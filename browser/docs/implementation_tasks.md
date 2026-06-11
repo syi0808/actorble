@@ -237,7 +237,7 @@ actorble-facade
 - strict mode에서 후보 0개는 `TARGET_NOT_FOUND`, 2개 이상은 `TARGET_AMBIGUOUS`로 구분된다.
 - `TargetHandle`은 snapshot handle이며 detached/stale 검증 진입점이 있다.
 
-### T5. Surface Engine: viewport와 scroll chain
+### T5. Surface Engine: viewport와 scroll chain - 완료
 
 브리핑: target이 속한 surface와 scroll/reveal 책임을 Target Resolver에서 분리한다. viewport와 scroll container를 먼저 지원하고, iframe/shadow/dialog/popover는 확장 지점으로 둔다.
 

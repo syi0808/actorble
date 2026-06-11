@@ -6,6 +6,7 @@ import type {
   Point,
   Rect,
   ScrollOptions,
+  ScrollMetrics,
   TargetDebugInfo,
 } from '../../shared/index.js'
 export type { HitTestOptions } from '../../shared/index.js'
@@ -36,6 +37,50 @@ export class BrowserDomAdapter implements DomAdapter {
 
   getComputedStyle(element: Element): CSSStyleDeclaration {
     return getOwnerWindow(element).getComputedStyle(element)
+  }
+
+  getViewportRect(root: Document | ShadowRoot = this.getRoot()): Rect {
+    const ownerWindow = getOwnerWindowForRoot(root)
+
+    return {
+      x: 0,
+      y: 0,
+      width: ownerWindow.innerWidth,
+      height: ownerWindow.innerHeight,
+    }
+  }
+
+  getViewportScrollTarget(root: Document | ShadowRoot = this.getRoot()): Window {
+    return getOwnerWindowForRoot(root)
+  }
+
+  getParentElement(element: Element): Element | null {
+    return element.parentElement
+  }
+
+  getScrollMetrics(target: Element | Window): ScrollMetrics {
+    if (isWindow(target)) {
+      const documentElement = target.document.documentElement
+      const body = target.document.body
+
+      return {
+        scrollLeft: target.scrollX,
+        scrollTop: target.scrollY,
+        scrollWidth: Math.max(documentElement.scrollWidth, body?.scrollWidth ?? 0),
+        scrollHeight: Math.max(documentElement.scrollHeight, body?.scrollHeight ?? 0),
+        clientWidth: target.innerWidth,
+        clientHeight: target.innerHeight,
+      }
+    }
+
+    return {
+      scrollLeft: target.scrollLeft,
+      scrollTop: target.scrollTop,
+      scrollWidth: target.scrollWidth,
+      scrollHeight: target.scrollHeight,
+      clientWidth: target.clientWidth,
+      clientHeight: target.clientHeight,
+    }
   }
 
   elementFromPoint(point: Point, options: HitTestOptions = {}): Element | null {
@@ -164,6 +209,16 @@ function isDocument(root: Document | ShadowRoot): root is Document {
 
 function getOwnerDocument(root: Document | ShadowRoot): Document {
   return isDocument(root) ? root : root.ownerDocument
+}
+
+function getOwnerWindowForRoot(root: Document | ShadowRoot): Window {
+  const ownerWindow = getOwnerDocument(root).defaultView ?? globalThis.window
+
+  if (!ownerWindow) {
+    throw actorbleError('PLATFORM_UNSUPPORTED', 'No window is available for the root.')
+  }
+
+  return ownerWindow
 }
 
 function getOwnerWindow(element: Element): Window {

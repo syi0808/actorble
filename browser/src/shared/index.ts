@@ -295,6 +295,15 @@ export type ScrollPosition = Readonly<{
   coordinateSpace?: CoordinateSpace
 }>
 
+export type ScrollMetrics = Readonly<{
+  scrollLeft: number
+  scrollTop: number
+  scrollWidth: number
+  scrollHeight: number
+  clientWidth: number
+  clientHeight: number
+}>
+
 export type MoveOptions = OperationOptions &
   Readonly<{
     duration?: DurationMs
@@ -359,6 +368,10 @@ export interface DomReadPort {
   querySelectorAll(selector: string, root?: ParentNode): readonly Element[]
   getBoundingClientRect(element: Element): Rect
   getComputedStyle(element: Element): CSSStyleDeclaration
+  getViewportRect(root?: Document | ShadowRoot): Rect
+  getViewportScrollTarget(root?: Document | ShadowRoot): Window
+  getParentElement(element: Element): Element | null
+  getScrollMetrics(target: Element | Window): ScrollMetrics
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
   contains(root: Node, node: Node): boolean
   isConnected(element: Element): boolean
