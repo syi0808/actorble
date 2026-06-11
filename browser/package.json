@@ -1,11 +1,13 @@
 {
-  "name": "stuntman",
+  "name": "@actorble/browser",
   "version": "0.1.0",
-  "description": "",
+  "description": "Browser implementation of Actorble.",
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
-  "author": "",
+  "author": "Yein Sung",
   "license": "MIT",
   "devEngines": {
     "packageManager": {
@@ -13,6 +15,10 @@
       "version": "^11.5.2",
       "onFail": "download"
     }
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.8"
   },
   "type": "module"
 }

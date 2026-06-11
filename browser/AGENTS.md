@@ -2,9 +2,9 @@
 
 ## Scope & Architecture
 
-This directory is for the browser implementation of Stuntman. Align implementation work with `../docs/browser-architecture.md` and keep browser behavior consistent with the high-level contracts in `../docs/high-level-architecture.md`.
+This directory is for the browser implementation of Actorble. Align implementation work with `../docs/browser-architecture.md` and keep browser behavior consistent with the high-level contracts in `../docs/high-level-architecture.md`.
 
-Browser code should map to the documented components: Stuntman Facade, Scenario Runner, Action Orchestrator, Target Resolver, Surface Engine, Geometry Engine, Interactability Engine, Pointer/Gesture engines, Interaction State Store, Visual Layer, and Platform Adapter. Browser-only platform code should stay under `browser/`; shared contracts or utilities should move to a shared top-level package only when another platform needs them.
+Browser code should map to the documented components: Actorble Facade, Scenario Runner, Action Orchestrator, Target Resolver, Surface Engine, Geometry Engine, Interactability Engine, Pointer/Gesture engines, Interaction State Store, Visual Layer, and Platform Adapter. Browser-only platform code should stay under `browser/`; shared contracts or utilities should move to a shared top-level package only when another platform needs them.
 
 ## Build, Test, and Development Commands
 
@@ -12,9 +12,11 @@ Use pnpm for browser package work. `browser/package.json` declares pnpm `^11.5.2
 
 - `cd browser && pnpm install`: install browser package dependencies.
 - `cd browser && pnpm pkg get scripts`: inspect available package scripts.
+- `cd browser && pnpm test`: run the Vitest test suite once.
+- `cd browser && pnpm test:watch`: run Vitest in watch mode.
 - `cd browser && pnpm exec <tool>`: run locally installed tools after they are added.
 
-`browser/package.json` currently defines no build, test, lint, or dev scripts. Add scripts before relying on commands such as `pnpm test`, `pnpm build`, or `pnpm lint`.
+`browser/package.json` currently defines test scripts only. Add build, lint, or dev scripts before relying on commands such as `pnpm build`, `pnpm lint`, or `pnpm dev`.
 
 ## Coding Style & Naming Conventions
 
@@ -30,6 +32,8 @@ Treat pseudo-state and visual mirroring as best-effort browser fidelity features
 
 ## Testing Guidelines
 
-No testing framework is configured yet. When adding one, document it in `browser/package.json` scripts and this file. Favor tests around public API behavior, engine boundaries, DOM adapter behavior, geometry snapshots, event dispatch order, and wait/observation settlement.
+Vitest is configured for browser package tests. Favor tests around public API behavior, engine boundaries, DOM adapter behavior, geometry snapshots, event dispatch order, and wait/observation settlement.
+
+Use TDD for behavior changes: write or update the failing Vitest case first, implement the smallest change that makes it pass, then refactor while keeping the suite green. For bug fixes, add a regression test that fails on the original behavior before changing implementation.
 
 Use behavior-focused test names, for example `click resolves target before dispatching pointer events` or `typeInto focuses editable target before input`.
