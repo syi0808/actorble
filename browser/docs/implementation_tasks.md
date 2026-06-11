@@ -122,7 +122,7 @@ platform-adapter/*
 
 각 작업은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 가장 작은 구현으로 통과시킨 뒤 리팩터링한다.
 
-### T1. Shared primitive와 port 경계 확정
+### T1. Shared primitive와 port 경계 확정 - 완료
 
 브리핑: 모든 모듈이 공유할 최소 타입을 `src/shared`에 둔다. 좌표, rect, timeout, cancellation, result/error, locator-like, target-like, clock, adapter port 같은 primitive를 먼저 고정해 이후 모듈 간 직접 참조를 줄인다.
 
@@ -134,7 +134,7 @@ platform-adapter/*
 - platform adapter를 직접 import하지 않아도 엔진 테스트를 작성할 수 있는 port 타입이 있다.
 - `shared`가 다른 feature module을 import하지 않는 테스트 또는 lint성 테스트가 있다.
 
-### T2. Diagnostics / Trace 최소 코어 분리
+### T2. Diagnostics / Trace 최소 코어 분리 - 완료
 
 브리핑: span 기반 trace와 debug event collector를 먼저 만든다. 초기 구현은 in-memory trace만 지원하고, 각 엔진은 trace 객체 전체가 아니라 span recorder interface만 받도록 한다.
 
