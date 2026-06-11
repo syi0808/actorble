@@ -32,10 +32,10 @@ const componentDirectories = [
 ]
 
 describe('architecture scaffold', () => {
-  it('tracks every documented browser component boundary with a README', async () => {
+  it('tracks every documented browser component boundary with an index module', async () => {
     await Promise.all(
       componentDirectories.map(async (directory) => {
-        await access(join(directory, 'README.md'))
+        await access(join(directory, 'index.ts'))
       }),
     )
   })
