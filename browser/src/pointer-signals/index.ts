@@ -1,4 +1,3 @@
-import { notImplemented } from '../shared/index.js'
 import type { ActorbleListener, Disposable, Point, PointerButtonName } from '../shared/index.js'
 
 export type PointerSignal =
@@ -27,12 +26,32 @@ export interface PointerSignalBus {
 }
 
 export class BrowserPointerSignalBus implements PointerSignalBus {
-  emit(): void {
-    return notImplemented('Pointer Signals emit')
+  readonly #listeners: ActorbleListener<PointerSignal>[] = []
+
+  emit(signal: PointerSignal): void {
+    for (const listener of [...this.#listeners]) {
+      listener(signal)
+    }
   }
 
-  subscribe(): Disposable {
-    return notImplemented('Pointer Signals subscribe')
+  subscribe(listener: ActorbleListener<PointerSignal>): Disposable {
+    this.#listeners.push(listener)
+    let disposed = false
+
+    return {
+      dispose: () => {
+        if (disposed) {
+          return
+        }
+
+        disposed = true
+        const index = this.#listeners.indexOf(listener)
+
+        if (index >= 0) {
+          this.#listeners.splice(index, 1)
+        }
+      },
+    }
   }
 }
 

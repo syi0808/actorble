@@ -285,7 +285,7 @@ actorble-facade
 - timeout과 cancellation이 `ActorbleError` helper와 연결된다.
 - `none`, `next-frame`, `settled` 전략의 최소 동작이 있다.
 
-### T9. Pointer Signals와 Pointer Engine
+### T9. Pointer Signals와 Pointer Engine - 완료
 
 브리핑: pointer 좌표와 버튼 상태를 의미 상태에서 분리한다. Pointer Engine은 signal만 발행하고 hover/active target을 소유하지 않는다.
 
