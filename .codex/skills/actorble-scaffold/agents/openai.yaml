@@ -1,0 +1,4 @@
+interface:
+  display_name: "Actorble Scaffold"
+  short_description: "Scaffold Actorble project structure"
+  default_prompt: "Use $actorble-scaffold to scaffold the next Actorble browser module boundary."

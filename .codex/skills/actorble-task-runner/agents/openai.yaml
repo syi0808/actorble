@@ -1,0 +1,4 @@
+interface:
+  display_name: "Actorble Task Runner"
+  short_description: "Execute clarified Actorble tasks"
+  default_prompt: "Use $actorble-task-runner to clarify and execute the next Actorble implementation task."
