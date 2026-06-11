@@ -390,4 +390,30 @@ describe('BrowserActionOrchestrator', () => {
     ])
     expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {})
   })
+
+  it('waitFor delegates to the wait observation engine and records an action span', async () => {
+    const { orchestrator, trace, wait } = createHarness()
+    const condition = { kind: 'custom', predicate: () => true }
+    const result = { condition, satisfied: true, strategy: 'settled' }
+    wait.waitFor.mockResolvedValue(result)
+
+    await expect(orchestrator.waitFor(condition, { timeout: 10 })).resolves.toBe(result)
+
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 10 })
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.waitFor',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'waitFor',
+          completed: true,
+          output: {
+            conditionKind: 'custom',
+            satisfied: true,
+            strategy: 'settled',
+          },
+        }),
+      }),
+    )
+  })
 })

@@ -1,7 +1,23 @@
+import { BrowserActionOrchestrator } from '../action-orchestrator/index.js'
+import { BrowserCapabilityFidelityReporter } from '../capability-fidelity/index.js'
+import { BrowserDiagnosticsTrace } from '../diagnostics-trace/index.js'
+import { BrowserGeometryEngine } from '../geometry-engine/index.js'
+import { BrowserDomAdapter } from '../platform-adapter/index.js'
+import { BrowserScenarioRunner } from '../scenario-runner/index.js'
+import { BrowserTargetResolver } from '../target-resolver/index.js'
+import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import { notImplemented } from '../shared/index.js'
-import type { CapabilityReport, FidelityReport } from '../capability-fidelity/index.js'
-import type { Trace } from '../diagnostics-trace/index.js'
-import type { GeometrySnapshot } from '../geometry-engine/index.js'
+import type { ActionOrchestrator } from '../action-orchestrator/index.js'
+import type {
+  CapabilityFidelityReporter,
+  CapabilityReport,
+  FidelityReport,
+} from '../capability-fidelity/index.js'
+import type { Trace, TraceCollector } from '../diagnostics-trace/index.js'
+import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.js'
+import type { DomPort } from '../shared/index.js'
+import type { ScenarioRunner } from '../scenario-runner/index.js'
+import type { TargetResolver } from '../target-resolver/index.js'
 import type {
   ActorbleListener,
   ActorbleOptions,
@@ -27,35 +43,77 @@ import type {
   WaitOptions,
 } from '../shared/index.js'
 
+export type ActorbleFacadeOptions = ActorbleOptions &
+  Readonly<{
+    capabilities?: CapabilityFidelityReporter
+    dom?: DomPort
+    geometry?: GeometryEngine
+    orchestrator?: ActionOrchestrator
+    resolver?: TargetResolver
+    runner?: ScenarioRunner
+    trace?: TraceCollector
+  }>
+
 export class Actorble {
-  constructor(readonly options: ActorbleOptions = {}) {}
+  readonly #capabilities: CapabilityFidelityReporter
+  readonly #geometry: GeometryEngine
+  readonly #orchestrator: ActionOrchestrator
+  readonly #resolver: TargetResolver
+  readonly #runner: ScenarioRunner
+  readonly #trace: TraceCollector
 
-  resolve(_locator: Locator, _options?: ResolveOptions): Promise<TargetHandle> {
-    return notImplemented('Actorble Facade resolve')
+  constructor(readonly options: ActorbleFacadeOptions = {}) {
+    const trace = options.trace ?? new BrowserDiagnosticsTrace()
+    const root = rootForDomAdapter(options.root)
+    const dom = options.dom ?? new BrowserDomAdapter(root)
+    const timeline = new BrowserTimelineEngine()
+    const resolver =
+      options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
+    const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
+    const orchestrator =
+      options.orchestrator ??
+      new BrowserActionOrchestrator({
+        dom,
+        geometry,
+        resolver,
+        timeline,
+        trace,
+      })
+
+    this.#trace = trace
+    this.#capabilities = options.capabilities ?? new BrowserCapabilityFidelityReporter()
+    this.#geometry = geometry
+    this.#orchestrator = orchestrator
+    this.#resolver = resolver
+    this.#runner = options.runner ?? new BrowserScenarioRunner({ orchestrator, timeline, trace })
   }
 
-  resolveAll(_locator: Locator, _options?: ResolveOptions): Promise<readonly TargetHandle[]> {
-    return notImplemented('Actorble Facade resolveAll')
+  resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle> {
+    return this.#resolver.resolve(locator, options)
   }
 
-  exists(_locator: Locator, _options?: ResolveOptions): Promise<boolean> {
-    return notImplemented('Actorble Facade exists')
+  resolveAll(locator: Locator, options?: ResolveOptions): Promise<readonly TargetHandle[]> {
+    return this.#resolver.resolveAll(locator, options)
   }
 
-  inspect(_target: TargetLike): Promise<TargetInspection> {
-    return notImplemented('Actorble Facade inspect')
+  exists(locator: Locator, options?: ResolveOptions): Promise<boolean> {
+    return this.#resolver.exists(locator, options)
   }
 
-  geometry(_target: TargetLike): Promise<GeometrySnapshot> {
-    return notImplemented('Actorble Facade geometry')
+  inspect(target: TargetLike): Promise<TargetInspection> {
+    return this.#resolver.inspect(target)
   }
 
-  moveTo(_target: TargetLike, _options?: MoveOptions): Promise<void> {
-    return notImplemented('Actorble Facade moveTo')
+  geometry(target: TargetLike): Promise<GeometrySnapshot> {
+    return this.#geometry.snapshot(target)
   }
 
-  click(_target: TargetLike, _options?: ClickOptions): Promise<void> {
-    return notImplemented('Actorble Facade click')
+  moveTo(target: TargetLike, options?: MoveOptions): Promise<void> {
+    return this.#orchestrator.moveTo(target, options)
+  }
+
+  click(target: TargetLike, options?: ClickOptions): Promise<void> {
+    return this.#orchestrator.click(target, options)
   }
 
   clickCurrent(_options?: ClickCurrentOptions): Promise<void> {
@@ -74,8 +132,8 @@ export class Actorble {
     return notImplemented('Actorble Facade type')
   }
 
-  typeInto(_target: TargetLike, _text: string, _options?: TypeOptions): Promise<void> {
-    return notImplemented('Actorble Facade typeInto')
+  typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void> {
+    return this.#orchestrator.typeInto(target, text, options)
   }
 
   fill(_target: TargetLike, _text: string, _options?: FillOptions): Promise<void> {
@@ -97,24 +155,24 @@ export class Actorble {
     return notImplemented('Actorble Facade drag')
   }
 
-  waitFor(_condition: WaitCondition, _options?: WaitOptions): Promise<void> {
-    return notImplemented('Actorble Facade waitFor')
+  async waitFor(condition: WaitCondition, options?: WaitOptions): Promise<void> {
+    await this.#orchestrator.waitFor(condition, options)
   }
 
-  run(_scenario: Scenario, _options?: RunOptions): Promise<void> {
-    return notImplemented('Actorble Facade run')
+  run(scenario: Scenario, options?: RunOptions): Promise<void> {
+    return this.#runner.run(scenario, options)
   }
 
   pause(): void {
-    return notImplemented('Actorble Facade pause')
+    this.#runner.pause()
   }
 
   resume(): void {
-    return notImplemented('Actorble Facade resume')
+    this.#runner.resume()
   }
 
   stop(): void {
-    return notImplemented('Actorble Facade stop')
+    this.#runner.stop()
   }
 
   destroy(): void {
@@ -122,15 +180,15 @@ export class Actorble {
   }
 
   getCapabilities(): CapabilityReport {
-    return notImplemented('Actorble Facade getCapabilities')
+    return this.#capabilities.getCapabilities()
   }
 
   getFidelity(): FidelityReport {
-    return notImplemented('Actorble Facade getFidelity')
+    return this.#capabilities.getFidelity()
   }
 
   getTrace(): Trace {
-    return notImplemented('Actorble Facade getTrace')
+    return this.#trace.getTrace()
   }
 
   on(_event: DebugEventName, _listener: ActorbleListener): void {
@@ -142,6 +200,24 @@ export class Actorble {
   }
 }
 
-export function createActorble(options: ActorbleOptions = {}): Actorble {
+export function createActorble(options: ActorbleFacadeOptions = {}): Actorble {
   return new Actorble(options)
+}
+
+function rootForDomAdapter(
+  root: ActorbleOptions['root'],
+): Document | ShadowRoot | undefined {
+  if (root === undefined) {
+    return undefined
+  }
+
+  if (isElementRoot(root)) {
+    return root.ownerDocument
+  }
+
+  return root
+}
+
+function isElementRoot(root: Document | ShadowRoot | Element): root is Element {
+  return root.nodeType === 1
 }

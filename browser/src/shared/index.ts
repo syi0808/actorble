@@ -469,13 +469,31 @@ export type WaitCondition =
   | Readonly<{ kind: 'text'; value: string | RegExp }>
   | Readonly<{ kind: 'custom'; predicate: () => boolean | Promise<boolean> }>
 
-export type ScenarioStep = Readonly<{
+type ScenarioStepOptions<TOptions extends OperationOptions> = Omit<TOptions, 'signal'>
+
+export type ScenarioClickStep = Readonly<{
   id?: string
-  action: string
-  target?: TargetLike
-  input?: unknown
-  options?: Readonly<Record<string, unknown>>
+  action: 'click'
+  target: TargetLike
+  options?: ScenarioStepOptions<ClickOptions>
 }>
+
+export type ScenarioTypeIntoStep = Readonly<{
+  id?: string
+  action: 'typeInto'
+  target: TargetLike
+  input: string
+  options?: ScenarioStepOptions<TypeOptions>
+}>
+
+export type ScenarioWaitForStep = Readonly<{
+  id?: string
+  action: 'waitFor'
+  input: WaitCondition
+  options?: ScenarioStepOptions<WaitOptions>
+}>
+
+export type ScenarioStep = ScenarioClickStep | ScenarioTypeIntoStep | ScenarioWaitForStep
 
 export type Scenario = Readonly<{
   id?: string

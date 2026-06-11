@@ -357,7 +357,7 @@ actorble-facade
 - pointer down 이후 실패 또는 cancel 시 cleanup이 보장된다.
 - action span에 input, output, failure context가 남는다.
 
-### T15. Actorble Facade와 Scenario Runner 조립
+### T15. Actorble Facade와 Scenario Runner 조립 - 완료
 
 브리핑: Scenario Runner는 step 순서, pause/resume/stop, scenario timeout/cancellation만 소유하고 개별 action은 orchestrator에 위임한다. Facade는 public API와 composition root 역할을 한다.
 

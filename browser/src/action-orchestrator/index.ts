@@ -359,8 +359,36 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return notImplemented('Action Orchestrator drag')
   }
 
-  waitFor(): Promise<WaitResult> {
-    return notImplemented('Action Orchestrator waitFor')
+  async waitFor(
+    condition: WaitCondition,
+    options: WaitOptions = {},
+  ): Promise<WaitResult> {
+    const span = this.#startActionSpan('waitFor', undefined, {
+      conditionKind: condition.kind,
+      ...options,
+    })
+    const phase: ActionPhase = 'wait'
+
+    try {
+      const result = await this.#wait.waitFor(condition, operationOptions(options))
+
+      span.end({
+        action: 'waitFor',
+        completed: true,
+        output: {
+          conditionKind: condition.kind,
+          satisfied: result.satisfied,
+          strategy: result.strategy,
+        },
+      })
+
+      return result
+    } catch (error) {
+      throw this.#finishActionFailure(span, error, {
+        action: 'waitFor',
+        phase,
+      })
+    }
   }
 
   geometry(): Promise<GeometrySnapshot> {

@@ -1,0 +1,224 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
+import { BrowserScenarioRunner } from '../src/scenario-runner/index.js'
+import { actorbleError, css } from '../src/shared/index.js'
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return { promise, resolve, reject }
+}
+
+function createOrchestrator(overrides = {}) {
+  return {
+    moveTo: vi.fn(),
+    click: vi.fn(async () => {}),
+    clickCurrent: vi.fn(),
+    doubleClick: vi.fn(),
+    focus: vi.fn(),
+    type: vi.fn(),
+    typeInto: vi.fn(async () => {}),
+    fill: vi.fn(),
+    press: vi.fn(),
+    scrollTo: vi.fn(),
+    drag: vi.fn(),
+    waitFor: vi.fn(async (condition) => ({ condition, satisfied: true, strategy: 'settled' })),
+    geometry: vi.fn(),
+    ...overrides,
+  }
+}
+
+describe('BrowserScenarioRunner', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('runs typed scenario steps in order through the action orchestrator', async () => {
+    const calls = []
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async (target, options) => {
+        calls.push(['click', target, options])
+      }),
+      typeInto: vi.fn(async (target, text, options) => {
+        calls.push(['typeInto', target, text, options])
+      }),
+      waitFor: vi.fn(async (condition, options) => {
+        calls.push(['waitFor', condition, options])
+        return { condition, satisfied: true, strategy: 'settled' }
+      }),
+    })
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const runner = new BrowserScenarioRunner({ orchestrator, trace })
+    const clickTarget = css('#save')
+    const inputTarget = css('#name')
+    const condition = { kind: 'custom', predicate: () => true }
+
+    await expect(
+      runner.run({
+        id: 'create-project',
+        steps: [
+          { action: 'click', target: clickTarget, options: { timeout: 10 } },
+          { action: 'typeInto', target: inputTarget, input: 'actorble' },
+          { action: 'waitFor', input: condition, options: { timeout: 20 } },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      ['click', clickTarget, expect.objectContaining({ timeout: 10, signal: expect.any(AbortSignal) })],
+      ['typeInto', inputTarget, 'actorble', expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['waitFor', condition, expect.objectContaining({ timeout: 20, signal: expect.any(AbortSignal) })],
+    ])
+    expect(runner.getSnapshot()).toEqual({
+      scenario: null,
+      status: 'completed',
+      currentStepIndex: null,
+    })
+    expect(trace.getTrace().spans).toEqual([
+      expect.objectContaining({
+        name: 'scenario.run',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          scenarioId: 'create-project',
+          steps: 3,
+          completed: true,
+        }),
+      }),
+    ])
+  })
+
+  it('pauses at step boundaries and resumes before starting the next step', async () => {
+    const firstStep = deferred()
+    const calls = []
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async () => {
+        calls.push('click')
+        runner.pause()
+        firstStep.resolve()
+      }),
+      waitFor: vi.fn(async () => {
+        calls.push('waitFor')
+        return { condition: { kind: 'custom', predicate: () => true }, satisfied: true, strategy: 'settled' }
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({
+      steps: [
+        { action: 'click', target: css('#save') },
+        { action: 'waitFor', input: { kind: 'custom', predicate: () => true } },
+      ],
+    })
+
+    await firstStep.promise
+
+    expect(calls).toEqual(['click'])
+    await vi.waitFor(() => {
+      expect(runner.getSnapshot()).toMatchObject({
+        status: 'paused',
+        currentStepIndex: 1,
+      })
+    })
+
+    runner.resume()
+
+    await expect(run).resolves.toBeUndefined()
+    expect(calls).toEqual(['click', 'waitFor'])
+  })
+
+  it('stops an in-flight scenario by aborting the current action signal', async () => {
+    let actionSignal
+    const orchestrator = createOrchestrator({
+      click: vi.fn((_target, options) => {
+        actionSignal = options.signal
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              reject(actorbleError('ACTION_CANCELLED', 'click cancelled', {
+                details: { operation: 'click', reason: options.signal.reason },
+              }))
+            },
+            { once: true },
+          )
+        })
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({ steps: [{ action: 'click', target: css('#save') }] })
+
+    await vi.waitFor(() => expect(actionSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(actionSignal.aborted).toBe(true)
+    expect(runner.getSnapshot()).toMatchObject({
+      status: 'stopped',
+      currentStepIndex: null,
+    })
+  })
+
+  it('times out the scenario and aborts the current action signal even when the action does not settle', async () => {
+    vi.useFakeTimers()
+    let actionSignal
+    const orchestrator = createOrchestrator({
+      click: vi.fn((_target, options) => {
+        actionSignal = options.signal
+        return new Promise(() => {})
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run(
+      { id: 'timeout-case', steps: [{ action: 'click', target: css('#save') }] },
+      { timeout: 25 },
+    )
+    await Promise.resolve()
+
+    expect(actionSignal).toBeDefined()
+    const expectation = expect(run).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'scenario.run',
+        timeout: 25,
+        scenarioId: 'timeout-case',
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    expect(actionSignal.aborted).toBe(true)
+    expect(actionSignal.reason).toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: { operation: 'scenario.run', timeout: 25 },
+    })
+    expect(runner.getSnapshot()).toMatchObject({
+      status: 'failed',
+      currentStepIndex: null,
+    })
+  })
+
+  it('fails unsupported runtime step shapes with an Actorble error', async () => {
+    const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+    await expect(
+      runner.run({
+        steps: [{ action: 'resolve', target: css('#save') }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: { action: 'resolve', stepIndex: 0 },
+    })
+    expect(runner.getSnapshot()).toMatchObject({
+      status: 'failed',
+      currentStepIndex: null,
+    })
+  })
+})
