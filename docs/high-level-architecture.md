@@ -1,4 +1,6 @@
-# 1. 최종 상위 구조
+# stuntman 상위 아키텍처 설계
+
+## 1. 최종 상위 구조
 
 ```mermaid
 flowchart TD
@@ -6,40 +8,83 @@ flowchart TD
     A --> C[Target Resolver API]
     A --> D[Control API]
     A --> E[Diagnostics API]
+    A --> F[Capability / Fidelity API]
 
-    B --> F[Timeline Engine]
-    F --> G[Action Planner]
+    B --> G[Action Orchestrator]
 
     G --> H[Target Resolver]
     G --> I[Surface Engine]
     G --> J[Geometry Engine]
+    G --> K[Interactability Engine]
+    G --> L[Gesture Engine]
+    G --> M[Focus Engine]
+    G --> N[Keyboard Engine]
+    G --> O[Text Input Engine]
+    G --> P[Wait / Observation Engine]
+    G --> Q[Timeline Engine]
 
-    J --> K[Pointer Engine]
-    I --> K
+    L --> R[Pointer Engine]
+    R --> S[Pointer Signals]
 
-    K --> L[Interaction State Engine]
-    M[Focus Engine] --> L
-    N[Keyboard Engine] --> L
-    O[Text Input Engine] --> L
+    S --> T[Interaction State Store]
+    M --> T
+    N --> T
+    O --> T
 
-    L --> P[Platform Adapter]
-    L --> Q[Visual Layer]
+    T --> U[Platform Adapter]
+    T --> V[Visual Layer]
 
-    R[Wait / Observation Engine] --> B
-    S[Diagnostics / Trace Engine] --> B
-    S --> F
-    S --> H
-    S --> J
-    S --> K
-    S --> L
-    S --> P
+    U --> U1[DOM / Native Adapter]
+    U --> U2[Event Dispatcher]
+    U --> U3[State Applier]
+    U --> U4[Style / Pseudo Mirror Adapter]
+
+    W[Diagnostics / Trace Engine] --> B
+    W --> G
+    W --> H
+    W --> I
+    W --> J
+    W --> K
+    W --> R
+    W --> T
+    W --> U
+```
+
+핵심 흐름은 다음과 같습니다.
+
+```txt
+Scenario
+→ Action Orchestrator
+→ Target / Surface / Geometry / Interactability
+→ Gesture / Pointer / Focus / Keyboard / Text Input
+→ Interaction State Store
+→ Platform Adapter / Visual Layer
+→ Observation / Settlement
 ```
 
 ---
 
-# 2. 엔진별 최종 책임
+## 2. 핵심 설계 원칙
 
-## Stuntman Facade
+```txt
+1. Stuntman Facade는 사용자가 만나는 진입점이다.
+2. Scenario Runner는 scenario 실행 흐름을 관리한다.
+3. Action Orchestrator는 action lifecycle을 transaction처럼 관리한다.
+4. Target Resolver는 외부 API로 노출한다.
+5. Surface Engine은 조작이 일어나는 공간과 좌표계를 관리한다.
+6. Geometry Engine은 target의 공간 정보를 계산한다.
+7. Interactability Engine은 target이 실제로 조작 가능한지 판단한다.
+8. Pointer Engine은 좌표, 이동, 버튼 상태만 소유한다.
+9. Interaction State Store는 hover, active, focus, typing, dragging 같은 의미 상태를 소유한다.
+10. Visual Layer는 실제 interaction state와 분리된다.
+11. Platform Adapter는 환경별 실제 API 호출을 격리한다.
+12. Capability / Fidelity는 구현체의 한계를 명시한다.
+13. Diagnostics / Trace는 초기부터 span 기반으로 설계한다.
+```
+
+---
+
+## 3. Stuntman Facade
 
 사용자가 직접 만나는 진입점입니다.
 
@@ -47,27 +92,141 @@ flowchart TD
 const stuntman = new Stuntman()
 
 await stuntman.moveTo(target)
-await stuntman.click()
-await stuntman.type('hello')
+await stuntman.click(target)
+await stuntman.typeInto(input, 'hello')
 await stuntman.press('Enter')
-await stuntman.waitFor(target)
+await stuntman.waitFor(text('Project created'))
 ```
 
 담당:
 
 ```txt
 - public API 제공
-- 내부 엔진 orchestration
+- 내부 엔진 orchestration 진입점
 - run / pause / resume / stop / destroy
-- debug / trace API 노출
+- resolve / geometry / inspect 같은 디버깅 친화 API 노출
+- capability / fidelity 정보 노출
+- trace / debug API 노출
+```
+
+추천 public API:
+
+```ts
+class Stuntman {
+  resolve(locator, options?)
+  resolveAll(locator, options?)
+  exists(locator, options?)
+  inspect(target)
+
+  geometry(target)
+
+  moveTo(target, options?)
+  click(target, options?)
+  clickCurrent(options?)
+  doubleClick(target, options?)
+
+  focus(target, options?)
+  type(text, options?)
+  typeInto(target, text, options?)
+  fill(target, text, options?)
+  press(keys, options?)
+
+  scrollTo(targetOrPosition, options?)
+  drag(from, to, options?)
+
+  waitFor(condition, options?)
+
+  run(scenario, options?)
+  pause()
+  resume()
+  stop()
+  destroy()
+
+  getCapabilities()
+  getFidelity()
+  getTrace()
+
+  on(event, listener)
+  off(event, listener)
+}
 ```
 
 ---
 
-## Target Resolver
+## 4. Scenario Runner
+
+Scenario Runner는 선언형 scenario를 실행 가능한 action 흐름으로 넘기는 계층입니다.
+
+담당:
+
+```txt
+- scenario 시작/종료 관리
+- step 순서 관리
+- pause / resume / stop 상태 관리
+- Action Orchestrator에 step 실행 위임
+- scenario-level timeout / cancellation 관리
+- scenario trace span 생성
+```
+
+Scenario Runner는 action 내부 세부 lifecycle을 직접 실행하지 않습니다.
+개별 action의 transaction은 Action Orchestrator가 담당합니다.
+
+---
+
+## 5. Action Orchestrator
+
+기존 `Action Planner`를 대체하는 핵심 실행 계층입니다.
+
+Action Orchestrator는 `click`, `moveTo`, `typeInto`, `drag` 같은 high-level action을 안전한 lifecycle로 실행합니다.
+
+담당:
+
+```txt
+- action lifecycle 관리
+- resolve / reveal / geometry / preflight / perform / wait / cleanup
+- cancellation-safe cleanup
+- retry policy
+- timeout policy
+- force option 처리
+- action-level trace span 생성
+```
+
+예를 들어 `click(target)`은 단일 함수처럼 보이지만 내부적으로는 다음 transaction입니다.
+
+```txt
+1. resolve target
+2. validate target freshness
+3. ensure target surface
+4. reveal target if needed
+5. compute geometry
+6. run interactability preflight
+7. move pointer to clickable point
+8. settle hover
+9. pointer down
+10. active state apply
+11. pointer up
+12. active state clear
+13. dispatch / invoke activation
+14. wait for settlement
+15. cleanup
+```
+
+Action Orchestrator가 있어야 다음 문제를 일관되게 처리할 수 있습니다.
+
+```txt
+- action 도중 target이 stale해진 경우
+- pointer down 이후 cancel된 경우 pointer up cleanup 보장
+- wait timeout 발생 시 상태 정리
+- force click 허용 여부
+- 실패 시 trace span과 error context 생성
+```
+
+---
+
+## 6. Target Resolver
 
 **무엇을 조작할지 찾는 엔진**입니다.
-외부 API로 노출하는 게 좋습니다.
+외부 API로 노출합니다.
 
 ```ts
 const button = await stuntman.resolve(
@@ -81,33 +240,97 @@ const inputs = await stuntman.resolveAll(label('Project name'))
 
 ```txt
 - role / text / label / selector / coordinate 기반 target 탐색
+- 후보 ranking
 - ambiguous target 처리
+- strict mode 지원
 - target debug 정보 제공
+- stale handle 검증
 - waitFor와 연동
+```
+
+TargetHandle은 영구 참조가 아니라 **짧게 유효한 snapshot handle**로 봅니다.
+
+```ts
+type TargetHandle = {
+  id: string
+  raw: unknown
+  locator?: Locator
+  resolvedAt: number
+  surfaceId?: string
+  validity: 'live' | 'stale' | 'detached' | 'unknown'
+  debug: TargetDebugInfo
+}
+```
+
+모든 action 직전에는 handle을 검증해야 합니다.
+
+```txt
+validate target
+→ live면 그대로 사용
+→ stale이면 locator로 재resolve
+→ 실패하면 TARGET_STALE 또는 TARGET_NOT_FOUND
+```
+
+`resolve` 옵션:
+
+```ts
+type ResolveOptions = {
+  strict?: boolean
+  timeout?: number
+}
+```
+
+동작 정책:
+
+```txt
+strict: true
+- 후보 0개 → TARGET_NOT_FOUND
+- 후보 2개 이상 → TARGET_AMBIGUOUS
+
+strict: false
+- ranking으로 best candidate 선택
+- trace에 candidate list 기록
 ```
 
 ---
 
-## Surface Engine
+## 7. Surface Engine
 
 **어느 공간에서 조작하는지 관리하는 엔진**입니다.
 
-브라우저라면 viewport, scroll container, modal, iframe 같은 개념이고,
-desktop이라면 screen, window, application surface 같은 개념입니다.
+브라우저라면 viewport, scroll container, modal, iframe 같은 개념이고, desktop이라면 screen, window, application surface 같은 개념입니다.
 
 담당:
 
 ```txt
 - 현재 active surface 관리
-- viewport/window/screen 좌표계 변환
+- coordinate space 관리
+- viewport / window / screen 좌표계 변환
+- target이 속한 surface 확인
 - target이 보이는 surface 판단
 - target이 안 보이면 scroll / window focus / surface activation 결정
-- clipping / visibility 판단
+- scroll chain 또는 surface activation chain 제공
+- clipping chain 원천 데이터 제공
+```
+
+Surface Engine은 visibility의 원천 데이터를 제공하지만, 최종적인 `visibleRect` 계산은 Geometry Engine이 담당합니다.
+
+```txt
+Surface Engine
+- 어디에서 볼 것인가
+- 어떤 surface에 속하는가
+- 어떤 좌표계를 사용하는가
+- 어떤 scroll/reveal 경로가 있는가
+
+Geometry Engine
+- 실제 rect가 어디인가
+- visible rect가 얼마인가
+- 클릭 가능한 지점은 어디인가
 ```
 
 ---
 
-## Geometry Engine
+## 8. Geometry Engine
 
 **target이 어디에 있고, 어디를 향해 움직여야 하는지 계산하는 엔진**입니다.
 
@@ -117,25 +340,148 @@ desktop이라면 screen, window, application surface 같은 개념입니다.
 - target bounding rect
 - visible rect
 - center point
-- clickable point
-- target이 가려졌는지 판단
-- target이 현재 surface 안에 보이는지 판단
+- clickable point 후보 계산
+- coordinate space 정규화
 - pointer가 이동할 anchor point 계산
 ```
 
-예:
+Geometry Engine은 조작 가능성 자체를 최종 판단하지 않습니다.
+`disabled`, `readonly`, `pointer-events`, `occlusion` 등은 Interactability Engine에서 판단합니다.
+
+Geometry snapshot 예시:
 
 ```ts
-const geometry = await stuntman.geometry(button)
+type GeometrySnapshot = {
+  target: TargetHandle
 
-geometry.clickablePoint
-geometry.visibleRect
-geometry.occluded
+  rect: Rect
+  visibleRect: Rect | null
+  center: Point
+
+  clickablePoint: ClickablePointResult
+
+  coordinateSpace: CoordinateSpace
+  computedAt: number
+}
+```
+
+`clickablePoint`는 단순 `Point | null`보다 계산 근거를 포함해야 합니다.
+
+```ts
+type ClickablePointResult =
+  | {
+      ok: true
+      point: Point
+      strategy:
+        | 'center'
+        | 'visible-center'
+        | 'grid-sampling'
+        | 'label-control'
+        | 'custom'
+      hitTarget?: TargetHandle
+    }
+  | {
+      ok: false
+      reason:
+        | 'not-visible'
+        | 'fully-occluded'
+        | 'pointer-events-none'
+        | 'disabled'
+        | 'outside-surface'
+        | 'no-sample-hit'
+      samples?: PointSample[]
+    }
 ```
 
 ---
 
-## Pointer Engine
+## 9. Interactability Engine
+
+**target이 지금 실제로 조작 가능한지 판단하는 엔진**입니다.
+
+Geometry가 “어디에 있는가”를 계산한다면, Interactability는 “지금 조작해도 되는가”를 판단합니다.
+
+담당:
+
+```txt
+- visible enough
+- enabled / disabled
+- readonly / editable
+- pointer-events
+- inert
+- aria-disabled
+- occlusion
+- receives pointer events
+- focusable 여부
+- editable 여부
+- force option으로 우회 가능한지 판단
+```
+
+예시 타입:
+
+```ts
+type InteractabilityReport = {
+  target: TargetHandle
+
+  visible: boolean
+  visibilityRatio?: number
+
+  enabled: boolean
+  editable?: boolean
+  focusable?: boolean
+
+  receivesPointerEvents: boolean
+  occludedBy?: TargetDebugInfo
+
+  canClick: boolean
+  canFocus: boolean
+  canType?: boolean
+
+  blockingReasons: InteractabilityReason[]
+}
+```
+
+예상 실패 메시지:
+
+```txt
+Cannot click "Create Project".
+The element is visible, but its clickable point is covered by ".loading-overlay".
+```
+
+Action Orchestrator는 action 수행 전 Interactability Engine의 preflight를 통과해야 합니다.
+
+---
+
+## 10. Gesture Engine
+
+Gesture Engine은 pointer 기반 composite action을 담당합니다.
+
+담당:
+
+```txt
+- click
+- doubleClick
+- longPress
+- drag
+- hover settle
+- selection drag
+```
+
+Gesture Engine은 Pointer Engine을 사용하지만, Pointer Engine 자체는 아닙니다.
+
+```txt
+Pointer Engine
+- 좌표와 버튼 상태를 관리
+
+Gesture Engine
+- pointer signal을 조합해 click, drag 같은 고수준 제스처를 구성
+```
+
+`click(target)`은 Action Orchestrator가 lifecycle을 관리하고, 실제 pointer down/up sequence는 Gesture Engine이 수행합니다.
+
+---
+
+## 11. Pointer Engine
 
 **포인터의 물리적 상태와 움직임을 관리하는 엔진**입니다.
 
@@ -151,67 +497,193 @@ geometry.occluded
 - duration
 - pointer button state
 - pointer down / up
-- drag movement
 - cursor movement signal emit
 ```
 
-PointerEngine이 직접 hover를 소유하지는 않습니다.
-
-대신 이런 signal을 냅니다.
+Pointer Engine은 hover, active, dragging target을 소유하지 않습니다.
 
 ```txt
-pointer:moved
-pointer:down
-pointer:up
-pointer:drag-start
-pointer:drag-move
-pointer:drag-end
+PointerEngine이 소유하는 것:
+- position
+- previousPosition
+- motion.status
+- motion path
+- pressed buttons
+
+Interaction State Store가 소유하는 것:
+- hovered target
+- active target
+- focused target
+- typing target
+- dragging source/drop target
+```
+
+PointerState:
+
+```ts
+type PointerState = {
+  id: string
+
+  position: Point
+  previousPosition: Point | null
+
+  motion: PointerMotionState
+  buttons: PointerButtonState
+
+  surface: {
+    id: string | null
+    coordinateSpace: CoordinateSpace
+  }
+}
+
+type PointerMotionState = {
+  status: 'idle' | 'moving' | 'settling' | 'cancelled'
+
+  from?: Point
+  to?: Point
+
+  startedAt?: number
+  updatedAt?: number
+
+  path?: PointerPath
+}
+
+type PointerButtonState = {
+  pressed: Set<PointerButton>
+  primary: PointerButton | null
+
+  lastDownAt?: number
+  lastUpAt?: number
+}
+```
+
+Pointer Engine은 다음 signal을 냅니다.
+
+```ts
+type PointerSignal =
+  | {
+      type: 'pointer:moved'
+      point: Point
+      previousPoint: Point | null
+    }
+  | {
+      type: 'pointer:down'
+      point: Point
+      button: PointerButton
+    }
+  | {
+      type: 'pointer:up'
+      point: Point
+      button: PointerButton
+    }
+  | {
+      type: 'pointer:cancelled'
+    }
 ```
 
 ---
 
-## Interaction State Engine
+## 12. Interaction State Store
 
-**현재 stuntman이 UI와 어떤 관계에 있는지 관리하는 엔진**입니다.
+기존 `Interaction State Engine`은 하나의 거대한 class가 아니라 **state store + slice 구조**로 설계합니다.
 
 담당:
 
 ```txt
-- hovered target
-- previous hovered target
-- hover chain
-- active target
-- focused target
-- focus-visible target
-- typing target
-- drag source
-- drop target
-- interaction phase
+- pointer signal 해석
+- focus / keyboard / text input signal 해석
+- hover / active / focus / typing / dragging 상태 관리
+- previous state와 next state 비교
+- state diff 생성
+- Platform Adapter와 Visual Layer에 반영할 effect 생성
 ```
 
-중요한 기준:
+구조:
+
+```txt
+Interaction State Store
+├─ hoverSlice
+├─ activeSlice
+├─ focusSlice
+├─ focusVisibleSlice
+├─ typingSlice
+├─ dragSlice
+├─ selectionSlice
+└─ pointerCaptureSlice
+```
+
+외부에서는 하나의 snapshot으로 노출합니다.
+
+```ts
+type InteractionStateSnapshot = {
+  hovered: {
+    target: TargetHandle | null
+    chain: TargetHandle[]
+    previous: TargetHandle | null
+  }
+
+  active: {
+    target: TargetHandle | null
+    button: PointerButton | null
+    startedAt: number | null
+  }
+
+  focused: {
+    target: TargetHandle | null
+    previous: TargetHandle | null
+  }
+
+  focusVisible: {
+    target: TargetHandle | null
+    modality: 'keyboard' | 'pointer' | 'programmatic'
+  }
+
+  typing: {
+    active: boolean
+    target: TargetHandle | null
+  }
+
+  dragging: {
+    active: boolean
+    source: TargetHandle | null
+    currentDropTarget: TargetHandle | null
+  }
+}
+```
+
+업데이트는 event/reducer 방식으로 처리합니다.
+
+```ts
+interactionStore.dispatch({
+  type: 'pointer:moved',
+  point,
+  hitTarget,
+})
+```
+
+중요한 원칙:
 
 ```txt
 좌표 자체
-→ PointerEngine
+→ Pointer Engine
 
 좌표가 UI에 대해 갖는 의미
-→ InteractionStateEngine
+→ Interaction State Store
 ```
 
 예:
 
 ```txt
 pointer.x = 410, pointer.y = 262
-→ PointerEngine
+→ Pointer Engine
 
 그 좌표 아래 Create Project 버튼이 hovered 상태다
-→ InteractionStateEngine
+→ Interaction State Store
 ```
 
 ---
 
-## Focus Engine
+## 13. Focus Engine
 
 **focus를 만들고 관리하는 엔진**입니다.
 
@@ -226,11 +698,22 @@ pointer.x = 410, pointer.y = 262
 - Tab 이동 처리
 ```
 
-FocusEngine은 실제 focus action을 수행하고, 그 결과 상태는 InteractionStateEngine에 반영합니다.
+Focus 상태의 source of truth는 플랫폼의 실제 focus 상태여야 합니다.
+
+브라우저 예시:
+
+```txt
+FocusEngine.ensureFocus(target)
+→ PlatformAdapter.dom.focus(element)
+→ PlatformAdapter.dom.readActiveElement()
+→ InteractionStateStore.syncFocusFromPlatform()
+```
+
+즉 Focus Engine은 focus를 요청하고, Interaction State Store는 실제 platform state를 읽어 동기화합니다.
 
 ---
 
-## Keyboard Engine
+## 14. Keyboard Engine
 
 **키보드 입력 장치 수준의 action을 관리하는 엔진**입니다.
 
@@ -242,6 +725,7 @@ FocusEngine은 실제 focus action을 수행하고, 그 결과 상태는 Interac
 - press
 - shortcut
 - modifier key
+- keyboard modality 갱신
 ```
 
 예:
@@ -252,13 +736,15 @@ await stuntman.press('Escape')
 await stuntman.press('Enter')
 ```
 
+Keyboard Engine은 문자 입력 자체보다는 key sequence와 shortcut을 담당합니다.
+
 ---
 
-## Text Input Engine
+## 15. Text Input Engine
 
 **문자 입력을 관리하는 엔진**입니다.
 
-KeyboardEngine과 분리하는 게 좋습니다.
+Keyboard Engine과 분리합니다.
 
 담당:
 
@@ -269,47 +755,77 @@ KeyboardEngine과 분리하는 게 좋습니다.
 - input/change event
 - composition/IME 고려
 - controlled input 대응
+- editor adapter 연동
 ```
 
-예:
+입력 전략:
 
 ```ts
-await stuntman.type('stuntman')
+type TextInputStrategy =
+  | 'set-value'
+  | 'insert-text'
+  | 'keyboard-events'
+  | 'composition'
+  | 'editor-adapter'
 ```
 
-내부적으로는:
+권장 API:
+
+```ts
+await stuntman.type('hello')
+// 현재 focused target에 사람처럼 입력
+
+await stuntman.typeInto(input, 'hello')
+// 특정 target에 focus 후 사람처럼 입력
+
+await stuntman.fill(input, 'hello')
+// 기존 값을 빠르게 대체
+```
+
+`type()`과 `fill()`은 의미가 다릅니다.
 
 ```txt
-ensure focus
-→ typing state start
-→ insert text
-→ input settle
-→ typing state end
+type
+- 사람처럼 한 글자씩 입력
+- typing cadence 적용 가능
+- keyboard / input visual feedback과 잘 맞음
+
+fill
+- 기존 값을 지우고 빠르게 값 설정
+- form setup / guided workflow에 적합
 ```
 
 ---
 
-## Timeline Engine
+## 16. Timeline Engine
 
 **시간 기반 실행을 관리하는 엔진**입니다.
 
 담당:
 
 ```txt
-- step scheduling
 - duration
 - easing
 - animation frame / tick
-- pause / resume
-- cancellation
+- pause / resume clock
+- cancellation signal
 - timeout
 ```
 
-stuntman은 단순 자동화가 아니라 “시간에 따른 상호작용 연출”이므로 Timeline은 1급입니다.
+Timeline Engine은 action lifecycle 전체를 소유하지 않습니다.
+Action lifecycle은 Action Orchestrator가 담당하고, Timeline Engine은 시간 기반 primitive를 제공합니다.
+
+예:
+
+```txt
+PointerEngine.moveTo()
+→ TimelineEngine.animate()
+→ frame마다 position update
+```
 
 ---
 
-## Wait / Observation Engine
+## 17. Wait / Observation Engine
 
 **UI가 원하는 상태가 될 때까지 기다리는 엔진**입니다.
 
@@ -322,19 +838,152 @@ stuntman은 단순 자동화가 아니라 “시간에 따른 상호작용 연�
 - focus changed
 - layout stable
 - animation settled
+- mutation quiet
 - custom condition
 - timeout
 ```
 
-예:
+권장 settle contract:
+
+```txt
+default settled:
+1. next microtask
+2. next animation frame
+3. mutation quiet window
+4. optional layout stable check
+```
+
+Wait strategy 예시:
 
 ```ts
-await stuntman.waitFor(text('Project created'))
+type WaitStrategy =
+  | 'none'
+  | 'next-frame'
+  | 'settled'
+  | { kind: 'mutation-quiet'; quietMs: number }
+  | { kind: 'layout-stable'; frames: number; threshold: number }
+  | WaitCondition
+```
+
+Action option 예시:
+
+```ts
+await stuntman.click(target, {
+  wait: 'settled',
+})
+
+await stuntman.click(target, {
+  wait: visible(text('Project created')),
+})
+```
+
+Wait / Observation Engine은 Geometry cache invalidation과도 연결되어야 합니다.
+
+```txt
+- mutation
+- resize
+- scroll
+- layout shift
+- animation frame
 ```
 
 ---
 
-## Visual Layer
+## 18. Platform Adapter
+
+**각 환경의 실제 API와 연결되는 계층**입니다.
+
+```txt
+Browser
+→ DOM / CSSOM / Event Dispatch
+
+macOS
+→ Swift / Accessibility / Native Input / Overlay Window
+
+Windows
+→ UI Automation / SendInput / Native Overlay
+
+Linux
+→ AT-SPI / X11 / Wayland-specific input / Overlay
+```
+
+Platform Adapter는 내부적으로 책임을 나눕니다.
+
+```txt
+Platform Adapter
+├─ DOM / Native Adapter
+├─ Event Dispatcher
+├─ State Applier
+└─ Style / Pseudo Mirror Adapter
+```
+
+브라우저 예시:
+
+```ts
+platform.dom.hitTest(point)
+platform.dom.focus(element)
+platform.dom.readActiveElement()
+
+platform.events.dispatchPointerDown(...)
+platform.events.dispatchClick(...)
+
+platform.state.applyHover(...)
+platform.state.applyActive(...)
+platform.state.applyFocusVisible(...)
+
+platform.styles.injectMirror(...)
+```
+
+Platform Adapter는 환경별 API 호출을 다른 엔진으로 새지 않게 격리합니다.
+
+---
+
+## 19. Pseudo State Mirror
+
+Pseudo State Mirror는 core correctness가 아니라 **best-effort visual feature**입니다.
+
+목표:
+
+```txt
+:hover / :active / :focus-visible 같은 pseudo state를
+runtime에서 가능한 범위 안에서 stuntman state와 연결한다.
+```
+
+브라우저 예시:
+
+```txt
+:hover
+→ data-stuntman-hover
+
+:active
+→ data-stuntman-active
+
+:focus-visible
+→ data-stuntman-focus-visible
+```
+
+중요한 정책:
+
+```txt
+- 실패해도 action 자체는 실패하지 않는다.
+- 실패는 warning trace로 남긴다.
+- 지원 범위는 Capability / Fidelity Report에 표시한다.
+- 정확한 native pseudo-state fidelity가 필요하면 native-backed backend로 승격한다.
+```
+
+즉:
+
+```txt
+hover state 자체
+= Interaction State Store의 core state
+
+hover visual reproduction
+= Pseudo State Mirror의 best-effort rendering
+```
+
+---
+
+## 20. Visual Layer
 
 **사용자에게 보이는 보조 시각 효과를 담당하는 계층**입니다.
 
@@ -361,235 +1010,477 @@ Visual Layer
 = 그 관계를 사용자에게 보여주는 표현
 ```
 
----
-
-## Platform Adapter
-
-**각 환경의 실제 API와 연결되는 계층**입니다.
+중요한 원칙:
 
 ```txt
-Browser
-→ DOM / CSSOM / Event Dispatch
+Visual Layer must be non-interactive by default.
+Visual Layer must never affect target resolution or hit-testing.
+```
 
-macOS
-→ Swift / Accessibility / Native Input / Overlay Window
+브라우저 구현체에서는 overlay root에 기본적으로 다음이 적용되어야 합니다.
 
-Windows
-→ UI Automation / SendInput / Native Overlay
-
-Linux
-→ AT-SPI / X11 / Wayland-specific input / Overlay
+```css
+[data-stuntman-overlay-root] {
+  pointer-events: none;
+}
 ```
 
 ---
 
-## Diagnostics / Trace Engine
+## 21. Capability / Fidelity Model
 
-초기부터 반드시 넣는 게 좋습니다.
+stuntman은 구현체별로 가능한 기능과 fidelity를 명시해야 합니다.
+
+특히 브라우저 in-page 구현체는 synthetic event의 한계를 가질 수 있습니다.
+
+Fidelity 예시:
+
+```ts
+type InputFidelity =
+  | 'visual-only'
+  | 'synthetic-dom-events'
+  | 'native-backed'
+```
+
+Capability 예시:
+
+```ts
+type CapabilityReport = {
+  pointerInput: 'none' | 'visual' | 'synthetic' | 'native'
+  keyboardInput: 'none' | 'synthetic' | 'native'
+  textInput:
+    | 'none'
+    | 'set-value'
+    | 'insert-text'
+    | 'composition'
+    | 'native'
+
+  pseudoState: 'none' | 'mirror' | 'native'
+
+  trustedEvents: boolean
+  crossOriginFrame: boolean
+  closedShadowRoot: boolean
+  dragAndDrop:
+    | 'none'
+    | 'pointer-gesture'
+    | 'html5-dnd'
+    | 'editor-selection'
+    | 'custom-adapter'
+}
+```
+
+이 모델은 다음 질문에 답하기 위한 것입니다.
+
+```txt
+이 구현체는 진짜 사용자 입력처럼 동작하는가?
+아니면 DOM event를 합성하는가?
+hover/focus/active는 native인가, mirror인가?
+drag/drop은 어느 수준까지 지원하는가?
+```
+
+---
+
+## 22. Diagnostics / Trace Engine
+
+초기부터 반드시 들어가야 합니다.
 
 담당:
 
 ```txt
 - step trace
+- action lifecycle trace
 - target resolution trace
 - geometry snapshot
+- interactability report
 - pointer path 기록
 - interaction state diff
 - emitted platform effect 기록
 - wait retry 기록
 - error context
+- actionable error message 생성
+```
+
+Trace는 단순 event log가 아니라 span tree로 설계합니다.
+
+```ts
+type TraceSpan = {
+  id: string
+  parentId?: string
+  name: string
+  startedAt: number
+  endedAt?: number
+  status: 'ok' | 'error' | 'cancelled'
+  input?: unknown
+  output?: unknown
+  events: TraceEvent[]
+}
+```
+
+예시:
+
+```txt
+click(role(button, "Create Project"))
+  resolve target
+  validate target
+  ensure visible
+  compute geometry
+  run interactability preflight
+  move pointer
+  pointer down
+  pointer up
+  dispatch click
+  wait settled
+```
+
+권장 error code:
+
+```txt
+TARGET_NOT_FOUND
+TARGET_AMBIGUOUS
+TARGET_STALE
+TARGET_DETACHED
+TARGET_NOT_VISIBLE
+TARGET_OBSCURED
+TARGET_OUTSIDE_SURFACE
+
+GEOMETRY_UNAVAILABLE
+CLICK_POINT_UNAVAILABLE
+
+UNSUPPORTED_TARGET
+UNSUPPORTED_INPUT
+UNSUPPORTED_CAPABILITY
+
+INPUT_NOT_EDITABLE
+INPUT_COMPOSITION_UNSUPPORTED
+
+POINTER_CAPTURE_CONFLICT
+VISUAL_LAYER_HITTEST_BLOCKED
+
+WAIT_TIMEOUT
+ACTION_CANCELLED
+PERMISSION_DENIED
+PLATFORM_ERROR
+PSEUDO_MIRROR_FAILED
+```
+
+에러에는 반드시 context를 포함합니다.
+
+```ts
+type StuntmanErrorContext = {
+  scenarioName?: string
+  stepIndex?: number
+  action?: string
+
+  locator?: Locator
+  candidates?: TargetDebugInfo[]
+
+  resolvedTarget?: TargetDebugInfo
+  geometry?: GeometrySnapshot
+  interactability?: InteractabilityReport
+
+  pointer?: PointerState
+  interaction?: InteractionStateSnapshot
+
+  elapsedMs?: number
+  timeoutMs?: number
+
+  suggestion?: string
+}
 ```
 
 ---
 
-# 3. 최종 데이터 흐름
+## 23. 최종 데이터 흐름
 
 ```mermaid
 flowchart LR
     A[User Scenario] --> B[Scenario Runner]
-    B --> C[Action Planner]
+    B --> C[Action Orchestrator]
 
     C --> D[Target Resolver]
     D --> E[Target Handle]
 
     E --> F[Surface Engine]
     F --> G[Geometry Engine]
+    G --> H[Interactability Engine]
 
-    G --> H[Pointer Engine]
-    H --> I[Pointer Signals]
+    H --> I[Gesture Engine]
+    I --> J[Pointer Engine]
+    J --> K[Pointer Signals]
 
-    I --> J[Interaction State Engine]
-    J --> K[State Diff]
+    K --> L[Interaction State Store]
+    L --> M[State Diff]
 
-    K --> L[Platform Adapter]
-    K --> M[Visual Layer]
+    M --> N[Platform Adapter]
+    M --> O[Visual Layer]
 
-    L --> N[Actual UI]
-    M --> N
+    N --> P[Actual UI]
+    O --> P
 
-    N --> O[Observation]
-    O --> B
+    P --> Q[Observation]
+    Q --> C
 ```
 
 ---
 
-# 4. `moveTo(target)` 최종 흐름
+## 24. `moveTo(target)` 최종 흐름
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Runner as Scenario Runner
+    participant Orchestrator as Action Orchestrator
     participant Resolver as Target Resolver
     participant Surface as Surface Engine
     participant Geometry as Geometry Engine
     participant Pointer as Pointer Engine
-    participant State as Interaction State Engine
+    participant State as Interaction State Store
     participant Platform as Platform Adapter
     participant Visual as Visual Layer
+    participant Trace as Diagnostics
 
     User->>Runner: moveTo(target)
-    Runner->>Resolver: resolve(target)
-    Resolver-->>Runner: target handle
+    Runner->>Orchestrator: execute moveTo
 
-    Runner->>Surface: ensure target surface
-    Surface-->>Runner: active surface
+    Orchestrator->>Trace: span:start moveTo
 
-    Runner->>Geometry: compute target geometry
-    Geometry-->>Runner: clickable point
+    Orchestrator->>Resolver: resolve(target)
+    Resolver-->>Orchestrator: target handle
 
-    Runner->>Pointer: move current point -> clickable point
+    Orchestrator->>Surface: ensure target surface
+    Surface-->>Orchestrator: active surface
+
+    Orchestrator->>Geometry: compute target geometry
+    Geometry-->>Orchestrator: clickable point / anchor point
+
+    Orchestrator->>Pointer: move current point -> anchor point
 
     loop each tick
         Pointer->>Pointer: update x/y
-        Pointer->>Platform: hitTest(x/y)
+        Pointer->>State: pointer:moved
+        State->>Platform: hitTest(x/y)
         Platform-->>State: hit target
         State->>State: derive hover state
         State->>Platform: apply state diff
         Pointer->>Visual: move cursor overlay
+        State->>Trace: record state diff
     end
 
-    Pointer-->>Runner: movement complete
-    State-->>Runner: hover settled
+    Pointer-->>Orchestrator: movement complete
+    State-->>Orchestrator: hover settled
+    Orchestrator->>Trace: span:end moveTo
 ```
 
 ---
 
-# 5. `click(target)` 최종 흐름
+## 25. `click(target)` 최종 흐름
 
 ```mermaid
 flowchart TD
-    A[click target] --> B[resolve target]
-    B --> C[ensure surface]
-    C --> D[compute geometry]
-    D --> E{target visible?}
+    A[click target] --> B[Action Orchestrator starts click span]
+    B --> C[resolve target]
+    C --> D[validate target freshness]
+    D --> E[ensure surface]
+    E --> F[compute geometry]
+    F --> G[run interactability preflight]
 
-    E -->|No| F[scroll / reveal / activate surface]
-    F --> D
+    G --> H{can click?}
+    H -->|No| I{force?}
+    I -->|No| J[throw actionable error]
+    I -->|Yes| K[continue with warning]
 
-    E -->|Yes| G[move pointer to clickable point]
-    G --> H[derive hover state]
-    H --> I[hover settle]
+    H -->|Yes| L[move pointer to clickable point]
+    K --> L
 
-    I --> J[pointer down]
-    J --> K[active state on target]
-    K --> L[pointer up]
-    L --> M[clear active state]
-    M --> N[dispatch / invoke activation]
-    N --> O[wait for settle]
+    L --> M[hover settle]
+    M --> N[pointer down]
+    N --> O[PointerEngine updates buttons.pressed]
+    O --> P[InteractionState sets active target]
+    P --> Q[Platform dispatches pointerdown / mousedown]
+
+    Q --> R[pointer up]
+    R --> S[PointerEngine clears button]
+    S --> T[InteractionState clears active target]
+    T --> U[Platform dispatches pointerup / mouseup]
+
+    U --> V{click eligible?}
+    V -->|Yes| W[dispatch / invoke activation]
+    V -->|No| X[cancel click]
+
+    W --> Y[wait settle]
+    X --> Y
+    Y --> Z[cleanup and close trace span]
 ```
 
 ---
 
-# 6. 최종 상태 소유권
+## 26. 최종 상태 소유권
 
 ```txt
 Target Resolver
 - target handle
 - candidate list
-- target ambiguity
+- locator matching
+- ambiguity
+- stale validation
 
 Surface Engine
 - active surface
 - coordinate space
-- visibility within surface
+- viewport/window/screen mapping
 - scroll/reveal ability
+- clipping chain source
 
 Geometry Engine
 - rect
 - visible rect
-- clickable point
+- center point
+- clickable point candidates
+- anchor point
+
+Interactability Engine
+- visible enough
+- enabled / disabled
+- readonly / editable
+- pointer-events
 - occlusion
+- canClick / canFocus / canType
 
 Pointer Engine
 - x/y
-- path
+- previous x/y
+- motion.status
+- motion path
 - velocity
 - button state
-- pointer phase
 
-Interaction State Engine
+Interaction State Store
 - hovered target
+- hover chain
 - active target
 - focused target
 - focus-visible target
 - typing target
 - dragging source/drop target
+- selection / pointer capture state
 
 Timeline Engine
-- current step
-- elapsed time
-- paused/running/stopped
+- duration
+- easing
+- frame scheduling
+- paused/running/stopped clock
 - cancellation
 
+Action Orchestrator
+- action lifecycle
+- transaction
+- preflight
+- retry
+- timeout
+- cleanup
+
+Platform Adapter
+- actual platform API calls
+- event dispatch
+- state apply
+- style/pseudo mirror
+
+Visual Layer
+- cursor overlay
+- highlight
+- keystroke overlay
+- mask/spotlight
+
 Diagnostics Engine
-- trace
+- trace span
 - errors
 - warnings
 - snapshots
+- actionable suggestions
+
+Capability / Fidelity Reporter
+- supported features
+- unsupported features
+- input fidelity
+- pseudo-state fidelity
 ```
 
 ---
 
-# 7. 최종 클래스 느낌
+## 27. 최종 클래스 느낌
 
-구현 언어별로 달라도, 개념적으로는 이런 형태를 따르면 됩니다.
+구현 언어별로 달라도, 개념적으로는 이런 형태를 따릅니다.
 
 ```ts
 class Stuntman {
+  scenarioRunner
+  actionOrchestrator
+
   targetResolver
   surfaceEngine
   geometryEngine
+  interactabilityEngine
+
+  gestureEngine
   pointerEngine
   focusEngine
   keyboardEngine
   textInputEngine
-  interactionState
-  timeline
-  observer
-  visualLayer
-  platform
-  diagnostics
 
-  resolve(target)
-  resolveAll(target)
+  interactionStateStore
+  timelineEngine
+  waitEngine
+
+  visualLayer
+  platformAdapter
+
+  diagnostics
+  capabilityReporter
+
+  resolve(locator, options?)
+  resolveAll(locator, options?)
+  exists(locator, options?)
+  inspect(target)
   geometry(target)
 
-  moveTo(target)
-  click(target?)
-  doubleClick(target?)
-  type(targetOrText, text?)
-  press(keys)
-  scrollTo(targetOrPosition)
-  waitFor(condition)
+  moveTo(target, options?)
+  click(target, options?)
+  clickCurrent(options?)
+  doubleClick(target, options?)
 
-  run(scenario)
+  focus(target, options?)
+  type(text, options?)
+  typeInto(target, text, options?)
+  fill(target, text, options?)
+  press(keys, options?)
+
+  scrollTo(targetOrPosition, options?)
+  drag(from, to, options?)
+
+  waitFor(condition, options?)
+
+  run(scenario, options?)
   pause()
   resume()
   stop()
   destroy()
 
+  getCapabilities()
+  getFidelity()
+  getTrace()
+
   on(event, listener)
   off(event, listener)
-  getTrace()
 }
+```
+
+---
+
+## 28. 한 줄 요약
+
+```txt
+Stuntman은 사용자의 선언형 scenario를 Action Orchestrator가 안전한 action lifecycle로 실행하고,
+Target / Surface / Geometry / Interactability를 통해 조작 대상을 검증한 뒤,
+Pointer / Focus / Keyboard / TextInput 신호를 Interaction State Store로 해석하고,
+Platform Adapter와 Visual Layer를 통해 실제 UI와 시각적 피드백에 반영하는 cross-platform UI interaction choreography runtime이다.
 ```
