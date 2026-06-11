@@ -249,7 +249,7 @@ actorble-facade
 - scrollable ancestor chain을 찾는다.
 - `ensureVisible`과 `scrollTo`는 DOM adapter를 통해서만 scroll을 수행한다.
 
-### T6. Geometry Engine: rect와 clickable point
+### T6. Geometry Engine: rect와 clickable point - 완료
 
 브리핑: bounding rect, visible rect, center, clickable point 후보 계산을 별도 모듈로 둔다. 조작 가능 여부 판단은 하지 않고 계산 결과와 실패 이유만 반환한다.
 
