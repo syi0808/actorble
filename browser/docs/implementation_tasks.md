@@ -297,7 +297,7 @@ actorble-facade
 - pointer state가 position, previousPosition, motion, buttons로 분리된다.
 - move/down/up/cancel signal이 순서대로 발행된다.
 
-### T10. Interaction State Store와 slice 구조
+### T10. Interaction State Store와 slice 구조 - 완료
 
 브리핑: pointer/focus/keyboard/text input signal을 받아 hover, active, focus, focus-visible, typing, dragging state를 reducer 방식으로 관리한다. 실제 DOM 반영은 effect descriptor로만 표현한다.
 
