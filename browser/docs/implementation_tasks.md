@@ -8,7 +8,7 @@
 - T1 shared primitive와 port 경계는 완료됐다. `src/shared/index.ts`가 좌표/rect/locator/target/options/error/result/adapter port를 제공한다.
 - T2 diagnostics trace 최소 코어는 완료됐다. `src/diagnostics-trace/index.ts`가 in-memory span/event/snapshot/warning collector를 제공한다.
 - T3 platform adapter 최소 구현은 완료됐다. `src/platform-adapter/*`가 jsdom 기반 DOM/event/state/style adapter 동작을 제공한다.
-- T4 이후 모듈은 대부분 public interface와 `notImplemented()` shell만 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
+- T5 이후 모듈은 대부분 public interface와 `notImplemented()` shell만 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -225,7 +225,7 @@ actorble-facade
 - `BrowserStateApplier`가 `data-actorble-hover`, `data-actorble-active`, `data-actorble-focus-visible`, `data-actorble-focus`, `data-actorble-dragging`을 apply/cleanup한다.
 - `BrowserStyleAdapter`가 style injection과 dispose를 지원한다.
 
-### T4. Target Resolver: element/css slice
+### T4. Target Resolver: element/css slice - 완료
 
 브리핑: locator를 target handle로 바꾸는 계층을 구현한다. 첫 slice는 `element()`과 `css()`만 대상으로 하고, role/text/label/testId는 후속 확장으로 남긴다.
 
