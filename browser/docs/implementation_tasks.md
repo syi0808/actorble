@@ -345,7 +345,7 @@ actorble-facade
 - timeout error가 diagnostics context와 연결될 수 있다.
 - mutation/resize/scroll 변화가 geometry cache invalidation hook으로 연결될 수 있다.
 
-### T14. Action Orchestrator click vertical slice
+### T14. Action Orchestrator click vertical slice - 완료
 
 브리핑: resolve, validate, ensureVisible, geometry, interactability preflight, perform, wait, cleanup 순서를 하나의 action transaction으로 묶는다. 먼저 `moveTo`, `click`, `typeInto`만 대상으로 한다.
 

@@ -182,6 +182,61 @@ describe('BrowserEventDispatcher', () => {
     ).toBe(false)
   })
 
+  it('dispatches mouse activation descriptors with click coordinates and cancel results', () => {
+    const button = document.createElement('button')
+    document.body.append(button)
+    const events = []
+    const dispatcher = new BrowserEventDispatcher()
+
+    button.addEventListener('click', (event) => {
+      events.push({
+        type: event.type,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        button: event.button,
+        buttons: event.buttons,
+        detail: event.detail,
+        bubbles: event.bubbles,
+        cancelable: event.cancelable,
+      })
+    })
+
+    expect(
+      dispatcher.dispatchMouseEvent({
+        type: 'click',
+        target: button,
+        point: { x: 9, y: 10 },
+        button: 'primary',
+        buttons: [],
+        detail: 1,
+      }),
+    ).toBe(true)
+
+    expect(events).toEqual([
+      {
+        type: 'click',
+        clientX: 9,
+        clientY: 10,
+        button: 0,
+        buttons: 0,
+        detail: 1,
+        bubbles: true,
+        cancelable: true,
+      },
+    ])
+
+    button.addEventListener('click', (event) => event.preventDefault(), { once: true })
+    expect(
+      dispatcher.dispatchMouseEvent({
+        type: 'click',
+        target: button,
+        point: { x: 9, y: 10 },
+        button: 'primary',
+        buttons: [],
+      }),
+    ).toBe(false)
+  })
+
   it('dispatches keyboard and text input descriptors', () => {
     const input = document.createElement('input')
     document.body.append(input)

@@ -131,6 +131,15 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([['moveTo', { x: 3, y: 4 }]])
   })
 
+  it('cancel delegates to pointer cancellation for orchestrator cleanup', async () => {
+    const { calls, pointer } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer })
+
+    await expect(engine.cancel()).resolves.toEqual({ completed: false })
+
+    expect(calls).toEqual([['cancel']])
+  })
+
   it('keeps multi-click, double-click, and drag as explicit capability extension points', async () => {
     const engine = createGestureEngine({ pointer: createFakePointer().pointer })
     const target = createTarget()

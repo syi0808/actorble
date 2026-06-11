@@ -1,12 +1,14 @@
 import type {
   EventDispatchPort,
   KeyboardEventDescriptor,
+  MouseEventDescriptor,
   PointerButtonName,
   PointerEventDescriptor,
   TextInputEventDescriptor,
 } from '../../shared/index.js'
 export type {
   KeyboardEventDescriptor,
+  MouseEventDescriptor,
   PointerEventDescriptor,
   TextInputEventDescriptor,
 } from '../../shared/index.js'
@@ -30,6 +32,10 @@ export class BrowserEventDispatcher implements EventDispatcher {
     }
 
     return event.target.dispatchEvent(createMouseEvent(mouseType, event)) && pointerResult
+  }
+
+  dispatchMouseEvent(event: MouseEventDescriptor): boolean {
+    return event.target.dispatchEvent(createMouseEvent(event.type, event))
   }
 
   dispatchKeyboardEvent(event: KeyboardEventDescriptor): boolean {
@@ -111,11 +117,13 @@ function createPointerEvent(event: PointerEventDescriptor): Event {
   return fallback
 }
 
-function createMouseEvent(type: string, event: PointerEventDescriptor): MouseEvent {
+type MouseDescriptorLike = PointerEventDescriptor | MouseEventDescriptor
+
+function createMouseEvent(type: string, event: MouseDescriptorLike): MouseEvent {
   return new (ownerWindow(event.target).MouseEvent)(type, pointerMouseEventInit(event))
 }
 
-function pointerMouseEventInit(event: PointerEventDescriptor): MouseEventInit {
+function pointerMouseEventInit(event: MouseDescriptorLike): MouseEventInit {
   return {
     bubbles: true,
     cancelable: true,
@@ -124,6 +132,7 @@ function pointerMouseEventInit(event: PointerEventDescriptor): MouseEventInit {
     clientY: event.point.y,
     button: event.button === undefined ? defaultMouseButton(event.type) : toMouseButton(event.button),
     buttons: toButtons(event.buttons),
+    ...('detail' in event && event.detail !== undefined ? { detail: event.detail } : {}),
   }
 }
 
@@ -191,7 +200,7 @@ function mouseEventTypeFor(type: PointerEventDescriptor['type']): string | undef
   }
 }
 
-function defaultMouseButton(type: PointerEventDescriptor['type']): number {
+function defaultMouseButton(type: MouseDescriptorLike['type']): number {
   return type === 'pointermove' ? -1 : 0
 }
 

@@ -404,6 +404,15 @@ export type KeyboardEventDescriptor = Readonly<{
   modifiers?: readonly string[]
 }>
 
+export type MouseEventDescriptor = Readonly<{
+  type: 'click'
+  target: Element
+  point: Point
+  button?: PointerButtonName
+  buttons?: readonly PointerButtonName[]
+  detail?: number
+}>
+
 export type TextInputEventDescriptor = Readonly<{
   type: 'beforeinput' | 'input' | 'change'
   target: Element
@@ -413,6 +422,7 @@ export type TextInputEventDescriptor = Readonly<{
 
 export interface EventDispatchPort {
   dispatchPointerEvent(event: PointerEventDescriptor): boolean
+  dispatchMouseEvent(event: MouseEventDescriptor): boolean
   dispatchKeyboardEvent(event: KeyboardEventDescriptor): boolean
   dispatchTextInputEvent(event: TextInputEventDescriptor): boolean
 }

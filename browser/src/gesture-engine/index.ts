@@ -1,7 +1,7 @@
 import { actorbleError } from '../shared/index.js'
 import { BrowserPointerEngine } from '../pointer-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
-import type { ClickOptions, DragOptions, Point, TargetHandle } from '../shared/index.js'
+import type { ClickOptions, DragOptions, MoveOptions, Point, TargetHandle } from '../shared/index.js'
 import type { PointerEngine } from '../pointer-engine/index.js'
 import type { TimelineEngine } from '../timeline-engine/index.js'
 
@@ -24,8 +24,9 @@ export type GestureEngineOptions = Readonly<{
 export interface GestureEngine {
   click(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
   doubleClick(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
-  hover(point: Point): Promise<GestureResult>
+  hover(point: Point, options?: MoveOptions): Promise<GestureResult>
   drag(from: Point, to: Point, options?: DragOptions): Promise<GestureResult>
+  cancel(): Promise<GestureResult>
 }
 
 export class BrowserGestureEngine implements GestureEngine {
@@ -67,8 +68,8 @@ export class BrowserGestureEngine implements GestureEngine {
     })
   }
 
-  async hover(point: Point): Promise<GestureResult> {
-    await this.#pointer.moveTo(point)
+  async hover(point: Point, options: MoveOptions = {}): Promise<GestureResult> {
+    await this.#pointer.moveTo(point, options)
 
     return { completed: true }
   }
@@ -78,6 +79,12 @@ export class BrowserGestureEngine implements GestureEngine {
       extensionPoint: 'drag',
       capability: 'pointer-gesture',
     })
+  }
+
+  async cancel(): Promise<GestureResult> {
+    await this.#pointer.cancel()
+
+    return { completed: false }
   }
 }
 
