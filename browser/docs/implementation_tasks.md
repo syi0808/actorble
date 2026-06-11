@@ -273,7 +273,7 @@ actorble-facade
 - disabled, readonly, pointer-events none, occlusion 케이스 테스트가 있다.
 - force option으로 우회 가능한 이유와 불가능한 이유를 구분할 수 있다.
 
-### T8. Timeline Engine
+### T8. Timeline Engine - 완료
 
 브리핑: duration, next-frame, settled, timeout, cancellation primitive를 독립 구현한다. Pointer/Wait/Scenario/Action은 이 primitive를 주입받는다.
 
