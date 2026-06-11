@@ -1,24 +1,8 @@
 import { notImplemented } from '../../shared/index.js'
-import type { TargetHandle } from '../../shared/index.js'
+import type { StateApplyPort } from '../../shared/index.js'
+export type { StateEffect, StateEffectKind } from '../../shared/index.js'
 
-export type StateEffectKind =
-  | 'hover'
-  | 'active'
-  | 'focus'
-  | 'focus-visible'
-  | 'typing'
-  | 'dragging'
-
-export type StateEffect = Readonly<{
-  kind: StateEffectKind
-  target: TargetHandle | null
-  active: boolean
-}>
-
-export interface StateApplier {
-  applyStateEffects(effects: readonly StateEffect[]): void
-  cleanup(): void
-}
+export interface StateApplier extends StateApplyPort {}
 
 export class BrowserStateApplier implements StateApplier {
   applyStateEffects(): void {

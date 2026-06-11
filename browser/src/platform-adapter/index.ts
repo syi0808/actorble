@@ -7,8 +7,9 @@ import type { DomAdapter } from './dom-adapter/index.js'
 import type { EventDispatcher } from './event-dispatcher/index.js'
 import type { StateApplier } from './state-applier/index.js'
 import type { StyleAdapter } from './style-adapter/index.js'
+import type { PlatformAdapterPort } from '../shared/index.js'
 
-export interface BrowserPlatformAdapter {
+export interface BrowserPlatformAdapter extends PlatformAdapterPort {
   readonly dom: DomAdapter
   readonly events: EventDispatcher
   readonly state: StateApplier

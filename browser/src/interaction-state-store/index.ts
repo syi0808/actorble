@@ -1,7 +1,6 @@
 import { notImplemented } from '../shared/index.js'
-import type { ActorbleListener, Disposable, TargetHandle } from '../shared/index.js'
+import type { ActorbleListener, Disposable, StateEffect, TargetHandle } from '../shared/index.js'
 import type { PointerSignal } from '../pointer-signals/index.js'
-import type { StateEffect } from '../platform-adapter/state-applier/index.js'
 
 export type InteractionStateSnapshot = Readonly<{
   hovered: readonly TargetHandle[]

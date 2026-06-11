@@ -1,11 +1,8 @@
 import { notImplemented } from '../shared/index.js'
-import type { CancellationOptions, DurationMs, TimestampMs } from '../shared/index.js'
+import type { CancellationOptions, Clock, DurationMs, TimestampMs } from '../shared/index.js'
+export type { Clock } from '../shared/index.js'
 
 export type WaitStrategy = 'none' | 'next-frame' | 'settled'
-
-export interface Clock {
-  now(): TimestampMs
-}
 
 export interface TimelineEngine extends Clock {
   delay(duration: DurationMs, options?: CancellationOptions): Promise<void>

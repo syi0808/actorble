@@ -1,25 +1,8 @@
 import { notImplemented } from '../../shared/index.js'
-import type { Point, Rect, ScrollOptions, TargetDebugInfo } from '../../shared/index.js'
+import type { DomPort, Point, Rect, ScrollOptions, TargetDebugInfo } from '../../shared/index.js'
+export type { HitTestOptions } from '../../shared/index.js'
 
-export type HitTestOptions = Readonly<{
-  ignoreActorbleInternal?: boolean
-}>
-
-export interface DomAdapter {
-  getRoot(): Document | ShadowRoot
-  querySelectorAll(selector: string, root?: ParentNode): readonly Element[]
-  getBoundingClientRect(element: Element): Rect
-  getComputedStyle(element: Element): CSSStyleDeclaration
-  elementFromPoint(point: Point, options?: HitTestOptions): Element | null
-  contains(root: Node, node: Node): boolean
-  isConnected(element: Element): boolean
-  getActiveElement(root?: Document | ShadowRoot): Element | null
-  focus(element: HTMLElement | SVGElement, options?: FocusOptions): void
-  blur(element: HTMLElement | SVGElement): void
-  scrollIntoView(element: Element, options?: ScrollIntoViewOptions): void
-  scrollTo(target: Element | Window, position: Point, options?: ScrollOptions): void
-  describeElement(element: Element): TargetDebugInfo
-}
+export interface DomAdapter extends DomPort {}
 
 export class BrowserDomAdapter implements DomAdapter {
   constructor(readonly root?: Document | ShadowRoot) {}

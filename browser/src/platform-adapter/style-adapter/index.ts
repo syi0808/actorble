@@ -1,15 +1,8 @@
 import { notImplemented } from '../../shared/index.js'
-import type { Disposable } from '../../shared/index.js'
+import type { Disposable, StylePort } from '../../shared/index.js'
+export type { StyleInjection } from '../../shared/index.js'
 
-export type StyleInjection = Readonly<{
-  id: string
-  cssText: string
-}>
-
-export interface StyleAdapter {
-  injectStyle(injection: StyleInjection): Disposable
-  removeStyle(id: string): void
-}
+export interface StyleAdapter extends StylePort {}
 
 export class BrowserStyleAdapter implements StyleAdapter {
   injectStyle(): Disposable {

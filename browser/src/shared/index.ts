@@ -1,6 +1,10 @@
 export type TimestampMs = number
 export type DurationMs = number
 
+export interface Clock {
+  now(): TimestampMs
+}
+
 export type CoordinateSpace =
   | 'viewport'
   | 'document'
@@ -41,9 +45,11 @@ export type CancellationSignalLike = Pick<
   'aborted' | 'reason' | 'addEventListener' | 'removeEventListener'
 >
 
-export type CancellationOptions = Readonly<{
-  signal?: CancellationSignalLike
-}>
+export interface Cancellation {
+  readonly signal?: CancellationSignalLike
+}
+
+export type CancellationOptions = Readonly<Cancellation>
 
 export type OperationOptions = TimeoutOptions & CancellationOptions
 
@@ -66,15 +72,16 @@ export type ActorbleErrorCode =
 
 export type ActorbleErrorDetails = Readonly<Record<string, unknown>>
 
+export type ActorbleErrorOptions = Readonly<{
+  cause?: unknown
+  details?: ActorbleErrorDetails
+}>
+
 export class ActorbleError extends Error {
   readonly code: ActorbleErrorCode
   readonly details?: ActorbleErrorDetails
 
-  constructor(
-    code: ActorbleErrorCode,
-    message: string,
-    options: { cause?: unknown; details?: ActorbleErrorDetails } = {},
-  ) {
+  constructor(code: ActorbleErrorCode, message: string, options: ActorbleErrorOptions = {}) {
     super(message, { cause: options.cause })
     this.name = 'ActorbleError'
     this.code = code
@@ -91,6 +98,32 @@ export class ActorbleNotImplementedError extends ActorbleError {
   }
 }
 
+export function actorbleError(
+  code: ActorbleErrorCode,
+  message: string,
+  options: ActorbleErrorOptions = {},
+): ActorbleError {
+  return new ActorbleError(code, message, options)
+}
+
+export function timeoutError(
+  operation: string,
+  timeout: DurationMs,
+  options: ActorbleErrorOptions = {},
+): ActorbleError {
+  return actorbleError('ACTION_TIMEOUT', `${operation} timed out after ${timeout}ms.`, {
+    cause: options.cause,
+    details: { ...options.details, operation, timeout },
+  })
+}
+
+export function cancellationError(operation: string, reason?: unknown): ActorbleError {
+  return actorbleError('ACTION_CANCELLED', `${operation} was cancelled.`, {
+    cause: reason,
+    details: { operation, reason },
+  })
+}
+
 export function notImplemented(boundary: string): never {
   throw new ActorbleNotImplementedError(boundary)
 }
@@ -98,6 +131,14 @@ export function notImplemented(boundary: string): never {
 export type Result<TValue, TError = ActorbleError> =
   | Readonly<{ ok: true; value: TValue }>
   | Readonly<{ ok: false; error: TError }>
+
+export function ok<TValue>(value: TValue): Result<TValue, never> {
+  return { ok: true, value }
+}
+
+export function err<TError = ActorbleError>(error: TError): Result<never, TError> {
+  return { ok: false, error }
+}
 
 export type ActorbleMode = 'interactive' | 'headless'
 
@@ -308,6 +349,96 @@ export type PointerButtonName =
   | 'auxiliary'
   | 'back'
   | 'forward'
+
+export type HitTestOptions = Readonly<{
+  ignoreActorbleInternal?: boolean
+}>
+
+export interface DomReadPort {
+  getRoot(): Document | ShadowRoot
+  querySelectorAll(selector: string, root?: ParentNode): readonly Element[]
+  getBoundingClientRect(element: Element): Rect
+  getComputedStyle(element: Element): CSSStyleDeclaration
+  elementFromPoint(point: Point, options?: HitTestOptions): Element | null
+  contains(root: Node, node: Node): boolean
+  isConnected(element: Element): boolean
+  getActiveElement(root?: Document | ShadowRoot): Element | null
+  describeElement(element: Element): TargetDebugInfo
+}
+
+export interface DomWritePort {
+  focus(element: HTMLElement | SVGElement, options?: FocusOptions): void
+  blur(element: HTMLElement | SVGElement): void
+  scrollIntoView(element: Element, options?: ScrollIntoViewOptions): void
+  scrollTo(target: Element | Window, position: Point, options?: ScrollOptions): void
+}
+
+export interface DomPort extends DomReadPort, DomWritePort {}
+
+export type PointerEventDescriptor = Readonly<{
+  type: 'pointermove' | 'pointerdown' | 'pointerup' | 'pointercancel'
+  target: Element
+  point: Point
+  button?: PointerButtonName
+  buttons?: readonly PointerButtonName[]
+}>
+
+export type KeyboardEventDescriptor = Readonly<{
+  type: 'keydown' | 'keyup'
+  target: Element
+  key: string
+  code?: string
+  modifiers?: readonly string[]
+}>
+
+export type TextInputEventDescriptor = Readonly<{
+  type: 'beforeinput' | 'input' | 'change'
+  target: Element
+  text?: string
+  inputType?: string
+}>
+
+export interface EventDispatchPort {
+  dispatchPointerEvent(event: PointerEventDescriptor): boolean
+  dispatchKeyboardEvent(event: KeyboardEventDescriptor): boolean
+  dispatchTextInputEvent(event: TextInputEventDescriptor): boolean
+}
+
+export type StateEffectKind =
+  | 'hover'
+  | 'active'
+  | 'focus'
+  | 'focus-visible'
+  | 'typing'
+  | 'dragging'
+
+export type StateEffect = Readonly<{
+  kind: StateEffectKind
+  target: TargetHandle | null
+  active: boolean
+}>
+
+export interface StateApplyPort {
+  applyStateEffects(effects: readonly StateEffect[]): void
+  cleanup(): void
+}
+
+export type StyleInjection = Readonly<{
+  id: string
+  cssText: string
+}>
+
+export interface StylePort {
+  injectStyle(injection: StyleInjection): Disposable
+  removeStyle(id: string): void
+}
+
+export interface PlatformAdapterPort {
+  readonly dom: DomPort
+  readonly events: EventDispatchPort
+  readonly state: StateApplyPort
+  readonly style: StylePort
+}
 
 export type WaitCondition =
   | Readonly<{ kind: 'visible'; target: TargetLike }>

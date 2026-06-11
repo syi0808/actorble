@@ -1,34 +1,12 @@
 import { notImplemented } from '../../shared/index.js'
-import type { Point, PointerButtonName } from '../../shared/index.js'
+import type { EventDispatchPort } from '../../shared/index.js'
+export type {
+  KeyboardEventDescriptor,
+  PointerEventDescriptor,
+  TextInputEventDescriptor,
+} from '../../shared/index.js'
 
-export type PointerEventDescriptor = Readonly<{
-  type: 'pointermove' | 'pointerdown' | 'pointerup' | 'pointercancel'
-  target: Element
-  point: Point
-  button?: PointerButtonName
-  buttons?: readonly PointerButtonName[]
-}>
-
-export type KeyboardEventDescriptor = Readonly<{
-  type: 'keydown' | 'keyup'
-  target: Element
-  key: string
-  code?: string
-  modifiers?: readonly string[]
-}>
-
-export type TextInputEventDescriptor = Readonly<{
-  type: 'beforeinput' | 'input' | 'change'
-  target: Element
-  text?: string
-  inputType?: string
-}>
-
-export interface EventDispatcher {
-  dispatchPointerEvent(event: PointerEventDescriptor): boolean
-  dispatchKeyboardEvent(event: KeyboardEventDescriptor): boolean
-  dispatchTextInputEvent(event: TextInputEventDescriptor): boolean
-}
+export interface EventDispatcher extends EventDispatchPort {}
 
 export class BrowserEventDispatcher implements EventDispatcher {
   dispatchPointerEvent(): boolean {
