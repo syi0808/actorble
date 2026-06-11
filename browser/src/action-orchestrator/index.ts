@@ -10,8 +10,10 @@ import {
   BrowserDomAdapter,
   BrowserEventDispatcher,
   BrowserStateApplier,
+  BrowserStyleAdapter,
   type TextInputMutationPort,
 } from '../platform-adapter/index.js'
+import { BrowserPseudoStateMirror } from '../pseudo-state-mirror/index.js'
 import { BrowserSurfaceEngine } from '../surface-engine/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
 import { BrowserTextInputEngine } from '../text-input-engine/index.js'
@@ -152,7 +154,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const timeline = options.timeline ?? new BrowserTimelineEngine()
     const store = options.store ?? new BrowserInteractionStateStore()
     const events = options.events ?? new BrowserEventDispatcher()
-    const state = options.state ?? new BrowserStateApplier()
+    const state =
+      options.state ??
+      new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: new BrowserStyleAdapter(dom.getRoot()),
+        trace,
+      })
     const signals = options.signals ?? new BrowserPointerSignalBus()
     const surface = options.surface ?? new BrowserSurfaceEngine({ dom })
     const geometry =

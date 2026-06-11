@@ -3,6 +3,7 @@ import { BrowserActionOrchestrator } from '../src/action-orchestrator/index.js'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
 import { BrowserInteractionStateStore } from '../src/interaction-state-store/index.js'
 import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
+import { BrowserPseudoStateMirror } from '../src/pseudo-state-mirror/index.js'
 import { actorbleError, cancellationError, css } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {
@@ -54,7 +55,7 @@ function createHarness(options = {}) {
   const target = options.target ?? targetHandle()
   const geometry = options.geometry ?? geometryFor(target)
   const signals = new BrowserPointerSignalBus()
-  const trace = createTrace()
+  const trace = options.trace ?? createTrace()
   const resolver = {
     resolve: vi.fn(async () => {
       calls.push('resolver.resolve')
@@ -191,7 +192,7 @@ function createHarness(options = {}) {
     dispatchKeyboardEvent: vi.fn(() => true),
     dispatchTextInputEvent: vi.fn(() => true),
   }
-  const state = {
+  const state = options.state ?? {
     applyStateEffects: vi.fn((effects) => {
       if (effects.length > 0) {
         calls.push(`state.${effects.map((effect) => `${effect.kind}:${effect.active}`).join(',')}`)
@@ -320,6 +321,40 @@ describe('BrowserActionOrchestrator', () => {
         name: 'action.click',
         status: 'cancelled',
       }),
+    )
+  })
+
+  it('does not fail click when pseudo state mirror application only records a warning', async () => {
+    const trace = createTrace()
+    const failingMirrorState = {
+      applyStateEffects: vi.fn(() => {
+        throw new Error('mirror blocked by runtime style policy')
+      }),
+      cleanup: vi.fn(),
+    }
+    const mirror = new BrowserPseudoStateMirror({
+      state: failingMirrorState,
+      trace,
+    })
+    const { orchestrator } = createHarness({ state: mirror, trace })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(trace.getTrace().spans[0]).toEqual(
+      expect.objectContaining({
+        name: 'action.click',
+        status: 'ok',
+      }),
+    )
+    expect(trace.getTrace().warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Pseudo state mirror apply failed.',
+          details: expect.objectContaining({
+            error: 'mirror blocked by runtime style policy',
+          }),
+        }),
+      ]),
     )
   })
 

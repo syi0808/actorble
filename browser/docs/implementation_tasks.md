@@ -369,7 +369,7 @@ actorble-facade
 - scenario runner가 step execution을 orchestrator에 위임한다.
 - facade 외부에서 concrete module graph를 직접 조립하지 않아도 된다.
 
-### T16. Pseudo State Mirror, Visual Layer, Capability / Fidelity
+### T16. Pseudo State Mirror, Visual Layer, Capability / Fidelity - 완료
 
 브리핑: core correctness와 visual fidelity를 분리한다. pseudo-state mirror와 overlay는 실패해도 action을 실패시키지 않고 diagnostics warning으로 남긴다. capability report는 synthetic browser runtime의 한계를 명시한다.
 
