@@ -261,7 +261,7 @@ actorble-facade
 - visible rect와 center point 계산 테스트가 있다.
 - clickable point는 `Point | null`이 아니라 strategy/reason이 있는 result로 반환된다.
 
-### T7. Interactability Engine: action preflight
+### T7. Interactability Engine: action preflight - 완료
 
 브리핑: visibility, enabled, editable, focusable, pointer-events, occlusion 판단을 Geometry Engine에서 분리한다. action별 preflight는 `canClick`, `canFocus`, `canType` 같은 report field로 표현한다.
 
