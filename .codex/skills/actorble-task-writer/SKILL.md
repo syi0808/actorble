@@ -1,6 +1,6 @@
 ---
 name: actorble-task-writer
-description: Write or revise Actorble implementation task documents from architecture docs and scaffolded modules. Use when Codex is asked to create docs such as implementation_tasks.md, derive module dependencies, split implementation work into tasks, or brief tasks before execution.
+description: Write or revise Actorble implementation task documents with dependency-aware sequencing and explicit completion status fields. Use when Codex is asked to create docs such as implementation_tasks.md, derive module dependencies, split implementation work into tasks, or brief tasks before execution.
 ---
 
 # Actorble Task Writer
@@ -18,6 +18,7 @@ Use this skill to turn Actorble architecture and scaffold structure into impleme
    - Platform-specific DOM/event/style code should remain behind platform adapters.
 3. Write tasks that are executable.
    - Give each task a stable ID.
+   - Include an explicit completion status line.
    - Include briefing, dependencies, completion criteria, and test expectations.
    - Keep task boundaries small enough for TDD and review.
 4. Keep the document implementation-neutral.

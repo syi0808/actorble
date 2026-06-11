@@ -29,6 +29,18 @@ Proceed with stated assumptions for lower-impact details.
 5. Refactor without changing behavior.
 6. Run the relevant suite or explain why it could not run.
 
+## Task Completion and Commit
+
+After verification succeeds:
+
+1. Update the executed task entry in the task document from `Status: [ ] Not started` to `Status: [x] Completed`.
+2. If the task document uses another explicit status format, preserve that format and mark only the executed task complete.
+3. Run `git status --short` and inspect the relevant diff.
+4. Stage only task-related files, including the task document status update.
+5. Create one conventional commit for the completed task.
+
+Do not commit unrelated user changes. If unrelated changes are already staged, do not unstage or modify them unless the user explicitly asks; report that the commit is blocked by pre-existing staged changes.
+
 ## Boundary Rules
 
 - Resolve targets before dispatching input.
@@ -47,5 +59,6 @@ Report:
 - Behavior completed.
 - Files changed.
 - Tests run and results.
+- Commit hash.
 - Assumptions made.
 - Residual risks or follow-up tasks.

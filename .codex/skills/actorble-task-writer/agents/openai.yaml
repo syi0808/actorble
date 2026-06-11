@@ -1,4 +1,4 @@
 interface:
   display_name: "Actorble Task Writer"
-  short_description: "Write dependency-aware task docs"
+  short_description: "Write task docs with completion status"
   default_prompt: "Use $actorble-task-writer to turn the current Actorble design into implementation tasks."

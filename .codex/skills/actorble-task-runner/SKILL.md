@@ -1,6 +1,6 @@
 ---
 name: actorble-task-runner
-description: Clarify and execute Actorble implementation tasks from task docs using a TDD-first workflow. Use when Codex is asked to run a task from implementation_tasks.md, implement an Actorble module slice, or continue task execution after a task has been selected.
+description: Clarify, execute, mark complete, and commit Actorble implementation tasks from task docs using a TDD-first workflow. Use when Codex is asked to run a task from implementation_tasks.md, implement an Actorble module slice, or continue task execution after a task has been selected.
 ---
 
 # Actorble Task Runner
@@ -24,9 +24,14 @@ Use this skill to execute one Actorble implementation task at a time with clear 
    - Follow the dependency map in the task doc.
    - Do not call DOM APIs outside platform adapter modules.
    - Do not merge geometry calculation with interactability judgment.
-5. Verify and report.
+5. Verify.
    - Run the narrowest relevant tests.
-   - Summarize changed files, behavior completed, tests run, and residual risk.
+6. Mark the task complete and commit.
+   - Update the executed task entry in the task document to show completed status after verification passes.
+   - Inspect `git status --short` and the relevant diff, then stage only task-related changes.
+   - Create a conventional commit for the completed task, including the task document status update.
+7. Report.
+   - Summarize changed files, behavior completed, tests run, commit hash, and residual risk.
 
 Read `references/execution-protocol.md` before executing a task that changes code.
 
