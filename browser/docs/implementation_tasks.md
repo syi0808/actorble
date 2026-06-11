@@ -321,7 +321,7 @@ actorble-facade
 - double click과 drag는 capability 확장 지점을 가진다.
 - gesture test는 fake pointer/timeline으로 실행된다.
 
-### T12. Focus, Keyboard, Text Input Engine
+### T12. Focus, Keyboard, Text Input Engine - 완료
 
 브리핑: focus 요청, key sequence, text insertion을 별도 엔진으로 둔다. `type`, `typeInto`, `fill`의 의미 차이를 API 수준에서 보존한다.
 

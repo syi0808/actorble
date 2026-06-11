@@ -11,7 +11,14 @@ export type {
   TextInputEventDescriptor,
 } from '../../shared/index.js'
 
-export interface EventDispatcher extends EventDispatchPort {}
+export type TextInputMutationMode = 'insert' | 'replace'
+
+export interface TextInputMutationPort {
+  isEditableTarget(target: Element): boolean
+  mutateTextInput(target: Element, text: string, mode: TextInputMutationMode): void
+}
+
+export interface EventDispatcher extends EventDispatchPort, TextInputMutationPort {}
 
 export class BrowserEventDispatcher implements EventDispatcher {
   dispatchPointerEvent(event: PointerEventDescriptor): boolean {
@@ -31,6 +38,24 @@ export class BrowserEventDispatcher implements EventDispatcher {
 
   dispatchTextInputEvent(event: TextInputEventDescriptor): boolean {
     return event.target.dispatchEvent(createTextInputEvent(event))
+  }
+
+  isEditableTarget(target: Element): boolean {
+    return isTextControl(target) || isContentEditable(target)
+  }
+
+  mutateTextInput(target: Element, text: string, mode: TextInputMutationMode): void {
+    if (isTextControl(target)) {
+      mutateTextControl(target, text, mode)
+      return
+    }
+
+    if (isContentEditable(target)) {
+      target.textContent = mode === 'replace' ? text : `${target.textContent ?? ''}${text}`
+      return
+    }
+
+    throw new TypeError('Target is not editable.')
   }
 }
 
@@ -184,4 +209,50 @@ function defineReadonlyEventProperty(event: Event, property: string, value: unkn
     enumerable: true,
     value,
   })
+}
+
+function isTextControl(target: Element): target is HTMLInputElement | HTMLTextAreaElement {
+  const view = ownerWindow(target)
+
+  return target instanceof view.HTMLInputElement || target instanceof view.HTMLTextAreaElement
+}
+
+function isContentEditable(target: Element): target is HTMLElement {
+  const view = ownerWindow(target)
+
+  return target instanceof view.HTMLElement && target.isContentEditable
+}
+
+function mutateTextControl(
+  target: HTMLInputElement | HTMLTextAreaElement,
+  text: string,
+  mode: TextInputMutationMode,
+): void {
+  if (mode === 'replace') {
+    target.value = text
+    setSelectionRange(target, text.length)
+    return
+  }
+
+  const value = target.value
+  const selectionStart = target.selectionStart ?? value.length
+  const selectionEnd = target.selectionEnd ?? selectionStart
+  const start = selectionStart
+  const end = selectionEnd
+  const nextValue = `${value.slice(0, start)}${text}${value.slice(end)}`
+  const nextPosition = start + text.length
+
+  target.value = nextValue
+  setSelectionRange(target, nextPosition)
+}
+
+function setSelectionRange(
+  target: HTMLInputElement | HTMLTextAreaElement,
+  position: number,
+): void {
+  try {
+    target.setSelectionRange(position, position)
+  } catch {
+    // Some input types expose value but do not support text selection.
+  }
 }
