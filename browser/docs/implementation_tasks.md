@@ -333,7 +333,7 @@ actorble-facade
 - Keyboard Engine은 keyDown/keyUp/press와 modifier state를 관리한다.
 - Text Input Engine은 fill과 type을 별도 strategy로 처리한다.
 
-### T13. Wait / Observation Engine
+### T13. Wait / Observation Engine - 완료
 
 브리핑: action 후 settlement와 명시적 wait condition을 담당한다. mutation quiet, next frame, layout stable 같은 wait strategy를 action lifecycle 밖의 독립 primitive로 만든다.
 
