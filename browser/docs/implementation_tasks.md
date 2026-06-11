@@ -7,7 +7,8 @@
 - T0 스캐폴딩은 완료됐다. `src/index.ts` barrel, 모듈별 `index.ts`, `tsconfig.json`, Vitest, package build/typecheck/test scripts가 있다.
 - T1 shared primitive와 port 경계는 완료됐다. `src/shared/index.ts`가 좌표/rect/locator/target/options/error/result/adapter port를 제공한다.
 - T2 diagnostics trace 최소 코어는 완료됐다. `src/diagnostics-trace/index.ts`가 in-memory span/event/snapshot/warning collector를 제공한다.
-- T3 이후 모듈은 대부분 public interface와 `notImplemented()` shell만 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
+- T3 platform adapter 최소 구현은 완료됐다. `src/platform-adapter/*`가 jsdom 기반 DOM/event/state/style adapter 동작을 제공한다.
+- T4 이후 모듈은 대부분 public interface와 `notImplemented()` shell만 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -211,7 +212,7 @@ actorble-facade
 - event append, snapshot attach, warning 기록이 가능하다.
 - trace 모듈이 action/target/geometry 같은 구체 모듈을 import하지 않는다.
 
-### T3. Platform Adapter 최소 구현
+### T3. Platform Adapter 최소 구현 - 완료
 
 브리핑: DOM 접근, event dispatch, state apply, style injection shell을 실제 브라우저/jsdom 동작으로 채운다. 이 태스크는 후속 엔진이 fake adapter 없이도 기본 DOM 테스트를 작성할 수 있게 만드는 기반이다.
 

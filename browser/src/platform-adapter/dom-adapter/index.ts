@@ -1,65 +1,310 @@
-import { notImplemented } from '../../shared/index.js'
-import type { DomPort, Point, Rect, ScrollOptions, TargetDebugInfo } from '../../shared/index.js'
+import { actorbleError } from '../../shared/index.js'
+import type {
+  DomPort,
+  FocusOptions,
+  HitTestOptions,
+  Point,
+  Rect,
+  ScrollOptions,
+  TargetDebugInfo,
+} from '../../shared/index.js'
 export type { HitTestOptions } from '../../shared/index.js'
 
 export interface DomAdapter extends DomPort {}
 
 export class BrowserDomAdapter implements DomAdapter {
-  constructor(readonly root?: Document | ShadowRoot) {}
+  constructor(readonly root: Document | ShadowRoot = getGlobalDocument()) {}
 
   getRoot(): Document | ShadowRoot {
-    return notImplemented('DOM Adapter getRoot')
+    return this.root
   }
 
-  querySelectorAll(): readonly Element[] {
-    return notImplemented('DOM Adapter querySelectorAll')
+  querySelectorAll(selector: string, root: ParentNode = this.getRoot()): readonly Element[] {
+    return Array.from(root.querySelectorAll(selector))
   }
 
-  getBoundingClientRect(): Rect {
-    return notImplemented('DOM Adapter getBoundingClientRect')
+  getBoundingClientRect(element: Element): Rect {
+    const rect = element.getBoundingClientRect()
+
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    }
   }
 
-  getComputedStyle(): CSSStyleDeclaration {
-    return notImplemented('DOM Adapter getComputedStyle')
+  getComputedStyle(element: Element): CSSStyleDeclaration {
+    return getOwnerWindow(element).getComputedStyle(element)
   }
 
-  elementFromPoint(): Element | null {
-    return notImplemented('DOM Adapter elementFromPoint')
+  elementFromPoint(point: Point, options: HitTestOptions = {}): Element | null {
+    const root = this.getRoot()
+
+    if (!options.ignoreActorbleInternal) {
+      return readElementFromPoint(root, point)
+    }
+
+    const disabled: Array<{ element: StyleableElement; pointerEvents: string }> = []
+
+    try {
+      for (;;) {
+        const candidate = readElementFromPoint(root, point)
+        const internal = findInternalElement(candidate)
+
+        if (!internal) {
+          return candidate
+        }
+
+        if (disabled.some((entry) => entry.element === internal)) {
+          return null
+        }
+
+        disabled.push({ element: internal, pointerEvents: internal.style.pointerEvents })
+        internal.style.pointerEvents = 'none'
+      }
+    } finally {
+      for (const entry of disabled) {
+        entry.element.style.pointerEvents = entry.pointerEvents
+      }
+    }
   }
 
-  contains(): boolean {
-    return notImplemented('DOM Adapter contains')
+  contains(root: Node, node: Node): boolean {
+    return root.contains(node)
   }
 
-  isConnected(): boolean {
-    return notImplemented('DOM Adapter isConnected')
+  isConnected(element: Element): boolean {
+    return element.isConnected
   }
 
-  getActiveElement(): Element | null {
-    return notImplemented('DOM Adapter getActiveElement')
+  getActiveElement(root: Document | ShadowRoot = this.getRoot()): Element | null {
+    return root.activeElement
   }
 
-  focus(): void {
-    return notImplemented('DOM Adapter focus')
+  focus(element: HTMLElement | SVGElement, options: FocusOptions = {}): void {
+    const focusOptions =
+      options.focusVisible === undefined
+        ? undefined
+        : ({ focusVisible: options.focusVisible } as globalThis.FocusOptions)
+
+    element.focus(focusOptions)
   }
 
-  blur(): void {
-    return notImplemented('DOM Adapter blur')
+  blur(element: HTMLElement | SVGElement): void {
+    element.blur()
   }
 
-  scrollIntoView(): void {
-    return notImplemented('DOM Adapter scrollIntoView')
+  scrollIntoView(element: Element, options?: ScrollIntoViewOptions): void {
+    element.scrollIntoView(options)
   }
 
-  scrollTo(): void {
-    return notImplemented('DOM Adapter scrollTo')
+  scrollTo(target: Element | Window, position: Point, options: ScrollOptions = {}): void {
+    if (isWindow(target)) {
+      target.scrollTo({ left: position.x, top: position.y, behavior: options.behavior })
+      return
+    }
+
+    if (typeof target.scrollTo === 'function') {
+      target.scrollTo({ left: position.x, top: position.y, behavior: options.behavior })
+      return
+    }
+
+    target.scrollLeft = position.x
+    target.scrollTop = position.y
   }
 
-  describeElement(): TargetDebugInfo {
-    return notImplemented('DOM Adapter describeElement')
+  describeElement(element: Element): TargetDebugInfo {
+    const attributes = Object.fromEntries(
+      Array.from(element.attributes, (attribute) => [attribute.name, attribute.value]),
+    )
+    const selector = selectorFor(element)
+
+    return {
+      description: describeSimple(element),
+      selector,
+      role: explicitOrImplicitRole(element),
+      name: accessibleName(element),
+      path: pathFor(element),
+      attributes,
+    }
   }
 }
 
 export function createDomAdapter(root?: Document | ShadowRoot): DomAdapter {
   return new BrowserDomAdapter(root)
+}
+
+type ElementFromPointSource = {
+  elementFromPoint?: (x: number, y: number) => Element | null
+}
+
+type StyleableElement = Element & {
+  style: CSSStyleDeclaration
+}
+
+const internalSelectors = [
+  '[data-actorble-internal]',
+  '[data-actorble-overlay-root]',
+  '[data-stuntman-internal]',
+  '[data-stuntman-overlay-root]',
+].join(',')
+
+function getGlobalDocument(): Document {
+  if (globalThis.document) {
+    return globalThis.document
+  }
+
+  throw actorbleError('PLATFORM_UNSUPPORTED', 'No global document is available.')
+}
+
+function isDocument(root: Document | ShadowRoot): root is Document {
+  return root.nodeType === 9
+}
+
+function getOwnerDocument(root: Document | ShadowRoot): Document {
+  return isDocument(root) ? root : root.ownerDocument
+}
+
+function getOwnerWindow(element: Element): Window {
+  return element.ownerDocument.defaultView ?? globalThis.window
+}
+
+function readElementFromPoint(root: Document | ShadowRoot, point: Point): Element | null {
+  const source =
+    typeof (root as ElementFromPointSource).elementFromPoint === 'function'
+      ? (root as ElementFromPointSource)
+      : (getOwnerDocument(root) as ElementFromPointSource)
+
+  if (typeof source.elementFromPoint !== 'function') {
+    return null
+  }
+
+  return source.elementFromPoint(point.x, point.y)
+}
+
+function findInternalElement(element: Element | null): StyleableElement | null {
+  const internal = element?.closest(internalSelectors)
+
+  if (internal && hasStyle(internal)) {
+    return internal
+  }
+
+  return null
+}
+
+function hasStyle(element: Element): element is StyleableElement {
+  return 'style' in element
+}
+
+function isWindow(target: Element | Window): target is Window {
+  return (target as Window).window === target
+}
+
+function selectorFor(element: Element): string | undefined {
+  if (element.id) {
+    return `#${escapeCssIdentifier(element.id)}`
+  }
+
+  return pathFor(element).join(' > ')
+}
+
+function pathFor(element: Element): readonly string[] {
+  const path: string[] = []
+  let current: Element | null = element
+
+  while (current) {
+    path.unshift(describeSimple(current))
+    current = current.parentElement
+  }
+
+  return path
+}
+
+function describeSimple(element: Element): string {
+  const tagName = element.tagName.toLowerCase()
+  const id = element.id ? `#${escapeCssIdentifier(element.id)}` : ''
+  const classes = Array.from(element.classList, escapeCssIdentifier)
+    .map((className) => `.${className}`)
+    .join('')
+
+  return `${tagName}${id}${classes}`
+}
+
+function escapeCssIdentifier(value: string): string {
+  const css = globalThis.CSS
+
+  if (css?.escape) {
+    return css.escape(value)
+  }
+
+  return value.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)
+}
+
+function explicitOrImplicitRole(element: Element): string | undefined {
+  const explicitRole = element.getAttribute('role')
+
+  if (explicitRole) {
+    return explicitRole
+  }
+
+  const tagName = element.tagName.toLowerCase()
+
+  if (tagName === 'button') {
+    return 'button'
+  }
+
+  if (tagName === 'a' && element.hasAttribute('href')) {
+    return 'link'
+  }
+
+  if (tagName === 'textarea') {
+    return 'textbox'
+  }
+
+  if (tagName === 'select') {
+    return 'combobox'
+  }
+
+  if (tagName === 'input') {
+    return implicitInputRole(element as HTMLInputElement)
+  }
+
+  return undefined
+}
+
+function implicitInputRole(element: HTMLInputElement): string | undefined {
+  switch (element.type) {
+    case 'button':
+    case 'reset':
+    case 'submit':
+      return 'button'
+    case 'checkbox':
+      return 'checkbox'
+    case 'radio':
+      return 'radio'
+    case 'range':
+      return 'slider'
+    case 'search':
+      return 'searchbox'
+    case 'email':
+    case 'password':
+    case 'tel':
+    case 'text':
+    case 'url':
+      return 'textbox'
+    default:
+      return undefined
+  }
+}
+
+function accessibleName(element: Element): string | undefined {
+  const ariaLabel = element.getAttribute('aria-label')?.trim()
+
+  if (ariaLabel) {
+    return ariaLabel
+  }
+
+  const text = element.textContent?.replace(/\s+/g, ' ').trim()
+  return text || undefined
 }
