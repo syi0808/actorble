@@ -309,7 +309,7 @@ actorble-facade
 - hover/active/focus/typing slice가 독립 테스트 가능하다.
 - platform adapter나 visual layer concrete implementation을 import하지 않는다.
 
-### T11. Gesture Engine
+### T11. Gesture Engine - 완료
 
 브리핑: click, doubleClick, drag 같은 composite pointer action을 Pointer Engine 위에 구성한다. Action Orchestrator가 lifecycle을 소유하고 Gesture Engine은 pointer sequence만 책임진다.
 

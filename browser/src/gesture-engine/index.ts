@@ -1,5 +1,9 @@
-import { notImplemented } from '../shared/index.js'
+import { actorbleError } from '../shared/index.js'
+import { BrowserPointerEngine } from '../pointer-engine/index.js'
+import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type { ClickOptions, DragOptions, Point, TargetHandle } from '../shared/index.js'
+import type { PointerEngine } from '../pointer-engine/index.js'
+import type { TimelineEngine } from '../timeline-engine/index.js'
 
 export type DragCapability =
   | 'none'
@@ -12,6 +16,11 @@ export type GestureResult = Readonly<{
   completed: boolean
 }>
 
+export type GestureEngineOptions = Readonly<{
+  pointer?: PointerEngine
+  timeline?: TimelineEngine
+}>
+
 export interface GestureEngine {
   click(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
   doubleClick(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
@@ -20,23 +29,74 @@ export interface GestureEngine {
 }
 
 export class BrowserGestureEngine implements GestureEngine {
-  click(): Promise<GestureResult> {
-    return notImplemented('Gesture Engine click')
+  readonly #pointer: PointerEngine
+
+  constructor(options: GestureEngineOptions = {}) {
+    this.#pointer =
+      options.pointer ??
+      new BrowserPointerEngine({
+        timeline: options.timeline ?? new BrowserTimelineEngine(),
+      })
   }
 
-  doubleClick(): Promise<GestureResult> {
-    return notImplemented('Gesture Engine doubleClick')
+  async click(
+    _target: TargetHandle,
+    point: Point,
+    options: ClickOptions = {},
+  ): Promise<GestureResult> {
+    if (options.clickCount !== undefined && options.clickCount > 1) {
+      throw unsupportedGesture('click', {
+        extensionPoint: 'multi-click',
+        clickCount: options.clickCount,
+      })
+    }
+
+    const button = options.button ?? 'primary'
+
+    await this.#pointer.moveTo(point)
+    await this.#pointer.down(button)
+    await this.#pointer.up(button)
+
+    return { completed: true }
   }
 
-  hover(): Promise<GestureResult> {
-    return notImplemented('Gesture Engine hover')
+  async doubleClick(): Promise<GestureResult> {
+    throw unsupportedGesture('doubleClick', {
+      extensionPoint: 'multi-click',
+      capability: 'pointer-gesture',
+    })
   }
 
-  drag(): Promise<GestureResult> {
-    return notImplemented('Gesture Engine drag')
+  async hover(point: Point): Promise<GestureResult> {
+    await this.#pointer.moveTo(point)
+
+    return { completed: true }
+  }
+
+  async drag(): Promise<GestureResult> {
+    throw unsupportedGesture('drag', {
+      extensionPoint: 'drag',
+      capability: 'pointer-gesture',
+    })
   }
 }
 
-export function createGestureEngine(): GestureEngine {
-  return new BrowserGestureEngine()
+export function createGestureEngine(options: GestureEngineOptions = {}): GestureEngine {
+  return new BrowserGestureEngine(options)
+}
+
+function unsupportedGesture(
+  gesture: 'click' | 'doubleClick' | 'drag',
+  details: Readonly<Record<string, unknown>>,
+): Error {
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Gesture Engine ${gesture} requires a capability extension.`,
+    {
+      details: {
+        gesture,
+        ...details,
+      },
+    },
+  )
 }
