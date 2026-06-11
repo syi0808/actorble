@@ -21,7 +21,12 @@ export class BrowserDomAdapter implements DomAdapter {
   }
 
   querySelectorAll(selector: string, root: ParentNode = this.getRoot()): readonly Element[] {
-    return Array.from(root.querySelectorAll(selector))
+    const direct = Array.from(root.querySelectorAll(selector))
+    const shadowMatches = collectOpenShadowRoots(root).flatMap((shadowRoot) =>
+      Array.from(shadowRoot.querySelectorAll(selector)),
+    )
+
+    return [...direct, ...shadowMatches]
   }
 
   getBoundingClientRect(element: Element): Rect {
@@ -115,8 +120,30 @@ export class BrowserDomAdapter implements DomAdapter {
     }
   }
 
+  getAttribute(element: Element, name: string): string | null {
+    return element.getAttribute(name)
+  }
+
+  getTextContent(element: Element): string {
+    return element.textContent ?? ''
+  }
+
   contains(root: Node, node: Node): boolean {
-    return root.contains(node)
+    if (root.contains(node)) {
+      return true
+    }
+
+    let current: Node | null = node
+
+    while (current) {
+      if (current === root) {
+        return true
+      }
+
+      current = parentOrShadowHost(current)
+    }
+
+    return false
   }
 
   isConnected(element: Element): boolean {
@@ -236,6 +263,39 @@ function readElementFromPoint(root: Document | ShadowRoot, point: Point): Elemen
   }
 
   return source.elementFromPoint(point.x, point.y)
+}
+
+function collectOpenShadowRoots(root: ParentNode): readonly ShadowRoot[] {
+  const descendants = Array.from(root.querySelectorAll('*'))
+  const elements = isElementNode(root) ? [root, ...descendants] : descendants
+  const shadowRoots: ShadowRoot[] = []
+
+  for (const element of elements) {
+    if (element.shadowRoot) {
+      shadowRoots.push(element.shadowRoot)
+      shadowRoots.push(...collectOpenShadowRoots(element.shadowRoot))
+    }
+  }
+
+  return shadowRoots
+}
+
+function parentOrShadowHost(node: Node): Node | null {
+  if (node.parentNode) {
+    return node.parentNode
+  }
+
+  const root = node.getRootNode()
+
+  return isShadowRootNode(root) ? root.host : null
+}
+
+function isElementNode(node: ParentNode): node is Element {
+  return node.nodeType === 1
+}
+
+function isShadowRootNode(node: Node): node is ShadowRoot {
+  return node.nodeType === 11 && 'host' in node
 }
 
 function findInternalElement(element: Element | null): StyleableElement | null {
@@ -358,6 +418,17 @@ function accessibleName(element: Element): string | undefined {
 
   if (ariaLabel) {
     return ariaLabel
+  }
+
+  const labelledBy = element.getAttribute('aria-labelledby')?.trim()
+  const labelledByName = labelledBy
+    ?.split(/\s+/)
+    .map((id) => element.ownerDocument.getElementById(id)?.textContent?.replace(/\s+/g, ' ').trim())
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+
+  if (labelledByName) {
+    return labelledByName
   }
 
   const text = element.textContent?.replace(/\s+/g, ' ').trim()

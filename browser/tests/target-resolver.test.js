@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
 import { BrowserDomAdapter } from '../src/platform-adapter/dom-adapter/index.js'
-import { css, element, role } from '../src/shared/index.js'
+import { css, element, label, point, role, testId, text } from '../src/shared/index.js'
 import { BrowserTargetResolver, createTargetResolver } from '../src/target-resolver/index.js'
 
 function createClock(start = 1000) {
@@ -182,17 +182,169 @@ describe('BrowserTargetResolver', () => {
       }),
     ])
     expect(snapshot.snapshots).toEqual([
-      expect.objectContaining({ name: 'target.resolve.candidates' }),
-      expect.objectContaining({ name: 'target.resolve.candidates' }),
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          rankingPolicy: 'score-desc-dom-order',
+          ambiguity: 'single-best',
+        }),
+      }),
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          rankingPolicy: 'score-desc-dom-order',
+          ambiguity: 'no-candidates',
+        }),
+      }),
     ])
   })
 
-  it('keeps unsupported locator kinds outside the first target resolver slice', async () => {
+  it('resolves role locators by accessible name ranking and strict ambiguity', async () => {
+    document.body.innerHTML = `
+      <button id="create" aria-label="Create Project">Create</button>
+      <button id="cancel">Create Draft</button>
+      <button id="hidden" hidden>Create Project</button>
+    `
     const resolver = createResolver()
 
-    await expect(resolver.resolve(role('button'))).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
+    await expect(resolver.resolve(role('button', { name: 'Create Project' }))).resolves.toMatchObject({
+      element: document.querySelector('#create'),
     })
+    await expect(
+      resolver.resolveAll(role('button', { name: /create/i })),
+    ).resolves.toMatchObject([
+      { element: document.querySelector('#create') },
+      { element: document.querySelector('#cancel') },
+    ])
+
+    document.querySelector('#hidden').hidden = false
+
+    await expect(
+      resolver.resolve(role('button', { name: 'Create Project' }), { strict: true }),
+    ).rejects.toMatchObject({
+      code: 'TARGET_AMBIGUOUS',
+      details: { count: 2, ambiguity: 'top-score-tie' },
+    })
+  })
+
+  it('resolves text locators with exact, partial, and regular expression matching', async () => {
+    document.body.innerHTML = `
+      <main>
+        <p id="partial">Project created successfully</p>
+        <p id="exact">Project created</p>
+        <p id="hidden" hidden>Project created</p>
+      </main>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(text('Project created', { exact: true }))).resolves.toMatchObject({
+      element: document.querySelector('#exact'),
+    })
+    await expect(resolver.resolve(text('success'))).resolves.toMatchObject({
+      element: document.querySelector('#partial'),
+    })
+    await expect(resolver.resolve(text(/created$/))).resolves.toMatchObject({
+      element: document.querySelector('#exact'),
+    })
+  })
+
+  it('resolves label locators to their associated controls', async () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="email">Email address</label>
+        <input id="email" />
+        <label>Display name <input id="name" /></label>
+        <button id="aria" aria-label="Email address">Not a label target</button>
+      </form>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(label('Email address'))).resolves.toMatchObject({
+      element: document.querySelector('#email'),
+    })
+    await expect(resolver.resolve(label('Display name'))).resolves.toMatchObject({
+      element: document.querySelector('#name'),
+    })
+  })
+
+  it('resolves test id locators with default and custom attributes', async () => {
+    document.body.innerHTML = `
+      <button id="default" data-testid="save">Save</button>
+      <button id="custom" data-qa="save">Save QA</button>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(testId('save'))).resolves.toMatchObject({
+      element: document.querySelector('#default'),
+    })
+    await expect(resolver.resolve(testId('save', { attribute: 'data-qa' }))).resolves.toMatchObject({
+      element: document.querySelector('#custom'),
+    })
+  })
+
+  it('resolves point locators through platform hit testing', async () => {
+    const target = document.createElement('button')
+    target.id = 'hit'
+    document.body.append(target)
+    const dom = new BrowserDomAdapter(document)
+    dom.elementFromPoint = () => target
+    const resolver = createResolver({ dom })
+
+    await expect(resolver.resolve(point(10, 20))).resolves.toMatchObject({
+      element: target,
+    })
+  })
+
+  it('resolves queryable locators inside open shadow roots', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const shadowRoot = host.attachShadow({ mode: 'open' })
+    shadowRoot.innerHTML = '<button id="shadow-save" aria-label="Save shadow">Save</button>'
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(css('#shadow-save'))).resolves.toMatchObject({
+      element: shadowRoot.querySelector('#shadow-save'),
+    })
+    await expect(resolver.resolve(role('button', { name: 'Save shadow' }))).resolves.toMatchObject({
+      element: shadowRoot.querySelector('#shadow-save'),
+    })
+  })
+
+  it('records locator ranking and hard browser fidelity limits in diagnostics', async () => {
+    document.body.innerHTML = `
+      <button id="first" aria-label="Save">One</button>
+      <button id="second" aria-label="Save">Two</button>
+    `
+    const trace = new BrowserDiagnosticsTrace({ clock: createClock(6000), idPrefix: 'trace' })
+    const resolver = createResolver({ trace })
+
+    await expect(resolver.resolve(role('button', { name: 'Save' }), { strict: true })).rejects.toMatchObject({
+      code: 'TARGET_AMBIGUOUS',
+    })
+
+    const snapshot = trace.getTrace()
+    expect(snapshot.snapshots).toContainEqual(
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          locator: { kind: 'role', role: 'button', name: 'Save' },
+          rankingPolicy: 'score-desc-dom-order',
+          ambiguity: 'top-score-tie',
+          candidates: [
+            expect.objectContaining({ index: 0, score: 100, reasons: ['role', 'name:exact'] }),
+            expect.objectContaining({ index: 1, score: 100, reasons: ['role', 'name:exact'] }),
+          ],
+        }),
+      }),
+    )
+    expect(snapshot.warnings).toEqual([
+      expect.objectContaining({
+        message: 'Browser resolver cannot inspect cross-origin frames or closed shadow roots.',
+      }),
+      expect.objectContaining({
+        message: 'Browser actions dispatch synthetic events; trusted native input and native drag/drop are unavailable.',
+      }),
+    ])
   })
 })
 

@@ -373,6 +373,8 @@ export interface DomReadPort {
   getParentElement(element: Element): Element | null
   getScrollMetrics(target: Element | Window): ScrollMetrics
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
+  getAttribute(element: Element, name: string): string | null
+  getTextContent(element: Element): string
   contains(root: Node, node: Node): boolean
   isConnected(element: Element): boolean
   getActiveElement(root?: Document | ShadowRoot): Element | null

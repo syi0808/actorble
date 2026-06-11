@@ -381,7 +381,7 @@ actorble-facade
 - pseudo mirror failure는 warning trace로 남고 action failure가 되지 않는다.
 - capability/fidelity report가 pointer, keyboard, text input, pseudo state, trusted events, drag/drop 한계를 표현한다.
 
-### T17. Locator와 browser fidelity 확장
+### T17. Locator와 browser fidelity 확장 - 완료
 
 브리핑: 첫 vertical slice 이후 role/text/label/testId/point locator, shadow root, iframe, dialog/popover, drag/drop capability를 확장한다.
 
