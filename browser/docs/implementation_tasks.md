@@ -857,7 +857,7 @@ actorble-facade
 
 ### T39. Fresh geometry before pointer dispatch
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: cursor visual만 target을 따라가면 실제 pointer event dispatch 좌표와 화면 표시가 어긋날 수 있다. click, click-based type focus, future drag 같은 pointer action은 pointerdown 직전 최신 geometry를 다시 확인해야 한다.
 

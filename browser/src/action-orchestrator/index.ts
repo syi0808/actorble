@@ -358,12 +358,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'perform'
       performStarted = true
       const clickTarget = handle
+      let dispatchPoint = point
       const commandId = this.#createPointerCommandId()
       const result = await this.#withSignalTarget(clickTarget, commandId, () =>
-        this.#gesture.click(clickTarget, point, publicPointerMovementOptions(options)),
+        this.#gesture.click(clickTarget, point, {
+          ...publicPointerMovementOptions(options),
+          refreshPointBeforeDown: async () => {
+            dispatchPoint = await this.#refreshClickPointBeforeDown(
+              'click',
+              clickTarget,
+              point,
+              options,
+              span,
+            )
+            return dispatchPoint
+          },
+        }),
       )
-      const activationDispatched = this.#dispatchActivationClick(clickTarget, point)
-      this.#showClickFeedback(point)
+      const activationDispatched = this.#dispatchActivationClick(clickTarget, dispatchPoint)
+      this.#showClickFeedback(dispatchPoint)
 
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -373,7 +386,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         completed: true,
         targetId: handle.id,
         output: {
-          point,
+          point: dispatchPoint,
           gestureCompleted: result.completed,
           activationDispatched,
         },
@@ -447,20 +460,33 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       if (focusStrategy === 'click') {
         const point = clickablePointOrThrow('typeInto', typeTarget, snapshot)
         const clickOptions = typeFocusClickOptions(options)
+        let dispatchPoint = point
 
         this.#clickDispatchState = createClickDispatchState(clickOptions)
         clickFocusNeedsCleanup = true
 
         const commandId = this.#createPointerCommandId()
         const result = await this.#withSignalTarget(typeTarget, commandId, () =>
-          this.#gesture.click(typeTarget, point, publicPointerMovementOptions(clickOptions)),
+          this.#gesture.click(typeTarget, point, {
+            ...publicPointerMovementOptions(clickOptions),
+            refreshPointBeforeDown: async () => {
+              dispatchPoint = await this.#refreshClickPointBeforeDown(
+                'typeInto',
+                typeTarget,
+                point,
+                clickOptions,
+                span,
+              )
+              return dispatchPoint
+            },
+          }),
         )
 
         clickFocusNeedsCleanup = false
 
-        const activationDispatched = this.#dispatchActivationClick(typeTarget, point)
+        const activationDispatched = this.#dispatchActivationClick(typeTarget, dispatchPoint)
 
-        this.#showClickFeedback(point)
+        this.#showClickFeedback(dispatchPoint)
 
         const focused = await this.#focus.getFocused()
         const focusedTarget = this.#assertClickFocusAcquired(typeTarget, focused.active)
@@ -468,7 +494,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         await this.#delayAfterClickFocus(options)
 
         clickFocusOutput = {
-          focusPoint: point,
+          focusPoint: dispatchPoint,
           focusedTargetId: focusedTarget.id,
           gestureCompleted: result.completed,
           activationDispatched,
@@ -613,6 +639,32 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     } finally {
       this.#signalContext = previousContext
     }
+  }
+
+  async #refreshClickPointBeforeDown(
+    action: Extract<ActionName, 'click' | 'typeInto'>,
+    target: TargetHandle,
+    initialPoint: Point,
+    options: ClickOptions,
+    span: TraceSpanHandle,
+  ): Promise<Point> {
+    const snapshot = await this.#geometry.snapshot(target)
+    const freshPoint = clickablePointOrThrow(action, target, snapshot)
+
+    span.event('pointer:fresh-geometry', {
+      action,
+      targetId: target.id,
+      initialPoint,
+      freshPoint,
+      changed: !samePoint(initialPoint, freshPoint),
+      computedAt: snapshot.computedAt,
+    })
+
+    const report = await this.#interactability.canClick(target, snapshot, options)
+    assertCanClick(target, report)
+    this.#warnForceBypass(target, report)
+
+    return freshPoint
   }
 
   #applyPointerSignal(signal: PointerSignal): void {
@@ -1254,6 +1306,10 @@ function assertCanType(target: TargetHandle, report: InteractabilityReport): voi
       unforceableReasons: report.unforceableReasons,
     },
   })
+}
+
+function samePoint(first: Point, second: Point): boolean {
+  return first.x === second.x && first.y === second.y
 }
 
 function normalizeActionError(

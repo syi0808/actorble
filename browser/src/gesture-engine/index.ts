@@ -23,6 +23,11 @@ export type GestureResult = Readonly<{
   completed: boolean
 }>
 
+export type GestureClickOptions = ClickOptions &
+  Readonly<{
+    refreshPointBeforeDown?: (point: Point) => Point | Promise<Point>
+  }>
+
 export type GestureEngineOptions = Readonly<{
   pointer?: PointerEngine
   timeline?: TimelineEngine
@@ -31,8 +36,12 @@ export type GestureEngineOptions = Readonly<{
 const DEFAULT_CLICK_PRESS_DWELL = 80
 
 export interface GestureEngine {
-  click(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
-  doubleClick(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
+  click(target: TargetHandle, point: Point, options?: GestureClickOptions): Promise<GestureResult>
+  doubleClick(
+    target: TargetHandle,
+    point: Point,
+    options?: GestureClickOptions,
+  ): Promise<GestureResult>
   hover(point: Point, options?: MoveOptions): Promise<GestureResult>
   drag(from: Point, to: Point, options?: DragOptions): Promise<GestureResult>
   cancel(): Promise<GestureResult>
@@ -56,7 +65,7 @@ export class BrowserGestureEngine implements GestureEngine {
   async click(
     _target: TargetHandle,
     point: Point,
-    options: ClickOptions = {},
+    options: GestureClickOptions = {},
   ): Promise<GestureResult> {
     if (options.clickCount !== undefined && options.clickCount > 1) {
       throw unsupportedGesture('click', {
@@ -68,6 +77,12 @@ export class BrowserGestureEngine implements GestureEngine {
     const button = options.button ?? 'primary'
 
     await this.#pointer.moveTo(point, pointerMovementOptions(options))
+    const refreshedPoint = await options.refreshPointBeforeDown?.(point)
+
+    if (refreshedPoint && !samePoint(point, refreshedPoint)) {
+      await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
+    }
+
     await this.#pointer.down(button)
     const pressDwell = normalizePressDwell(options.pressDwell)
 
@@ -138,6 +153,14 @@ function pointerMovementOptions(options: ClickOptions): MoveOptions | undefined 
   return Object.keys(movement).length === 0 ? undefined : movement
 }
 
+function freshPointMovementOptions(options: ClickOptions): MoveOptions {
+  return {
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    duration: 0,
+  }
+}
+
 function cancellationOptions(options: ClickOptions): CancellationOptions {
   return options.signal === undefined ? {} : { signal: options.signal }
 }
@@ -152,4 +175,8 @@ function normalizePressDwell(pressDwell: number | undefined): number {
   }
 
   return pressDwell
+}
+
+function samePoint(first: Point, second: Point): boolean {
+  return first.x === second.x && first.y === second.y
 }

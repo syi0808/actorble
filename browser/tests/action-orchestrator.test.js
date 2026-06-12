@@ -53,6 +53,22 @@ function geometryFor(target, point = { x: 20, y: 30 }) {
   }
 }
 
+function clickReportFor(target, overrides = {}) {
+  return {
+    target,
+    visible: true,
+    enabled: true,
+    receivesPointerEvents: true,
+    canClick: true,
+    canFocus: true,
+    canType: true,
+    blockingReasons: [],
+    forceBypassedReasons: [],
+    unforceableReasons: [],
+    ...overrides,
+  }
+}
+
 function createTrace() {
   let now = 5000
 
@@ -155,7 +171,10 @@ function createPointerVisualTrackerDouble() {
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
-  const geometry = options.geometry ?? geometryFor(target)
+  const geometrySnapshots = [...(options.geometrySnapshots ?? [])]
+  const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target)
+  let currentGeometry = geometry
+  const clickReports = [...(options.clickReports ?? [])]
   const signals = new BrowserPointerSignalBus()
   const trace = options.trace ?? createTrace()
   const resolver = {
@@ -189,18 +208,20 @@ function createHarness(options = {}) {
   const geometryEngine = {
     snapshot: vi.fn(async () => {
       calls.push('geometry.snapshot')
-      return geometry
+      currentGeometry = geometrySnapshots.shift() ?? currentGeometry
+      return currentGeometry
     }),
-    getBoundingRect: vi.fn(() => geometry.rect),
-    getVisibleRect: vi.fn(() => geometry.visibleRect),
-    getCenter: vi.fn(() => geometry.center),
-    getClickablePoint: vi.fn(() => geometry.clickablePoint),
+    getBoundingRect: vi.fn(() => currentGeometry.rect),
+    getVisibleRect: vi.fn(() => currentGeometry.visibleRect),
+    getCenter: vi.fn(() => currentGeometry.center),
+    getClickablePoint: vi.fn(() => currentGeometry.clickablePoint),
   }
   const interactability = {
     inspect: vi.fn(async () => ({ target, canClick: true, blockingReasons: [] })),
     canClick: vi.fn(async () => {
       calls.push('interactability.canClick')
       return (
+        clickReports.shift() ??
         options.clickReport ?? {
           target,
           visible: true,
@@ -237,14 +258,26 @@ function createHarness(options = {}) {
   const fakeGesture = {
     click: vi.fn(async () => {
       calls.push('gesture.click')
-      signals.emit({ type: 'pointer:moved', point: geometry.clickablePoint.point, previousPoint: null })
-      signals.emit({ type: 'pointer:down', point: geometry.clickablePoint.point, button: 'primary' })
+      signals.emit({
+        type: 'pointer:moved',
+        point: currentGeometry.clickablePoint.point,
+        previousPoint: null,
+      })
+      signals.emit({
+        type: 'pointer:down',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
 
       if (options.clickFailure) {
         throw options.clickFailure
       }
 
-      signals.emit({ type: 'pointer:up', point: geometry.clickablePoint.point, button: 'primary' })
+      signals.emit({
+        type: 'pointer:up',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
       return { completed: true }
     }),
     hover: vi.fn(async (point) => {
@@ -714,6 +747,118 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('refreshes click geometry before pointer down and dispatches at the fresh point', async () => {
+    const target = targetHandle()
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const { events, orchestrator, trace } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, freshGeometry],
+      useRealGesture: true,
+    })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
+      type: 'pointermove',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
+      type: 'pointermove',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: ['primary'],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
+      type: 'pointerup',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: [],
+    })
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
+      type: 'click',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
+    })
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pointer:fresh-geometry',
+          data: expect.objectContaining({
+            action: 'click',
+            changed: true,
+            freshPoint: { x: 80, y: 90 },
+            initialPoint: { x: 20, y: 30 },
+            targetId: 'target-1',
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('fails fresh click preflight before pointer down and cleans up perform state', async () => {
+    const target = targetHandle()
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const { events, orchestrator, state, trace } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, freshGeometry],
+      clickReports: [
+        clickReportFor(target),
+        clickReportFor(target, {
+          enabled: false,
+          canClick: false,
+          canFocus: false,
+          canType: false,
+          blockingReasons: ['disabled'],
+          unforceableReasons: ['disabled'],
+        }),
+      ],
+      useRealGesture: true,
+    })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'click',
+        blockingReasons: ['disabled'],
+        targetId: 'target-1',
+      }),
+    })
+
+    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'pointermove',
+    ])
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(trace.getTrace().spans[0]).toEqual(
+      expect.objectContaining({
+        name: 'action.click',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'perform' }),
+      }),
+    )
+  })
+
   it('moveTo resolves, reveals, moves to the clickable point, and waits for settlement', async () => {
     const { calls, orchestrator } = createHarness()
 
@@ -798,7 +943,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.click).toHaveBeenCalledWith(
       target,
       { x: 20, y: 30 },
-      { motion, timeout: 1500 },
+      {
+        motion,
+        timeout: 1500,
+        refreshPointBeforeDown: expect.any(Function),
+      },
     )
   })
 
@@ -1066,9 +1215,9 @@ describe('BrowserActionOrchestrator', () => {
       signal: controller.signal,
     })
 
-    await flushMicrotasks()
-
-    expect(controlled.pendingDelayCount).toBe(1)
+    await vi.waitFor(() => {
+      expect(controlled.pendingDelayCount).toBe(1)
+    })
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
@@ -1357,6 +1506,59 @@ describe('BrowserActionOrchestrator', () => {
     ])
     expect(input.value).toBe('H')
     expect(timeline.delay).toHaveBeenCalledWith(5, {})
+  })
+
+  it('uses fresh geometry for click-focused typeInto focus clicks', async () => {
+    const target = inputTargetHandle()
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const { events, orchestrator, text } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, freshGeometry],
+      useRealGesture: true,
+    })
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'H', {
+        delay: 0,
+        focusStrategy: 'click',
+        focusClick: { duration: 0, pressDwell: 0 },
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
+      type: 'pointermove',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: ['primary'],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
+      type: 'pointerup',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: [],
+    })
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
+      type: 'click',
+      target: target.element,
+      point: { x: 80, y: 90 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
+    })
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'H', {
+      delay: 0,
+      focusStrategy: 'none',
+    })
   })
 
   it('fails click-focused typeInto when the click does not focus the target', async () => {

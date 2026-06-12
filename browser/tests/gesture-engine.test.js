@@ -88,6 +88,31 @@ describe('BrowserGestureEngine', () => {
     ])
   })
 
+  it('refreshes the click point after movement and before pointer down', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    await expect(
+      engine.click(createTarget(), { x: 40, y: 24 }, {
+        refreshPointBeforeDown: vi.fn(async (point) => {
+          calls.push(['refreshPointBeforeDown', point])
+          return { x: 45, y: 29 }
+        }),
+      }),
+    ).resolves.toEqual({
+      completed: true,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 40, y: 24 }],
+      ['refreshPointBeforeDown', { x: 40, y: 24 }],
+      ['moveTo', { x: 45, y: 29 }, { duration: 0 }],
+      ['down', 'primary'],
+      ['delay', 80],
+      ['up', 'primary'],
+    ])
+  })
+
   it('click emits the expected pointer signal sequence through the pointer boundary', async () => {
     const signals = new BrowserPointerSignalBus()
     const timeline = createTimeline()
