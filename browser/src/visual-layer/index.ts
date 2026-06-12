@@ -9,6 +9,7 @@ import type {
 export type VisualLayerOptions = Readonly<{
   enabled?: boolean
   root?: Document | ShadowRoot
+  textVisibility?: VisualTextVisibility
 }>
 
 export type HighlightRequest = Readonly<{
@@ -102,13 +103,98 @@ export class BrowserVisualLayer implements VisualLayer {
     })
   }
 
-  showFocus(_request: FocusVisualRequest): void {}
+  showFocus(request: FocusVisualRequest): void {
+    if (!this.#enabled) {
+      return
+    }
 
-  showTyping(_request: TypingVisualRequest): void {}
+    if (!request.active || !request.target) {
+      this.#removePart('focus')
+      return
+    }
 
-  showKeystroke(_request: KeystrokeVisualRequest): void {}
+    const rect = rectFromElement(request.target.element)
+    const focus = this.#ensurePart('focus', 'data-actorble-visual-focus')
+    focus.setAttribute('data-actorble-target-id', request.target.id)
+    Object.assign(focus.style, {
+      border: '2px solid Highlight',
+      borderRadius: '4px',
+      boxSizing: 'border-box',
+      height: `${rect.height}px`,
+      left: `${rect.x}px`,
+      outline: '1px solid Canvas',
+      outlineOffset: '2px',
+      top: `${rect.y}px`,
+      width: `${rect.width}px`,
+    })
+  }
 
-  clearFeedback(): void {}
+  showTyping(request: TypingVisualRequest): void {
+    if (!this.#enabled) {
+      return
+    }
+
+    if (!request.active) {
+      this.#removePart('typing')
+      return
+    }
+
+    const rect = rectFromElement(request.target.element)
+    const typing = this.#ensurePart('typing', 'data-actorble-visual-typing')
+    typing.setAttribute('data-actorble-target-id', request.target.id)
+    typing.textContent = ''
+    Object.assign(typing.style, {
+      background: 'Highlight',
+      border: '1px solid Canvas',
+      borderRadius: '999px',
+      height: '6px',
+      left: `${rect.x + rect.width + 6}px`,
+      opacity: '0.9',
+      top: `${rect.y + rect.height / 2 - 3}px`,
+      width: '18px',
+    })
+  }
+
+  showKeystroke(request: KeystrokeVisualRequest): void {
+    if (!this.#enabled) {
+      return
+    }
+
+    const visibility =
+      request.textVisibility ?? this.options.textVisibility ?? 'plain'
+    const keystroke = this.#ensurePart('keystroke', 'data-actorble-visual-keystroke')
+    const rect = request.target ? rectFromElement(request.target.element) : null
+
+    if (request.target) {
+      keystroke.setAttribute('data-actorble-target-id', request.target.id)
+    } else {
+      keystroke.removeAttribute('data-actorble-target-id')
+    }
+
+    keystroke.setAttribute('data-actorble-text-visibility', visibility)
+    keystroke.textContent = displayTextForKeystroke(request, visibility)
+    Object.assign(keystroke.style, {
+      background: 'Canvas',
+      border: '1px solid Highlight',
+      borderRadius: '4px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.22)',
+      color: 'CanvasText',
+      font: '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+      left: `${rect ? rect.x + rect.width / 2 : 12}px`,
+      maxWidth: '220px',
+      overflow: 'hidden',
+      padding: '2px 6px',
+      textOverflow: 'ellipsis',
+      top: `${rect ? Math.max(0, rect.y - 28) : 12}px`,
+      transform: rect ? 'translateX(-50%)' : 'none',
+      whiteSpace: 'nowrap',
+    })
+  }
+
+  clearFeedback(): void {
+    this.#removePart('typing')
+    this.#removePart('keystroke')
+  }
 
   hide(): void {
     if (this.#rootElement) {
@@ -173,6 +259,17 @@ export class BrowserVisualLayer implements VisualLayer {
 
     return part
   }
+
+  #removePart(key: string): void {
+    const part = this.#parts.get(key)
+
+    if (!part) {
+      return
+    }
+
+    part.remove()
+    this.#parts.delete(key)
+  }
 }
 
 export class NoopVisualLayer implements VisualLayer {
@@ -233,3 +330,65 @@ function rectFromElement(element: Element): Rect {
     height: rect.height,
   }
 }
+
+function displayTextForKeystroke(
+  request: KeystrokeVisualRequest,
+  visibility: VisualTextVisibility,
+): string {
+  switch (visibility) {
+    case 'hidden':
+      return safeLabelForTarget(request.target)
+    case 'masked':
+      return maskText(request.text)
+    case 'plain':
+      return request.text
+  }
+}
+
+function safeLabelForTarget(target: TargetHandle | undefined): string {
+  if (!target) {
+    return 'target'
+  }
+
+  return (
+    target.debug.name ??
+    target.debug.description ??
+    target.debug.selector ??
+    target.id
+  )
+}
+
+function maskText(text: string): string {
+  const parts = splitGraphemes(text)
+
+  if (parts.length === 0) {
+    return ''
+  }
+
+  return '*'.repeat(parts.length)
+}
+
+function splitGraphemes(text: string): readonly string[] {
+  const Segmenter = (Intl as IntlWithSegmenter).Segmenter
+
+  if (typeof Segmenter === 'function') {
+    return Array.from(
+      new Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
+      (part) => part.segment,
+    )
+  }
+
+  return Array.from(text)
+}
+
+type GraphemeSegmenter = Readonly<{
+  segment(text: string): Iterable<Readonly<{ segment: string }>>
+}>
+
+type IntlWithSegmenter = typeof Intl &
+  Readonly<{
+    Segmenter?: new (
+      locales?: string | readonly string[],
+      options?: Readonly<{ granularity?: 'grapheme' }>,
+    ) => GraphemeSegmenter
+  }>

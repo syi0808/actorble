@@ -90,6 +90,38 @@ describe('BrowserVisualLayer', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
+  it('renders focus, typing, and keystroke feedback with text visibility policy', () => {
+    const target = targetHandle('field')
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showFocus({ target, active: true })
+    layer.showTyping({ target, active: true })
+    layer.showKeystroke({ target, text: 's', textVisibility: 'plain' })
+
+    const root = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(root.querySelector('[data-actorble-visual-focus]')).not.toBeNull()
+    expect(root.querySelector('[data-actorble-visual-typing]')).not.toBeNull()
+    expect(root.querySelector('[data-actorble-visual-keystroke]').textContent).toBe('s')
+
+    layer.showKeystroke({ target, text: 'secret', textVisibility: 'masked' })
+    expect(root.querySelector('[data-actorble-visual-keystroke]').textContent).toBe('******')
+
+    layer.showKeystroke({ target, text: 'secret', textVisibility: 'hidden' })
+    expect(root.querySelector('[data-actorble-visual-keystroke]').textContent).toBe(
+      'button#field',
+    )
+
+    layer.showTyping({ target, active: false })
+    expect(root.querySelector('[data-actorble-visual-typing]')).toBeNull()
+
+    layer.clearFeedback()
+    expect(root.querySelector('[data-actorble-visual-keystroke]')).toBeNull()
+    expect(root.querySelector('[data-actorble-visual-focus]')).not.toBeNull()
+
+    layer.showFocus({ target, active: false })
+    expect(root.querySelector('[data-actorble-visual-focus]')).toBeNull()
+  })
+
   it('provides a no-op visual layer for compile-pass runtime hooks', () => {
     const target = targetHandle()
     const layer = new NoopVisualLayer()

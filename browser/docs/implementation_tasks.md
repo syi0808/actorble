@@ -463,7 +463,7 @@ actorble-facade
 
 ### T21. Typing, focus, keystroke visual feedback
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: Interaction State Store의 focus/typing 상태를 사용자가 볼 수 있는 표현으로 연결한다. 이 태스크는 실제 입력 correctness가 아니라 focus ring, typing indicator, keystroke overlay 같은 visual fidelity에만 집중한다.
 

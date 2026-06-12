@@ -45,6 +45,7 @@ import type {
   ScrollOptions,
   ScrollPosition,
   StateApplyPort,
+  StateEffect,
   TargetHandle,
   TargetLike,
   TypeOptions,
@@ -186,6 +187,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#state = state
     this.#store = store
     this.#surface = surface
+    this.#visual = options.visual ?? new NoopVisualLayer()
     this.#text =
       options.text ??
       new BrowserTextInputEngine({
@@ -194,12 +196,22 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         store,
         dom,
         timeline,
+        onKeystroke: (event) => {
+          this.#tryVisual('showKeystroke', () =>
+            this.#visual.showKeystroke({
+              target: event.target,
+              text: event.text,
+            }),
+          )
+        },
       })
-    this.#visual = options.visual ?? new NoopVisualLayer()
     this.#wait = options.wait ?? new BrowserWaitObservationEngine({ dom, timeline, trace })
 
     signals.subscribe((signal) => {
       this.#applyPointerSignal(signal)
+    })
+    store.subscribe((diff) => {
+      this.#applyInteractionStateEffects(diff.effects)
     })
   }
 
@@ -364,6 +376,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         output: { textLength: Array.from(text).length },
       })
     } catch (error) {
+      this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
       throw this.#finishActionFailure(span, error, {
         action: 'typeInto',
         phase,
@@ -564,6 +577,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const diff = this.#store.reset()
       this.#state.applyStateEffects(diff.effects)
       this.#state.cleanup()
+      this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
     } catch (error) {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action state cleanup failed.', {
@@ -617,6 +631,48 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         rect: geometry.rect,
       }),
     )
+  }
+
+  #applyInteractionStateEffects(effects: readonly StateEffect[]): void {
+    const effectsToApply = effects.filter(isFocusOrTypingStateEffect)
+
+    if (effectsToApply.length === 0) {
+      return
+    }
+
+    this.#state.applyStateEffects(effectsToApply)
+    this.#applyVisualStateEffects(effectsToApply)
+  }
+
+  #applyVisualStateEffects(effects: readonly StateEffect[]): void {
+    for (const effect of effects) {
+      switch (effect.kind) {
+        case 'focus-visible':
+          this.#tryVisual('showFocus', () =>
+            this.#visual.showFocus({
+              target: effect.target,
+              active: effect.active,
+            }),
+          )
+          break
+        case 'typing':
+          {
+            const target = effect.target
+
+            if (!target) {
+              break
+            }
+
+            this.#tryVisual('showTyping', () =>
+              this.#visual.showTyping({
+                target,
+                active: effect.active,
+              }),
+            )
+          }
+          break
+      }
+    }
   }
 
   #tryVisual(effect: string, operation: () => void): void {
@@ -757,6 +813,14 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
 
 function isLocator(target: TargetLike): target is Locator {
   return typeof target === 'object' && target !== null && 'kind' in target
+}
+
+function isFocusOrTypingStateEffect(effect: StateEffect): boolean {
+  return (
+    effect.kind === 'focus' ||
+    effect.kind === 'focus-visible' ||
+    effect.kind === 'typing'
+  )
 }
 
 function summarizeTarget(target: TargetLike): Readonly<Record<string, unknown>> {

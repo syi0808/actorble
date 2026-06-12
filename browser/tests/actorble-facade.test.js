@@ -82,6 +82,27 @@ function createClickableButton(id = 'create') {
   return { button, seen }
 }
 
+function createTypeableInput(id = 'message') {
+  const input = document.createElement('input')
+  input.id = id
+  input.scrollIntoView = vi.fn()
+  input.getBoundingClientRect = vi.fn(() => ({
+    x: 20,
+    y: 30,
+    width: 160,
+    height: 24,
+    top: 30,
+    left: 20,
+    right: 180,
+    bottom: 54,
+    toJSON: () => {},
+  }))
+  document.body.append(input)
+  document.elementFromPoint = vi.fn(() => input)
+
+  return input
+}
+
 function createFakeVisualLayer() {
   return {
     showCursor: vi.fn(),
@@ -230,6 +251,22 @@ describe('Actorble facade', () => {
     })
     expect(visual.showCursor).toHaveBeenCalledWith({ x: 40, y: 35 })
     expect(visual.showClick).toHaveBeenCalledWith({ x: 40, y: 35 })
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
+  })
+
+  it('passes text visibility into the default visual layer and destroys visual feedback', async () => {
+    createTypeableInput('secret')
+    const actorble = createActorble({ visual: { textVisibility: 'masked' } })
+
+    await expect(actorble.typeInto(css('#secret'), 's')).resolves.toBeUndefined()
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-focus]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-keystroke]').textContent).toBe('*')
+
+    actorble.destroy()
+
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 })

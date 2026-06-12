@@ -442,6 +442,40 @@ describe('BrowserTextInputEngine', () => {
     expect(store.snapshot().typing).toBeNull()
   })
 
+  it('emits keystroke feedback only for committed grapheme input', async () => {
+    const input = document.createElement('input')
+    document.body.append(input)
+    const target = handle('message', input)
+    const onKeystroke = vi.fn()
+
+    input.addEventListener('beforeinput', (event) => {
+      if (event.data === 'b') {
+        event.preventDefault()
+      }
+    })
+
+    const engine = createTextInputEngine({
+      focus: new BrowserFocusEngine({
+        dom: new BrowserDomAdapter(document),
+        store: new BrowserInteractionStateStore(),
+      }),
+      events: new BrowserEventDispatcher(),
+      timeline: createTimeline(),
+      onKeystroke,
+    })
+
+    await engine.typeInto(target, 'abc')
+
+    expect(onKeystroke.mock.calls.map(([event]) => ({
+      strategy: event.strategy,
+      targetId: event.target.id,
+      text: event.text,
+    }))).toEqual([
+      { strategy: 'typeInto', targetId: 'message', text: 'a' },
+      { strategy: 'typeInto', targetId: 'message', text: 'c' },
+    ])
+  })
+
   it('clears typing state when cancelled during cadence delay', async () => {
     const input = document.createElement('input')
     document.body.append(input)

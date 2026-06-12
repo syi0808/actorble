@@ -9,6 +9,7 @@ import { BrowserFocusEngine } from '../focus-engine/index.js'
 import { BrowserInteractionStateStore } from '../interaction-state-store/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type {
+  ActorbleListener,
   ActorbleErrorDetails,
   CancellationSignalLike,
   DurationMs,
@@ -33,12 +34,19 @@ export type TextInputResult = Readonly<{
   text: string
 }>
 
+export type TextInputKeystrokeEvent = Readonly<{
+  strategy: Extract<TextInputStrategy, 'type' | 'typeInto'>
+  target: TargetHandle
+  text: string
+}>
+
 export type TextInputEngineOptions = Readonly<{
   focus?: FocusEngine
   events?: EventDispatchPort & Partial<TextInputMutationPort>
   store?: InteractionStateStore
   dom?: DomPort
   timeline?: TimelineEngine
+  onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>
 }>
 
 export interface TextInputEngine {
@@ -53,6 +61,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
   readonly #mutations: TextInputMutationPort
   readonly #store: InteractionStateStore
   readonly #timeline: TimelineEngine
+  readonly #onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>
 
   constructor(options: TextInputEngineOptions = {}) {
     const store = options.store ?? new BrowserInteractionStateStore()
@@ -63,6 +72,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
     this.#mutations = textMutationPort(eventDispatcher)
     this.#store = store
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
+    this.#onKeystroke = options.onKeystroke
   }
 
   async type(text: string, options: TypeOptions = {}): Promise<TextInputResult> {
@@ -186,6 +196,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
             text: part,
             inputType: 'insertText',
           })
+          this.#emitKeystroke({ strategy, target, text: part })
         }
 
         if (mutated) {
@@ -196,6 +207,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
   }
 
   async #withTyping(target: TargetHandle, operation: () => Promise<void>): Promise<void> {
+    this.#store.setFocused(target, true)
     this.#store.setTyping(target)
 
     try {
@@ -203,6 +215,10 @@ export class BrowserTextInputEngine implements TextInputEngine {
     } finally {
       this.#store.setTyping(null)
     }
+  }
+
+  #emitKeystroke(event: TextInputKeystrokeEvent): void {
+    this.#onKeystroke?.(event)
   }
 
   #assertEditable(target: TargetHandle): void {

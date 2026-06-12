@@ -65,6 +65,7 @@ export class Actorble {
   readonly #resolver: TargetResolver
   readonly #runner: ScenarioRunner
   readonly #trace: TraceCollector
+  readonly #visual?: VisualLayer
 
   constructor(readonly options: ActorbleFacadeOptions = {}) {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -92,6 +93,7 @@ export class Actorble {
     this.#orchestrator = orchestrator
     this.#resolver = resolver
     this.#runner = options.runner ?? new BrowserScenarioRunner({ orchestrator, timeline, trace })
+    this.#visual = visual
   }
 
   resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle> {
@@ -182,7 +184,16 @@ export class Actorble {
   }
 
   destroy(): void {
-    return notImplemented('Actorble Facade destroy')
+    this.#runner.stop()
+
+    try {
+      this.#visual?.clearFeedback()
+      this.#visual?.destroy()
+    } catch (error) {
+      this.#trace.warn('Visual layer destroy failed.', {
+        error: describeUnknownError(error),
+      })
+    }
   }
 
   getCapabilities(): CapabilityReport {
@@ -246,10 +257,22 @@ function visualForOptions(
   }
 
   if (typeof visual === 'object' && visual !== null && visual.enabled !== false) {
-    return new BrowserVisualLayer({ enabled: visual.enabled, root })
+    return new BrowserVisualLayer({
+      enabled: visual.enabled,
+      root,
+      textVisibility: visual.textVisibility,
+    })
   }
 
   return undefined
+}
+
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return String(error)
 }
 
 function isVisualLayer(visual: ActorbleFacadeOptions['visual']): visual is VisualLayer {

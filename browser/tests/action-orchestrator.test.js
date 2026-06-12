@@ -215,12 +215,18 @@ function createHarness(options = {}) {
           showClick: vi.fn(() => {
             calls.push('visual.click')
           }),
-          showFocus: vi.fn(),
+          showFocus: vi.fn((request) => {
+            calls.push(`visual.focus:${request.active}`)
+          }),
           showTyping: vi.fn((request) => {
             calls.push(`visual.typing:${request.active}`)
           }),
-          showKeystroke: vi.fn(),
-          clearFeedback: vi.fn(),
+          showKeystroke: vi.fn((request) => {
+            calls.push(`visual.keystroke:${request.text}`)
+          }),
+          clearFeedback: vi.fn(() => {
+            calls.push('visual.clearFeedback')
+          }),
           hide: vi.fn(),
           destroy: vi.fn(),
         }
@@ -252,6 +258,7 @@ function createHarness(options = {}) {
     orchestrator,
     resolver,
     state,
+    store,
     target,
     text,
     trace,
@@ -540,6 +547,72 @@ describe('BrowserActionOrchestrator', () => {
       'visual.typing:false',
       'wait.settle',
     ])
+  })
+
+  it('routes focus and typing state effects to DOM state and visual feedback independently', () => {
+    const { state, store, target, visual } = createHarness({ enableVisual: true })
+
+    store.setFocused(target, true)
+    store.setTyping(target)
+    store.setTyping(null)
+
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
+      { kind: 'focus', target: expect.objectContaining({ id: target.id }), active: true },
+      {
+        kind: 'focus-visible',
+        target: expect.objectContaining({ id: target.id }),
+        active: true,
+      },
+    ])
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
+      { kind: 'typing', target: expect.objectContaining({ id: target.id }), active: true },
+    ])
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(3, [
+      { kind: 'typing', target: expect.objectContaining({ id: target.id }), active: false },
+    ])
+    expect(visual.showFocus).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: true,
+    })
+    expect(visual.showTyping).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: true,
+    })
+    expect(visual.showTyping).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: false,
+    })
+  })
+
+  it('records focus visual failures as warnings without failing state updates', () => {
+    const visual = {
+      showCursor: vi.fn(),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(() => {
+        throw new Error('focus overlay blocked')
+      }),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    const { store, target, trace } = createHarness({ visual })
+
+    expect(() => store.setFocused(target, true)).not.toThrow()
+
+    expect(trace.getTrace().warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Visual layer update failed.',
+          details: expect.objectContaining({
+            effect: 'showFocus',
+            error: 'focus overlay blocked',
+          }),
+        }),
+      ]),
+    )
   })
 
   it('waitFor delegates to the wait observation engine and records an action span', async () => {
