@@ -682,7 +682,7 @@ actorble-facade
 
 ### T31. Stylesheet-driven pseudo-state selector mirror
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: 현재 pseudo-state mirror는 이름과 달리 app stylesheet의 `:hover`/`:active`/`:focus-visible` selector를 rewrite하지 않는다. 접근 가능한 stylesheet를 스캔하고 selector를 data attribute 기반 mirror selector로 변환해, 가능한 경우 기존 앱 스타일을 그대로 재현한다.
 

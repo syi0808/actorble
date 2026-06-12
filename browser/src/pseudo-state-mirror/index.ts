@@ -1,6 +1,11 @@
 import { BrowserStateApplier } from '../platform-adapter/state-applier/index.js'
 import { BrowserStyleAdapter } from '../platform-adapter/style-adapter/index.js'
+import { buildPseudoStateMirrorCss } from './stylesheet-mirror.js'
 import type { SpanRecorder } from '../diagnostics-trace/index.js'
+import type {
+  StyleSheetRuleSnapshot,
+  StyleSheetScanner,
+} from '../platform-adapter/style-adapter/index.js'
 import type {
   Disposable,
   StateApplyPort,
@@ -20,6 +25,7 @@ export type PseudoStateMirrorRequest = Readonly<{
 export type PseudoStateMirrorOptions = Readonly<{
   state?: StateApplyPort
   style?: StylePort
+  styleScanner?: StyleSheetScanner
   trace?: SpanRecorder
   mirrorStyleId?: string
   mirrorCssText?: string
@@ -33,19 +39,24 @@ export interface PseudoStateMirror extends StateApplyPort {
 export class BrowserPseudoStateMirror implements PseudoStateMirror {
   readonly #state: StateApplyPort
   readonly #style?: StylePort
+  readonly #styleScanner?: StyleSheetScanner
   readonly #trace?: SpanRecorder
   readonly #mirrorStyleId: string
-  readonly #mirrorCssText: string
+  readonly #mirrorCssText?: string
   readonly #activeTargets = new Map<StateEffectKind, Map<string, TargetHandle>>()
   #styleDisposable?: Disposable
   #styleAttempted = false
 
   constructor(options: PseudoStateMirrorOptions = {}) {
+    const style = options.style ?? createDefaultStyleAdapter()
+
     this.#state = options.state ?? new BrowserStateApplier()
-    this.#style = options.style ?? createDefaultStyleAdapter()
+    this.#style = style
+    this.#styleScanner =
+      options.styleScanner ?? (isStyleSheetScanner(style) ? style : undefined)
     this.#trace = options.trace
     this.#mirrorStyleId = options.mirrorStyleId ?? defaultMirrorStyleId
-    this.#mirrorCssText = options.mirrorCssText ?? defaultMirrorCssText
+    this.#mirrorCssText = options.mirrorCssText
   }
 
   apply(request: PseudoStateMirrorRequest): void {
@@ -109,23 +120,63 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
 
     this.#styleAttempted = true
 
+    const cssText = this.#resolveMirrorCssText()
+
+    if (cssText.trim().length === 0) {
+      return
+    }
+
     try {
       this.#styleDisposable = this.#style.injectStyle({
         id: this.#mirrorStyleId,
-        cssText: this.#mirrorCssText,
+        cssText,
       })
     } catch (error) {
       this.#recordWarning('style', error, { styleId: this.#mirrorStyleId })
     }
   }
 
-  #disposeStyle(): void {
-    if (this.#styleDisposable === undefined) {
-      return
+  #resolveMirrorCssText(): string {
+    if (this.#mirrorCssText !== undefined) {
+      return this.#mirrorCssText
     }
 
-    this.#styleDisposable.dispose()
-    this.#styleDisposable = undefined
+    if (this.#styleScanner === undefined) {
+      return ''
+    }
+
+    try {
+      const scan = this.#styleScanner.scanStyleSheets()
+
+      for (const warning of scan.warnings) {
+        this.#recordWarning('scan', warning.message, warning.details ?? {})
+      }
+
+      const mirror = buildPseudoStateMirrorCss(scan.rules)
+
+      for (const warning of mirror.warnings) {
+        this.#recordWarning('rewrite', warning.message, warning.details ?? {})
+      }
+
+      this.#trace?.appendEvent('pseudo:mirror:stylesheet-scan', {
+        sourceRuleCount: countStyleRules(scan.rules),
+        mirroredRuleCount: mirror.mirroredRuleCount,
+        warningCount: scan.warnings.length + mirror.warnings.length,
+      })
+
+      return mirror.cssText
+    } catch (error) {
+      this.#recordWarning('scan', error)
+      return ''
+    }
+  }
+
+  #disposeStyle(): void {
+    if (this.#styleDisposable !== undefined) {
+      this.#styleDisposable.dispose()
+      this.#styleDisposable = undefined
+    }
+
     this.#styleAttempted = false
   }
 
@@ -174,7 +225,7 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
   }
 
   #recordWarning(
-    phase: 'apply' | 'clear' | 'style',
+    phase: 'apply' | 'clear' | 'scan' | 'rewrite' | 'style',
     error: unknown,
     details: Readonly<Record<string, unknown>> = {},
   ): void {
@@ -195,18 +246,37 @@ export function createPseudoStateMirror(): PseudoStateMirror {
 
 const defaultMirrorStyleId = 'actorble-pseudo-state-mirror'
 
-const defaultMirrorCssText = `
-[data-actorble-hover] {}
-[data-actorble-active] {}
-[data-actorble-focus-visible] {}
-`
-
-function createDefaultStyleAdapter(): StylePort | undefined {
+function createDefaultStyleAdapter(): BrowserStyleAdapter | undefined {
   try {
     return new BrowserStyleAdapter()
   } catch {
     return undefined
   }
+}
+
+function isStyleSheetScanner(value: unknown): value is StyleSheetScanner {
+  const scanner = value as { scanStyleSheets?: unknown }
+
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'scanStyleSheets' in value &&
+    typeof scanner.scanStyleSheets === 'function'
+  )
+}
+
+function countStyleRules(rules: readonly StyleSheetRuleSnapshot[]): number {
+  let count = 0
+
+  for (const rule of rules) {
+    if (rule.kind === 'style') {
+      count += 1
+    } else {
+      count += countStyleRules(rule.rules)
+    }
+  }
+
+  return count
 }
 
 function isPseudoStateEffect(effect: StateEffect): boolean {

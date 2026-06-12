@@ -421,4 +421,41 @@ describe('BrowserStyleAdapter', () => {
     adapter.removeStyle('cursor')
     expect(document.head.querySelector('style[data-actorble-style-id="cursor"]')).toBeNull()
   })
+
+  it('scans accessible stylesheets and skips actorble runtime styles', () => {
+    const source = document.createElement('style')
+    source.textContent = `
+      .button:hover { color: red; }
+      @media (min-width: 1px) { .field:focus-visible { outline: 1px solid blue; } }
+    `
+    document.head.append(source)
+
+    const adapter = new BrowserStyleAdapter(document)
+    adapter.injectStyle({
+      id: 'actorble-pseudo-state-mirror',
+      cssText: '.button[data-actorble-hover] { color: red; }',
+    })
+
+    expect(adapter.scanStyleSheets()).toEqual({
+      rules: [
+        {
+          kind: 'style',
+          selectorText: '.button:hover',
+          styleText: 'color: red;',
+        },
+        {
+          kind: 'group',
+          prelude: '@media (min-width: 1px)',
+          rules: [
+            {
+              kind: 'style',
+              selectorText: '.field:focus-visible',
+              styleText: 'outline: 1px solid blue;',
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    })
+  })
 })
