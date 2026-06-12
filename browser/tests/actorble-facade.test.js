@@ -55,6 +55,47 @@ function createDependencies() {
   return { condition, orchestrator, resolver, runner, target, trace }
 }
 
+function createClickableButton(id = 'create') {
+  const button = document.createElement('button')
+  button.id = id
+  button.textContent = id
+  button.scrollIntoView = vi.fn()
+  button.getBoundingClientRect = vi.fn(() => ({
+    x: 15,
+    y: 25,
+    width: 50,
+    height: 20,
+    top: 25,
+    left: 15,
+    right: 65,
+    bottom: 45,
+    toJSON: () => {},
+  }))
+  document.body.append(button)
+  document.elementFromPoint = vi.fn(() => button)
+
+  const seen = []
+  button.addEventListener('pointerdown', () => seen.push('pointerdown'))
+  button.addEventListener('pointerup', () => seen.push('pointerup'))
+  button.addEventListener('click', () => seen.push('click'))
+
+  return { button, seen }
+}
+
+function createFakeVisualLayer() {
+  return {
+    showCursor: vi.fn(),
+    highlightTarget: vi.fn(),
+    showClick: vi.fn(),
+    showFocus: vi.fn(),
+    showTyping: vi.fn(),
+    showKeystroke: vi.fn(),
+    clearFeedback: vi.fn(),
+    hide: vi.fn(),
+    destroy: vi.fn(),
+  }
+}
+
 describe('Actorble facade', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -153,5 +194,42 @@ describe('Actorble facade', () => {
     expect(overlay.querySelector('[data-actorble-visual-cursor]')).not.toBeNull()
     expect(overlay.querySelector('[data-actorble-visual-highlight]')).not.toBeNull()
     expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
+  })
+
+  it('does not create overlay DOM when visual feedback is disabled', async () => {
+    const { seen } = createClickableButton('disabled-visual')
+    const actorble = createActorble({ visual: { enabled: false } })
+
+    await expect(actorble.click(css('#disabled-visual'))).resolves.toBeUndefined()
+
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
+  })
+
+  it('does not create the default visual layer in headless mode', async () => {
+    const { seen } = createClickableButton('headless-visual')
+    const actorble = createActorble({ mode: 'headless', visual: true })
+
+    await expect(actorble.click(css('#headless-visual'))).resolves.toBeUndefined()
+
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
+  })
+
+  it('honors an injected visual layer in headless mode without creating default overlay DOM', async () => {
+    const { button, seen } = createClickableButton('injected-visual')
+    const visual = createFakeVisualLayer()
+    const actorble = createActorble({ mode: 'headless', visual })
+
+    await expect(actorble.click(css('#injected-visual'))).resolves.toBeUndefined()
+
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(visual.highlightTarget).toHaveBeenCalledWith({
+      target: expect.objectContaining({ element: button }),
+      rect: { x: 15, y: 25, width: 50, height: 20 },
+    })
+    expect(visual.showCursor).toHaveBeenCalledWith({ x: 40, y: 35 })
+    expect(visual.showClick).toHaveBeenCalledWith({ x: 40, y: 35 })
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 })

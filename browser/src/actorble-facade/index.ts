@@ -74,7 +74,7 @@ export class Actorble {
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
     const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
-    const visual = visualForOptions(options.visual, dom.getRoot())
+    const visual = visualForOptions(options.visual, dom.getRoot(), options.mode)
     const orchestrator =
       options.orchestrator ??
       new BrowserActionOrchestrator({
@@ -231,9 +231,14 @@ function isElementRoot(root: Document | ShadowRoot | Element): root is Element {
 function visualForOptions(
   visual: ActorbleFacadeOptions['visual'],
   root: Document | ShadowRoot,
+  mode: ActorbleFacadeOptions['mode'],
 ): VisualLayer | undefined {
   if (isVisualLayer(visual)) {
     return visual
+  }
+
+  if (mode === 'headless') {
+    return undefined
   }
 
   if (visual === true) {

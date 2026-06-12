@@ -396,7 +396,7 @@ actorble-facade
 
 ### T18. Visual Layer runtime 연결
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: T16의 overlay shell을 실제 action 실행 경로에 연결한다. Visual Layer는 core correctness가 아니라 관찰 가능한 보조 표현이어야 하며, 실패해도 action을 실패시키지 않는다.
 
