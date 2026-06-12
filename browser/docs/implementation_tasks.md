@@ -11,6 +11,7 @@
 - 일부 public facade/orchestrator 메서드는 아직 `notImplemented()` shell로 남아 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
 - T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결하기 위한 후속 보강 태스크다.
 - T23-T25는 browser-like cursor visual, CSS `cursor` 반영, pointer press feedback을 기존 visual runtime 위에 보강하는 태스크다.
+- T26-T33은 example에서 확인된 visual fidelity 문제를 다룬다. 기본 입력 타이밍, click press 가시성, 조용한 visual 기본값, CSS pseudo-state mirror, cursor 의미 보정, browser smoke 검증을 순서대로 보강한다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -570,6 +571,178 @@ actorble-facade
 - Visual Layer 테스트가 pressed state attribute/class와 restore 동작을 검증한다.
 - Action Orchestrator 테스트가 `pointer:down`/`pointer:up`/`pointer:cancelled`에 따른 cursor visual 호출 순서와 cleanup을 검증한다.
 - click visual feedback과 cursor press feedback이 독립적으로 호출되는 회귀 테스트를 둔다.
+
+### T26. Public pointer motion defaults and click movement routing
+
+- Status: [ ] Not started
+
+브리핑: 현재 public action의 기본 pointer movement는 옵션이 없으면 즉시 이동하거나 example에서 `spring` profile을 직접 사용해 통통 튀어 보인다. 기본 사용자-facing 동작은 nonzero duration의 tween/easing으로 두고, `spring`은 명시적 opt-in profile로만 유지한다.
+
+의존성: 완료된 T19, `shared`, `pointer-engine`, `gesture-engine`, `action-orchestrator`, `actorble-facade`, `example/*`.
+
+완료 기준:
+
+- `moveTo` public path에서 `duration`/`motion`이 생략되면 안정적인 `ease-in-out` tween 기본값을 사용한다.
+- `click`은 target point로 이동할 때 public movement 기본값 또는 명시된 movement option을 거친 뒤 `pointerdown`/`pointerup`을 수행한다.
+- 명시적 `duration: 0` 또는 명시적 `motion`은 caller 의도를 보존하고 기본값으로 덮어쓰지 않는다.
+- `spring` profile은 계속 지원하되 기본 action/example flow에는 사용하지 않는다.
+- 기본값은 한 곳에서 관리되고, low-level `PointerEngine`의 deterministic 직접 사용성을 불필요하게 깨지 않는다.
+
+테스트 기대:
+
+- fake timeline 기반 Action Orchestrator 또는 Gesture Engine 테스트가 option 없는 `click`에서 `pointer:moved` frame들이 `pointerdown`보다 먼저 발생함을 검증한다.
+- explicit zero-duration movement와 explicit `spring` profile이 기존처럼 opt-in으로 동작하는 회귀 테스트를 둔다.
+- action playground가 normal visual flow에서 `spring`을 쓰지 않는지 example typecheck로 검증한다.
+
+### T27. Public typing cadence defaults
+
+- Status: [ ] Not started
+
+브리핑: `type`/`typeInto`는 사람이 입력하는 API인데 `delay`가 없으면 글자가 즉시 모두 삽입된다. public action 기본값에는 grapheme 사이 cadence를 두고, 빠른 값 대체는 `fill`의 책임으로 유지한다.
+
+의존성: 완료된 T20, `shared`, `timeline-engine`, `text-input-engine`, `action-orchestrator`, `actorble-facade`.
+
+완료 기준:
+
+- public `typeInto`에서 `delay`가 생략되면 사람이 볼 수 있는 기본 grapheme delay를 적용한다.
+- 명시적 `delay` 값은 기본값보다 우선하며, `delay: 0`은 즉시 입력을 요청하는 opt-out으로 동작한다.
+- `fill`은 typing cadence 기본값의 영향을 받지 않는다.
+- timeout/cancellation은 기본 cadence가 적용된 경우에도 typing state cleanup을 보장한다.
+
+테스트 기대:
+
+- fake timeline 테스트가 option 없는 `typeInto('abc')`에서 기본 delay를 두 번 호출하는지 검증한다.
+- explicit `delay: 0`과 explicit custom delay가 기본값을 덮어쓰는 회귀 테스트를 둔다.
+- cancellation/timeout 중 typing state가 남지 않는 기존 테스트를 기본 cadence 경로로 확장한다.
+
+### T28. Perceptible click press dwell and cursor shrink
+
+- Status: [ ] Not started
+
+브리핑: `pointerdown` 직후 `pointerup`이 같은 tick에 가까워 cursor shrink transition이 렌더링될 시간이 없다. click correctness와 event order는 유지하되, visual runtime에서는 down 상태가 최소 한 frame 이상 관찰 가능해야 한다.
+
+의존성: 완료된 T25-T26, `shared`, `timeline-engine`, `gesture-engine`, `action-orchestrator`, `visual-layer`.
+
+완료 기준:
+
+- `click` gesture는 기본 press dwell을 두어 cursor pressed visual이 관찰 가능하다.
+- 명시적 option으로 press dwell을 줄이거나 끌 수 있어 테스트와 caller 제어성을 유지한다.
+- cursor pressed transform/transition은 browser-like cursor shape를 유지하면서 충분히 보이는 수준으로 조정된다.
+- `pointerdown` → dwell → `pointerup` → synthetic `click` event order는 변하지 않는다.
+- cancellation 또는 failed perform cleanup 이후 pressed visual state가 남지 않는다.
+
+테스트 기대:
+
+- fake timeline 테스트가 click 중 dwell delay가 `pointerdown`과 `pointerup` 사이에서 호출됨을 검증한다.
+- Visual Layer 테스트가 pressed cursor transform/transition이 복귀 transform과 구분되는지 검증한다.
+- cancellation/failed cleanup 테스트가 pressed visual restore를 검증한다.
+
+### T29. Quiet visual feedback defaults and granular visual options
+
+- Status: [ ] Not started
+
+브리핑: 현재 Visual Layer는 cursor 외에도 target highlight, click ring, focus ring, typing indicator, keystroke overlay를 기본 action path에서 그린다. 기본 visual mode는 앱의 실제 UI를 방해하지 않는 cursor 중심 표현으로 낮추고, 부가 feedback은 명시적 debug/option으로만 켠다.
+
+의존성: 완료된 T18, T21-T25, `shared`, `visual-layer`, `action-orchestrator`, `actorble-facade`, `capability-fidelity`.
+
+완료 기준:
+
+- `VisualFeedbackOptions`가 cursor, target highlight, click feedback, focus overlay, typing indicator, keystroke overlay를 독립적으로 제어할 수 있다.
+- `visual: true`의 기본값은 cursor와 core cleanup만 켜고, click ring/target highlight/focus overlay/typing indicator/keystroke overlay는 기본으로 생성하지 않는다.
+- 명시적 visual option 또는 debug preset을 통해 기존 부가 feedback을 다시 켤 수 있다.
+- visual disabled/headless 경로는 overlay DOM을 만들지 않는 기존 동작을 유지한다.
+- fidelity report는 visual overlay runtime과 visual feedback detail level을 혼동하지 않는다.
+
+테스트 기대:
+
+- `visual: true` click/type flow에서 click ring, focus overlay, typing indicator, keystroke overlay가 생성되지 않는 회귀 테스트를 둔다.
+- 각 granular option을 켰을 때 해당 overlay part만 생성되는 Visual Layer 또는 Facade 테스트를 둔다.
+- `destroy()`와 failed action cleanup이 opt-in overlay part를 제거하는지 검증한다.
+
+### T30. Pseudo-state mirror fallback removal and focus-visible correctness
+
+- Status: [ ] Not started
+
+브리핑: pseudo-state mirror가 실제 app CSS를 복제하지 못할 때 임의 fallback style을 넣으면 앱의 hover/focus 디자인과 달라진다. mirror 실패 또는 미지원 상태에서는 state attribute만 남기고, 스타일은 임의로 만들지 않는다.
+
+의존성: 완료된 T16, T21, `pseudo-state-mirror`, `interaction-state-store`, `focus-engine`, `text-input-engine`, `platform-adapter/state-applier`, `platform-adapter/style-adapter`.
+
+완료 기준:
+
+- 기본 mirror CSS에서 임의 `outline`, border, background 같은 fallback visual style을 제거한다.
+- `:hover`, `:active`, `:focus-visible` mirror stylesheet 생성에 실패하면 action은 성공하되 fallback visual style을 주입하지 않는다.
+- `typeInto`는 typing lifecycle 때문에 `focus-visible`을 강제로 켜지 않는다. focus-visible은 focus option 또는 modality 정책에 따라 별도로 결정된다.
+- state attribute apply/cleanup은 유지되어 diagnostics와 향후 CSS mirror의 입력으로 사용할 수 있다.
+
+테스트 기대:
+
+- Pseudo State Mirror 테스트가 기본 주입 CSS에 arbitrary focus outline이 없음을 검증한다.
+- style injection 실패 경로에서 warning만 남고 fallback style이 추가되지 않는지 검증한다.
+- `typeInto` 회귀 테스트가 입력 중 focus state와 focus-visible state를 구분해 검증한다.
+
+### T31. Stylesheet-driven pseudo-state selector mirror
+
+- Status: [ ] Not started
+
+브리핑: 현재 pseudo-state mirror는 이름과 달리 app stylesheet의 `:hover`/`:active`/`:focus-visible` selector를 rewrite하지 않는다. 접근 가능한 stylesheet를 스캔하고 selector를 data attribute 기반 mirror selector로 변환해, 가능한 경우 기존 앱 스타일을 그대로 재현한다.
+
+의존성: 완료된 T30, `pseudo-state-mirror`, `platform-adapter/style-adapter`, `diagnostics-trace`, `shared`.
+
+완료 기준:
+
+- same-origin 또는 runtime에서 접근 가능한 stylesheet의 CSS rule을 스캔한다.
+- `:hover`, `:active`, `:focus-visible` selector를 각각 `data-actorble-hover`, `data-actorble-active`, `data-actorble-focus-visible` 기반 selector로 rewrite한다.
+- rewrite된 mirror stylesheet는 원본 selector의 의도를 가능한 범위에서 유지하되, 지원 불가 selector/rule은 warning 또는 trace event로 건너뛴다.
+- inaccessible stylesheet, parse failure, injection failure는 action failure가 아니라 diagnostics warning으로 남긴다.
+- 지원되는 rule이 하나도 없으면 임의 fallback style 없이 style injection을 생략할 수 있다.
+
+테스트 기대:
+
+- selector rewriter 단위 테스트가 class/id/compound selector의 pseudo-state rewrite 결과를 검증한다.
+- jsdom style adapter 테스트가 `.button:hover` 같은 rule이 `[data-actorble-hover]` mirror rule로 주입되는지 검증한다.
+- inaccessible stylesheet 또는 unsupported rule이 warning만 남기고 action success를 깨지 않는지 검증한다.
+
+### T32. Cursor semantics for editable and indirect cursor targets
+
+- Status: [ ] Not started
+
+브리핑: input 같은 editable target에서 computed `cursor`가 `auto` 또는 inherited value로 남으면 cursor overlay가 arrow처럼 보일 수 있다. Cursor visual은 DOM style resolution을 우선하되, style이 indirect value일 때 target semantics로 browser-like fallback을 선택해야 한다.
+
+의존성: 완료된 T24, T29, `action-orchestrator`, `platform-adapter/dom-adapter`, `interactability-engine`, `visual-layer`.
+
+완료 기준:
+
+- editable text target의 resolved cursor가 `auto`/`inherit`/empty 계열이면 text cursor visual로 degrade된다.
+- disabled, not-allowed, progress/wait, pointer button 같은 explicit cursor 값은 semantic fallback보다 우선한다.
+- cursor resolution은 Visual Layer 내부가 아니라 orchestrator/adapter 경계에서 수행한다.
+- resolution 실패는 기존처럼 diagnostics warning으로 남고 action success를 깨지 않는다.
+
+테스트 기대:
+
+- Action Orchestrator 테스트가 input target에서 computed `auto`가 `text` cursor visual request로 전달되는지 검증한다.
+- explicit `cursor: pointer` 또는 ancestor-resolved cursor가 semantic fallback보다 우선하는 회귀 테스트를 둔다.
+- cursor style read failure warning 경로를 유지한다.
+
+### T33. Browser visual fidelity example and smoke verification
+
+- Status: [ ] Not started
+
+브리핑: visual fidelity 개선은 jsdom style assertions만으로는 충분히 확인하기 어렵다. action playground를 조용한 기본 visual과 opt-in debug visual을 보여주도록 정리하고, 실제 browser runtime에서 불필요한 overlay가 보이지 않는지 smoke 검증한다.
+
+의존성: 완료된 T26-T32, `example/*`, `actorble-facade`, `visual-layer`, `capability-fidelity`.
+
+완료 기준:
+
+- action playground의 normal flow는 tween movement, typing cadence, click dwell을 보여주되 `spring`, click ring, typing indicator 같은 부가 visual을 기본으로 사용하지 않는다.
+- debug 또는 visual detail toggle을 통해 opt-in overlay feedback을 명확히 비교할 수 있다.
+- example UI는 public API만 사용하고 내부 모듈에 직접 의존하지 않는다.
+- browser smoke 검증에서 overlay root가 hit-test를 막지 않고, default visual mode에 불필요한 overlay part가 생성되지 않음을 확인한다.
+
+테스트 기대:
+
+- `pnpm example:typecheck`와 `pnpm example:build`가 통과한다.
+- 가능하면 Playwright 또는 Browser-driven smoke test로 action playground default flow의 overlay DOM과 event 결과를 검증한다.
+- fidelity report snapshot 또는 integration test가 visual overlay enabled와 visual detail option을 구분하는지 검증한다.
 
 ## 첫 vertical slice
 
