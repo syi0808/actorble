@@ -441,7 +441,7 @@ actorble-facade
 
 ### T20. Text input typing cadence
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `type`과 `typeInto`가 글자를 즉시 모두 삽입하지 않고 cadence를 적용할 수 있게 한다. `fill`은 빠른 값 대체 전략으로 유지해 `type`과 의미를 분리한다.
 

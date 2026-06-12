@@ -497,8 +497,15 @@ describe('BrowserActionOrchestrator', () => {
 
   it('typeInto resolves and checks type interactability before delegating text input', async () => {
     const { calls, orchestrator, target, text } = createHarness()
+    const controller = new AbortController()
 
-    await expect(orchestrator.typeInto(css('#target-1'), 'hello')).resolves.toBeUndefined()
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'hello', {
+        delay: 8,
+        timeout: 100,
+        signal: controller.signal,
+      }),
+    ).resolves.toBeUndefined()
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -509,7 +516,11 @@ describe('BrowserActionOrchestrator', () => {
       'text.typeInto',
       'wait.settle',
     ])
-    expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {})
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {
+      delay: 8,
+      timeout: 100,
+      signal: controller.signal,
+    })
   })
 
   it('surrounds typeInto with visual highlight and typing hooks', async () => {
