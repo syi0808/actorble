@@ -493,7 +493,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     switch (signal.type) {
       case 'pointer:moved':
-        this.#tryVisual('showCursor', () => this.#visual.showCursor(signal.point))
+        this.#showPointerCursor(signal.point, target)
         this.#events.dispatchPointerEvent({
           type: 'pointermove',
           target: target.element,
@@ -631,6 +631,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         rect: geometry.rect,
       }),
     )
+  }
+
+  #showPointerCursor(point: Point, _target: TargetHandle): void {
+    this.#tryVisual('showCursor', () => this.#visual.showCursor(point))
   }
 
   #applyInteractionStateEffects(effects: readonly StateEffect[]): void {

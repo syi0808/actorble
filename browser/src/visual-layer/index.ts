@@ -17,6 +17,28 @@ export type HighlightRequest = Readonly<{
   rect?: Rect
 }>
 
+export type CursorVisualKind =
+  | 'default'
+  | 'pointer'
+  | 'text'
+  | 'not-allowed'
+  | 'wait'
+  | 'progress'
+  | 'grab'
+  | 'grabbing'
+  | 'move'
+  | 'crosshair'
+  | 'custom'
+
+export type CursorVisualRequest = Readonly<{
+  point: Point
+  cursor?: string
+  kind?: CursorVisualKind
+  pressed?: boolean
+}>
+
+export type CursorVisualInput = Point | CursorVisualRequest
+
 export type FocusVisualRequest = Readonly<{
   target: TargetHandle | null
   active: boolean
@@ -34,7 +56,7 @@ export type KeystrokeVisualRequest = Readonly<{
 }>
 
 export interface VisualLayer {
-  showCursor(point: Point): void
+  showCursor(request: CursorVisualInput): void
   highlightTarget(request: HighlightRequest): void
   showClick(point: Point): void
   showFocus(request: FocusVisualRequest): void
@@ -51,18 +73,33 @@ export class BrowserVisualLayer implements VisualLayer {
 
   constructor(readonly options: VisualLayerOptions = {}) {}
 
-  showCursor(point: Point): void {
+  showCursor(input: CursorVisualInput): void {
     if (!this.#enabled) {
       return
     }
 
+    const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
+    cursor.setAttribute('data-actorble-cursor-kind', request.kind)
+
+    if (request.cssCursor) {
+      cursor.setAttribute('data-actorble-css-cursor', request.cssCursor)
+    } else {
+      cursor.removeAttribute('data-actorble-css-cursor')
+    }
+
+    if (request.pressed) {
+      cursor.setAttribute('data-actorble-cursor-pressed', '')
+    } else {
+      cursor.removeAttribute('data-actorble-cursor-pressed')
+    }
+
     Object.assign(cursor.style, {
       border: '1px solid CanvasText',
       borderRadius: '999px',
       height: '10px',
-      left: `${point.x}px`,
-      top: `${point.y}px`,
+      left: `${request.point.x}px`,
+      top: `${request.point.y}px`,
       transform: 'translate(-50%, -50%)',
       width: '10px',
     })
@@ -273,7 +310,7 @@ export class BrowserVisualLayer implements VisualLayer {
 }
 
 export class NoopVisualLayer implements VisualLayer {
-  showCursor(_point: Point): void {}
+  showCursor(_request: CursorVisualInput): void {}
 
   highlightTarget(_request: HighlightRequest): void {}
 
@@ -294,6 +331,84 @@ export class NoopVisualLayer implements VisualLayer {
 
 export function createVisualLayer(options: VisualLayerOptions = {}): VisualLayer {
   return new BrowserVisualLayer(options)
+}
+
+type NormalizedCursorVisualRequest = Readonly<{
+  point: Point
+  cssCursor?: string
+  kind: CursorVisualKind
+  pressed: boolean
+}>
+
+function normalizeCursorVisualRequest(input: CursorVisualInput): NormalizedCursorVisualRequest {
+  if ('point' in input) {
+    const cssCursor = normalizeCursorText(input.cursor)
+
+    return {
+      point: input.point,
+      cssCursor,
+      kind: input.kind ?? cursorVisualKindFor(cssCursor),
+      pressed: input.pressed ?? false,
+    }
+  }
+
+  return {
+    point: input,
+    kind: 'default',
+    pressed: false,
+  }
+}
+
+function normalizeCursorText(cursor: string | undefined): string | undefined {
+  const normalized = cursor?.trim()
+
+  return normalized ? normalized : undefined
+}
+
+function cursorVisualKindFor(cursor: string | undefined): CursorVisualKind {
+  const normalized = cursor?.toLowerCase()
+
+  if (!normalized || normalized === 'auto' || normalized === 'default') {
+    return 'default'
+  }
+
+  if (normalized.includes('not-allowed')) {
+    return 'not-allowed'
+  }
+
+  if (normalized.includes('grabbing')) {
+    return 'grabbing'
+  }
+
+  if (normalized.includes('pointer')) {
+    return 'pointer'
+  }
+
+  if (normalized.includes('text')) {
+    return 'text'
+  }
+
+  if (normalized.includes('progress')) {
+    return 'progress'
+  }
+
+  if (normalized.includes('wait')) {
+    return 'wait'
+  }
+
+  if (normalized.includes('grab')) {
+    return 'grab'
+  }
+
+  if (normalized.includes('move')) {
+    return 'move'
+  }
+
+  if (normalized.includes('crosshair')) {
+    return 'crosshair'
+  }
+
+  return 'custom'
 }
 
 function getGlobalDocument(): Document {

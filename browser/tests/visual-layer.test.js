@@ -90,6 +90,34 @@ describe('BrowserVisualLayer', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
+  it('accepts cursor visual request metadata for future cursor fidelity work', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({
+      point: { x: 14, y: 28 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+
+    const cursor = document.body.querySelector('[data-actorble-visual-cursor]')
+    expect(cursor.style.left).toBe('14px')
+    expect(cursor.style.top).toBe('28px')
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('pointer')
+    expect(cursor.getAttribute('data-actorble-css-cursor')).toBe('pointer')
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+
+    layer.showCursor({
+      point: { x: 15, y: 29 },
+      cursor: 'text',
+      pressed: false,
+    })
+
+    expect(cursor.style.left).toBe('15px')
+    expect(cursor.style.top).toBe('29px')
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('text')
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+  })
+
   it('renders focus, typing, and keystroke feedback with text visibility policy', () => {
     const target = targetHandle('field')
     const layer = new BrowserVisualLayer({ root: document })

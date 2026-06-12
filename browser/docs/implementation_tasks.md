@@ -10,6 +10,7 @@
 - T3 platform adapter 최소 구현은 완료됐다. `src/platform-adapter/*`가 jsdom 기반 DOM/event/state/style adapter 동작을 제공한다.
 - 일부 public facade/orchestrator 메서드는 아직 `notImplemented()` shell로 남아 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
 - T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결하기 위한 후속 보강 태스크다.
+- T23-T25는 browser-like cursor visual, CSS `cursor` 반영, pointer press feedback을 기존 visual runtime 위에 보강하는 태스크다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -503,6 +504,72 @@ actorble-facade
 - 예제 TypeScript typecheck가 통과한다.
 - capability/fidelity report snapshot 테스트가 visual runtime 지원 수준을 검증한다.
 - 가능하면 Playwright 또는 browser-driven smoke test로 overlay가 생성되고 target hit-test를 막지 않음을 확인한다.
+
+### T23. Browser-like cursor visual
+
+- Status: [ ] Not started
+
+브리핑: 현재 cursor overlay는 위치를 나타내는 작은 원형 marker에 가깝다. 이 태스크는 Visual Layer가 실제 브라우저 커서처럼 보이는 overlay를 표현하도록 개선한다. Visual Layer는 여전히 표현 계층이며, target resolution, hit-test, pointer event dispatch에는 관여하지 않는다.
+
+의존성: 완료된 T18-T22, `visual-layer`, `shared`.
+
+완료 기준:
+
+- 기본 cursor overlay가 원형 점이 아니라 browser-like pointer hotspot을 가진 커서 형태로 렌더링된다.
+- Visual Layer는 `default`/`auto`, `pointer`, `text`, `not-allowed`, `wait` 또는 `progress`, `grab`/`grabbing`, `move`, `crosshair` 같은 주요 cursor 의미를 구분해 표현할 수 있다.
+- 지원하지 않는 cursor 값은 안전한 기본 cursor visual로 degrade된다.
+- overlay root와 cursor part는 계속 `pointer-events: none`이며 `data-actorble-internal` marker를 유지한다.
+- `hide()`, `destroy()`, visual disabled 옵션에서 cursor overlay DOM이 남지 않는다.
+
+테스트 기대:
+
+- jsdom 기반 Visual Layer 테스트가 cursor variant별 attribute/class/style 변화를 검증한다.
+- cursor hotspot 기준 위치가 기존 center marker와 다르게 안정적으로 적용되는지 검증한다.
+- visual disabled/headless equivalent 경로에서 cursor DOM을 만들지 않는 회귀 테스트를 둔다.
+
+### T24. CSS cursor resolution and visual routing
+
+- Status: [ ] Not started
+
+브리핑: CSS `cursor`는 target style과 pseudo-state mirror 결과에 의해 바뀔 수 있다. 이 태스크는 pointer lifecycle 중 현재 target의 computed cursor를 읽고 Visual Layer에 전달한다. CSS/DOM 읽기는 adapter 또는 orchestrator 경계에 남기고, Visual Layer가 target/style resolution을 직접 수행하지 않게 한다.
+
+의존성: 완료된 T23, `action-orchestrator`, `platform-adapter/dom-adapter`, `interaction-state-store`, `pseudo-state-mirror`, `visual-layer`.
+
+완료 기준:
+
+- `pointer:moved` 처리 시 hover state effect와 pseudo-state mirror 적용 이후 target의 computed `cursor` 값이 cursor visual에 반영된다.
+- `pointer:down`/`pointer:up` 처리 시 active state에 의해 CSS cursor가 달라질 수 있는 경우 cursor visual도 갱신된다.
+- `auto`, `inherit`, 빈 값처럼 직접 표현하기 어려운 값은 필요하면 ancestor chain 또는 안전한 기본값으로 해석한다.
+- Actorble internal overlay 요소는 cursor resolution과 hit-test에 영향을 주지 않는다.
+- cursor style 읽기 또는 visual update 실패는 diagnostics warning으로 남고 action success/failure 판정에 영향을 주지 않는다.
+
+테스트 기대:
+
+- fake DOM/style adapter를 사용하는 Action Orchestrator 테스트가 computed `cursor` 값이 Visual Layer 호출로 전달되는지 검증한다.
+- hover/active state effect 적용 순서 이후 cursor를 읽는 회귀 테스트를 둔다.
+- unsupported cursor 값과 visual failure warning 경로를 검증한다.
+
+### T25. Cursor press feedback
+
+- Status: [ ] Not started
+
+브리핑: click ripple과 별개로, 실제 커서 자체가 눌릴 때 약간 작아졌다가 pointer up 이후 원래 크기로 돌아오는 visual feedback을 추가한다. 이 효과는 core click correctness가 아니라 Visual Layer affordance이며, pointer button state와 cleanup 흐름을 따라야 한다.
+
+의존성: 완료된 T23-T24, `pointer-signals`, `action-orchestrator`, `interaction-state-store`, `visual-layer`, `diagnostics-trace`.
+
+완료 기준:
+
+- `pointer:down`은 cursor visual에 pressed 상태를 반영하고, `pointer:up`은 원래 상태로 복귀시킨다.
+- `pointer:cancelled`, action cancellation, failed perform cleanup 이후 pressed visual state가 남지 않는다.
+- cursor shrink/restore 효과는 deterministic CSS transition 또는 equivalent visual state로 표현되며 pointer event dispatch 순서를 바꾸지 않는다.
+- 기존 `showClick` click feedback은 pointer up 이후 click affordance로 유지되고, cursor press feedback과 책임이 섞이지 않는다.
+- visual disabled/headless 경로에서는 press feedback이 DOM을 만들거나 action 동작을 바꾸지 않는다.
+
+테스트 기대:
+
+- Visual Layer 테스트가 pressed state attribute/class와 restore 동작을 검증한다.
+- Action Orchestrator 테스트가 `pointer:down`/`pointer:up`/`pointer:cancelled`에 따른 cursor visual 호출 순서와 cleanup을 검증한다.
+- click visual feedback과 cursor press feedback이 독립적으로 호출되는 회귀 테스트를 둔다.
 
 ## 첫 vertical slice
 
