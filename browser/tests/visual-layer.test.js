@@ -162,6 +162,8 @@ describe('BrowserVisualLayer', () => {
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
     expect(cursor.getAttribute('data-actorble-css-cursor')).toBe('url(cursor.svg), copy')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    expect(cursor.style.transform).toBe('scale(0.92)')
+    expect(cursor.style.transition).toBe('transform 80ms ease-out')
     expect(cursor.style.left).toBe('30px')
     expect(cursor.style.top).toBe('40px')
     expect(cursor.style.width).toBe('14px')
@@ -178,6 +180,34 @@ describe('BrowserVisualLayer', () => {
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
     expect(cursor.hasAttribute('data-actorble-css-cursor')).toBe(false)
+    expect(cursor.style.transform).toBe('none')
+  })
+
+  it('shrinks pressed cursor variants and restores their base transform', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({
+      point: { x: 50, y: 60 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+
+    const cursor = getCursorElement()
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    expect(cursor.style.transform).toBe('rotate(-18deg) scale(0.92)')
+    expect(cursor.style.transformOrigin).toBe('5px 1px')
+    expect(cursor.style.transition).toBe('transform 80ms ease-out')
+
+    layer.showCursor({
+      point: { x: 50, y: 60 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+    expect(cursor.style.transform).toBe('rotate(-18deg)')
+    expect(cursor.style.transformOrigin).toBe('5px 1px')
+    expect(cursor.style.transition).toBe('transform 80ms ease-out')
   })
 
   it('accepts cursor visual request metadata without leaking stale variant state', () => {

@@ -137,6 +137,13 @@ type ClickDispatchState = {
   upSeen: boolean
 }
 
+type CursorVisualState = {
+  target: TargetHandle
+  point: Point
+  cursor?: string
+  pressed: boolean
+}
+
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
   readonly #events: EventDispatchPort
@@ -153,6 +160,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #wait: WaitObservationEngine
   #signalTarget: TargetHandle | null = null
   #clickDispatchState: ClickDispatchState | null = null
+  readonly #cursorPressedButtons = new Set<PointerButtonName>()
+  #cursorVisualState: CursorVisualState | null = null
 
   constructor(options: ActionOrchestratorOptions = {}) {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -486,6 +495,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#state.applyStateEffects(diff.effects)
 
     if (signal.type === 'pointer:cancelled') {
+      this.#cursorPressedButtons.clear()
+      this.#restorePressedCursorVisual()
       return
     }
 
@@ -504,7 +515,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         })
         break
       case 'pointer:down': {
-        this.#showPointerCursor(signal.point, target)
+        this.#cursorPressedButtons.add(signal.button)
+        this.#showPointerCursor(signal.point, target, this.#hasPressedCursorButtons())
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
           target: target.element,
@@ -522,7 +534,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       }
       case 'pointer:up': {
-        this.#showPointerCursor(signal.point, target)
+        this.#cursorPressedButtons.delete(signal.button)
+        this.#showPointerCursor(signal.point, target, this.#hasPressedCursorButtons())
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerup',
           target: target.element,
@@ -581,7 +594,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const diff = this.#store.reset()
       this.#state.applyStateEffects(diff.effects)
       this.#state.cleanup()
-      this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
     } catch (error) {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action state cleanup failed.', {
@@ -589,6 +601,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         error: describeUnknownError(error),
       })
     }
+
+    this.#cursorPressedButtons.clear()
+    this.#restorePressedCursorVisual()
+    this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
   }
 
   #finishActionFailure(
@@ -637,12 +653,41 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     )
   }
 
-  #showPointerCursor(point: Point, target: TargetHandle): void {
+  #showPointerCursor(
+    point: Point,
+    target: TargetHandle,
+    pressed = this.#hasPressedCursorButtons(),
+  ): void {
     const cursor = this.#resolveCursor(target)
+    const visualPoint = { x: point.x, y: point.y }
 
     this.#tryVisual('showCursor', () =>
-      this.#visual.showCursor(cursor === undefined ? { point } : { point, cursor }),
+      this.#visual.showCursor(
+        cursor === undefined
+          ? { point: visualPoint, pressed }
+          : { point: visualPoint, cursor, pressed },
+      ),
     )
+    this.#cursorVisualState = {
+      target,
+      point: visualPoint,
+      ...(cursor === undefined ? {} : { cursor }),
+      pressed,
+    }
+  }
+
+  #restorePressedCursorVisual(): void {
+    const state = this.#cursorVisualState
+
+    if (!state?.pressed) {
+      return
+    }
+
+    this.#showPointerCursor(state.point, state.target, false)
+  }
+
+  #hasPressedCursorButtons(): boolean {
+    return this.#cursorPressedButtons.size > 0
   }
 
   #resolveCursor(target: TargetHandle): string | undefined {

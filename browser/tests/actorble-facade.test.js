@@ -250,7 +250,18 @@ describe('Actorble facade', () => {
       rect: { x: 15, y: 25, width: 50, height: 20 },
     })
     expect(visual.showCursor).toHaveBeenCalledTimes(3)
-    expect(visual.showCursor).toHaveBeenCalledWith({ point: { x: 40, y: 35 } })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
+      point: { x: 40, y: 35 },
+      pressed: false,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 40, y: 35 },
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+      point: { x: 40, y: 35 },
+      pressed: false,
+    })
     expect(visual.showClick).toHaveBeenCalledWith({ x: 40, y: 35 })
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })

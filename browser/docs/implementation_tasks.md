@@ -551,7 +551,7 @@ actorble-facade
 
 ### T25. Cursor press feedback
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: click ripple과 별개로, 실제 커서 자체가 눌릴 때 약간 작아졌다가 pointer up 이후 원래 크기로 돌아오는 visual feedback을 추가한다. 이 효과는 core click correctness가 아니라 Visual Layer affordance이며, pointer button state와 cleanup 흐름을 따라야 한다.
 

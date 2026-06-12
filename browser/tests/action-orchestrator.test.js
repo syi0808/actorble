@@ -158,6 +158,10 @@ function createHarness(options = {}) {
     drag: vi.fn(),
     cancel: vi.fn(async () => {
       calls.push('gesture.cancel')
+      if (options.cancelFailure) {
+        throw options.cancelFailure
+      }
+
       signals.emit({ type: 'pointer:cancelled' })
       return { completed: false }
     }),
@@ -526,6 +530,22 @@ describe('BrowserActionOrchestrator', () => {
       target: expect.objectContaining({ id: 'target-1' }),
       rect: { x: 10, y: 20, width: 20, height: 20 },
     })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
+      point: { x: 20, y: 30 },
+      cursor: 'default',
+      pressed: false,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'default',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+      point: { x: 20, y: 30 },
+      cursor: 'default',
+      pressed: false,
+    })
+    expect(visual.showClick).toHaveBeenCalledTimes(1)
   })
 
   it('routes computed cursor after hover state effects on pointer move', async () => {
@@ -556,6 +576,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
+      pressed: false,
     })
   })
 
@@ -598,14 +619,69 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
+      pressed: false,
     })
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'grabbing',
+      pressed: true,
     })
     expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
+      pressed: false,
+    })
+  })
+
+  it('restores pressed cursor visual when click cancellation emits pointer cancelled', async () => {
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      clickFailure: cancellationError('click', 'scenario stopped'),
+      cursorStyle: () => 'pointer',
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+
+    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenLastCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+  })
+
+  it('restores pressed cursor visual during failed perform cleanup without a cancellation signal', async () => {
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      clickFailure: new Error('perform failed after pointer down'),
+      cancelFailure: new Error('cancel failed before signal'),
+      cursorStyle: () => 'pointer',
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+    })
+
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenLastCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: false,
     })
   })
 
@@ -630,6 +706,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'url(cursor.svg), copy',
+      pressed: false,
     })
   })
 
@@ -647,7 +724,10 @@ describe('BrowserActionOrchestrator', () => {
 
     await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
 
-    expect(visual.showCursor).toHaveBeenCalledWith({ point: { x: 20, y: 30 } })
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      pressed: false,
+    })
     expect(trace.getTrace().warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

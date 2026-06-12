@@ -81,6 +81,7 @@ export class BrowserVisualLayer implements VisualLayer {
     const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
     const spec = CURSOR_VISUAL_SPECS[request.kind]
+    const baseTransform = spec.style.transform ?? 'none'
     cursor.setAttribute('data-actorble-cursor-kind', request.kind)
     cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
     cursor.setAttribute('data-actorble-cursor-hotspot-y', String(spec.hotspot.y))
@@ -108,10 +109,11 @@ export class BrowserVisualLayer implements VisualLayer {
       pointerEvents: 'none',
       position: 'absolute',
       top: `${request.point.y - spec.hotspot.y}px`,
-      transform: 'none',
       transformOrigin: `${spec.hotspot.x}px ${spec.hotspot.y}px`,
       width: `${spec.width}px`,
       ...spec.style,
+      transform: cursorTransform(baseTransform, request.pressed),
+      transition: 'transform 80ms ease-out',
     })
   }
 
@@ -518,6 +520,20 @@ function normalizeCursorText(cursor: string | undefined): string | undefined {
   const normalized = cursor?.trim()
 
   return normalized ? normalized : undefined
+}
+
+function cursorTransform(baseTransform: string, pressed: boolean): string {
+  const normalized = baseTransform.trim() || 'none'
+
+  if (!pressed) {
+    return normalized
+  }
+
+  if (normalized === 'none') {
+    return 'scale(0.92)'
+  }
+
+  return `${normalized} scale(0.92)`
 }
 
 function cursorVisualKindFor(cursor: string | undefined): SupportedCursorVisualKind {
