@@ -42,7 +42,7 @@ export function setBusy(button: HTMLButtonElement, busy: boolean): void {
 }
 
 export function renderTrace(trace: Trace, target: HTMLElement): void {
-  const spans = trace.spans.slice(-10).reverse()
+  const spans = trace.spans.slice(-20).reverse()
 
   target.innerHTML =
     spans.length === 0

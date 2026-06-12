@@ -879,7 +879,7 @@ actorble-facade
 
 ### T40. Scenario timing and tracking example smoke
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: delay step, run-level pacing, click-to-focus typing, runner-active cursor tracking은 jsdom 단위 테스트만으로 체감 품질을 확인하기 어렵다. action playground 또는 scenario runner example에서 실제 browser flow로 묶어 확인한다.
 

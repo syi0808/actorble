@@ -308,6 +308,54 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
+.tracking-scrollport {
+  max-height: 308px;
+  overflow: auto;
+  border: 1px solid #d7c288;
+  border-radius: 8px;
+  background: #fffdf8;
+  scroll-behavior: auto;
+}
+
+.tracking-content {
+  min-height: 356px;
+  padding: 14px;
+}
+
+.tracking-layout-offset {
+  height: 0;
+}
+
+.tracking-scrollport[data-state="shifted"] .tracking-layout-offset {
+  height: 36px;
+}
+
+.tracking-scroll-spacer {
+  height: 58px;
+}
+
+.tracking-readout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  margin-top: 14px;
+  border: 1px solid #d9e2e7;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fbfcfd;
+  color: #314147;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.tracking-readout strong {
+  min-width: 84px;
+  color: #6d4a13;
+  text-align: right;
+}
+
 .project-board {
   border: 1px solid #d7c288;
   border-radius: 8px;
