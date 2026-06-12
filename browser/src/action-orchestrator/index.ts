@@ -150,6 +150,7 @@ const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   easing: 'ease-in-out',
   duration: 250,
 }
+const DEFAULT_PUBLIC_TYPING_DELAY = 60
 
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
@@ -919,7 +920,7 @@ function operationOptions(options: OperationOptions): WaitOptions {
 function typeOptions(options: TypeOptions): TypeOptions {
   return {
     ...operationOptions(options),
-    ...(options.delay === undefined ? {} : { delay: options.delay }),
+    delay: options.delay ?? DEFAULT_PUBLIC_TYPING_DELAY,
   }
 }
 

@@ -3,6 +3,7 @@ import { BrowserActionOrchestrator } from '../src/action-orchestrator/index.js'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
 import { BrowserInteractionStateStore } from '../src/interaction-state-store/index.js'
 import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
+import { BrowserDomAdapter } from '../src/platform-adapter/index.js'
 import { BrowserPseudoStateMirror } from '../src/pseudo-state-mirror/index.js'
 import { actorbleError, cancellationError, css } from '../src/shared/index.js'
 
@@ -18,6 +19,21 @@ function targetHandle(id = 'target-1') {
     resolvedAt: 1000,
     validity: 'live',
     debug: { selector: `#${id}`, description: `button#${id}` },
+  }
+}
+
+function inputTargetHandle(id = 'target-1') {
+  const target = document.createElement('input')
+  target.id = id
+  document.body.append(target)
+
+  return {
+    id,
+    element: target,
+    root: document,
+    resolvedAt: 1000,
+    validity: 'live',
+    debug: { selector: `#${id}`, description: `input#${id}` },
   }
 }
 
@@ -64,6 +80,55 @@ function createFrameTimeline(frameInterval = 125) {
     }),
     settle: vi.fn(async () => {}),
     withTimeout: vi.fn(async (operation) => operation),
+  }
+}
+
+function createBlockingTimeline() {
+  let now = 0
+  const pendingDelays = []
+
+  return {
+    timeline: {
+      now: vi.fn(() => now),
+      delay: vi.fn(
+        (duration, options = {}) =>
+          new Promise((resolve, reject) => {
+            if (options.signal?.aborted) {
+              reject(cancellationError('timeline.delay', options.signal.reason))
+              return
+            }
+
+            const onAbort = () => {
+              reject(cancellationError('timeline.delay', options.signal?.reason))
+            }
+
+            options.signal?.addEventListener('abort', onAbort, { once: true })
+            pendingDelays.push({
+              duration,
+              resolve: () => {
+                options.signal?.removeEventListener('abort', onAbort)
+                now += duration
+                resolve()
+              },
+            })
+          }),
+      ),
+      nextFrame: vi.fn(async () => now),
+      settle: vi.fn(async () => {}),
+      withTimeout: vi.fn(async (operation) => operation),
+    },
+    get pendingDelayCount() {
+      return pendingDelays.length
+    },
+    resolveNextDelay() {
+      const pending = pendingDelays.shift()
+
+      if (!pending) {
+        throw new Error('No pending delay to resolve.')
+      }
+
+      pending.resolve()
+    },
   }
 }
 
@@ -310,6 +375,119 @@ function createHarness(options = {}) {
     text,
     trace,
     visual,
+    wait,
+  }
+}
+
+function createRealTextHarness(options = {}) {
+  const target = options.target ?? inputTargetHandle()
+  const geometry = options.geometry ?? geometryFor(target)
+  const trace = options.trace ?? createTrace()
+  const timeline = options.timeline ?? createFrameTimeline()
+  const store = options.store ?? new BrowserInteractionStateStore()
+  const calls = []
+  const resolver = {
+    resolve: vi.fn(async () => {
+      calls.push('resolver.resolve')
+      return target
+    }),
+    resolveAll: vi.fn(async () => [target]),
+    exists: vi.fn(async () => true),
+    inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
+    validate: vi.fn(async () => {
+      calls.push('resolver.validate')
+      return target
+    }),
+  }
+  const surface = {
+    getSurfaceFor: vi.fn(() => ({
+      id: 'viewport',
+      root: document,
+      coordinateSpace: 'viewport',
+      viewport: null,
+      clippingChain: [],
+    })),
+    getScrollableAncestors: vi.fn(() => []),
+    ensureVisible: vi.fn(async () => {
+      calls.push('surface.ensureVisible')
+    }),
+    scrollTo: vi.fn(),
+    mapPoint: vi.fn((point) => point),
+  }
+  const geometryEngine = {
+    snapshot: vi.fn(async () => {
+      calls.push('geometry.snapshot')
+      return geometry
+    }),
+    getBoundingRect: vi.fn(() => geometry.rect),
+    getVisibleRect: vi.fn(() => geometry.visibleRect),
+    getCenter: vi.fn(() => geometry.center),
+    getClickablePoint: vi.fn(() => geometry.clickablePoint),
+  }
+  const interactability = {
+    inspect: vi.fn(async () => ({ target, canClick: true, blockingReasons: [] })),
+    canClick: vi.fn(async () => ({
+      target,
+      visible: true,
+      enabled: true,
+      receivesPointerEvents: true,
+      canClick: true,
+      canFocus: true,
+      canType: true,
+      blockingReasons: [],
+      forceBypassedReasons: [],
+      unforceableReasons: [],
+    })),
+    canFocus: vi.fn(async () => ({ target, canFocus: true, blockingReasons: [] })),
+    canType: vi.fn(async () => {
+      calls.push('interactability.canType')
+      return {
+        target,
+        visible: true,
+        enabled: true,
+        receivesPointerEvents: true,
+        canClick: true,
+        canFocus: true,
+        canType: true,
+        blockingReasons: [],
+        forceBypassedReasons: [],
+        unforceableReasons: [],
+      }
+    }),
+  }
+  const wait = {
+    waitFor: vi.fn(),
+    settle: vi.fn(async () => {
+      calls.push('wait.settle')
+      return null
+    }),
+    invalidateGeometry: vi.fn(),
+  }
+  const state = {
+    applyStateEffects: vi.fn(),
+    cleanup: vi.fn(),
+  }
+  const orchestrator = new BrowserActionOrchestrator({
+    resolver,
+    surface,
+    geometry: geometryEngine,
+    interactability,
+    wait,
+    trace,
+    timeline,
+    store,
+    state,
+    dom: new BrowserDomAdapter(document),
+  })
+
+  return {
+    calls,
+    input: target.element,
+    orchestrator,
+    store,
+    target,
+    timeline,
+    trace,
     wait,
   }
 }
@@ -856,6 +1034,95 @@ describe('BrowserActionOrchestrator', () => {
       timeout: 100,
       signal: controller.signal,
     })
+  })
+
+  it('applies the default public typeInto cadence when delay is omitted', async () => {
+    const { orchestrator, target, text } = createHarness()
+
+    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {
+      delay: 60,
+    })
+  })
+
+  it('preserves explicit zero delay as public typeInto cadence opt-out', async () => {
+    const { orchestrator, target, text } = createHarness()
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'abc', { delay: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {
+      delay: 0,
+    })
+  })
+
+  it('uses the default public typeInto cadence between grapheme inputs', async () => {
+    const { input, orchestrator, timeline } = createRealTextHarness()
+
+    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+
+    expect(timeline.delay).toHaveBeenCalledTimes(2)
+    expect(timeline.delay).toHaveBeenNthCalledWith(1, 60, {})
+    expect(timeline.delay).toHaveBeenNthCalledWith(2, 60, {})
+    expect(input.value).toBe('abc')
+  })
+
+  it('clears typing state when public typeInto is cancelled during default cadence', async () => {
+    const controlledTimeline = createBlockingTimeline()
+    const controller = new AbortController()
+    const { input, orchestrator, store } = createRealTextHarness({
+      timeline: controlledTimeline.timeline,
+    })
+
+    const result = orchestrator.typeInto(css('#target-1'), 'ab', {
+      signal: controller.signal,
+    })
+
+    await vi.waitFor(() => {
+      expect(controlledTimeline.pendingDelayCount).toBe(1)
+    })
+    expect(input.value).toBe('a')
+    expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
+
+    controller.abort('user stopped')
+
+    await expect(result).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+    expect(store.snapshot().typing).toBeNull()
+  })
+
+  it('clears typing state when public typeInto times out during default cadence', async () => {
+    vi.useFakeTimers()
+    const controlledTimeline = createBlockingTimeline()
+    const { input, orchestrator, store } = createRealTextHarness({
+      timeline: controlledTimeline.timeline,
+    })
+
+    try {
+      const result = orchestrator.typeInto(css('#target-1'), 'ab', {
+        timeout: 25,
+      })
+
+      await vi.waitFor(() => {
+        expect(controlledTimeline.pendingDelayCount).toBe(1)
+      })
+      expect(input.value).toBe('a')
+      expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
+
+      const expectation = expect(result).rejects.toMatchObject({
+        code: 'ACTION_TIMEOUT',
+        details: { operation: 'text.typeInto', timeout: 25 },
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await expectation
+      expect(store.snapshot().typing).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('surrounds typeInto with visual highlight and typing hooks', async () => {

@@ -596,7 +596,7 @@ actorble-facade
 
 ### T27. Public typing cadence defaults
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `type`/`typeInto`는 사람이 입력하는 API인데 `delay`가 없으면 글자가 즉시 모두 삽입된다. public action 기본값에는 grapheme 사이 cadence를 두고, 빠른 값 대체는 `fill`의 책임으로 유지한다.
 
