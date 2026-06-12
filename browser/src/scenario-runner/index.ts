@@ -5,7 +5,6 @@ import {
   ActorbleError,
   actorbleError,
   cancellationError,
-  notImplemented,
   timeoutError,
 } from '../shared/index.js'
 import { NoopLayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
@@ -16,6 +15,7 @@ import type {
   ClickOptions,
   RunOptions,
   Scenario,
+  ScenarioDelayStep,
   ScenarioStep,
   TargetLike,
   TypeOptions,
@@ -246,9 +246,31 @@ export class BrowserScenarioRunner implements ScenarioRunner {
           .waitFor(step.input, withSignal(step.options, signal))
           .then(() => undefined)
       case 'delay':
-        return notImplemented('Scenario Runner delay step')
+        return this.#executeDelayStep(step, stepIndex, signal)
       default:
         throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex)
+    }
+  }
+
+  async #executeDelayStep(
+    step: ScenarioDelayStep,
+    stepIndex: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const span = this.#trace.startSpan(
+      'scenario.step.delay',
+      delayStepTraceAttributes(step, stepIndex),
+    )
+
+    try {
+      assertPositiveDuration(step.duration, step.action, stepIndex)
+      await raceWithScenarioSignal(this.#timeline.delay(step.duration, { signal }), signal)
+      span.end({ completed: true })
+    } catch (error) {
+      const normalized = normalizeScenarioError(error, signal)
+
+      finishStepSpan(span, normalized)
+      throw normalized
     }
   }
 
@@ -372,12 +394,39 @@ function finishScenarioSpan(span: TraceSpanHandle, error: ActorbleError): void {
   span.error(error)
 }
 
+function finishStepSpan(span: TraceSpanHandle, error: ActorbleError): void {
+  if (error.code === 'ACTION_CANCELLED') {
+    span.cancel(error.details?.reason)
+    return
+  }
+
+  span.error(error)
+}
+
 function unsupportedStepError(action: unknown, stepIndex: number): ActorbleError {
   return actorbleError(
     'PLATFORM_UNSUPPORTED',
     `Scenario step action "${String(action)}" is not supported.`,
     {
       details: { action, stepIndex },
+    },
+  )
+}
+
+function assertPositiveDuration(
+  duration: unknown,
+  action: string,
+  stepIndex: number,
+): asserts duration is number {
+  if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
+    return
+  }
+
+  throw actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Scenario step "${action}" requires a positive duration.`,
+    {
+      details: { action, stepIndex, field: 'duration' },
     },
   )
 }
@@ -440,4 +489,17 @@ function withSignal<TOptions extends ClickOptions | TypeOptions | WaitOptions>(
 
 function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: unknown } {
   return typeof step === 'object' && step !== null && 'action' in step
+}
+
+function delayStepTraceAttributes(
+  step: ScenarioDelayStep,
+  stepIndex: number,
+): Record<string, unknown> {
+  return {
+    action: step.action,
+    stepIndex,
+    ...(step.id === undefined ? {} : { stepId: step.id }),
+    duration: step.duration,
+    ...(step.reason === undefined ? {} : { reason: step.reason }),
+  }
 }

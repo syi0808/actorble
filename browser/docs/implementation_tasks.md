@@ -747,7 +747,7 @@ actorble-facade
 
 ### T34. First-class scenario delay step
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: delay를 step option이 아니라 scenario를 구성하는 명시적 step으로 추가한다. 사용자는 action 사이의 의도적인 대기를 scenario timeline에서 읽을 수 있어야 하며, runner는 delay 중에도 pause/stop/timeout을 즉시 반영해야 한다.
 
