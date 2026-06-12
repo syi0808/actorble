@@ -312,12 +312,6 @@ export type ScrollMetrics = Readonly<{
   clientHeight: number
 }>
 
-export type MoveOptions = OperationOptions &
-  Readonly<{
-    duration?: DurationMs
-    motion?: PointerMotionProfile
-  }>
-
 export type PointerEasingName = 'ease-in' | 'ease-out' | 'ease-in-out'
 
 export type PointerMotionProfile =
@@ -339,7 +333,15 @@ export type PointerMotionProfile =
       duration?: DurationMs
     }>
 
+export type PointerMovementOptions = Readonly<{
+  duration?: DurationMs
+  motion?: PointerMotionProfile
+}>
+
+export type MoveOptions = OperationOptions & PointerMovementOptions
+
 export type ClickOptions = OperationOptions &
+  PointerMovementOptions &
   Readonly<{
     button?: PointerButtonName
     clickCount?: number

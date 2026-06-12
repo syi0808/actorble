@@ -54,7 +54,7 @@ export class BrowserGestureEngine implements GestureEngine {
 
     const button = options.button ?? 'primary'
 
-    await this.#pointer.moveTo(point)
+    await this.#pointer.moveTo(point, pointerMovementOptions(options))
     await this.#pointer.down(button)
     await this.#pointer.up(button)
 
@@ -106,4 +106,15 @@ function unsupportedGesture(
       },
     },
   )
+}
+
+function pointerMovementOptions(options: ClickOptions): MoveOptions | undefined {
+  const movement: MoveOptions = {
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.duration === undefined ? {} : { duration: options.duration }),
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
+  }
+
+  return Object.keys(movement).length === 0 ? undefined : movement
 }

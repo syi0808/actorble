@@ -41,8 +41,10 @@ function createFakePointer() {
     calls,
     pointer: {
       getState: vi.fn(() => state),
-      moveTo: vi.fn(async (point) => {
-        calls.push(['moveTo', point])
+      moveTo: vi.fn(async (point, options) => {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['moveTo', point, options] : ['moveTo', point])
         return state
       }),
       down: vi.fn(async (button) => {
@@ -119,6 +121,25 @@ describe('BrowserGestureEngine', () => {
       ['moveTo', { x: 5, y: 9 }],
       ['down', 'secondary'],
       ['up', 'secondary'],
+    ])
+  })
+
+  it('routes explicit click movement options into pointer movement before pressing', async () => {
+    const { calls, pointer } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer })
+
+    await engine.click(createTarget(), { x: 12, y: 18 }, {
+      motion: { kind: 'spring', duration: 260 },
+      timeout: 1500,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 12, y: 18 }, {
+        motion: { kind: 'spring', duration: 260 },
+        timeout: 1500,
+      }],
+      ['down', 'primary'],
+      ['up', 'primary'],
     ])
   })
 

@@ -249,16 +249,16 @@ describe('Actorble facade', () => {
       target: expect.objectContaining({ element: button }),
       rect: { x: 15, y: 25, width: 50, height: 20 },
     })
-    expect(visual.showCursor).toHaveBeenCalledTimes(3)
-    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
-      point: { x: 40, y: 35 },
-      pressed: false,
-    })
-    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
-      point: { x: 40, y: 35 },
-      pressed: true,
-    })
-    expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+    const cursorRequests = visual.showCursor.mock.calls.map(([request]) => request)
+
+    expect(cursorRequests.length).toBeGreaterThanOrEqual(3)
+    expect(cursorRequests).toEqual(
+      expect.arrayContaining([
+        { point: { x: 40, y: 35 }, pressed: false },
+        { point: { x: 40, y: 35 }, pressed: true },
+      ]),
+    )
+    expect(cursorRequests.at(-1)).toEqual({
       point: { x: 40, y: 35 },
       pressed: false,
     })

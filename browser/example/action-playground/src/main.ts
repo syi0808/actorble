@@ -159,10 +159,7 @@ runFlowButton.addEventListener('click', () => {
         delay: 80,
         timeout: 5000,
       })
-      await actorble.moveTo(testId('create-project'), {
-        motion: { kind: 'spring', duration: 260 },
-        timeout: 1500,
-      })
+      await actorble.moveTo(testId('create-project'), { timeout: 1500 })
       await actorble.click(testId('create-project'), { timeout: 1500 })
     },
     renderFidelity,

@@ -574,7 +574,7 @@ actorble-facade
 
 ### T26. Public pointer motion defaults and click movement routing
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: 현재 public action의 기본 pointer movement는 옵션이 없으면 즉시 이동하거나 example에서 `spring` profile을 직접 사용해 통통 튀어 보인다. 기본 사용자-facing 동작은 nonzero duration의 tween/easing으로 두고, `spring`은 명시적 opt-in profile로만 유지한다.
 

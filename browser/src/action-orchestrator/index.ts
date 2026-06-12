@@ -41,6 +41,7 @@ import type {
   OperationOptions,
   PressOptions,
   Point,
+  PointerMotionProfile,
   PointerButtonName,
   ScrollOptions,
   ScrollPosition,
@@ -144,6 +145,12 @@ type CursorVisualState = {
   pressed: boolean
 }
 
+const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
+  kind: 'ease',
+  easing: 'ease-in-out',
+  duration: 250,
+}
+
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
   readonly #events: EventDispatchPort
@@ -241,7 +248,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       this.#showTargetHighlight(handle, snapshot)
 
       phase = 'perform'
-      await this.#withSignalTarget(handle, () => this.#gesture.hover(point, options))
+      await this.#withSignalTarget(handle, () =>
+        this.#gesture.hover(point, publicPointerMovementOptions(options)),
+      )
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
 
@@ -288,7 +297,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       performStarted = true
       const clickTarget = handle
       const result = await this.#withSignalTarget(clickTarget, () =>
-        this.#gesture.click(clickTarget, point, options),
+        this.#gesture.click(clickTarget, point, publicPointerMovementOptions(options)),
       )
       const activationDispatched = this.#dispatchActivationClick(clickTarget, point)
       this.#tryVisual('showClick', () => this.#visual.showClick(point))
@@ -774,6 +783,19 @@ function createClickDispatchState(options: ClickOptions): ClickDispatchState {
     upAllowed: true,
     downSeen: false,
     upSeen: false,
+  }
+}
+
+function publicPointerMovementOptions<TOptions extends MoveOptions | ClickOptions>(
+  options: TOptions,
+): TOptions {
+  if (options.duration !== undefined || options.motion !== undefined) {
+    return options
+  }
+
+  return {
+    ...options,
+    motion: DEFAULT_PUBLIC_POINTER_MOTION,
   }
 }
 

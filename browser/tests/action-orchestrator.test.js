@@ -50,6 +50,23 @@ function createTrace() {
   })
 }
 
+function createFrameTimeline(frameInterval = 125) {
+  let now = 0
+
+  return {
+    now: vi.fn(() => now),
+    delay: vi.fn(async (duration) => {
+      now += duration
+    }),
+    nextFrame: vi.fn(async () => {
+      now += frameInterval
+      return now
+    }),
+    settle: vi.fn(async () => {}),
+    withTimeout: vi.fn(async (operation) => operation),
+  }
+}
+
 function cursorFromStyle(style) {
   return { cursor: style }
 }
@@ -136,7 +153,7 @@ function createHarness(options = {}) {
       )
     }),
   }
-  const gesture = {
+  const fakeGesture = {
     click: vi.fn(async () => {
       calls.push('gesture.click')
       signals.emit({ type: 'pointer:moved', point: geometry.clickablePoint.point, previousPoint: null })
@@ -166,6 +183,7 @@ function createHarness(options = {}) {
       return { completed: false }
     }),
   }
+  const gesture = options.gesture ?? (options.useRealGesture ? undefined : fakeGesture)
   const focus = {
     focus: vi.fn(),
     blur: vi.fn(),
@@ -263,11 +281,12 @@ function createHarness(options = {}) {
     surface,
     geometry: geometryEngine,
     interactability,
-    gesture,
+    ...(gesture === undefined ? {} : { gesture }),
     focus,
     text,
     wait,
     trace,
+    timeline: options.timeline,
     store,
     events,
     state,
@@ -498,6 +517,76 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointermove',
       'wait.settle',
     ])
+  })
+
+  it('applies the public ease movement default when moveTo omits movement options', async () => {
+    const { gesture, orchestrator } = createHarness()
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(gesture.hover).toHaveBeenCalledWith(
+      { x: 20, y: 30 },
+      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 } },
+    )
+  })
+
+  it('preserves explicit zero-duration public movement', async () => {
+    const { gesture, orchestrator } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), { duration: 0, timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expect(gesture.hover).toHaveBeenCalledWith(
+      { x: 20, y: 30 },
+      { duration: 0, timeout: 100 },
+    )
+  })
+
+  it('routes the public click movement default before pointer down', async () => {
+    const timeline = createFrameTimeline()
+    const { calls, events, orchestrator } = createHarness({
+      timeline,
+      useRealGesture: true,
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
+    expect(calls.filter((call) => call.startsWith('event.'))).toEqual([
+      'event.pointermove',
+      'event.pointermove',
+      'event.pointerdown',
+      'event.pointerup',
+      'event.click',
+    ])
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
+      type: 'pointermove',
+      target: expect.any(HTMLButtonElement),
+      point: { x: 10, y: 15 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
+      type: 'pointermove',
+      target: expect.any(HTMLButtonElement),
+      point: { x: 20, y: 30 },
+      buttons: [],
+    })
+  })
+
+  it('preserves explicit spring movement as click opt-in behavior', async () => {
+    const { gesture, orchestrator, target } = createHarness()
+    const motion = { kind: 'spring', duration: 260 }
+
+    await expect(
+      orchestrator.click(css('#target-1'), { motion, timeout: 1500 }),
+    ).resolves.toBeUndefined()
+
+    expect(gesture.click).toHaveBeenCalledWith(
+      target,
+      { x: 20, y: 30 },
+      { motion, timeout: 1500 },
+    )
   })
 
   it('routes pointer and click visual hooks without changing core dispatch order', async () => {
