@@ -80,7 +80,10 @@ export class BrowserVisualLayer implements VisualLayer {
 
     const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
+    const spec = CURSOR_VISUAL_SPECS[request.kind]
     cursor.setAttribute('data-actorble-cursor-kind', request.kind)
+    cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
+    cursor.setAttribute('data-actorble-cursor-hotspot-y', String(spec.hotspot.y))
 
     if (request.cssCursor) {
       cursor.setAttribute('data-actorble-css-cursor', request.cssCursor)
@@ -94,14 +97,21 @@ export class BrowserVisualLayer implements VisualLayer {
       cursor.removeAttribute('data-actorble-cursor-pressed')
     }
 
+    cursor.removeAttribute('style')
+    cursor.textContent = ''
     Object.assign(cursor.style, {
-      border: '1px solid CanvasText',
-      borderRadius: '999px',
-      height: '10px',
-      left: `${request.point.x}px`,
-      top: `${request.point.y}px`,
-      transform: 'translate(-50%, -50%)',
-      width: '10px',
+      boxSizing: 'border-box',
+      contain: 'layout paint style',
+      display: 'block',
+      height: `${spec.height}px`,
+      left: `${request.point.x - spec.hotspot.x}px`,
+      pointerEvents: 'none',
+      position: 'absolute',
+      top: `${request.point.y - spec.hotspot.y}px`,
+      transform: 'none',
+      transformOrigin: `${spec.hotspot.x}px ${spec.hotspot.y}px`,
+      width: `${spec.width}px`,
+      ...spec.style,
     })
   }
 
@@ -234,6 +244,8 @@ export class BrowserVisualLayer implements VisualLayer {
   }
 
   hide(): void {
+    this.#removePart('cursor')
+
     if (this.#rootElement) {
       this.#rootElement.hidden = true
     }
@@ -336,7 +348,7 @@ export function createVisualLayer(options: VisualLayerOptions = {}): VisualLayer
 type NormalizedCursorVisualRequest = Readonly<{
   point: Point
   cssCursor?: string
-  kind: CursorVisualKind
+  kind: SupportedCursorVisualKind
   pressed: boolean
 }>
 
@@ -347,7 +359,7 @@ function normalizeCursorVisualRequest(input: CursorVisualInput): NormalizedCurso
     return {
       point: input.point,
       cssCursor,
-      kind: input.kind ?? cursorVisualKindFor(cssCursor),
+      kind: normalizeCursorVisualKind(input.kind, cssCursor),
       pressed: input.pressed ?? false,
     }
   }
@@ -359,13 +371,156 @@ function normalizeCursorVisualRequest(input: CursorVisualInput): NormalizedCurso
   }
 }
 
+type SupportedCursorVisualKind = Exclude<CursorVisualKind, 'custom'>
+
+type CursorVisualSpec = Readonly<{
+  width: number
+  height: number
+  hotspot: Point
+  style: Readonly<Record<string, string>>
+}>
+
+const CURSOR_VISUAL_SPECS: Readonly<Record<SupportedCursorVisualKind, CursorVisualSpec>> = {
+  default: {
+    width: 14,
+    height: 20,
+    hotspot: { x: 0, y: 0 },
+    style: {
+      background: 'CanvasText',
+      border: '1px solid Canvas',
+      borderRadius: '1px',
+      clipPath:
+        'polygon(0 0, 0 18px, 5px 13px, 8px 20px, 11px 18px, 8px 12px, 14px 12px)',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.35)',
+    },
+  },
+  pointer: {
+    width: 13,
+    height: 18,
+    hotspot: { x: 5, y: 1 },
+    style: {
+      background: 'CanvasText',
+      border: '1px solid Canvas',
+      borderRadius: '6px 6px 8px 8px',
+      clipPath:
+        'polygon(5px 0, 10px 0, 10px 6px, 13px 6px, 13px 14px, 10px 18px, 3px 18px, 0 13px, 0 8px, 5px 8px)',
+      transform: 'rotate(-18deg)',
+    },
+  },
+  text: {
+    width: 8,
+    height: 22,
+    hotspot: { x: 4, y: 11 },
+    style: {
+      background:
+        'linear-gradient(CanvasText, CanvasText) center / 2px 100% no-repeat',
+      border: '0px',
+      borderBottom: '2px solid CanvasText',
+      borderRadius: '0px',
+      borderTop: '2px solid CanvasText',
+    },
+  },
+  'not-allowed': {
+    width: 18,
+    height: 18,
+    hotspot: { x: 9, y: 9 },
+    style: {
+      background:
+        'linear-gradient(45deg, transparent 44%, CanvasText 44%, CanvasText 56%, transparent 56%)',
+      border: '2px solid CanvasText',
+      borderRadius: '999px',
+    },
+  },
+  wait: {
+    width: 18,
+    height: 18,
+    hotspot: { x: 9, y: 9 },
+    style: {
+      background: 'transparent',
+      border: '2px solid CanvasText',
+      borderRadius: '999px',
+      borderRightColor: 'transparent',
+    },
+  },
+  progress: {
+    width: 18,
+    height: 18,
+    hotspot: { x: 9, y: 9 },
+    style: {
+      background: 'transparent',
+      border: '2px solid CanvasText',
+      borderBottomColor: 'transparent',
+      borderRadius: '999px',
+      boxShadow: '0 0 0 2px Canvas',
+    },
+  },
+  grab: {
+    width: 16,
+    height: 16,
+    hotspot: { x: 8, y: 2 },
+    style: {
+      background: 'CanvasText',
+      border: '1px solid Canvas',
+      borderRadius: '7px 7px 5px 5px',
+      clipPath:
+        'polygon(2px 4px, 5px 1px, 7px 3px, 9px 1px, 12px 4px, 15px 7px, 13px 16px, 4px 16px, 0 9px)',
+      transform: 'rotate(-8deg)',
+    },
+  },
+  grabbing: {
+    width: 16,
+    height: 16,
+    hotspot: { x: 8, y: 2 },
+    style: {
+      background: 'CanvasText',
+      border: '1px solid Canvas',
+      borderRadius: '8px 8px 6px 6px',
+      clipPath:
+        'polygon(1px 5px, 4px 2px, 7px 4px, 10px 2px, 15px 7px, 13px 16px, 4px 16px, 0 10px)',
+      transform: 'rotate(-8deg) scale(0.92)',
+    },
+  },
+  move: {
+    width: 16,
+    height: 16,
+    hotspot: { x: 8, y: 8 },
+    style: {
+      background:
+        'linear-gradient(CanvasText, CanvasText) center / 2px 100% no-repeat, linear-gradient(CanvasText, CanvasText) center / 100% 2px no-repeat',
+      border: '0px',
+      transform: 'rotate(45deg)',
+    },
+  },
+  crosshair: {
+    width: 22,
+    height: 22,
+    hotspot: { x: 11, y: 11 },
+    style: {
+      background:
+        'linear-gradient(CanvasText, CanvasText) center / 1px 100% no-repeat, linear-gradient(CanvasText, CanvasText) center / 100% 1px no-repeat',
+      border: '0px',
+    },
+  },
+}
+
+function normalizeCursorVisualKind(
+  kind: CursorVisualKind | undefined,
+  cssCursor: string | undefined,
+): SupportedCursorVisualKind {
+  if (kind && kind !== 'custom') {
+    return kind
+  }
+
+  return cursorVisualKindFor(cssCursor)
+}
+
 function normalizeCursorText(cursor: string | undefined): string | undefined {
   const normalized = cursor?.trim()
 
   return normalized ? normalized : undefined
 }
 
-function cursorVisualKindFor(cursor: string | undefined): CursorVisualKind {
+function cursorVisualKindFor(cursor: string | undefined): SupportedCursorVisualKind {
   const normalized = cursor?.toLowerCase()
 
   if (!normalized || normalized === 'auto' || normalized === 'default') {
@@ -408,7 +563,7 @@ function cursorVisualKindFor(cursor: string | undefined): CursorVisualKind {
     return 'crosshair'
   }
 
-  return 'custom'
+  return 'default'
 }
 
 function getGlobalDocument(): Document {

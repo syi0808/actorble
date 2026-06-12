@@ -507,7 +507,7 @@ actorble-facade
 
 ### T23. Browser-like cursor visual
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: 현재 cursor overlay는 위치를 나타내는 작은 원형 marker에 가깝다. 이 태스크는 Visual Layer가 실제 브라우저 커서처럼 보이는 overlay를 표현하도록 개선한다. Visual Layer는 여전히 표현 계층이며, target resolution, hit-test, pointer event dispatch에는 관여하지 않는다.
 

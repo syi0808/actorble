@@ -17,6 +17,13 @@ function targetHandle(id = 'target-1') {
   }
 }
 
+function getCursorElement() {
+  const cursor = document.body.querySelector('[data-actorble-visual-cursor]')
+  expect(cursor).not.toBeNull()
+
+  return cursor
+}
+
 describe('BrowserVisualLayer', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -45,6 +52,7 @@ describe('BrowserVisualLayer', () => {
 
     layer.hide()
     expect(root.hidden).toBe(true)
+    expect(root.querySelector('[data-actorble-visual-cursor]')).toBeNull()
 
     layer.destroy()
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
@@ -90,7 +98,89 @@ describe('BrowserVisualLayer', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('accepts cursor visual request metadata for future cursor fidelity work', () => {
+  it('renders the default cursor as a browser-like hotspot shape instead of a centered dot', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({ x: 14, y: 28 })
+
+    const cursor = getCursorElement()
+    expect(cursor.hasAttribute('data-actorble-internal')).toBe(true)
+    expect(cursor.style.pointerEvents).toBe('none')
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('0')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('0')
+    expect(cursor.style.left).toBe('14px')
+    expect(cursor.style.top).toBe('28px')
+    expect(cursor.style.width).toBe('14px')
+    expect(cursor.style.height).toBe('20px')
+    expect(cursor.style.transform).toBe('none')
+    expect(cursor.style.clipPath).toContain('polygon')
+    expect(cursor.style.borderRadius).not.toBe('999px')
+  })
+
+  it('renders distinct browser cursor variants with stable hotspot offsets', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+    const point = { x: 80, y: 90 }
+    const variants = [
+      ['pointer', 'pointer', '13px', '18px', '5', '1'],
+      ['text', 'text', '8px', '22px', '4', '11'],
+      ['not-allowed', 'not-allowed', '18px', '18px', '9', '9'],
+      ['wait', 'wait', '18px', '18px', '9', '9'],
+      ['progress', 'progress', '18px', '18px', '9', '9'],
+      ['grab', 'grab', '16px', '16px', '8', '2'],
+      ['grabbing', 'grabbing', '16px', '16px', '8', '2'],
+      ['move', 'move', '16px', '16px', '8', '8'],
+      ['crosshair', 'crosshair', '22px', '22px', '11', '11'],
+    ]
+
+    for (const [cssCursor, expectedKind, width, height, hotspotX, hotspotY] of variants) {
+      layer.showCursor({ point, cursor: cssCursor })
+
+      const cursor = getCursorElement()
+      expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe(expectedKind)
+      expect(cursor.getAttribute('data-actorble-css-cursor')).toBe(cssCursor)
+      expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe(hotspotX)
+      expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe(hotspotY)
+      expect(cursor.style.left).toBe(`${point.x - Number(hotspotX)}px`)
+      expect(cursor.style.top).toBe(`${point.y - Number(hotspotY)}px`)
+      expect(cursor.style.width).toBe(width)
+      expect(cursor.style.height).toBe(height)
+      expect(cursor.style.transform).not.toBe('translate(-50%, -50%)')
+    }
+  })
+
+  it('degrades unsupported cursor values to the default visual while preserving metadata', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({
+      point: { x: 30, y: 40 },
+      cursor: 'url(cursor.svg), copy',
+      pressed: true,
+    })
+
+    const cursor = getCursorElement()
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
+    expect(cursor.getAttribute('data-actorble-css-cursor')).toBe('url(cursor.svg), copy')
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    expect(cursor.style.left).toBe('30px')
+    expect(cursor.style.top).toBe('40px')
+    expect(cursor.style.width).toBe('14px')
+    expect(cursor.style.height).toBe('20px')
+
+    layer.showCursor({
+      point: { x: 31, y: 41 },
+      kind: 'custom',
+      pressed: false,
+    })
+
+    expect(cursor.style.left).toBe('31px')
+    expect(cursor.style.top).toBe('41px')
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+    expect(cursor.hasAttribute('data-actorble-css-cursor')).toBe(false)
+  })
+
+  it('accepts cursor visual request metadata without leaking stale variant state', () => {
     const layer = new BrowserVisualLayer({ root: document })
 
     layer.showCursor({
@@ -98,13 +188,8 @@ describe('BrowserVisualLayer', () => {
       cursor: 'pointer',
       pressed: true,
     })
-
-    const cursor = document.body.querySelector('[data-actorble-visual-cursor]')
-    expect(cursor.style.left).toBe('14px')
-    expect(cursor.style.top).toBe('28px')
-    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('pointer')
-    expect(cursor.getAttribute('data-actorble-css-cursor')).toBe('pointer')
-    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    const cursor = getCursorElement()
+    const pointerTransform = cursor.style.transform
 
     layer.showCursor({
       point: { x: 15, y: 29 },
@@ -112,10 +197,12 @@ describe('BrowserVisualLayer', () => {
       pressed: false,
     })
 
-    expect(cursor.style.left).toBe('15px')
-    expect(cursor.style.top).toBe('29px')
+    expect(cursor.style.left).toBe('11px')
+    expect(cursor.style.top).toBe('18px')
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('text')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+    expect(cursor.style.transform).not.toBe(pointerTransform)
+    expect(cursor.style.borderRadius).toBe('0px')
   })
 
   it('renders focus, typing, and keystroke feedback with text visibility policy', () => {
