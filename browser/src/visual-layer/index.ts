@@ -115,6 +115,10 @@ export class BrowserVisualLayer implements VisualLayer {
       transform: cursorTransform(baseTransform, request.pressed),
       transition: 'transform 80ms ease-out',
     })
+
+    if (spec.svg) {
+      cursor.append(createCursorSvg(cursor.ownerDocument, request.kind, spec.svg))
+    }
   }
 
   highlightTarget(request: HighlightRequest): void {
@@ -382,128 +386,284 @@ type CursorVisualSpec = Readonly<{
   width: number
   height: number
   hotspot: Point
+  svg?: CursorVisualSvgSpec
   style: Readonly<Record<string, string>>
 }>
 
+type CursorVisualSvgSpec = Readonly<{
+  viewBox: string
+  paths: readonly CursorVisualSvgPathSpec[]
+}>
+
+type CursorVisualSvgPathSpec = Readonly<{
+  d: string
+  fill: string
+  fillRule?: string
+  stroke?: string
+  strokeLinecap?: string
+  strokeLinejoin?: string
+  strokeWidth?: string
+}>
+
+// CC0 source: https://www.svgrepo.com/svg/369973/cursor-default
+const DEFAULT_CURSOR_ARROW_PATH =
+  'M 29,18L 52.25,41.1667L 43.0865,42.6585L 50.817,56.6949L ' +
+  '43.827,60.4115L 36,46.25L 29,53.25L 29,18 Z'
+
 const CURSOR_VISUAL_SPECS: Readonly<Record<SupportedCursorVisualKind, CursorVisualSpec>> = {
   default: {
-    width: 14,
-    height: 20,
-    hotspot: { x: 0, y: 0 },
+    width: 18,
+    height: 27,
+    hotspot: { x: 2, y: 2 },
+    svg: {
+      viewBox: '25 14 34 50',
+      paths: [
+        {
+          d: DEFAULT_CURSOR_ARROW_PATH,
+          fill: 'CanvasText',
+          stroke: 'Canvas',
+          strokeLinejoin: 'round',
+          strokeWidth: '4',
+        },
+      ],
+    },
     style: {
-      background: 'CanvasText',
-      border: '1px solid Canvas',
-      borderRadius: '1px',
-      clipPath:
-        'polygon(0 0, 0 18px, 5px 13px, 8px 20px, 11px 18px, 8px 12px, 14px 12px)',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.35)',
+      border: '0px',
+      color: 'CanvasText',
+      filter: 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))',
+      overflow: 'visible',
     },
   },
   pointer: {
     width: 13,
     height: 18,
     hotspot: { x: 5, y: 1 },
+    svg: {
+      viewBox: '0 0 13 18',
+      paths: [
+        {
+          d:
+            'M 5,1 C 4.2,1 3.6,1.6 3.6,2.5 L 3.6,8.2 L 2.8,7.4 ' +
+            'C 2.2,6.8 1.3,6.9 0.8,7.5 C 0.3,8.1 0.3,8.9 0.8,9.5 ' +
+            'L 5.4,16.4 C 6,17.4 7,18 8.2,18 L 10.1,18 C 11.7,18 13,16.7 13,15.1 ' +
+            'L 13,8.1 C 13,7.2 12.3,6.5 11.4,6.5 C 11.1,6.5 10.8,6.6 10.5,6.8 ' +
+            'C 10.3,6.1 9.7,5.7 9,5.7 C 8.7,5.7 8.4,5.8 8.2,5.9 ' +
+            'C 7.9,5.3 7.4,5 6.8,5 C 6.5,5 6.2,5.1 6,5.2 L 6,2.5 ' +
+            'C 6,1.6 5.8,1 5,1 Z',
+          fill: 'CanvasText',
+          stroke: 'Canvas',
+          strokeLinejoin: 'round',
+          strokeWidth: '1.4',
+        },
+      ],
+    },
     style: {
-      background: 'CanvasText',
-      border: '1px solid Canvas',
-      borderRadius: '6px 6px 8px 8px',
-      clipPath:
-        'polygon(5px 0, 10px 0, 10px 6px, 13px 6px, 13px 14px, 10px 18px, 3px 18px, 0 13px, 0 8px, 5px 8px)',
-      transform: 'rotate(-18deg)',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   text: {
     width: 8,
     height: 22,
     hotspot: { x: 4, y: 11 },
+    svg: {
+      viewBox: '0 0 8 22',
+      paths: [
+        {
+          d: 'M 3,0 L 5,0 L 5,22 L 3,22 Z M 0,0 L 8,0 L 8,2 L 0,2 Z M 0,20 L 8,20 L 8,22 L 0,22 Z',
+          fill: 'CanvasText',
+        },
+      ],
+    },
     style: {
-      background:
-        'linear-gradient(CanvasText, CanvasText) center / 2px 100% no-repeat',
       border: '0px',
-      borderBottom: '2px solid CanvasText',
       borderRadius: '0px',
-      borderTop: '2px solid CanvasText',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   'not-allowed': {
     width: 18,
     height: 18,
     hotspot: { x: 9, y: 9 },
+    svg: {
+      viewBox: '0 0 18 18',
+      paths: [
+        {
+          d: 'M 9,2 A 7,7 0 1 0 9,16 A 7,7 0 1 0 9,2 Z M 4.2,13.8 L 13.8,4.2',
+          fill: 'none',
+          stroke: 'CanvasText',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          strokeWidth: '2.2',
+        },
+      ],
+    },
     style: {
-      background:
-        'linear-gradient(45deg, transparent 44%, CanvasText 44%, CanvasText 56%, transparent 56%)',
-      border: '2px solid CanvasText',
-      borderRadius: '999px',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   wait: {
     width: 18,
     height: 18,
     hotspot: { x: 9, y: 9 },
+    svg: {
+      viewBox: '0 0 18 18',
+      paths: [
+        {
+          d:
+            'M 4,2 L 14,2 M 5,3 C 5,6 7,8 9,9 C 7,10 5,12 5,15 ' +
+            'M 13,3 C 13,6 11,8 9,9 C 11,10 13,12 13,15 M 4,16 L 14,16',
+          fill: 'none',
+          stroke: 'CanvasText',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          strokeWidth: '2',
+        },
+        {
+          d: 'M 7,5 L 11,5 L 9,7 Z M 7,14 L 11,14 L 9,11 Z',
+          fill: 'CanvasText',
+        },
+      ],
+    },
     style: {
-      background: 'transparent',
-      border: '2px solid CanvasText',
-      borderRadius: '999px',
-      borderRightColor: 'transparent',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   progress: {
     width: 18,
     height: 18,
     hotspot: { x: 9, y: 9 },
+    svg: {
+      viewBox: '0 0 18 18',
+      paths: [
+        {
+          d: 'M 14.4,9 A 5.4,5.4 0 1 1 10.6,3.9 M 10.6,3.9 L 13.1,3.5 M 10.6,3.9 L 11.6,6.2',
+          fill: 'none',
+          stroke: 'CanvasText',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          strokeWidth: '2',
+        },
+      ],
+    },
     style: {
-      background: 'transparent',
-      border: '2px solid CanvasText',
-      borderBottomColor: 'transparent',
-      borderRadius: '999px',
-      boxShadow: '0 0 0 2px Canvas',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   grab: {
     width: 16,
     height: 16,
     hotspot: { x: 8, y: 2 },
+    svg: {
+      viewBox: '0 0 16 16',
+      paths: [
+        {
+          d:
+            'M 2,8 L 2,6.5 C 2,5.8 2.6,5.2 3.3,5.2 C 3.7,5.2 4,5.4 4.3,5.7 ' +
+            'L 4.3,3.2 C 4.3,2.5 4.9,1.9 5.6,1.9 C 6.3,1.9 6.9,2.5 6.9,3.2 ' +
+            'L 6.9,2.5 C 6.9,1.8 7.5,1.2 8.2,1.2 C 8.9,1.2 9.5,1.8 9.5,2.5 ' +
+            'L 9.5,3.1 C 9.7,2.6 10.2,2.3 10.8,2.3 C 11.5,2.3 12.1,2.9 12.1,3.6 ' +
+            'L 12.1,5.2 C 12.3,5 12.6,4.9 13,4.9 C 13.7,4.9 14.3,5.5 14.3,6.2 ' +
+            'L 14.3,10 C 14.3,13.1 12.2,16 8.6,16 L 6.6,16 C 4.9,16 3.7,15.2 2.9,13.8 ' +
+            'L 1,10.2 C 0.7,9.5 1.2,8.6 2,8 Z',
+          fill: 'CanvasText',
+          stroke: 'Canvas',
+          strokeLinejoin: 'round',
+          strokeWidth: '1.2',
+        },
+      ],
+    },
     style: {
-      background: 'CanvasText',
-      border: '1px solid Canvas',
-      borderRadius: '7px 7px 5px 5px',
-      clipPath:
-        'polygon(2px 4px, 5px 1px, 7px 3px, 9px 1px, 12px 4px, 15px 7px, 13px 16px, 4px 16px, 0 9px)',
-      transform: 'rotate(-8deg)',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   grabbing: {
     width: 16,
     height: 16,
     hotspot: { x: 8, y: 2 },
+    svg: {
+      viewBox: '0 0 16 16',
+      paths: [
+        {
+          d:
+            'M 2,6.8 C 2,5.9 2.7,5.2 3.6,5.2 L 4.7,5.2 L 4.7,4 ' +
+            'C 4.7,3.2 5.3,2.6 6.1,2.6 C 6.6,2.6 7,2.8 7.2,3.2 ' +
+            'C 7.4,2.5 8,2 8.7,2 C 9.4,2 10,2.5 10.2,3.2 ' +
+            'C 10.5,2.9 10.9,2.7 11.3,2.7 C 12.1,2.7 12.7,3.3 12.7,4.1 ' +
+            'L 12.7,5.6 L 13.1,5.6 C 13.9,5.6 14.6,6.3 14.6,7.1 ' +
+            'L 14.6,9.9 C 14.6,13.1 12.2,16 8.6,16 L 6.5,16 ' +
+            'C 4.9,16 3.6,15.2 2.8,13.8 L 1.2,10.8 C 0.8,10.1 1.2,9.1 2,8.9 Z',
+          fill: 'CanvasText',
+          stroke: 'Canvas',
+          strokeLinejoin: 'round',
+          strokeWidth: '1.2',
+        },
+      ],
+    },
     style: {
-      background: 'CanvasText',
-      border: '1px solid Canvas',
-      borderRadius: '8px 8px 6px 6px',
-      clipPath:
-        'polygon(1px 5px, 4px 2px, 7px 4px, 10px 2px, 15px 7px, 13px 16px, 4px 16px, 0 10px)',
-      transform: 'rotate(-8deg) scale(0.92)',
+      border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   move: {
     width: 16,
     height: 16,
     hotspot: { x: 8, y: 8 },
+    svg: {
+      viewBox: '0 0 16 16',
+      paths: [
+        {
+          d:
+            'M 8,1 L 5.5,3.5 M 8,1 L 10.5,3.5 M 8,1 L 8,15 ' +
+            'M 8,15 L 5.5,12.5 M 8,15 L 10.5,12.5 ' +
+            'M 1,8 L 3.5,5.5 M 1,8 L 3.5,10.5 M 1,8 L 15,8 ' +
+            'M 15,8 L 12.5,5.5 M 15,8 L 12.5,10.5',
+          fill: 'none',
+          stroke: 'CanvasText',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          strokeWidth: '2',
+        },
+      ],
+    },
     style: {
-      background:
-        'linear-gradient(CanvasText, CanvasText) center / 2px 100% no-repeat, linear-gradient(CanvasText, CanvasText) center / 100% 2px no-repeat',
       border: '0px',
-      transform: 'rotate(45deg)',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
   crosshair: {
     width: 22,
     height: 22,
     hotspot: { x: 11, y: 11 },
+    svg: {
+      viewBox: '0 0 22 22',
+      paths: [
+        {
+          d: 'M 11,1 L 11,7 M 11,15 L 11,21 M 1,11 L 7,11 M 15,11 L 21,11 M 11,9.2 A 1.8,1.8 0 1 0 11,12.8 A 1.8,1.8 0 1 0 11,9.2 Z',
+          fill: 'none',
+          stroke: 'CanvasText',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          strokeWidth: '1.6',
+        },
+      ],
+    },
     style: {
-      background:
-        'linear-gradient(CanvasText, CanvasText) center / 1px 100% no-repeat, linear-gradient(CanvasText, CanvasText) center / 100% 1px no-repeat',
       border: '0px',
+      color: 'CanvasText',
+      overflow: 'visible',
     },
   },
 }
@@ -538,6 +698,58 @@ function cursorTransform(baseTransform: string, pressed: boolean): string {
   }
 
   return `${normalized} ${pressedScale}`
+}
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
+function createCursorSvg(
+  ownerDocument: Document,
+  kind: SupportedCursorVisualKind,
+  spec: CursorVisualSvgSpec,
+): SVGSVGElement {
+  const svg = ownerDocument.createElementNS(SVG_NAMESPACE, 'svg')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('data-actorble-cursor-svg', kind)
+  svg.setAttribute('focusable', 'false')
+  svg.setAttribute('height', '100%')
+  svg.setAttribute('viewBox', spec.viewBox)
+  svg.setAttribute('width', '100%')
+  Object.assign(svg.style, {
+    display: 'block',
+    height: '100%',
+    overflow: 'visible',
+    width: '100%',
+  })
+
+  for (const pathSpec of spec.paths) {
+    const path = ownerDocument.createElementNS(SVG_NAMESPACE, 'path')
+    path.setAttribute('d', pathSpec.d)
+    path.setAttribute('fill', pathSpec.fill)
+
+    if (pathSpec.fillRule) {
+      path.setAttribute('fill-rule', pathSpec.fillRule)
+    }
+
+    if (pathSpec.stroke) {
+      path.setAttribute('stroke', pathSpec.stroke)
+    }
+
+    if (pathSpec.strokeLinecap) {
+      path.setAttribute('stroke-linecap', pathSpec.strokeLinecap)
+    }
+
+    if (pathSpec.strokeWidth) {
+      path.setAttribute('stroke-width', pathSpec.strokeWidth)
+    }
+
+    if (pathSpec.strokeLinejoin) {
+      path.setAttribute('stroke-linejoin', pathSpec.strokeLinejoin)
+    }
+
+    svg.append(path)
+  }
+
+  return svg
 }
 
 function cursorVisualKindFor(cursor: string | undefined): SupportedCursorVisualKind {

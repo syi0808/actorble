@@ -98,24 +98,32 @@ describe('BrowserVisualLayer', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('renders the default cursor as a browser-like hotspot shape instead of a centered dot', () => {
+  it('renders the default cursor from an embedded arrow SVG instead of a CSS polygon', () => {
     const layer = new BrowserVisualLayer({ root: document })
 
     layer.showCursor({ x: 14, y: 28 })
 
     const cursor = getCursorElement()
+    const svg = cursor.querySelector('svg')
+    const path = svg?.querySelector('path')
+
     expect(cursor.hasAttribute('data-actorble-internal')).toBe(true)
     expect(cursor.style.pointerEvents).toBe('none')
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
-    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('0')
-    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('0')
-    expect(cursor.style.left).toBe('14px')
-    expect(cursor.style.top).toBe('28px')
-    expect(cursor.style.width).toBe('14px')
-    expect(cursor.style.height).toBe('20px')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('2')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('2')
+    expect(cursor.style.left).toBe('12px')
+    expect(cursor.style.top).toBe('26px')
+    expect(cursor.style.width).toBe('18px')
+    expect(cursor.style.height).toBe('27px')
     expect(cursor.style.transform).toBe('none')
-    expect(cursor.style.clipPath).toContain('polygon')
+    expect(cursor.style.clipPath).toBe('')
     expect(cursor.style.borderRadius).not.toBe('999px')
+    expect(svg).not.toBeNull()
+    expect(svg.getAttribute('viewBox')).toBe('25 14 34 50')
+    expect(path?.getAttribute('d')).toContain('M 29,18L 52.25,41.1667')
+    expect(path?.getAttribute('fill')).toBe('CanvasText')
+    expect(path?.getAttribute('stroke')).toBe('Canvas')
   })
 
   it('renders distinct browser cursor variants with stable hotspot offsets', () => {
@@ -137,6 +145,7 @@ describe('BrowserVisualLayer', () => {
       layer.showCursor({ point, cursor: cssCursor })
 
       const cursor = getCursorElement()
+      const svg = cursor.querySelector('svg')
       expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe(expectedKind)
       expect(cursor.getAttribute('data-actorble-css-cursor')).toBe(cssCursor)
       expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe(hotspotX)
@@ -145,7 +154,11 @@ describe('BrowserVisualLayer', () => {
       expect(cursor.style.top).toBe(`${point.y - Number(hotspotY)}px`)
       expect(cursor.style.width).toBe(width)
       expect(cursor.style.height).toBe(height)
+      expect(cursor.style.background).toBe('')
+      expect(cursor.style.clipPath).toBe('')
       expect(cursor.style.transform).not.toBe('translate(-50%, -50%)')
+      expect(svg).not.toBeNull()
+      expect(svg.getAttribute('data-actorble-cursor-svg')).toBe(expectedKind)
     }
   })
 
@@ -164,10 +177,10 @@ describe('BrowserVisualLayer', () => {
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
     expect(cursor.style.transform).toBe('scale(0.88)')
     expect(cursor.style.transition).toBe('transform 80ms ease-out')
-    expect(cursor.style.left).toBe('30px')
-    expect(cursor.style.top).toBe('40px')
-    expect(cursor.style.width).toBe('14px')
-    expect(cursor.style.height).toBe('20px')
+    expect(cursor.style.left).toBe('28px')
+    expect(cursor.style.top).toBe('38px')
+    expect(cursor.style.width).toBe('18px')
+    expect(cursor.style.height).toBe('27px')
 
     layer.showCursor({
       point: { x: 31, y: 41 },
@@ -175,8 +188,8 @@ describe('BrowserVisualLayer', () => {
       pressed: false,
     })
 
-    expect(cursor.style.left).toBe('31px')
-    expect(cursor.style.top).toBe('41px')
+    expect(cursor.style.left).toBe('29px')
+    expect(cursor.style.top).toBe('39px')
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
     expect(cursor.hasAttribute('data-actorble-css-cursor')).toBe(false)
@@ -194,7 +207,7 @@ describe('BrowserVisualLayer', () => {
 
     const cursor = getCursorElement()
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
-    expect(cursor.style.transform).toBe('rotate(-18deg) scale(0.88)')
+    expect(cursor.style.transform).toBe('scale(0.88)')
     expect(cursor.style.transformOrigin).toBe('5px 1px')
     expect(cursor.style.transition).toBe('transform 80ms ease-out')
 
@@ -205,7 +218,7 @@ describe('BrowserVisualLayer', () => {
     })
 
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
-    expect(cursor.style.transform).toBe('rotate(-18deg)')
+    expect(cursor.style.transform).toBe('none')
     expect(cursor.style.transformOrigin).toBe('5px 1px')
     expect(cursor.style.transition).toBe('transform 80ms ease-out')
   })
