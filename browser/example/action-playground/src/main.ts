@@ -9,8 +9,9 @@ import {
 } from '../../shared/example-utils.js'
 
 type DemoActorble = ReturnType<typeof createActorble>
+type VisualMode = 'quiet' | 'debug' | 'off'
 
-let visualEnabled = true
+let visualMode: VisualMode = 'quiet'
 let actorble: DemoActorble = createDemoActorble()
 const app = byId<HTMLDivElement>('app')
 
@@ -67,10 +68,39 @@ app.innerHTML = `
             <p class="eyebrow">Actions</p>
             <h2>Human-like flow</h2>
           </div>
-          <label class="toggle-row" for="visual-toggle">
-            <input id="visual-toggle" type="checkbox" checked />
-            <span>Visual feedback</span>
-          </label>
+          <fieldset class="segmented-control" aria-label="Visual detail">
+            <label>
+              <input
+                id="visual-mode-quiet"
+                data-testid="visual-mode-quiet"
+                name="visual-mode"
+                type="radio"
+                value="quiet"
+                checked
+              />
+              <span>Quiet</span>
+            </label>
+            <label>
+              <input
+                id="visual-mode-debug"
+                data-testid="visual-mode-debug"
+                name="visual-mode"
+                type="radio"
+                value="debug"
+              />
+              <span>Debug</span>
+            </label>
+            <label>
+              <input
+                id="visual-mode-off"
+                data-testid="visual-mode-off"
+                name="visual-mode"
+                type="radio"
+                value="off"
+              />
+              <span>Off</span>
+            </label>
+          </fieldset>
           <button class="secondary-action" id="reset-stage" type="button">Reset</button>
         </div>
         <div class="action-grid">
@@ -98,7 +128,9 @@ const createProjectButton = byId<HTMLButtonElement>('create-project')
 const projectStatus = byId<HTMLElement>('project-status')
 const taskState = document.querySelector<HTMLElement>('[data-testid="task-state"]')
 const resetStageButton = byId<HTMLButtonElement>('reset-stage')
-const visualToggle = byId<HTMLInputElement>('visual-toggle')
+const visualModeInputs = Array.from(
+  document.querySelectorAll<HTMLInputElement>('input[name="visual-mode"]'),
+)
 const runFlowButton = byId<HTMLButtonElement>('run-flow')
 const runTypeButton = byId<HTMLButtonElement>('run-type')
 const runClickButton = byId<HTMLButtonElement>('run-click')
@@ -134,13 +166,19 @@ resetStageButton.addEventListener('click', () => {
   setStatus(runStatus, 'Ready')
 })
 
-visualToggle.addEventListener('change', () => {
-  visualEnabled = visualToggle.checked
-  actorble.destroy()
-  actorble = createDemoActorble()
-  renderFidelity()
-  setStatus(runStatus, visualEnabled ? 'Visual on' : 'Visual off')
-})
+for (const input of visualModeInputs) {
+  input.addEventListener('change', () => {
+    if (!input.checked) {
+      return
+    }
+
+    visualMode = input.value as VisualMode
+    actorble.destroy()
+    actorble = createDemoActorble()
+    renderFidelity()
+    setStatus(runStatus, visualModeStatus(visualMode))
+  })
+}
 
 runFlowButton.addEventListener('click', () => {
   void runWithStatus(
@@ -160,7 +198,7 @@ runFlowButton.addEventListener('click', () => {
         timeout: 5000,
       })
       await actorble.moveTo(testId('create-project'), { timeout: 1500 })
-      await actorble.click(testId('create-project'), { timeout: 1500 })
+      await actorble.click(testId('create-project'), { pressDwell: 120, timeout: 1500 })
     },
     renderFidelity,
   )
@@ -205,8 +243,32 @@ function createDemoActorble(): DemoActorble {
   return createActorble({
     mode: 'interactive',
     debug: true,
-    visual: visualEnabled ? { preset: 'debug', textVisibility: 'masked' } : { enabled: false },
+    visual: visualOptionsForMode(visualMode),
   })
+}
+
+function visualOptionsForMode(
+  mode: VisualMode,
+): true | { preset: 'debug'; textVisibility: 'masked' } | { enabled: false } {
+  switch (mode) {
+    case 'debug':
+      return { preset: 'debug', textVisibility: 'masked' }
+    case 'off':
+      return { enabled: false }
+    case 'quiet':
+      return true
+  }
+}
+
+function visualModeStatus(mode: VisualMode): string {
+  switch (mode) {
+    case 'debug':
+      return 'Debug visual'
+    case 'off':
+      return 'Visual off'
+    case 'quiet':
+      return 'Quiet visual'
+  }
 }
 
 function createProject(): void {
@@ -262,12 +324,12 @@ function renderFidelity(): void {
   const fidelity = actorble.getFidelity()
 
   fidelityOutput.innerHTML = renderRows({
-    visualImplementation: fidelity.visualOverlay.implementation,
-    visualRuntime: fidelity.visualOverlay.runtime,
-    visualInteractivity: fidelity.visualOverlay.interactivity,
-    visualHitTesting: fidelity.visualOverlay.hitTesting,
-    pointerInput: fidelity.pointerInput,
-    textInput: fidelity.textInput,
-    trustedEvents: fidelity.trustedEvents,
+    overlay: fidelity.visualOverlay.implementation,
+    runtime: fidelity.visualOverlay.runtime,
+    interactivity: fidelity.visualOverlay.interactivity,
+    hitTesting: fidelity.visualOverlay.hitTesting,
+    pointer: fidelity.pointerInput,
+    text: fidelity.textInput,
+    trusted: fidelity.trustedEvents,
   })
 }

@@ -725,7 +725,7 @@ actorble-facade
 
 ### T33. Browser visual fidelity example and smoke verification
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: visual fidelity 개선은 jsdom style assertions만으로는 충분히 확인하기 어렵다. action playground를 조용한 기본 visual과 opt-in debug visual을 보여주도록 정리하고, 실제 browser runtime에서 불필요한 overlay가 보이지 않는지 smoke 검증한다.
 
