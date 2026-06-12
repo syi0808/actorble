@@ -234,6 +234,23 @@ describe('Actorble facade', () => {
     expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
   })
 
+  it('passes public cursor scale options into the default visual layer', async () => {
+    const { seen } = createClickableButton('scaled-cursor')
+    const actorble = createActorble({ visual: { cursorScale: 2 } })
+
+    await expect(actorble.click(css('#scaled-cursor'))).resolves.toBeUndefined()
+
+    const cursor = document.body.querySelector('[data-actorble-visual-cursor]')
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(cursor).not.toBeNull()
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('4')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('4')
+    expect(cursor.style.left).toBe('36px')
+    expect(cursor.style.top).toBe('31px')
+    expect(cursor.style.width).toBe('36px')
+    expect(cursor.style.height).toBe('54px')
+  })
+
   it('does not create overlay DOM when visual feedback is disabled', async () => {
     const { seen } = createClickableButton('disabled-visual')
     const actorble = createActorble({ visual: { enabled: false } })

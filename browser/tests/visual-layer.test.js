@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDomAdapter } from '../src/platform-adapter/index.js'
-import { BrowserVisualLayer, NoopVisualLayer } from '../src/visual-layer/index.js'
+import {
+  BrowserVisualLayer,
+  NoopVisualLayer,
+  createVisualLayer,
+} from '../src/visual-layer/index.js'
 
 function targetHandle(id = 'target-1') {
   const element = document.createElement('button')
@@ -159,6 +163,68 @@ describe('BrowserVisualLayer', () => {
       expect(cursor.style.transform).not.toBe('translate(-50%, -50%)')
       expect(svg).not.toBeNull()
       expect(svg.getAttribute('data-actorble-cursor-svg')).toBe(expectedKind)
+    }
+  })
+
+  it('scales cursor dimensions and hotspots while keeping the requested point anchored', () => {
+    const layer = createVisualLayer({ root: document, cursorScale: 2 })
+
+    layer.showCursor({ x: 14, y: 28 })
+
+    const cursor = getCursorElement()
+    const svg = cursor.querySelector('svg')
+
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('4')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('4')
+    expect(cursor.style.left).toBe('10px')
+    expect(cursor.style.top).toBe('24px')
+    expect(cursor.style.width).toBe('36px')
+    expect(cursor.style.height).toBe('54px')
+    expect(svg.getAttribute('viewBox')).toBe('25 14 34 50')
+
+    layer.showCursor({ point: { x: 80, y: 90 }, cursor: 'pointer' })
+
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('pointer')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('10')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('2')
+    expect(cursor.style.left).toBe('70px')
+    expect(cursor.style.top).toBe('88px')
+    expect(cursor.style.width).toBe('26px')
+    expect(cursor.style.height).toBe('36px')
+  })
+
+  it('uses scaled hotspot origins for pressed cursor feedback', () => {
+    const layer = new BrowserVisualLayer({ root: document, cursorScale: 2 })
+
+    layer.showCursor({
+      point: { x: 50, y: 60 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+
+    const cursor = getCursorElement()
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    expect(cursor.style.transform).toBe('scale(0.88)')
+    expect(cursor.style.transformOrigin).toBe('10px 2px')
+    expect(cursor.style.width).toBe('26px')
+    expect(cursor.style.height).toBe('36px')
+  })
+
+  it('falls back to the default cursor scale for invalid scale values', () => {
+    for (const cursorScale of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      document.body.innerHTML = ''
+      const layer = new BrowserVisualLayer({ root: document, cursorScale })
+
+      layer.showCursor({ x: 14, y: 28 })
+
+      const cursor = getCursorElement()
+      expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('2')
+      expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('2')
+      expect(cursor.style.left).toBe('12px')
+      expect(cursor.style.top).toBe('26px')
+      expect(cursor.style.width).toBe('18px')
+      expect(cursor.style.height).toBe('27px')
     }
   })
 

@@ -276,6 +276,7 @@ function visualForOptions(
     return new BrowserVisualLayer({
       enabled: visual.enabled,
       root,
+      cursorScale: visual.cursorScale,
       textVisibility: visual.textVisibility,
     })
   }

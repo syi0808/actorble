@@ -9,6 +9,7 @@ import type {
 export type VisualLayerOptions = Readonly<{
   enabled?: boolean
   root?: Document | ShadowRoot
+  cursorScale?: number
   textVisibility?: VisualTextVisibility
 }>
 
@@ -80,7 +81,10 @@ export class BrowserVisualLayer implements VisualLayer {
 
     const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
-    const spec = CURSOR_VISUAL_SPECS[request.kind]
+    const spec = scaleCursorVisualSpec(
+      CURSOR_VISUAL_SPECS[request.kind],
+      normalizeCursorScale(this.options.cursorScale),
+    )
     const baseTransform = spec.style.transform ?? 'none'
     cursor.setAttribute('data-actorble-cursor-kind', request.kind)
     cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
@@ -683,6 +687,31 @@ function normalizeCursorText(cursor: string | undefined): string | undefined {
   const normalized = cursor?.trim()
 
   return normalized ? normalized : undefined
+}
+
+function normalizeCursorScale(cursorScale: number | undefined): number {
+  return cursorScale !== undefined && Number.isFinite(cursorScale) && cursorScale > 0
+    ? cursorScale
+    : 1
+}
+
+function scaleCursorVisualSpec(
+  spec: CursorVisualSpec,
+  scale: number,
+): CursorVisualSpec {
+  if (scale === 1) {
+    return spec
+  }
+
+  return {
+    ...spec,
+    width: spec.width * scale,
+    height: spec.height * scale,
+    hotspot: {
+      x: spec.hotspot.x * scale,
+      y: spec.hotspot.y * scale,
+    },
+  }
 }
 
 function cursorTransform(baseTransform: string, pressed: boolean): string {

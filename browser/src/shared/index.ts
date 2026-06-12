@@ -157,6 +157,7 @@ export type VisualFeedbackOptions = Readonly<{
   enabled?: boolean
   preset?: VisualFeedbackPreset
   cursor?: boolean
+  cursorScale?: number
   targetHighlight?: boolean
   clickFeedback?: boolean
   focusOverlay?: boolean
@@ -168,6 +169,7 @@ export type VisualFeedbackOptions = Readonly<{
 export type ResolvedVisualFeedbackOptions = Readonly<{
   enabled: boolean
   cursor: boolean
+  cursorScale: number
   targetHighlight: boolean
   clickFeedback: boolean
   focusOverlay: boolean
@@ -197,6 +199,7 @@ export function resolveVisualFeedbackOptions(
   return {
     enabled,
     cursor: options.cursor ?? defaults.cursor ?? presetDefaults.cursor,
+    cursorScale: resolveVisualCursorScale(options, defaults),
     targetHighlight:
       options.targetHighlight ?? defaults.targetHighlight ?? presetDefaults.targetHighlight,
     clickFeedback:
@@ -209,6 +212,21 @@ export function resolveVisualFeedbackOptions(
       options.keystrokeOverlay ?? defaults.keystrokeOverlay ?? presetDefaults.keystrokeOverlay,
     textVisibility: options.textVisibility ?? defaults.textVisibility,
   }
+}
+
+function resolveVisualCursorScale(
+  options: VisualFeedbackOptions,
+  defaults: VisualFeedbackOptions,
+): number {
+  return normalizeVisualCursorScale(
+    options.cursorScale === undefined ? defaults.cursorScale : options.cursorScale,
+  )
+}
+
+function normalizeVisualCursorScale(cursorScale: number | undefined): number {
+  return cursorScale !== undefined && Number.isFinite(cursorScale) && cursorScale > 0
+    ? cursorScale
+    : 1
 }
 
 const quietVisualFeedbackDefaults = {
