@@ -142,10 +142,18 @@ export function err<TError = ActorbleError>(error: TError): Result<never, TError
 
 export type ActorbleMode = 'interactive' | 'headless'
 
+export type VisualTextVisibility = 'hidden' | 'masked' | 'plain'
+
+export type VisualFeedbackOptions = Readonly<{
+  enabled?: boolean
+  textVisibility?: VisualTextVisibility
+}>
+
 export type ActorbleOptions = Readonly<{
   root?: Document | ShadowRoot | Element
   mode?: ActorbleMode
   debug?: boolean
+  visual?: boolean | VisualFeedbackOptions
 }>
 
 export type LocatorKind =
@@ -307,7 +315,13 @@ export type ScrollMetrics = Readonly<{
 export type MoveOptions = OperationOptions &
   Readonly<{
     duration?: DurationMs
+    motion?: PointerMotionProfile
   }>
+
+export type PointerMotionProfile = Readonly<{
+  kind: 'linear'
+  duration?: DurationMs
+}>
 
 export type ClickOptions = OperationOptions &
   Readonly<{

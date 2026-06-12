@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDomAdapter } from '../src/platform-adapter/index.js'
-import { BrowserVisualLayer } from '../src/visual-layer/index.js'
+import { BrowserVisualLayer, NoopVisualLayer } from '../src/visual-layer/index.js'
 
 function targetHandle(id = 'target-1') {
   const element = document.createElement('button')
@@ -76,8 +76,35 @@ describe('BrowserVisualLayer', () => {
     layer.showCursor({ x: 1, y: 2 })
     layer.highlightTarget({ target: targetHandle(), rect: { x: 0, y: 0, width: 1, height: 1 } })
     layer.showClick({ x: 3, y: 4 })
+    layer.showFocus({ target: targetHandle('focus-target'), active: true })
+    layer.showTyping({ target: targetHandle('typing-target'), active: true })
+    layer.showKeystroke({
+      target: targetHandle('keystroke-target'),
+      text: 'secret',
+      textVisibility: 'masked',
+    })
+    layer.clearFeedback()
     layer.hide()
     layer.destroy()
+
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
+  })
+
+  it('provides a no-op visual layer for compile-pass runtime hooks', () => {
+    const target = targetHandle()
+    const layer = new NoopVisualLayer()
+
+    expect(() => {
+      layer.showCursor({ x: 1, y: 2 })
+      layer.highlightTarget({ target, rect: { x: 0, y: 0, width: 1, height: 1 } })
+      layer.showClick({ x: 3, y: 4 })
+      layer.showFocus({ target, active: true })
+      layer.showTyping({ target, active: true })
+      layer.showKeystroke({ target, text: 'secret', textVisibility: 'hidden' })
+      layer.clearFeedback()
+      layer.hide()
+      layer.destroy()
+    }).not.toThrow()
 
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })

@@ -6,6 +6,7 @@ import { BrowserDomAdapter } from '../platform-adapter/index.js'
 import { BrowserScenarioRunner } from '../scenario-runner/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
+import { BrowserVisualLayer } from '../visual-layer/index.js'
 import { notImplemented } from '../shared/index.js'
 import type { ActionOrchestrator } from '../action-orchestrator/index.js'
 import type {
@@ -18,6 +19,7 @@ import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.
 import type { DomPort } from '../shared/index.js'
 import type { ScenarioRunner } from '../scenario-runner/index.js'
 import type { TargetResolver } from '../target-resolver/index.js'
+import type { VisualLayer } from '../visual-layer/index.js'
 import type {
   ActorbleListener,
   ActorbleOptions,
@@ -39,11 +41,12 @@ import type {
   TargetInspection,
   TargetLike,
   TypeOptions,
+  VisualFeedbackOptions,
   WaitCondition,
   WaitOptions,
 } from '../shared/index.js'
 
-export type ActorbleFacadeOptions = ActorbleOptions &
+export type ActorbleFacadeOptions = Omit<ActorbleOptions, 'visual'> &
   Readonly<{
     capabilities?: CapabilityFidelityReporter
     dom?: DomPort
@@ -52,6 +55,7 @@ export type ActorbleFacadeOptions = ActorbleOptions &
     resolver?: TargetResolver
     runner?: ScenarioRunner
     trace?: TraceCollector
+    visual?: boolean | VisualFeedbackOptions | VisualLayer
   }>
 
 export class Actorble {
@@ -70,6 +74,7 @@ export class Actorble {
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
     const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
+    const visual = visualForOptions(options.visual, dom.getRoot())
     const orchestrator =
       options.orchestrator ??
       new BrowserActionOrchestrator({
@@ -78,6 +83,7 @@ export class Actorble {
         resolver,
         timeline,
         trace,
+        visual,
       })
 
     this.#trace = trace
@@ -220,4 +226,33 @@ function rootForDomAdapter(
 
 function isElementRoot(root: Document | ShadowRoot | Element): root is Element {
   return root.nodeType === 1
+}
+
+function visualForOptions(
+  visual: ActorbleFacadeOptions['visual'],
+  root: Document | ShadowRoot,
+): VisualLayer | undefined {
+  if (isVisualLayer(visual)) {
+    return visual
+  }
+
+  if (visual === true) {
+    return new BrowserVisualLayer({ root })
+  }
+
+  if (typeof visual === 'object' && visual !== null && visual.enabled !== false) {
+    return new BrowserVisualLayer({ enabled: visual.enabled, root })
+  }
+
+  return undefined
+}
+
+function isVisualLayer(visual: ActorbleFacadeOptions['visual']): visual is VisualLayer {
+  return (
+    typeof visual === 'object' &&
+    visual !== null &&
+    'showCursor' in visual &&
+    'highlightTarget' in visual &&
+    'showClick' in visual
+  )
 }

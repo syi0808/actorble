@@ -1,5 +1,10 @@
 import { actorbleError } from '../shared/index.js'
-import type { Point, Rect, TargetHandle } from '../shared/index.js'
+import type {
+  Point,
+  Rect,
+  TargetHandle,
+  VisualTextVisibility,
+} from '../shared/index.js'
 
 export type VisualLayerOptions = Readonly<{
   enabled?: boolean
@@ -11,10 +16,30 @@ export type HighlightRequest = Readonly<{
   rect?: Rect
 }>
 
+export type FocusVisualRequest = Readonly<{
+  target: TargetHandle | null
+  active: boolean
+}>
+
+export type TypingVisualRequest = Readonly<{
+  target: TargetHandle
+  active: boolean
+}>
+
+export type KeystrokeVisualRequest = Readonly<{
+  target?: TargetHandle
+  text: string
+  textVisibility?: VisualTextVisibility
+}>
+
 export interface VisualLayer {
   showCursor(point: Point): void
   highlightTarget(request: HighlightRequest): void
   showClick(point: Point): void
+  showFocus(request: FocusVisualRequest): void
+  showTyping(request: TypingVisualRequest): void
+  showKeystroke(request: KeystrokeVisualRequest): void
+  clearFeedback(): void
   hide(): void
   destroy(): void
 }
@@ -76,6 +101,14 @@ export class BrowserVisualLayer implements VisualLayer {
       width: '18px',
     })
   }
+
+  showFocus(_request: FocusVisualRequest): void {}
+
+  showTyping(_request: TypingVisualRequest): void {}
+
+  showKeystroke(_request: KeystrokeVisualRequest): void {}
+
+  clearFeedback(): void {}
 
   hide(): void {
     if (this.#rootElement) {
@@ -140,6 +173,26 @@ export class BrowserVisualLayer implements VisualLayer {
 
     return part
   }
+}
+
+export class NoopVisualLayer implements VisualLayer {
+  showCursor(_point: Point): void {}
+
+  highlightTarget(_request: HighlightRequest): void {}
+
+  showClick(_point: Point): void {}
+
+  showFocus(_request: FocusVisualRequest): void {}
+
+  showTyping(_request: TypingVisualRequest): void {}
+
+  showKeystroke(_request: KeystrokeVisualRequest): void {}
+
+  clearFeedback(): void {}
+
+  hide(): void {}
+
+  destroy(): void {}
 }
 
 export function createVisualLayer(options: VisualLayerOptions = {}): VisualLayer {

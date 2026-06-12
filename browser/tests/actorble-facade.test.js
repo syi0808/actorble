@@ -113,10 +113,45 @@ describe('Actorble facade', () => {
     await expect(actorble.click(css('#save'))).resolves.toBeUndefined()
 
     expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
     expect(actorble.getTrace().spans).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'action.click', status: 'ok' }),
       ]),
     )
+  })
+
+  it('can opt into the default visual layer without changing click behavior', async () => {
+    const button = document.createElement('button')
+    button.id = 'create'
+    button.textContent = 'Create'
+    button.scrollIntoView = vi.fn()
+    button.getBoundingClientRect = vi.fn(() => ({
+      x: 15,
+      y: 25,
+      width: 50,
+      height: 20,
+      top: 25,
+      left: 15,
+      right: 65,
+      bottom: 45,
+      toJSON: () => {},
+    }))
+    document.body.append(button)
+    document.elementFromPoint = vi.fn(() => button)
+    const seen = []
+    button.addEventListener('pointerdown', () => seen.push('pointerdown'))
+    button.addEventListener('pointerup', () => seen.push('pointerup'))
+    button.addEventListener('click', () => seen.push('click'))
+    const actorble = createActorble({ visual: true })
+
+    await expect(actorble.click(css('#create'))).resolves.toBeUndefined()
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-cursor]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-highlight]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
   })
 })

@@ -18,6 +18,7 @@ import { BrowserSurfaceEngine } from '../surface-engine/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
 import { BrowserTextInputEngine } from '../text-input-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
+import { NoopVisualLayer } from '../visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
 import {
   ActorbleError,
@@ -59,6 +60,7 @@ import type { SurfaceEngine } from '../surface-engine/index.js'
 import type { TargetResolver } from '../target-resolver/index.js'
 import type { TextInputEngine } from '../text-input-engine/index.js'
 import type { TimelineEngine } from '../timeline-engine/index.js'
+import type { VisualLayer } from '../visual-layer/index.js'
 import type { WaitObservationEngine, WaitResult } from '../wait-observation-engine/index.js'
 
 export type ActionName =
@@ -112,6 +114,7 @@ export type ActionOrchestratorOptions = Readonly<{
   text?: TextInputEngine
   timeline?: TimelineEngine
   trace?: SpanRecorder
+  visual?: VisualLayer
   wait?: WaitObservationEngine
 }>
 
@@ -144,6 +147,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #surface: SurfaceEngine
   readonly #text: TextInputEngine
   readonly #trace: SpanRecorder
+  readonly #visual: VisualLayer
   readonly #wait: WaitObservationEngine
   #signalTarget: TargetHandle | null = null
   #clickDispatchState: ClickDispatchState | null = null
@@ -189,7 +193,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         events,
         store,
         dom,
+        timeline,
       })
+    this.#visual = options.visual ?? new NoopVisualLayer()
     this.#wait = options.wait ?? new BrowserWaitObservationEngine({ dom, timeline, trace })
 
     signals.subscribe((signal) => {
@@ -209,6 +215,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       const point = clickablePointOrThrow('moveTo', handle, snapshot)
+      this.#showTargetHighlight(handle, snapshot)
 
       phase = 'perform'
       await this.#withSignalTarget(handle, () => this.#gesture.hover(point, options))
@@ -247,6 +254,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       const point = clickablePointOrThrow('click', handle, snapshot)
+      this.#showTargetHighlight(handle, snapshot)
 
       phase = 'preflight'
       const report = await this.#interactability.canClick(handle, snapshot, options)
@@ -260,6 +268,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#gesture.click(clickTarget, point, options),
       )
       const activationDispatched = this.#dispatchActivationClick(clickTarget, point)
+      this.#tryVisual('showClick', () => this.#visual.showClick(point))
 
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -326,13 +335,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'ensureVisible'
       await this.#surface.ensureVisible(handle, options)
       phase = 'geometry'
-      await this.#geometry.snapshot(handle)
+      const snapshot = await this.#geometry.snapshot(handle)
+      this.#showTargetHighlight(handle, snapshot)
       phase = 'preflight'
       const report = await this.#interactability.canType(handle)
       assertCanType(handle, report)
 
       phase = 'perform'
-      await this.#text.typeInto(handle, text, typeOptions(options))
+      const typeTarget = handle
+
+      this.#tryVisual('showTyping', () =>
+        this.#visual.showTyping({ target: typeTarget, active: true }),
+      )
+      try {
+        await this.#text.typeInto(typeTarget, text, typeOptions(options))
+      } finally {
+        this.#tryVisual('showTyping', () =>
+          this.#visual.showTyping({ target: typeTarget, active: false }),
+        )
+      }
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
 
@@ -459,6 +480,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     switch (signal.type) {
       case 'pointer:moved':
+        this.#tryVisual('showCursor', () => this.#visual.showCursor(signal.point))
         this.#events.dispatchPointerEvent({
           type: 'pointermove',
           target: target.element,
@@ -586,6 +608,26 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       targetId: target.id,
       reasons: report.forceBypassedReasons,
     })
+  }
+
+  #showTargetHighlight(target: TargetHandle, geometry: GeometrySnapshot): void {
+    this.#tryVisual('highlightTarget', () =>
+      this.#visual.highlightTarget({
+        target,
+        rect: geometry.rect,
+      }),
+    )
+  }
+
+  #tryVisual(effect: string, operation: () => void): void {
+    try {
+      operation()
+    } catch (error) {
+      this.#trace.warn('Visual layer update failed.', {
+        effect,
+        error: describeUnknownError(error),
+      })
+    }
   }
 
   #clearPointerContext(): void {

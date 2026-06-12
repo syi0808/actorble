@@ -202,6 +202,29 @@ function createHarness(options = {}) {
       calls.push('state.cleanup')
     }),
   }
+  const visual =
+    options.visual ??
+    (options.enableVisual
+      ? {
+          showCursor: vi.fn((point) => {
+            calls.push(`visual.cursor:${point.x},${point.y}`)
+          }),
+          highlightTarget: vi.fn(() => {
+            calls.push('visual.highlight')
+          }),
+          showClick: vi.fn(() => {
+            calls.push('visual.click')
+          }),
+          showFocus: vi.fn(),
+          showTyping: vi.fn((request) => {
+            calls.push(`visual.typing:${request.active}`)
+          }),
+          showKeystroke: vi.fn(),
+          clearFeedback: vi.fn(),
+          hide: vi.fn(),
+          destroy: vi.fn(),
+        }
+      : undefined)
   const store = new BrowserInteractionStateStore()
   const orchestrator = new BrowserActionOrchestrator({
     resolver,
@@ -217,6 +240,7 @@ function createHarness(options = {}) {
     events,
     state,
     signals,
+    visual,
   })
 
   return {
@@ -231,6 +255,7 @@ function createHarness(options = {}) {
     target,
     text,
     trace,
+    visual,
     wait,
   }
 }
@@ -358,6 +383,37 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('records visual hook failures as warnings without failing the action', async () => {
+    const visual = {
+      showCursor: vi.fn(() => {
+        throw new Error('overlay blocked')
+      }),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    const { orchestrator, trace } = createHarness({ visual })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(trace.getTrace().warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Visual layer update failed.',
+          details: expect.objectContaining({
+            effect: 'showCursor',
+            error: 'overlay blocked',
+          }),
+        }),
+      ]),
+    )
+  })
+
   it('fails preflight without performing a gesture when click is not interactable', async () => {
     const { events, gesture, orchestrator, trace } = createHarness({
       clickReport: {
@@ -409,6 +465,36 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
+  it('routes pointer and click visual hooks without changing core dispatch order', async () => {
+    const { calls, orchestrator, visual } = createHarness({ enableVisual: true })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'interactability.canClick',
+      'gesture.click',
+      'state.hover:true',
+      'visual.cursor:20,30',
+      'event.pointermove',
+      'state.active:true',
+      'event.pointerdown',
+      'state.active:false',
+      'event.pointerup',
+      'event.click',
+      'visual.click',
+      'wait.settle',
+    ])
+    expect(visual.highlightTarget).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: 'target-1' }),
+      rect: { x: 10, y: 20, width: 20, height: 20 },
+    })
+  })
+
   it('typeInto resolves and checks type interactability before delegating text input', async () => {
     const { calls, orchestrator, target, text } = createHarness()
 
@@ -424,6 +510,25 @@ describe('BrowserActionOrchestrator', () => {
       'wait.settle',
     ])
     expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {})
+  })
+
+  it('surrounds typeInto with visual highlight and typing hooks', async () => {
+    const { calls, orchestrator } = createHarness({ enableVisual: true })
+
+    await expect(orchestrator.typeInto(css('#target-1'), 'hello')).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'interactability.canType',
+      'visual.typing:true',
+      'text.typeInto',
+      'visual.typing:false',
+      'wait.settle',
+    ])
   })
 
   it('waitFor delegates to the wait observation engine and records an action span', async () => {

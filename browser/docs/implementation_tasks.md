@@ -8,7 +8,8 @@
 - T1 shared primitive와 port 경계는 완료됐다. `src/shared/index.ts`가 좌표/rect/locator/target/options/error/result/adapter port를 제공한다.
 - T2 diagnostics trace 최소 코어는 완료됐다. `src/diagnostics-trace/index.ts`가 in-memory span/event/snapshot/warning collector를 제공한다.
 - T3 platform adapter 최소 구현은 완료됐다. `src/platform-adapter/*`가 jsdom 기반 DOM/event/state/style adapter 동작을 제공한다.
-- T5 이후 모듈은 대부분 public interface와 `notImplemented()` shell만 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
+- 일부 public facade/orchestrator 메서드는 아직 `notImplemented()` shell로 남아 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
+- T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결하기 위한 후속 보강 태스크다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -392,6 +393,116 @@ actorble-facade
 - locator별 ranking과 ambiguity 정책이 trace에 남는다.
 - cross-origin frame, closed shadow root, trusted event 한계가 capability/fidelity에 반영된다.
 - 확장 기능은 기존 `click(css(...))` vertical slice를 깨지 않는다.
+
+### T18. Visual Layer runtime 연결
+
+- Status: [ ] Not started
+
+브리핑: T16의 overlay shell을 실제 action 실행 경로에 연결한다. Visual Layer는 core correctness가 아니라 관찰 가능한 보조 표현이어야 하며, 실패해도 action을 실패시키지 않는다.
+
+의존성: 완료된 T9-T16, `visual-layer`, `action-orchestrator`, `actorble-facade`, `diagnostics-trace`.
+
+완료 기준:
+
+- composition root가 runtime 옵션에 따라 Visual Layer를 생성하거나 주입받을 수 있다.
+- `pointer:moved` signal은 cursor overlay 위치를 갱신한다.
+- `click`/`moveTo`/`typeInto` action은 target geometry를 이용해 highlight 또는 affordance를 표시할 수 있다.
+- click gesture는 pointer down/up 흐름과 분리된 click visual feedback을 남긴다.
+- Visual Layer 실패는 diagnostics warning으로 기록되고 action success/failure 판정에 영향을 주지 않는다.
+- overlay는 계속 `pointer-events: none`이며 target resolution과 hit-test에서 제외된다.
+
+테스트 기대:
+
+- fake Visual Layer를 주입한 Action Orchestrator 테스트가 pointer signal과 visual 호출 순서를 검증한다.
+- jsdom 기반 Visual Layer 테스트가 overlay root, cursor, highlight, click feedback이 target hit-test를 막지 않음을 검증한다.
+- visual disabled/headless 옵션에서 overlay DOM을 만들지 않는 회귀 테스트를 둔다.
+
+### T19. Pointer motion profile과 easing
+
+- Status: [ ] Not started
+
+브리핑: Pointer Engine의 현재 선형 `duration` 이동을 확장해 사람이 조작하는 듯한 motion profile을 지원한다. Pointer Engine은 좌표와 path만 소유하고, target 의미 상태와 Visual Layer 표현은 계속 외부 계층에 둔다.
+
+의존성: `shared`, `timeline-engine`, `pointer-signals`, `pointer-engine`, `gesture-engine`.
+
+완료 기준:
+
+- move option이 deterministic 기본 profile과 명시적 motion profile을 구분할 수 있다.
+- linear 외 easing 기반 movement가 frame별 `pointer:moved` signal을 만든다.
+- spring-like movement는 overshoot/settling을 표현하더라도 최종 좌표가 요청 target으로 수렴한다.
+- cancellation은 motion status와 pressed button state를 일관되게 정리한다.
+- motion path는 테스트에서 재현 가능해야 하며 임의 난수는 seed 또는 deterministic profile 뒤에 숨긴다.
+
+테스트 기대:
+
+- fake timeline으로 easing progress와 emitted path를 검증한다.
+- spring-like profile이 최종 target point와 idle status로 끝나는지 검증한다.
+- cancel 중단 시 추가 frame signal이 나오지 않고 `pointer:cancelled`가 기록되는지 검증한다.
+
+### T20. Text input typing cadence
+
+- Status: [ ] Not started
+
+브리핑: `type`과 `typeInto`가 글자를 즉시 모두 삽입하지 않고 cadence를 적용할 수 있게 한다. `fill`은 빠른 값 대체 전략으로 유지해 `type`과 의미를 분리한다.
+
+의존성: `shared`, `timeline-engine`, `focus-engine`, `text-input-engine`, `action-orchestrator`.
+
+완료 기준:
+
+- Text Input Engine이 Timeline Engine을 주입받아 grapheme 단위 입력 사이에 delay를 적용한다.
+- `TypeOptions.delay`는 `type`과 `typeInto`에 반영되고 `fill`에는 적용하지 않는다.
+- `beforeinput`이 취소된 글자는 mutation 없이 다음 입력으로 진행하되 cadence와 event order를 보존한다.
+- action cancellation은 typing state를 반드시 clear한다.
+- 빈 문자열 입력은 불필요한 delay 없이 typing lifecycle을 안전하게 종료한다.
+
+테스트 기대:
+
+- fake timeline으로 `typeInto('abc', { delay })`가 각 글자 사이에 delay를 호출하는지 검증한다.
+- `beforeinput` cancel, timeout/cancellation, 빈 문자열 케이스의 typing state cleanup을 검증한다.
+- Action Orchestrator가 TypeOptions를 Text Input Engine까지 전달하는 회귀 테스트를 둔다.
+
+### T21. Typing, focus, keystroke visual feedback
+
+- Status: [ ] Not started
+
+브리핑: Interaction State Store의 focus/typing 상태를 사용자가 볼 수 있는 표현으로 연결한다. 이 태스크는 실제 입력 correctness가 아니라 focus ring, typing indicator, keystroke overlay 같은 visual fidelity에만 집중한다.
+
+의존성: 완료된 T18, T20, `interaction-state-store`, `visual-layer`, `focus-engine`, `keyboard-engine`, `text-input-engine`.
+
+완료 기준:
+
+- Visual Layer가 focus ring과 typing/keystroke feedback을 표현할 수 있다.
+- focus/typing state effect는 DOM state applier와 visual 표현을 독립적으로 갱신한다.
+- keystroke overlay는 입력 대상, 입력 문자, 또는 safe label을 표시하되 민감한 원문 노출을 끌 수 있다.
+- visual feedback은 action cleanup, cancellation, `destroy()`에서 제거된다.
+- visual feedback failure는 diagnostics warning으로 남고 input action을 실패시키지 않는다.
+
+테스트 기대:
+
+- focus/typing state change에 따른 visual call 또는 overlay DOM 변화를 검증한다.
+- sensitive text masking 옵션을 검증한다.
+- cancellation과 destroy cleanup 후 overlay part가 남지 않는지 검증한다.
+
+### T22. Human-like visual fidelity example과 report 정렬
+
+- Status: [ ] Not started
+
+브리핑: visual runtime이 실제로 보이는지 예제와 fidelity report로 검증한다. 현재 capability/fidelity report가 shell 존재와 runtime 연결을 혼동하지 않도록 구현 상태를 정확히 표현한다.
+
+의존성: 완료된 T18-T21, `capability-fidelity`, `actorble-facade`, `example/*`.
+
+완료 기준:
+
+- action playground 또는 별도 예제가 cursor movement, target highlight, click feedback, typing cadence를 한 흐름에서 보여준다.
+- capability/fidelity report가 synthetic input 한계와 visual runtime 지원 수준을 구분해 설명한다.
+- visual fidelity가 꺼진 모드와 켜진 모드의 동작 차이가 예제에서 확인 가능하다.
+- 예제는 구현된 public API만 사용하고 내부 모듈에 직접 의존하지 않는다.
+
+테스트 기대:
+
+- 예제 TypeScript typecheck가 통과한다.
+- capability/fidelity report snapshot 테스트가 visual runtime 지원 수준을 검증한다.
+- 가능하면 Playwright 또는 browser-driven smoke test로 overlay가 생성되고 target hit-test를 막지 않음을 확인한다.
 
 ## 첫 vertical slice
 

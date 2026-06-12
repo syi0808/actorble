@@ -76,7 +76,7 @@ export class BrowserPointerEngine implements PointerEngine {
   async moveTo(point: Point, options: MoveOptions = {}): Promise<PointerState> {
     const target = clonePoint(point)
     const from = clonePoint(this.#state.position)
-    const duration = normalizeDuration(options.duration ?? 0)
+    const duration = normalizeDuration(options.duration ?? options.motion?.duration ?? 0)
 
     this.#state = {
       ...this.#state,

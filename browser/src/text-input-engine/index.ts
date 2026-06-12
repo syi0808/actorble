@@ -2,6 +2,7 @@ import { actorbleError } from '../shared/index.js'
 import { BrowserEventDispatcher } from '../platform-adapter/event-dispatcher/index.js'
 import { BrowserFocusEngine } from '../focus-engine/index.js'
 import { BrowserInteractionStateStore } from '../interaction-state-store/index.js'
+import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type { FillOptions, TargetHandle, TargetLike, TypeOptions } from '../shared/index.js'
 import type { FocusEngine } from '../focus-engine/index.js'
 import type {
@@ -10,6 +11,7 @@ import type {
 } from '../platform-adapter/event-dispatcher/index.js'
 import type { DomPort, EventDispatchPort } from '../shared/index.js'
 import type { InteractionStateStore } from '../interaction-state-store/index.js'
+import type { TimelineEngine } from '../timeline-engine/index.js'
 
 export type TextInputStrategy = 'type' | 'typeInto' | 'fill'
 
@@ -23,6 +25,7 @@ export type TextInputEngineOptions = Readonly<{
   events?: EventDispatchPort & Partial<TextInputMutationPort>
   store?: InteractionStateStore
   dom?: DomPort
+  timeline?: TimelineEngine
 }>
 
 export interface TextInputEngine {
@@ -36,6 +39,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
   readonly #events: EventDispatchPort
   readonly #mutations: TextInputMutationPort
   readonly #store: InteractionStateStore
+  readonly #timeline: TimelineEngine
 
   constructor(options: TextInputEngineOptions = {}) {
     const store = options.store ?? new BrowserInteractionStateStore()
@@ -45,6 +49,7 @@ export class BrowserTextInputEngine implements TextInputEngine {
     this.#events = eventDispatcher
     this.#mutations = textMutationPort(eventDispatcher)
     this.#store = store
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
   }
 
   async type(text: string, _options: TypeOptions = {}): Promise<TextInputResult> {

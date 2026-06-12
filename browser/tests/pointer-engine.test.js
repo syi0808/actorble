@@ -127,6 +127,26 @@ describe('BrowserPointerEngine', () => {
     })
   })
 
+  it('accepts a linear motion profile as a skeleton hook for duration movement', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+
+    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'linear', duration: 100 } })
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(events.map((event) => event.point)).toEqual([
+      { x: 25, y: 0 },
+      { x: 50, y: 0 },
+      { x: 75, y: 0 },
+      { x: 100, y: 0 },
+    ])
+    expect(engine.getState().motion).toMatchObject({
+      status: 'idle',
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+    })
+  })
+
   it('updates pressed buttons and primary button while emitting down and up signals', async () => {
     const { engine, events } = createEngine()
 
