@@ -13,6 +13,7 @@ import type {
   CapabilityFidelityReporter,
   CapabilityReport,
   FidelityReport,
+  VisualOverlayFidelity,
 } from '../capability-fidelity/index.js'
 import type { Trace, TraceCollector } from '../diagnostics-trace/index.js'
 import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.js'
@@ -88,7 +89,11 @@ export class Actorble {
       })
 
     this.#trace = trace
-    this.#capabilities = options.capabilities ?? new BrowserCapabilityFidelityReporter()
+    this.#capabilities =
+      options.capabilities ??
+      new BrowserCapabilityFidelityReporter({
+        visualOverlay: visualOverlayFidelityForOptions(options.visual, options.mode),
+      })
     this.#geometry = geometry
     this.#orchestrator = orchestrator
     this.#resolver = resolver
@@ -265,6 +270,41 @@ function visualForOptions(
   }
 
   return undefined
+}
+
+function visualOverlayFidelityForOptions(
+  visual: ActorbleFacadeOptions['visual'],
+  mode: ActorbleFacadeOptions['mode'],
+): VisualOverlayFidelity {
+  if (isVisualLayer(visual)) {
+    return {
+      implementation: 'custom-layer',
+      runtime: 'enabled',
+      interactivity: 'caller-owned',
+      hitTesting: 'caller-owned',
+    }
+  }
+
+  const enabled =
+    mode !== 'headless' &&
+    (visual === true ||
+      (typeof visual === 'object' && visual !== null && visual.enabled !== false))
+
+  if (enabled) {
+    return {
+      implementation: 'browser-overlay',
+      runtime: 'enabled',
+      interactivity: 'non-interactive',
+      hitTesting: 'ignored',
+    }
+  }
+
+  return {
+    implementation: 'browser-overlay',
+    runtime: 'disabled',
+    interactivity: 'none',
+    hitTesting: 'not-applicable',
+  }
 }
 
 function describeUnknownError(error: unknown): string {

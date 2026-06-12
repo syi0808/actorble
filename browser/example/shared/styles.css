@@ -182,10 +182,15 @@ h3 {
 
 .panel-heading {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.panel-heading > div {
+  min-width: 0;
 }
 
 .secondary-action {
@@ -202,6 +207,23 @@ h3 {
 
 .secondary-action:hover {
   background: #e7eef2;
+}
+
+.toggle-row {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  color: #26343a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #173b43;
 }
 
 .project-form {
@@ -287,7 +309,7 @@ button:focus-visible,
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 

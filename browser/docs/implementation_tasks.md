@@ -485,7 +485,7 @@ actorble-facade
 
 ### T22. Human-like visual fidelity example과 report 정렬
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: visual runtime이 실제로 보이는지 예제와 fidelity report로 검증한다. 현재 capability/fidelity report가 shell 존재와 runtime 연결을 혼동하지 않도록 구현 상태를 정확히 표현한다.
 

@@ -217,7 +217,10 @@ function renderCapabilities(): void {
         keyboardInput: fidelity.keyboardInput,
         textInput: fidelity.textInput,
         pseudoState: fidelity.pseudoState,
-        visualOverlay: fidelity.visualOverlay,
+        visualImplementation: fidelity.visualOverlay.implementation,
+        visualRuntime: fidelity.visualOverlay.runtime,
+        visualInteractivity: fidelity.visualOverlay.interactivity,
+        visualHitTesting: fidelity.visualOverlay.hitTesting,
         trustedEvents: fidelity.trustedEvents,
       })}
       <ul class="limit-list">

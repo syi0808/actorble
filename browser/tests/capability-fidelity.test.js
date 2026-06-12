@@ -22,10 +22,16 @@ describe('BrowserCapabilityFidelityReporter', () => {
       keyboardInput: 'synthetic-dom-events',
       textInput: 'synthetic-dom-events',
       pseudoState: 'mirror',
-      visualOverlay: 'non-interactive',
+      visualOverlay: {
+        implementation: 'browser-overlay',
+        runtime: 'disabled',
+        interactivity: 'none',
+        hitTesting: 'not-applicable',
+      },
       trustedEvents: false,
       limits: [
         'Events are synthetic DOM events and are not browser-trusted user input.',
+        'Visual feedback is optional and does not make synthetic events browser-trusted.',
         'Cross-origin frames and closed shadow roots cannot be inspected from in-page JavaScript.',
         'Drag and drop is not implemented in the initial browser vertical slice.',
       ],
@@ -43,7 +49,51 @@ describe('BrowserCapabilityFidelityReporter', () => {
     })
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',
-      visualOverlay: 'non-interactive',
+      visualOverlay: {
+        implementation: 'browser-overlay',
+        runtime: 'disabled',
+        interactivity: 'none',
+        hitTesting: 'not-applicable',
+      },
+    })
+  })
+
+  it('reports enabled browser visual runtime separately from synthetic input limits', () => {
+    const actorble = createActorble({ visual: true })
+
+    expect(actorble.getFidelity()).toMatchObject({
+      pointerInput: 'synthetic-dom-events',
+      trustedEvents: false,
+      visualOverlay: {
+        implementation: 'browser-overlay',
+        runtime: 'enabled',
+        interactivity: 'non-interactive',
+        hitTesting: 'ignored',
+      },
+    })
+  })
+
+  it('reports custom visual layers as caller-owned runtime fidelity', () => {
+    const visual = {
+      showCursor() {},
+      highlightTarget() {},
+      showClick() {},
+      showFocus() {},
+      showTyping() {},
+      showKeystroke() {},
+      clearFeedback() {},
+      hide() {},
+      destroy() {},
+    }
+    const actorble = createActorble({ mode: 'headless', visual })
+
+    expect(actorble.getFidelity()).toMatchObject({
+      visualOverlay: {
+        implementation: 'custom-layer',
+        runtime: 'enabled',
+        interactivity: 'caller-owned',
+        hitTesting: 'caller-owned',
+      },
     })
   })
 })

@@ -19,7 +19,29 @@ export type InputFidelity =
   | 'synthetic-dom-events'
   | 'native-backed'
 
-export type VisualOverlayFidelity = 'none' | 'non-interactive'
+export type VisualOverlayImplementation =
+  | 'browser-overlay'
+  | 'custom-layer'
+  | 'none'
+
+export type VisualOverlayRuntime = 'disabled' | 'enabled'
+
+export type VisualOverlayInteractivity =
+  | 'non-interactive'
+  | 'caller-owned'
+  | 'none'
+
+export type VisualOverlayHitTesting =
+  | 'ignored'
+  | 'caller-owned'
+  | 'not-applicable'
+
+export type VisualOverlayFidelity = Readonly<{
+  implementation: VisualOverlayImplementation
+  runtime: VisualOverlayRuntime
+  interactivity: VisualOverlayInteractivity
+  hitTesting: VisualOverlayHitTesting
+}>
 
 export type CapabilityReport = Readonly<{
   pointerInput: PointerInputCapability
@@ -47,7 +69,17 @@ export interface CapabilityFidelityReporter {
   getFidelity(): FidelityReport
 }
 
+export type CapabilityFidelityReporterOptions = Readonly<{
+  visualOverlay?: VisualOverlayFidelity
+}>
+
 export class BrowserCapabilityFidelityReporter implements CapabilityFidelityReporter {
+  readonly #visualOverlay: VisualOverlayFidelity
+
+  constructor(options: CapabilityFidelityReporterOptions = {}) {
+    this.#visualOverlay = options.visualOverlay ?? browserVisualOverlayDisabled
+  }
+
   getCapabilities(): CapabilityReport {
     return { ...browserCapabilityReport }
   }
@@ -55,13 +87,16 @@ export class BrowserCapabilityFidelityReporter implements CapabilityFidelityRepo
   getFidelity(): FidelityReport {
     return {
       ...browserFidelityReport,
+      visualOverlay: { ...this.#visualOverlay },
       limits: [...browserFidelityReport.limits],
     }
   }
 }
 
-export function createCapabilityFidelityReporter(): CapabilityFidelityReporter {
-  return new BrowserCapabilityFidelityReporter()
+export function createCapabilityFidelityReporter(
+  options: CapabilityFidelityReporterOptions = {},
+): CapabilityFidelityReporter {
+  return new BrowserCapabilityFidelityReporter(options)
 }
 
 const browserCapabilityReport: CapabilityReport = {
@@ -75,15 +110,23 @@ const browserCapabilityReport: CapabilityReport = {
   dragAndDrop: 'none',
 }
 
+const browserVisualOverlayDisabled: VisualOverlayFidelity = {
+  implementation: 'browser-overlay',
+  runtime: 'disabled',
+  interactivity: 'none',
+  hitTesting: 'not-applicable',
+}
+
 const browserFidelityReport: FidelityReport = {
   pointerInput: 'synthetic-dom-events',
   keyboardInput: 'synthetic-dom-events',
   textInput: 'synthetic-dom-events',
   pseudoState: 'mirror',
-  visualOverlay: 'non-interactive',
+  visualOverlay: browserVisualOverlayDisabled,
   trustedEvents: false,
   limits: [
     'Events are synthetic DOM events and are not browser-trusted user input.',
+    'Visual feedback is optional and does not make synthetic events browser-trusted.',
     'Cross-origin frames and closed shadow roots cannot be inspected from in-page JavaScript.',
     'Drag and drop is not implemented in the initial browser vertical slice.',
   ],

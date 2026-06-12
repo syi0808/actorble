@@ -269,4 +269,33 @@ describe('Actorble facade', () => {
 
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
+
+  it('runs a public API visual flow without letting the overlay block target hit-testing', async () => {
+    const input = createTypeableInput('project-name')
+    const { button, seen } = createClickableButton('create-project')
+    const actorble = createActorble({ visual: true })
+
+    await expect(actorble.moveTo(css('#project-name'))).resolves.toBeUndefined()
+    await expect(
+      actorble.typeInto(css('#project-name'), 'Atlas', { delay: 1 }),
+    ).resolves.toBeUndefined()
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-cursor]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-highlight]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-keystroke]').textContent).toBe('s')
+
+    overlay.style.pointerEvents = 'auto'
+    document.elementFromPoint = vi.fn(() =>
+      overlay.style.pointerEvents === 'none' ? button : overlay,
+    )
+
+    await expect(actorble.click(css('#create-project'))).resolves.toBeUndefined()
+
+    expect(input.value).toBe('Atlas')
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(overlay.style.pointerEvents).toBe('auto')
+    expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
+  })
 })
