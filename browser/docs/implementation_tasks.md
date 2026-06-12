@@ -661,7 +661,7 @@ actorble-facade
 
 ### T30. Pseudo-state mirror fallback removal and focus-visible correctness
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: pseudo-state mirror가 실제 app CSS를 복제하지 못할 때 임의 fallback style을 넣으면 앱의 hover/focus 디자인과 달라진다. mirror 실패 또는 미지원 상태에서는 state attribute만 남기고, 스타일은 임의로 만들지 않는다.
 

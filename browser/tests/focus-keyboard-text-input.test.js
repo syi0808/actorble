@@ -276,6 +276,48 @@ describe('BrowserTextInputEngine', () => {
     expect(store.snapshot().typing).toBeNull()
   })
 
+  it('typeInto keeps focus-visible separate from the typing lifecycle', async () => {
+    const input = document.createElement('input')
+    document.body.append(input)
+    const target = handle('message', input)
+    const store = new BrowserInteractionStateStore()
+    const seen = []
+    const engine = new BrowserTextInputEngine({
+      focus: new BrowserFocusEngine({
+        dom: new BrowserDomAdapter(document),
+        store,
+      }),
+      events: new BrowserEventDispatcher(),
+      store,
+    })
+
+    input.addEventListener('beforeinput', () => {
+      seen.push({
+        focused: store.snapshot().focused?.id,
+        focusVisible: store.snapshot().focusVisible,
+        typing: store.snapshot().typing?.id,
+      })
+    })
+
+    await expect(engine.typeInto(target, 'A')).resolves.toEqual({
+      strategy: 'typeInto',
+      text: 'A',
+    })
+
+    expect(seen).toEqual([
+      {
+        focused: 'message',
+        focusVisible: false,
+        typing: 'message',
+      },
+    ])
+    expect(store.snapshot()).toMatchObject({
+      focused: { id: 'message' },
+      focusVisible: false,
+      typing: null,
+    })
+  })
+
   it('type uses the currently focused editable target without replacing content', async () => {
     const textarea = document.createElement('textarea')
     textarea.value = 'A'

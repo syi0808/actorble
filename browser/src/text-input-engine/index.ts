@@ -207,7 +207,10 @@ export class BrowserTextInputEngine implements TextInputEngine {
   }
 
   async #withTyping(target: TargetHandle, operation: () => Promise<void>): Promise<void> {
-    this.#store.setFocused(target, true)
+    const snapshot = this.#store.snapshot()
+    const focusVisible = snapshot.focused?.id === target.id && snapshot.focusVisible
+
+    this.#store.setFocused(target, focusVisible)
     this.#store.setTyping(target)
 
     try {

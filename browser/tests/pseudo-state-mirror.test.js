@@ -51,9 +51,13 @@ describe('BrowserPseudoStateMirror', () => {
     expect(target.element.hasAttribute('data-actorble-hover')).toBe(true)
     expect(target.element.hasAttribute('data-actorble-active')).toBe(true)
     expect(target.element.hasAttribute('data-actorble-focus-visible')).toBe(true)
-    expect(
-      document.head.querySelector('style[data-actorble-style-id="actorble-pseudo-state-mirror"]'),
-    ).not.toBeNull()
+    const mirrorStyle = document.head.querySelector(
+      'style[data-actorble-style-id="actorble-pseudo-state-mirror"]',
+    )
+    expect(mirrorStyle).not.toBeNull()
+    expect(mirrorStyle?.textContent).not.toMatch(
+      /\b(?:outline|outline-offset|border|background|background-color)\s*:/,
+    )
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'pseudo:mirror:apply' })]),
     )
@@ -102,5 +106,39 @@ describe('BrowserPseudoStateMirror', () => {
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'pseudo:mirror:warning' })]),
     )
+  })
+
+  it('keeps state attributes without injecting fallback styles when mirror style injection fails', () => {
+    const target = targetHandle()
+    const trace = createTrace()
+    const failingStyle = {
+      injectStyle: vi.fn(() => {
+        throw new Error('style injection blocked')
+      }),
+      removeStyle: vi.fn(),
+    }
+    const mirror = new BrowserPseudoStateMirror({
+      state: new BrowserStateApplier(),
+      style: failingStyle,
+      trace,
+    })
+
+    expect(() => mirror.apply({ target, states: ['hover', 'focus-visible'] })).not.toThrow()
+
+    expect(target.element.hasAttribute('data-actorble-hover')).toBe(true)
+    expect(target.element.hasAttribute('data-actorble-focus-visible')).toBe(true)
+    expect(failingStyle.injectStyle).toHaveBeenCalledTimes(1)
+    expect(
+      document.head.querySelector('style[data-actorble-style-id="actorble-pseudo-state-mirror"]'),
+    ).toBeNull()
+    expect(trace.getTrace().warnings).toEqual([
+      expect.objectContaining({
+        message: 'Pseudo state mirror style failed.',
+        details: expect.objectContaining({
+          phase: 'style',
+          error: 'style injection blocked',
+        }),
+      }),
+    ])
   })
 })

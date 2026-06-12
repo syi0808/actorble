@@ -198,10 +198,7 @@ const defaultMirrorStyleId = 'actorble-pseudo-state-mirror'
 const defaultMirrorCssText = `
 [data-actorble-hover] {}
 [data-actorble-active] {}
-[data-actorble-focus-visible] {
-  outline: 2px solid Highlight;
-  outline-offset: 2px;
-}
+[data-actorble-focus-visible] {}
 `
 
 function createDefaultStyleAdapter(): StylePort | undefined {
