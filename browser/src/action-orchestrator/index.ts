@@ -63,6 +63,7 @@ import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.
 import type { GestureEngine } from '../gesture-engine/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../interactability-engine/index.js'
 import type { InteractionStateStore } from '../interaction-state-store/index.js'
+import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { PointerVisualTracker } from '../pointer-visual-tracker/index.js'
 import type { PointerSignal, PointerSignalBus } from '../pointer-signals/index.js'
 import type { SurfaceEngine } from '../surface-engine/index.js'
@@ -121,6 +122,7 @@ export type ActionOrchestratorOptions = Readonly<{
   store?: InteractionStateStore
   surface?: SurfaceEngine
   text?: TextInputEngine
+  layoutInvalidation?: LayoutInvalidationTracker
   timeline?: TimelineEngine
   trace?: SpanRecorder
   visual?: VisualLayer
@@ -253,7 +255,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           )
         },
       })
-    this.#wait = options.wait ?? new BrowserWaitObservationEngine({ dom, timeline, trace })
+    this.#wait =
+      options.wait ??
+      new BrowserWaitObservationEngine({
+        dom,
+        layoutInvalidation: options.layoutInvalidation,
+        timeline,
+        trace,
+      })
 
     signals.subscribe((signal) => {
       this.#applyPointerSignal(signal)

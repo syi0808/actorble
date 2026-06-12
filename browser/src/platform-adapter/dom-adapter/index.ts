@@ -1,8 +1,11 @@
 import { actorbleError } from '../../shared/index.js'
 import type {
+  ActorbleListener,
+  Disposable,
   DomPort,
   FocusOptions,
   HitTestOptions,
+  LayoutInvalidationReason,
   Point,
   Rect,
   ScrollOptions,
@@ -201,6 +204,72 @@ export class BrowserDomAdapter implements DomAdapter {
       attributes,
     }
   }
+
+  observeLayoutInvalidations(
+    listener: ActorbleListener<LayoutInvalidationReason>,
+  ): Disposable {
+    const root = this.getRoot()
+    const ownerWindow = getOwnerWindowForRoot(root)
+    const cleanupListeners: Array<() => void> = []
+    let mutationObserver: MutationObserver | null = null
+
+    const listen = (
+      target: EventTarget,
+      type: string,
+      reason: LayoutInvalidationReason,
+      options?: AddEventListenerOptions,
+    ) => {
+      const handler = () => {
+        listener(reason)
+      }
+
+      target.addEventListener(type, handler, options)
+      cleanupListeners.push(() => {
+        target.removeEventListener(type, handler, options)
+      })
+    }
+
+    listen(ownerWindow, 'resize', 'resize')
+    listen(root, 'scroll', 'scroll', { capture: true, passive: true })
+
+    for (const eventName of [
+      'animationstart',
+      'animationiteration',
+      'animationend',
+      'transitionrun',
+      'transitionstart',
+      'transitionend',
+      'transitioncancel',
+    ]) {
+      listen(root, eventName, 'animation-frame', { capture: true, passive: true })
+    }
+
+    const MutationObserverCtor = (ownerWindow as MutationObserverOwner).MutationObserver
+
+    if (typeof MutationObserverCtor === 'function') {
+      const observer = new MutationObserverCtor(() => {
+        listener('mutation')
+      })
+      observer.observe(root, {
+        attributes: true,
+        characterData: true,
+        childList: true,
+        subtree: true,
+      })
+      mutationObserver = observer
+    }
+
+    return {
+      dispose() {
+        for (const cleanup of cleanupListeners.splice(0)) {
+          cleanup()
+        }
+
+        mutationObserver?.disconnect()
+        mutationObserver = null
+      },
+    }
+  }
 }
 
 export function createDomAdapter(root?: Document | ShadowRoot): DomAdapter {
@@ -209,6 +278,10 @@ export function createDomAdapter(root?: Document | ShadowRoot): DomAdapter {
 
 type ElementFromPointSource = {
   elementFromPoint?: (x: number, y: number) => Element | null
+}
+
+type MutationObserverOwner = Window & {
+  MutationObserver?: typeof MutationObserver
 }
 
 type StyleableElement = Element & {

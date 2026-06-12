@@ -106,6 +106,30 @@ describe('BrowserDomAdapter', () => {
     expect(adapter.elementFromPoint({ x: 4, y: 5 }, { ignoreActorbleInternal: true })).toBe(target)
     expect(overlay.style.pointerEvents).toBe('')
   })
+
+  it('observes layout invalidation sources and cleans up listeners', () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="scrollbox"></div>
+      </main>
+    `
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+    const subscription = adapter.observeLayoutInvalidations(listener)
+    const scrollbox = document.querySelector('#scrollbox')
+
+    window.dispatchEvent(new Event('resize'))
+    scrollbox.dispatchEvent(new Event('scroll', { bubbles: true }))
+
+    expect(listener).toHaveBeenNthCalledWith(1, 'resize')
+    expect(listener).toHaveBeenNthCalledWith(2, 'scroll')
+
+    subscription.dispose()
+    window.dispatchEvent(new Event('resize'))
+    scrollbox.dispatchEvent(new Event('scroll', { bubbles: true }))
+
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('BrowserEventDispatcher', () => {

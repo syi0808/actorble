@@ -7,6 +7,10 @@ import {
 import { BrowserDomAdapter } from '../platform-adapter/dom-adapter/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type {
+  LayoutInvalidationEvent,
+  LayoutInvalidationTracker,
+} from '../layout-invalidation-tracker/index.js'
+import type {
   ActorbleErrorDetails,
   DomPort,
   DurationMs,
@@ -45,6 +49,7 @@ export type WaitTraceRecorder = Readonly<{
 
 export type WaitObservationEngineOptions = Readonly<{
   dom?: DomPort
+  layoutInvalidation?: LayoutInvalidationTracker
   timeline?: TimelineEngine
   trace?: WaitTraceRecorder
   onGeometryInvalidated?: GeometryInvalidationHook
@@ -55,12 +60,16 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #timeline: TimelineEngine
   readonly #trace?: WaitTraceRecorder
   readonly #onGeometryInvalidated?: GeometryInvalidationHook
+  readonly #layoutInvalidationSubscription?: { dispose(): void }
 
   constructor(options: WaitObservationEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
     this.#trace = options.trace
     this.#onGeometryInvalidated = options.onGeometryInvalidated
+    this.#layoutInvalidationSubscription = options.layoutInvalidation?.subscribe((event) => {
+      this.#recordLayoutInvalidation(event)
+    })
   }
 
   async waitFor(condition: WaitCondition, options: WaitOptions = {}): Promise<WaitResult> {
@@ -149,6 +158,17 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       root: rootKind(this.#dom.getRoot()),
     })
     this.#onGeometryInvalidated?.(reason)
+  }
+
+  #recordLayoutInvalidation(event: LayoutInvalidationEvent): void {
+    this.#trace?.appendEvent?.('layout:invalidate', {
+      reason: event.reason,
+      reasons: [...event.reasons],
+      coalesced: event.coalesced,
+      invalidatedAt: event.at,
+      root: rootKind(this.#dom.getRoot()),
+    })
+    this.#onGeometryInvalidated?.(event.reason)
   }
 
   async #waitForCondition(

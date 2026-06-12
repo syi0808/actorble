@@ -813,7 +813,7 @@ actorble-facade
 
 ### T37. Runner-active layout invalidation tracker
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: runner 실행 중에는 scroll, resize, DOM mutation, CSS animation 같은 layout 변화를 평소보다 민감하게 관찰해야 한다. 단, 이벤트마다 geometry를 즉시 읽으면 과도한 layout read가 발생하므로 dirty flag와 animation frame coalescing으로 제어한다.
 

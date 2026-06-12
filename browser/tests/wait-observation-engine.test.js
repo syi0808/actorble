@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
+import { BrowserLayoutInvalidationTracker } from '../src/layout-invalidation-tracker/index.js'
 import { css } from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
@@ -178,6 +179,48 @@ describe('BrowserWaitObservationEngine', () => {
         data: expect.objectContaining({ reason: 'scroll' }),
       }),
     ])
+  })
+
+  it('records coalesced runner layout invalidations during settle without failing', async () => {
+    const onGeometryInvalidated = vi.fn()
+    const trace = new BrowserDiagnosticsTrace({
+      clock: traceClock(),
+      idPrefix: 'trace',
+    })
+    let tracker
+    const timeline = createTimeline({
+      nextFrame: vi.fn(async () => 125),
+      settle: vi.fn(async () => {
+        tracker.markDirty('scroll')
+        tracker.markDirty('resize')
+        await Promise.resolve()
+      }),
+    })
+
+    tracker = new BrowserLayoutInvalidationTracker({ timeline })
+    const engine = new BrowserWaitObservationEngine({
+      layoutInvalidation: tracker,
+      onGeometryInvalidated,
+      timeline,
+      trace,
+    })
+
+    tracker.start()
+
+    await expect(engine.settle('settled')).resolves.toBeNull()
+
+    expect(onGeometryInvalidated).toHaveBeenCalledOnce()
+    expect(onGeometryInvalidated).toHaveBeenCalledWith('scroll')
+    expect(trace.getTrace().events).toContainEqual(
+      expect.objectContaining({
+        name: 'layout:invalidate',
+        data: expect.objectContaining({
+          reason: 'scroll',
+          reasons: ['scroll', 'resize'],
+          coalesced: 2,
+        }),
+      }),
+    )
   })
 })
 

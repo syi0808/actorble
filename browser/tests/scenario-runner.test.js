@@ -44,6 +44,24 @@ function createTimeline(overrides = {}) {
   }
 }
 
+function createLayoutInvalidationTracker(overrides = {}) {
+  let running = false
+
+  return {
+    start: vi.fn(() => {
+      running = true
+    }),
+    stop: vi.fn(() => {
+      running = false
+    }),
+    isRunning: vi.fn(() => running),
+    markDirty: vi.fn(),
+    subscribe: vi.fn(() => ({ dispose: vi.fn() })),
+    dispose: vi.fn(),
+    ...overrides,
+  }
+}
+
 describe('BrowserScenarioRunner', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -101,6 +119,46 @@ describe('BrowserScenarioRunner', () => {
         }),
       }),
     ])
+  })
+
+  it('starts layout invalidation only while a scenario run is active', async () => {
+    const calls = []
+    const layoutInvalidation = createLayoutInvalidationTracker({
+      start: vi.fn(() => {
+        calls.push('layout:start')
+      }),
+      stop: vi.fn(() => {
+        calls.push('layout:stop')
+      }),
+    })
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async () => {
+        calls.push('click')
+      }),
+      waitFor: vi.fn(async () => {
+        calls.push('waitFor')
+        throw actorbleError('PLATFORM_UNSUPPORTED', 'wait failed')
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator, layoutInvalidation })
+
+    await expect(
+      runner.run({ steps: [{ action: 'click', target: css('#save') }] }),
+    ).resolves.toBeUndefined()
+    await expect(
+      runner.run({ steps: [{ action: 'waitFor', input: { kind: 'custom', predicate: () => true } }] }),
+    ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
+
+    expect(calls).toEqual([
+      'layout:start',
+      'click',
+      'layout:stop',
+      'layout:start',
+      'waitFor',
+      'layout:stop',
+    ])
+    expect(layoutInvalidation.start).toHaveBeenCalledTimes(2)
+    expect(layoutInvalidation.stop).toHaveBeenCalledTimes(2)
   })
 
   it('pauses at step boundaries and resumes before starting the next step', async () => {
@@ -658,7 +716,8 @@ describe('BrowserScenarioRunner', () => {
         })
       }),
     })
-    const runner = new BrowserScenarioRunner({ orchestrator })
+    const layoutInvalidation = createLayoutInvalidationTracker()
+    const runner = new BrowserScenarioRunner({ orchestrator, layoutInvalidation })
     const run = runner.run({ steps: [{ action: 'click', target: css('#save') }] })
 
     await vi.waitFor(() => expect(actionSignal).toBeDefined())
@@ -673,6 +732,7 @@ describe('BrowserScenarioRunner', () => {
       status: 'stopped',
       currentStepIndex: null,
     })
+    expect(layoutInvalidation.stop).toHaveBeenCalledOnce()
   })
 
   it('times out the scenario and aborts the current action signal even when the action does not settle', async () => {

@@ -7,7 +7,7 @@ import {
   cancellationError,
   timeoutError,
 } from '../shared/index.js'
-import { NoopLayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
+import { BrowserLayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { ActionOrchestrator } from '../action-orchestrator/index.js'
 import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../diagnostics-trace/index.js'
@@ -60,11 +60,17 @@ export class BrowserScenarioRunner implements ScenarioRunner {
   #resumePausedRun: (() => void) | null = null
 
   constructor(options: ScenarioRunnerOptions = {}) {
-    this.#layoutInvalidation =
-      options.layoutInvalidation ?? new NoopLayoutInvalidationTracker()
-    this.#orchestrator = options.orchestrator ?? new BrowserActionOrchestrator()
-    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
-    this.#trace = options.trace ?? new BrowserDiagnosticsTrace()
+    const trace = options.trace ?? new BrowserDiagnosticsTrace()
+    const timeline = options.timeline ?? new BrowserTimelineEngine()
+    const layoutInvalidation =
+      options.layoutInvalidation ?? new BrowserLayoutInvalidationTracker({ timeline })
+
+    this.#layoutInvalidation = layoutInvalidation
+    this.#orchestrator =
+      options.orchestrator ??
+      new BrowserActionOrchestrator({ layoutInvalidation, timeline, trace })
+    this.#timeline = timeline
+    this.#trace = trace
   }
 
   async run(scenario: Scenario, options: RunOptions = {}): Promise<void> {

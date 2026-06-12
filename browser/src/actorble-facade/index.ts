@@ -2,6 +2,7 @@ import { BrowserActionOrchestrator } from '../action-orchestrator/index.js'
 import { BrowserCapabilityFidelityReporter } from '../capability-fidelity/index.js'
 import { BrowserDiagnosticsTrace } from '../diagnostics-trace/index.js'
 import { BrowserGeometryEngine } from '../geometry-engine/index.js'
+import { createLayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import { BrowserDomAdapter } from '../platform-adapter/index.js'
 import { BrowserScenarioRunner } from '../scenario-runner/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
@@ -17,6 +18,7 @@ import type {
 } from '../capability-fidelity/index.js'
 import type { Trace, TraceCollector } from '../diagnostics-trace/index.js'
 import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.js'
+import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { DomPort } from '../shared/index.js'
 import type { ScenarioRunner } from '../scenario-runner/index.js'
 import type { TargetResolver } from '../target-resolver/index.js'
@@ -66,6 +68,7 @@ export class Actorble {
   readonly #resolver: TargetResolver
   readonly #runner: ScenarioRunner
   readonly #trace: TraceCollector
+  readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #visual?: VisualLayer
 
   constructor(readonly options: ActorbleFacadeOptions = {}) {
@@ -73,6 +76,7 @@ export class Actorble {
     const root = rootForDomAdapter(options.root)
     const dom = options.dom ?? new BrowserDomAdapter(root)
     const timeline = new BrowserTimelineEngine()
+    const layoutInvalidation = createLayoutInvalidationTracker({ dom, timeline })
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
     const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
@@ -86,11 +90,13 @@ export class Actorble {
         resolver,
         timeline,
         trace,
+        layoutInvalidation,
         visual,
         visualFeedback,
       })
 
     this.#trace = trace
+    this.#layoutInvalidation = layoutInvalidation
     this.#capabilities =
       options.capabilities ??
       new BrowserCapabilityFidelityReporter({
@@ -99,7 +105,9 @@ export class Actorble {
     this.#geometry = geometry
     this.#orchestrator = orchestrator
     this.#resolver = resolver
-    this.#runner = options.runner ?? new BrowserScenarioRunner({ orchestrator, timeline, trace })
+    this.#runner =
+      options.runner ??
+      new BrowserScenarioRunner({ orchestrator, timeline, trace, layoutInvalidation })
     this.#visual = visual
   }
 
@@ -192,6 +200,7 @@ export class Actorble {
 
   destroy(): void {
     this.#runner.stop()
+    this.#layoutInvalidation.dispose()
 
     try {
       this.#visual?.clearFeedback()

@@ -1,6 +1,13 @@
 export type TimestampMs = number
 export type DurationMs = number
 
+export type LayoutInvalidationReason =
+  | 'scroll'
+  | 'resize'
+  | 'mutation'
+  | 'animation-frame'
+  | 'manual'
+
 export interface Clock {
   now(): TimestampMs
 }
@@ -496,6 +503,9 @@ export interface DomReadPort {
   isConnected(element: Element): boolean
   getActiveElement(root?: Document | ShadowRoot): Element | null
   describeElement(element: Element): TargetDebugInfo
+  observeLayoutInvalidations(
+    listener: ActorbleListener<LayoutInvalidationReason>,
+  ): Disposable
 }
 
 export interface DomWritePort {
