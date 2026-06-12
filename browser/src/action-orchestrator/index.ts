@@ -49,6 +49,7 @@ import type {
   ResolvedVisualFeedbackOptions,
   StateApplyPort,
   StateEffect,
+  TargetDebugInfo,
   TargetHandle,
   TargetLike,
   TypeOptions,
@@ -726,7 +727,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
   #resolveCursor(target: TargetHandle): string | undefined {
     try {
-      return resolveCursorFromAncestors(this.#dom, target.element)
+      return resolveCursorForTarget(this.#dom, target.element)
     } catch (error) {
       this.#trace.warn('Cursor style resolution failed.', {
         targetId: target.id,
@@ -865,6 +866,10 @@ function publicPointerMovementOptions<TOptions extends MoveOptions | ClickOption
   }
 }
 
+function resolveCursorForTarget(dom: DomPort, element: Element): string | undefined {
+  return resolveCursorFromAncestors(dom, element) ?? semanticCursorFallback(dom, element)
+}
+
 function resolveCursorFromAncestors(dom: DomPort, element: Element): string | undefined {
   let current: Element | null = element
   const visited = new Set<Element>()
@@ -881,6 +886,10 @@ function resolveCursorFromAncestors(dom: DomPort, element: Element): string | un
   }
 
   return undefined
+}
+
+function semanticCursorFallback(dom: DomPort, element: Element): string | undefined {
+  return isEditableTextTarget(dom.describeElement(element)) ? 'text' : undefined
 }
 
 function normalizeCursorValue(cursor: string): string | undefined {
@@ -903,6 +912,73 @@ const indirectCursorValues = new Set([
   'revert-layer',
   'unset',
 ])
+
+type CursorAttributeMap = Readonly<Record<string, string>>
+
+const textCursorEditableInputTypes = new Set([
+  '',
+  'date',
+  'datetime-local',
+  'email',
+  'month',
+  'number',
+  'password',
+  'search',
+  'tel',
+  'text',
+  'time',
+  'url',
+  'week',
+])
+
+function isEditableTextTarget(debug: TargetDebugInfo): boolean {
+  const attributes = normalizeCursorAttributes(debug.attributes)
+
+  if (
+    hasCursorAttribute(attributes, 'disabled') ||
+    attributes['aria-disabled'] === 'true' ||
+    hasCursorAttribute(attributes, 'inert') ||
+    hasCursorAttribute(attributes, 'readonly')
+  ) {
+    return false
+  }
+
+  if (hasCursorAttribute(attributes, 'contenteditable')) {
+    return attributes.contenteditable !== 'false'
+  }
+
+  const tagName = cursorTagNameFor(debug)
+
+  if (tagName === 'textarea') {
+    return true
+  }
+
+  if (tagName !== 'input') {
+    return false
+  }
+
+  return textCursorEditableInputTypes.has((attributes.type ?? '').toLowerCase())
+}
+
+function normalizeCursorAttributes(
+  attributes: TargetDebugInfo['attributes'],
+): CursorAttributeMap {
+  if (!attributes) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(attributes).map(([name, value]) => [name.toLowerCase(), value]),
+  )
+}
+
+function hasCursorAttribute(attributes: CursorAttributeMap, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(attributes, name)
+}
+
+function cursorTagNameFor(debug: TargetDebugInfo): string | undefined {
+  return debug.description?.match(/^[a-z0-9-]+/i)?.[0]?.toLowerCase()
+}
 
 function clickablePointOrThrow(
   action: 'moveTo' | 'click',

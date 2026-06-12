@@ -313,6 +313,13 @@ function createHarness(options = {}) {
       return cursorFromStyle(cursor)
     }),
     getParentElement: vi.fn((element) => element.parentElement),
+    describeElement: vi.fn((element) => ({
+      description: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`,
+      selector: element.id ? `#${element.id}` : undefined,
+      attributes: Object.fromEntries(
+        Array.from(element.attributes, (attribute) => [attribute.name, attribute.value]),
+      ),
+    })),
   }
   const visual =
     options.visual ??
@@ -1070,6 +1077,82 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'url(cursor.svg), copy',
+      pressed: false,
+    })
+  })
+
+  it('uses a text cursor visual for editable text targets when resolved cursor is indirect', async () => {
+    const target = inputTargetHandle()
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyle: () => 'auto',
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'text',
+      pressed: false,
+    })
+  })
+
+  it('keeps explicit cursor values ahead of editable semantic fallback', async () => {
+    const target = inputTargetHandle()
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyle: () => 'pointer',
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+  })
+
+  it('keeps ancestor-resolved cursor values ahead of editable semantic fallback', async () => {
+    const parent = document.createElement('section')
+    parent.id = 'parent'
+    const target = inputTargetHandle()
+    parent.append(target.element)
+    document.body.append(parent)
+    const cursorStyles = new Map([
+      [target.element, 'inherit'],
+      [parent, 'wait'],
+    ])
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyles,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'wait',
+      pressed: false,
+    })
+  })
+
+  it('does not use editable semantic cursor fallback for disabled text targets', async () => {
+    const target = inputTargetHandle()
+    target.element.setAttribute('disabled', '')
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyle: () => 'auto',
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
       pressed: false,
     })
   })

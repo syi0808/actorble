@@ -704,7 +704,7 @@ actorble-facade
 
 ### T32. Cursor semantics for editable and indirect cursor targets
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: input 같은 editable target에서 computed `cursor`가 `auto` 또는 inherited value로 남으면 cursor overlay가 arrow처럼 보일 수 있다. Cursor visual은 DOM style resolution을 우선하되, style이 indirect value일 때 target semantics로 browser-like fallback을 선택해야 한다.
 
