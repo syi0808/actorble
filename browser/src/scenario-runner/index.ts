@@ -5,9 +5,12 @@ import {
   ActorbleError,
   actorbleError,
   cancellationError,
+  notImplemented,
   timeoutError,
 } from '../shared/index.js'
+import { NoopLayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { ActionOrchestrator } from '../action-orchestrator/index.js'
+import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../diagnostics-trace/index.js'
 import type {
   ClickOptions,
@@ -38,12 +41,14 @@ export interface ScenarioRunner {
 }
 
 export type ScenarioRunnerOptions = Readonly<{
+  layoutInvalidation?: LayoutInvalidationTracker
   orchestrator?: ActionOrchestrator
   timeline?: TimelineEngine
   trace?: SpanRecorder
 }>
 
 export class BrowserScenarioRunner implements ScenarioRunner {
+  readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #orchestrator: ActionOrchestrator
   readonly #timeline: TimelineEngine
   readonly #trace: SpanRecorder
@@ -55,6 +60,8 @@ export class BrowserScenarioRunner implements ScenarioRunner {
   #resumePausedRun: (() => void) | null = null
 
   constructor(options: ScenarioRunnerOptions = {}) {
+    this.#layoutInvalidation =
+      options.layoutInvalidation ?? new NoopLayoutInvalidationTracker()
     this.#orchestrator = options.orchestrator ?? new BrowserActionOrchestrator()
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
     this.#trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -83,6 +90,7 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     this.#currentStepIndex = null
     this.#controller = controller
     this.#pauseRequested = false
+    this.#layoutInvalidation.start()
 
     if (options.timeout !== undefined) {
       const timeout = normalizeDuration(options.timeout)
@@ -134,6 +142,7 @@ export class BrowserScenarioRunner implements ScenarioRunner {
       }
 
       cleanupExternalAbort()
+      this.#layoutInvalidation.stop()
       this.#controller = null
       this.#scenario = null
       this.#pauseRequested = false
@@ -236,6 +245,8 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         return this.#orchestrator
           .waitFor(step.input, withSignal(step.options, signal))
           .then(() => undefined)
+      case 'delay':
+        return notImplemented('Scenario Runner delay step')
       default:
         throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex)
     }

@@ -12,6 +12,7 @@
 - T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결하기 위한 후속 보강 태스크다.
 - T23-T25는 browser-like cursor visual, CSS `cursor` 반영, pointer press feedback을 기존 visual runtime 위에 보강하는 태스크다.
 - T26-T33은 example에서 확인된 visual fidelity 문제를 다룬다. 기본 입력 타이밍, click press 가시성, 조용한 visual 기본값, CSS pseudo-state mirror, cursor 의미 보정, browser smoke 검증을 순서대로 보강한다.
+- T34-T40은 scenario timeline과 runner 중 visual 안정성 문제를 다룬다. `delay` step, run-level pacing, click 기반 type focus, scroll/resize/layout 변화에 따른 cursor tracking과 dispatch 좌표 보정을 순서대로 보강한다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령:
@@ -743,6 +744,160 @@ actorble-facade
 - `pnpm example:typecheck`와 `pnpm example:build`가 통과한다.
 - 가능하면 Playwright 또는 Browser-driven smoke test로 action playground default flow의 overlay DOM과 event 결과를 검증한다.
 - fidelity report snapshot 또는 integration test가 visual overlay enabled와 visual detail option을 구분하는지 검증한다.
+
+### T34. First-class scenario delay step
+
+- Status: [ ] Not started
+
+브리핑: delay를 step option이 아니라 scenario를 구성하는 명시적 step으로 추가한다. 사용자는 action 사이의 의도적인 대기를 scenario timeline에서 읽을 수 있어야 하며, runner는 delay 중에도 pause/stop/timeout을 즉시 반영해야 한다.
+
+의존성: 완료된 T8, T15, `shared`, `scenario-runner`, `timeline-engine`, `diagnostics-trace`.
+
+완료 기준:
+
+- `ScenarioStep` union에 `action: 'delay'` step을 추가하고, 양수 duration을 runner timeline delay로 실행한다.
+- delay step은 Action Orchestrator로 위임하지 않고 Scenario Runner 책임으로 처리한다.
+- scenario timeout, external abort, `stop()`은 delay 중에도 action 실행 중과 동일하게 취소된다.
+- `pause()`는 delay step 시작 전 또는 다음 step 시작 전 runner 경계에서 기존 pause semantics와 일관되게 동작한다.
+- trace에는 delay step의 duration과 완료/취소 결과를 식별할 수 있는 event 또는 span이 남는다.
+
+테스트 기대:
+
+- Scenario Runner 테스트가 `delay` step을 순서대로 실행하고 다음 action 전에 timeline delay가 호출되는지 검증한다.
+- delay 중 `stop()`과 scenario timeout이 같은 AbortSignal 경로로 취소되는 회귀 테스트를 둔다.
+- unsupported step 테스트가 `delay`를 더 이상 unsupported action으로 처리하지 않음을 검증한다.
+
+### T35. Run-level scenario pacing
+
+- Status: [ ] Not started
+
+브리핑: 명시적 `delay` step과 별개로, runner 실행 전체에 적용되는 기본 step 간격을 제공한다. 이 pacing은 scenario의 모든 대기를 대체하지 않고, 반복 실행이나 demo flow에서 기본 리듬을 주기 위한 runner option이다.
+
+의존성: 완료된 T34, `shared`, `scenario-runner`, `timeline-engine`, `diagnostics-trace`.
+
+완료 기준:
+
+- `RunOptions`에 step 사이 기본 간격을 표현하는 pacing option을 추가한다.
+- runner는 step이 성공적으로 끝난 뒤 마지막 step이 아니면 pacing delay를 적용한다.
+- 명시적 `delay` step은 scenario timeline의 독립 step으로 유지되며, run-level pacing과 schema 책임이 섞이지 않는다.
+- pacing delay도 scenario timeout, external abort, `stop()`에 의해 취소된다.
+- trace 또는 diagnostics에서 explicit delay step과 run-level pacing delay를 구분할 수 있다.
+
+테스트 기대:
+
+- Scenario Runner 테스트가 `pacing.betweenSteps`가 action 사이에서 호출되고 마지막 step 뒤에는 호출되지 않음을 검증한다.
+- explicit delay step과 run-level pacing을 함께 둔 scenario에서 둘이 순서대로 관찰되는지 검증한다.
+- cancellation/timeout 테스트를 pacing delay 경로로 확장한다.
+
+### T36. Click-based focus acquisition for typeInto
+
+- Status: [ ] Not started
+
+브리핑: `typeInto`는 현재 programmatic focus 뒤 바로 입력한다. interactive flow에서는 target으로 pointer가 이동하고 click으로 focus를 획득한 뒤 typing cadence가 시작되는 경로가 필요하다. 이 동작은 `type`/`fill`과 섞지 않고 `typeInto`의 focus acquisition option으로 둔다.
+
+의존성: 완료된 T26-T28, T30, `shared`, `action-orchestrator`, `gesture-engine`, `focus-engine`, `text-input-engine`, `interactability-engine`, `visual-layer`.
+
+완료 기준:
+
+- `TypeOptions`에 focus 획득 전략을 표현하는 option을 추가한다.
+- click 기반 전략은 resolve/reveal/geometry/type preflight 이후 target의 최신 clickable point로 pointer click을 수행하고, focus가 실제 target 또는 editable target으로 잡혔는지 확인한 뒤 typing을 시작한다.
+- programmatic focus 경로는 기존 headless/test 사용성을 깨지 않도록 유지한다.
+- click focus와 typing 사이에 관찰 가능한 짧은 settle 또는 configurable delay를 둘 수 있다.
+- `type(text)`는 계속 현재 focused editable target만 사용하고 자동 target click을 수행하지 않는다.
+
+테스트 기대:
+
+- Action Orchestrator 테스트가 `typeInto(..., { focusStrategy: 'click' })`에서 pointer move/down/up/click event가 input event보다 먼저 발생함을 검증한다.
+- programmatic focus 기본 경로 또는 opt-in 경로가 기존 `typeInto` 테스트를 깨지 않는지 검증한다.
+- click focus 중 cancellation/timeout 발생 시 pointer active/pressed visual과 typing state가 남지 않는 회귀 테스트를 둔다.
+
+### T37. Runner-active layout invalidation tracker
+
+- Status: [ ] Not started
+
+브리핑: runner 실행 중에는 scroll, resize, DOM mutation, CSS animation 같은 layout 변화를 평소보다 민감하게 관찰해야 한다. 단, 이벤트마다 geometry를 즉시 읽으면 과도한 layout read가 발생하므로 dirty flag와 animation frame coalescing으로 제어한다.
+
+의존성: 완료된 T13, T15, `scenario-runner`, `wait-observation-engine`, `timeline-engine`, `platform-adapter/dom-adapter`, `diagnostics-trace`.
+
+완료 기준:
+
+- runner 실행 중에만 활성화되는 layout invalidation 관찰 경로를 추가한다.
+- viewport/window resize, scrollable ancestor scroll, root-level DOM mutation 또는 equivalent invalidation source를 dirty signal로 모은다.
+- dirty signal은 직접 geometry read/write를 하지 않고 다음 frame 또는 settle boundary에서 coalescing된다.
+- runner idle, stopped, destroyed 상태에서는 observer/listener가 cleanup된다.
+- diagnostics에는 invalidation reason과 coalesced update 횟수를 추적할 수 있는 event가 남는다.
+
+테스트 기대:
+
+- fake observer 또는 adapter 기반 테스트가 여러 scroll/resize signal이 한 frame의 invalidation으로 합쳐지는지 검증한다.
+- runner stop/failure 이후 listener cleanup이 호출되는지 검증한다.
+- wait/settle 중 invalidation이 action failure로 전파되지 않고 diagnostics에 남는지 검증한다.
+
+### T38. Target-anchor cursor visual tracking
+
+- Status: [ ] Not started
+
+브리핑: cursor visual은 마지막 viewport 좌표가 아니라 현재 명령이 가리키는 target anchor를 따라가야 한다. runner가 delay 또는 wait 중이어도 target이 scroll/resize/animation으로 움직이면 cursor visual은 최신 geometry에 맞게 업데이트되어야 한다.
+
+의존성: 완료된 T37, `action-orchestrator`, `geometry-engine`, `surface-engine`, `visual-layer`, `interaction-state-store`, `diagnostics-trace`.
+
+완료 기준:
+
+- cursor visual state는 free point와 target anchor 상태를 구분해 저장한다.
+- target anchor 상태는 target handle, anchor 계산 방식, pressed state, command id를 포함해 최신 명령이 이전 follow 상태를 폐기할 수 있다.
+- runner-active invalidation이 발생하면 현재 anchor target의 geometry를 재계산해 cursor visual point를 다시 투영한다.
+- point 변화가 의미 없을 때는 Visual Layer DOM write를 생략해 과도한 업데이트를 줄인다.
+- target이 detached/stale이면 cursor follow를 중단하거나 diagnostics warning으로 degrade하되 runner 전체를 불필요하게 실패시키지 않는다.
+
+테스트 기대:
+
+- Action Orchestrator 또는 tracker 단위 테스트가 target rect가 바뀐 뒤 cursor visual request point가 새 rect를 따라가는지 검증한다.
+- 새 click/move/typeInto command가 시작되면 이전 command id의 cursor follow update가 무시되는지 검증한다.
+- detached target 경로에서 warning과 cleanup이 발생하고 stale cursor가 계속 남지 않는지 검증한다.
+
+### T39. Fresh geometry before pointer dispatch
+
+- Status: [ ] Not started
+
+브리핑: cursor visual만 target을 따라가면 실제 pointer event dispatch 좌표와 화면 표시가 어긋날 수 있다. click, click-based type focus, future drag 같은 pointer action은 pointerdown 직전 최신 geometry를 다시 확인해야 한다.
+
+의존성: 완료된 T36, T38, `action-orchestrator`, `gesture-engine`, `geometry-engine`, `interactability-engine`, `surface-engine`, `platform-adapter/event-dispatcher`.
+
+완료 기준:
+
+- pointer action은 initial geometry 이후 perform 직전 또는 pointerdown 직전에 target freshness와 clickable point를 다시 확인한다.
+- scroll/resize/layout 변화로 target point가 바뀐 경우 pointer move endpoint와 pointerdown/up dispatch point가 최신 geometry를 따른다.
+- target이 더 이상 interactable하지 않으면 기존 interactability error 체계로 실패하고 cleanup을 수행한다.
+- explicit force click 정책은 기존 interactability force semantics와 충돌하지 않는다.
+- visual cursor anchor와 actual dispatch point가 같은 geometry source를 공유하거나 trace에서 차이를 진단할 수 있다.
+
+테스트 기대:
+
+- fake geometry가 perform 직전에 다른 point를 반환하는 테스트에서 pointerdown/click event가 최신 point를 사용하는지 검증한다.
+- fresh geometry preflight가 실패할 때 pointerdown이 dispatch되지 않고 action failure phase와 cleanup이 기록되는지 검증한다.
+- click-based `typeInto` 경로에서도 focus click 좌표가 최신 geometry를 사용하는지 검증한다.
+
+### T40. Scenario timing and tracking example smoke
+
+- Status: [ ] Not started
+
+브리핑: delay step, run-level pacing, click-to-focus typing, runner-active cursor tracking은 jsdom 단위 테스트만으로 체감 품질을 확인하기 어렵다. action playground 또는 scenario runner example에서 실제 browser flow로 묶어 확인한다.
+
+의존성: 완료된 T34-T39, `example/*`, `actorble-facade`, `scenario-runner`, `visual-layer`, `capability-fidelity`.
+
+완료 기준:
+
+- scenario runner example이 `delay` step을 public scenario syntax로 보여준다.
+- action playground 또는 scenario example에서 `typeInto` click focus 전략을 사용해 pointer click, focus, typing 순서를 관찰할 수 있다.
+- runner 실행 중 scroll 또는 layout 변화가 있는 target을 따라 cursor visual이 갱신되는 demo path를 제공한다.
+- example code는 public API만 사용하고 internal tracker/orchestrator concrete state에 직접 의존하지 않는다.
+- smoke 검증은 default visual mode와 debug visual mode가 모두 hit-testing을 방해하지 않음을 확인한다.
+
+테스트 기대:
+
+- `pnpm example:typecheck`와 `pnpm example:build`가 통과한다.
+- Playwright 또는 equivalent browser smoke가 delay step, click-to-focus typeInto, scroll/resize cursor follow를 최소 한 flow로 검증한다.
+- smoke 실패 시 trace 또는 DOM diagnostics로 어느 step에서 drift가 발생했는지 확인할 수 있어야 한다.
 
 ## 첫 vertical slice
 

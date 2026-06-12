@@ -422,9 +422,20 @@ export type FocusOptions = OperationOptions &
     focusVisible?: boolean
   }>
 
+export type TypeFocusStrategy = 'programmatic' | 'click' | 'none'
+
+export type TypeFocusClickOptions = PointerMovementOptions &
+  Readonly<{
+    button?: PointerButtonName
+    pressDwell?: DurationMs
+  }>
+
 export type TypeOptions = OperationOptions &
   Readonly<{
     delay?: DurationMs
+    focusStrategy?: TypeFocusStrategy
+    focusClick?: TypeFocusClickOptions
+    afterFocusDelay?: DurationMs
   }>
 
 export type FillOptions = OperationOptions &
@@ -449,7 +460,14 @@ export type DragOptions = OperationOptions &
 
 export type WaitOptions = OperationOptions
 
-export type RunOptions = OperationOptions
+export type ScenarioPacingOptions = Readonly<{
+  betweenSteps?: DurationMs
+}>
+
+export type RunOptions = OperationOptions &
+  Readonly<{
+    pacing?: ScenarioPacingOptions
+  }>
 
 export type PointerButtonName =
   | 'primary'
@@ -594,7 +612,18 @@ export type ScenarioWaitForStep = Readonly<{
   options?: ScenarioStepOptions<WaitOptions>
 }>
 
-export type ScenarioStep = ScenarioClickStep | ScenarioTypeIntoStep | ScenarioWaitForStep
+export type ScenarioDelayStep = Readonly<{
+  id?: string
+  action: 'delay'
+  duration: DurationMs
+  reason?: string
+}>
+
+export type ScenarioStep =
+  | ScenarioClickStep
+  | ScenarioTypeIntoStep
+  | ScenarioWaitForStep
+  | ScenarioDelayStep
 
 export type Scenario = Readonly<{
   id?: string

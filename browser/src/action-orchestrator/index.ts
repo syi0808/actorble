@@ -13,6 +13,7 @@ import {
   BrowserStyleAdapter,
   type TextInputMutationPort,
 } from '../platform-adapter/index.js'
+import { NoopPointerVisualTracker } from '../pointer-visual-tracker/index.js'
 import { BrowserPseudoStateMirror } from '../pseudo-state-mirror/index.js'
 import { BrowserSurfaceEngine } from '../surface-engine/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
@@ -61,6 +62,7 @@ import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.
 import type { GestureEngine } from '../gesture-engine/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../interactability-engine/index.js'
 import type { InteractionStateStore } from '../interaction-state-store/index.js'
+import type { PointerVisualTracker } from '../pointer-visual-tracker/index.js'
 import type { PointerSignal, PointerSignalBus } from '../pointer-signals/index.js'
 import type { SurfaceEngine } from '../surface-engine/index.js'
 import type { TargetResolver } from '../target-resolver/index.js'
@@ -122,6 +124,7 @@ export type ActionOrchestratorOptions = Readonly<{
   trace?: SpanRecorder
   visual?: VisualLayer
   visualFeedback?: VisualFeedbackOptions
+  pointerVisual?: PointerVisualTracker
   wait?: WaitObservationEngine
 }>
 
@@ -171,6 +174,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #trace: SpanRecorder
   readonly #visual: VisualLayer
   readonly #visualFeedback: ResolvedVisualFeedbackOptions
+  readonly #pointerVisual: PointerVisualTracker
   readonly #wait: WaitObservationEngine
   #signalTarget: TargetHandle | null = null
   #clickDispatchState: ClickDispatchState | null = null
@@ -213,6 +217,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#store = store
     this.#surface = surface
     this.#visual = options.visual ?? new NoopVisualLayer()
+    this.#pointerVisual = options.pointerVisual ?? new NoopPointerVisualTracker()
     this.#visualFeedback =
       options.visualFeedback === undefined
         ? resolveVisualFeedbackOptions(undefined, { enabled: true, preset: 'debug' })
@@ -709,6 +714,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       ...(cursor === undefined ? {} : { cursor }),
       pressed,
     }
+    this.#pointerVisual.setMode({
+      kind: 'freePoint',
+      point: visualPoint,
+      pressed,
+    })
   }
 
   #restorePressedCursorVisual(): void {
