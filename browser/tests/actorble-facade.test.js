@@ -183,7 +183,7 @@ describe('Actorble facade', () => {
     )
   })
 
-  it('can opt into the default visual layer without changing click behavior', async () => {
+  it('uses quiet cursor-only feedback for visual true without changing click behavior', async () => {
     const button = document.createElement('button')
     button.id = 'create'
     button.textContent = 'Create'
@@ -208,6 +208,23 @@ describe('Actorble facade', () => {
     const actorble = createActorble({ visual: true })
 
     await expect(actorble.click(css('#create'))).resolves.toBeUndefined()
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-cursor]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-highlight]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-click]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-focus]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-typing]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-keystroke]')).toBeNull()
+  })
+
+  it('restores legacy extra feedback through the debug visual preset', async () => {
+    const { seen } = createClickableButton('debug-visual')
+    const actorble = createActorble({ visual: { preset: 'debug' } })
+
+    await expect(actorble.click(css('#debug-visual'))).resolves.toBeUndefined()
 
     const overlay = document.body.querySelector('[data-actorble-overlay-root]')
     expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
@@ -266,9 +283,11 @@ describe('Actorble facade', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('passes text visibility into the default visual layer and destroys visual feedback', async () => {
+  it('passes text visibility into opt-in keystroke feedback and destroys visual feedback', async () => {
     createTypeableInput('secret')
-    const actorble = createActorble({ visual: { textVisibility: 'masked' } })
+    const actorble = createActorble({
+      visual: { focusOverlay: true, keystrokeOverlay: true, textVisibility: 'masked' },
+    })
 
     await expect(actorble.typeInto(css('#secret'), 's')).resolves.toBeUndefined()
 
@@ -282,10 +301,61 @@ describe('Actorble facade', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
+  it('creates only explicitly requested granular visual feedback parts', async () => {
+    const { seen } = createClickableButton('granular-visual')
+    const actorble = createActorble({
+      visual: {
+        cursor: false,
+        targetHighlight: true,
+        clickFeedback: true,
+      },
+    })
+
+    await expect(actorble.click(css('#granular-visual'))).resolves.toBeUndefined()
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-cursor]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-highlight]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-focus]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-typing]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-keystroke]')).toBeNull()
+  })
+
+  it('clears opt-in overlay parts after a failed action', async () => {
+    const button = document.createElement('button')
+    button.id = 'blocked-action'
+    button.disabled = true
+    button.scrollIntoView = vi.fn()
+    button.getBoundingClientRect = vi.fn(() => ({
+      x: 15,
+      y: 25,
+      width: 50,
+      height: 20,
+      top: 25,
+      left: 15,
+      right: 65,
+      bottom: 45,
+      toJSON: () => {},
+    }))
+    document.body.append(button)
+    document.elementFromPoint = vi.fn(() => button)
+    const actorble = createActorble({ visual: { targetHighlight: true } })
+
+    await expect(actorble.click(css('#blocked-action'))).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+    })
+
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(overlay?.querySelector('[data-actorble-visual-highlight]')).toBeNull()
+  })
+
   it('runs a public API visual flow without letting the overlay block target hit-testing', async () => {
     const input = createTypeableInput('project-name')
     const { button, seen } = createClickableButton('create-project')
-    const actorble = createActorble({ visual: true })
+    const actorble = createActorble({ visual: { preset: 'debug' } })
 
     await expect(actorble.moveTo(css('#project-name'))).resolves.toBeUndefined()
     await expect(

@@ -25,6 +25,7 @@ import {
   actorbleError,
   element as elementLocator,
   notImplemented,
+  resolveVisualFeedbackOptions,
 } from '../shared/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../diagnostics-trace/index.js'
 import type { FocusEngine } from '../focus-engine/index.js'
@@ -45,11 +46,13 @@ import type {
   PointerButtonName,
   ScrollOptions,
   ScrollPosition,
+  ResolvedVisualFeedbackOptions,
   StateApplyPort,
   StateEffect,
   TargetHandle,
   TargetLike,
   TypeOptions,
+  VisualFeedbackOptions,
   WaitCondition,
   WaitOptions,
 } from '../shared/index.js'
@@ -117,6 +120,7 @@ export type ActionOrchestratorOptions = Readonly<{
   timeline?: TimelineEngine
   trace?: SpanRecorder
   visual?: VisualLayer
+  visualFeedback?: VisualFeedbackOptions
   wait?: WaitObservationEngine
 }>
 
@@ -165,6 +169,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #text: TextInputEngine
   readonly #trace: SpanRecorder
   readonly #visual: VisualLayer
+  readonly #visualFeedback: ResolvedVisualFeedbackOptions
   readonly #wait: WaitObservationEngine
   #signalTarget: TargetHandle | null = null
   #clickDispatchState: ClickDispatchState | null = null
@@ -207,6 +212,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#store = store
     this.#surface = surface
     this.#visual = options.visual ?? new NoopVisualLayer()
+    this.#visualFeedback =
+      options.visualFeedback === undefined
+        ? resolveVisualFeedbackOptions(undefined, { enabled: true, preset: 'debug' })
+        : resolveVisualFeedbackOptions({
+            enabled: true,
+            preset: 'quiet',
+            ...options.visualFeedback,
+          })
     this.#text =
       options.text ??
       new BrowserTextInputEngine({
@@ -216,10 +229,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         dom,
         timeline,
         onKeystroke: (event) => {
+          if (!this.#visualFeedback.enabled || !this.#visualFeedback.keystrokeOverlay) {
+            return
+          }
+
           this.#tryVisual('showKeystroke', () =>
             this.#visual.showKeystroke({
               target: event.target,
               text: event.text,
+              textVisibility: this.#visualFeedback.textVisibility,
             }),
           )
         },
@@ -301,7 +319,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#gesture.click(clickTarget, point, publicPointerMovementOptions(options)),
       )
       const activationDispatched = this.#dispatchActivationClick(clickTarget, point)
-      this.#tryVisual('showClick', () => this.#visual.showClick(point))
+      this.#showClickFeedback(point)
 
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -322,6 +340,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       if (performStarted) {
         phase = 'cleanup'
         await this.#cleanupFailedPerform(span)
+      } else {
+        this.#clearVisualFeedback()
       }
 
       throw this.#finishActionFailure(span, error, {
@@ -377,15 +397,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'perform'
       const typeTarget = handle
 
-      this.#tryVisual('showTyping', () =>
-        this.#visual.showTyping({ target: typeTarget, active: true }),
-      )
+      this.#showTypingFeedback(typeTarget, true)
       try {
         await this.#text.typeInto(typeTarget, text, typeOptions(options))
       } finally {
-        this.#tryVisual('showTyping', () =>
-          this.#visual.showTyping({ target: typeTarget, active: false }),
-        )
+        this.#showTypingFeedback(typeTarget, false)
       }
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -397,7 +413,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         output: { textLength: Array.from(text).length },
       })
     } catch (error) {
-      this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
+      this.#clearVisualFeedback()
       throw this.#finishActionFailure(span, error, {
         action: 'typeInto',
         phase,
@@ -614,7 +630,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     this.#cursorPressedButtons.clear()
     this.#restorePressedCursorVisual()
-    this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
+    this.#clearVisualFeedback()
   }
 
   #finishActionFailure(
@@ -655,6 +671,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   #showTargetHighlight(target: TargetHandle, geometry: GeometrySnapshot): void {
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.targetHighlight) {
+      return
+    }
+
     this.#tryVisual('highlightTarget', () =>
       this.#visual.highlightTarget({
         target,
@@ -668,6 +688,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     target: TargetHandle,
     pressed = this.#hasPressedCursorButtons(),
   ): void {
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
+      return
+    }
+
     const cursor = this.#resolveCursor(target)
     const visualPoint = { x: point.x, y: point.y }
 
@@ -725,9 +749,17 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   #applyVisualStateEffects(effects: readonly StateEffect[]): void {
+    if (!this.#visualFeedback.enabled) {
+      return
+    }
+
     for (const effect of effects) {
       switch (effect.kind) {
         case 'focus-visible':
+          if (!this.#visualFeedback.focusOverlay) {
+            break
+          }
+
           this.#tryVisual('showFocus', () =>
             this.#visual.showFocus({
               target: effect.target,
@@ -737,6 +769,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           break
         case 'typing':
           {
+            if (!this.#visualFeedback.typingIndicator) {
+              break
+            }
+
             const target = effect.target
 
             if (!target) {
@@ -753,6 +789,35 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           break
       }
     }
+  }
+
+  #showClickFeedback(point: Point): void {
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.clickFeedback) {
+      return
+    }
+
+    this.#tryVisual('showClick', () => this.#visual.showClick(point))
+  }
+
+  #showTypingFeedback(target: TargetHandle, active: boolean): void {
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.typingIndicator) {
+      return
+    }
+
+    this.#tryVisual('showTyping', () =>
+      this.#visual.showTyping({
+        target,
+        active,
+      }),
+    )
+  }
+
+  #clearVisualFeedback(): void {
+    if (!this.#visualFeedback.enabled) {
+      return
+    }
+
+    this.#tryVisual('clearFeedback', () => this.#visual.clearFeedback())
   }
 
   #tryVisual(effect: string, operation: () => void): void {

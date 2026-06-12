@@ -205,7 +205,7 @@ function createDemoActorble(): DemoActorble {
   return createActorble({
     mode: 'interactive',
     debug: true,
-    visual: visualEnabled ? { enabled: true, textVisibility: 'masked' } : { enabled: false },
+    visual: visualEnabled ? { preset: 'debug', textVisibility: 'masked' } : { enabled: false },
   })
 }
 

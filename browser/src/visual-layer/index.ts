@@ -241,6 +241,9 @@ export class BrowserVisualLayer implements VisualLayer {
   }
 
   clearFeedback(): void {
+    this.#removePart('highlight')
+    this.#removePart('click')
+    this.#removePart('focus')
     this.#removePart('typing')
     this.#removePart('keystroke')
   }

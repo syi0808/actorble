@@ -77,6 +77,7 @@ export class Actorble {
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
     const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
     const visual = visualForOptions(options.visual, dom.getRoot(), options.mode)
+    const visualFeedback = visualFeedbackForOptions(options.visual, options.mode)
     const orchestrator =
       options.orchestrator ??
       new BrowserActionOrchestrator({
@@ -86,6 +87,7 @@ export class Actorble {
         timeline,
         trace,
         visual,
+        visualFeedback,
       })
 
     this.#trace = trace
@@ -305,6 +307,29 @@ function visualOverlayFidelityForOptions(
     interactivity: 'none',
     hitTesting: 'not-applicable',
   }
+}
+
+function visualFeedbackForOptions(
+  visual: ActorbleFacadeOptions['visual'],
+  mode: ActorbleFacadeOptions['mode'],
+): VisualFeedbackOptions | undefined {
+  if (isVisualLayer(visual)) {
+    return undefined
+  }
+
+  if (mode === 'headless') {
+    return { enabled: false, preset: 'quiet' }
+  }
+
+  if (visual === true) {
+    return { enabled: true, preset: 'quiet' }
+  }
+
+  if (typeof visual === 'object' && visual !== null) {
+    return { enabled: true, preset: 'quiet', ...visual }
+  }
+
+  return { enabled: false, preset: 'quiet' }
 }
 
 function describeUnknownError(error: unknown): string {

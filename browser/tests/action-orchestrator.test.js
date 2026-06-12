@@ -364,6 +364,7 @@ function createHarness(options = {}) {
     dom,
     signals,
     visual,
+    visualFeedback: options.visualFeedback,
   })
 
   return {
@@ -775,7 +776,10 @@ describe('BrowserActionOrchestrator', () => {
   })
 
   it('routes pointer and click visual hooks without changing core dispatch order', async () => {
-    const { calls, orchestrator, visual } = createHarness({ enableVisual: true })
+    const { calls, orchestrator, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: { preset: 'debug' },
+    })
 
     await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
 
@@ -820,6 +824,56 @@ describe('BrowserActionOrchestrator', () => {
       pressed: false,
     })
     expect(visual.showClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('honors granular visual feedback options at the orchestrator boundary', async () => {
+    const { calls, orchestrator, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: {
+        cursor: false,
+        targetHighlight: true,
+        clickFeedback: false,
+      },
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'interactability.canClick',
+      'gesture.click',
+      'state.hover:true',
+      'event.pointermove',
+      'state.active:true',
+      'event.pointerdown',
+      'state.active:false',
+      'event.pointerup',
+      'event.click',
+      'wait.settle',
+    ])
+    expect(visual.highlightTarget).toHaveBeenCalledTimes(1)
+    expect(visual.showCursor).not.toHaveBeenCalled()
+    expect(visual.showClick).not.toHaveBeenCalled()
+  })
+
+  it('uses quiet-based defaults when orchestrator visual feedback options are explicit', () => {
+    const { store, target, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: { focusOverlay: true },
+    })
+
+    store.setFocused(target, true)
+    store.setTyping(target)
+
+    expect(visual.showFocus).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: true,
+    })
+    expect(visual.showTyping).not.toHaveBeenCalled()
   })
 
   it('routes computed cursor after hover state effects on pointer move', async () => {

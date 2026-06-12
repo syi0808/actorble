@@ -639,7 +639,7 @@ actorble-facade
 
 ### T29. Quiet visual feedback defaults and granular visual options
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: 현재 Visual Layer는 cursor 외에도 target highlight, click ring, focus ring, typing indicator, keystroke overlay를 기본 action path에서 그린다. 기본 visual mode는 앱의 실제 UI를 방해하지 않는 cursor 중심 표현으로 낮추고, 부가 feedback은 명시적 debug/option으로만 켠다.
 

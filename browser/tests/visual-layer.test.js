@@ -261,9 +261,6 @@ describe('BrowserVisualLayer', () => {
 
     layer.clearFeedback()
     expect(root.querySelector('[data-actorble-visual-keystroke]')).toBeNull()
-    expect(root.querySelector('[data-actorble-visual-focus]')).not.toBeNull()
-
-    layer.showFocus({ target, active: false })
     expect(root.querySelector('[data-actorble-visual-focus]')).toBeNull()
   })
 

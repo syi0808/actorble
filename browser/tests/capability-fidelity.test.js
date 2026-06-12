@@ -73,6 +73,13 @@ describe('BrowserCapabilityFidelityReporter', () => {
     })
   })
 
+  it('does not conflate visual runtime fidelity with feedback detail options', () => {
+    const quiet = createActorble({ visual: true })
+    const debug = createActorble({ visual: { preset: 'debug' } })
+
+    expect(quiet.getFidelity().visualOverlay).toEqual(debug.getFidelity().visualOverlay)
+  })
+
   it('reports custom visual layers as caller-owned runtime fidelity', () => {
     const visual = {
       showCursor() {},
