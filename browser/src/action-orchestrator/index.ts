@@ -13,7 +13,7 @@ import {
   BrowserStyleAdapter,
   type TextInputMutationPort,
 } from '../platform-adapter/index.js'
-import { NoopPointerVisualTracker } from '../pointer-visual-tracker/index.js'
+import { BrowserPointerVisualTracker } from '../pointer-visual-tracker/index.js'
 import { BrowserPseudoStateMirror } from '../pseudo-state-mirror/index.js'
 import { BrowserSurfaceEngine } from '../surface-engine/index.js'
 import { BrowserTargetResolver } from '../target-resolver/index.js'
@@ -156,6 +156,11 @@ type CursorVisualState = {
   pressed: boolean
 }
 
+type PointerSignalContext = {
+  target: TargetHandle
+  commandId: number
+}
+
 const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   kind: 'ease',
   easing: 'ease-in-out',
@@ -181,10 +186,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #visualFeedback: ResolvedVisualFeedbackOptions
   readonly #pointerVisual: PointerVisualTracker
   readonly #wait: WaitObservationEngine
-  #signalTarget: TargetHandle | null = null
+  #signalContext: PointerSignalContext | null = null
   #clickDispatchState: ClickDispatchState | null = null
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
   #cursorVisualState: CursorVisualState | null = null
+  #nextPointerCommandId = 1
 
   constructor(options: ActionOrchestratorOptions = {}) {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -224,7 +230,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#surface = surface
     this.#timeline = timeline
     this.#visual = options.visual ?? new NoopVisualLayer()
-    this.#pointerVisual = options.pointerVisual ?? new NoopPointerVisualTracker()
     this.#visualFeedback =
       options.visualFeedback === undefined
         ? resolveVisualFeedbackOptions(undefined, { enabled: true, preset: 'debug' })
@@ -233,6 +238,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
             preset: 'quiet',
             ...options.visualFeedback,
           })
+    this.#pointerVisual =
+      options.pointerVisual ??
+      new BrowserPointerVisualTracker({
+        geometry,
+        layoutInvalidation: options.layoutInvalidation,
+        trace,
+        onUpdate: (update) => {
+          this.#renderPointerCursor(update.point, update.target, update.pressed)
+        },
+        onStale: () => {
+          this.#cursorPressedButtons.clear()
+          this.#cursorVisualState = null
+          if (this.#visualFeedback.enabled && this.#visualFeedback.cursor) {
+            this.#tryVisual('hide', () => this.#visual.hide())
+          }
+        },
+      })
     this.#text =
       options.text ??
       new BrowserTextInputEngine({
@@ -287,7 +309,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       this.#showTargetHighlight(handle, snapshot)
 
       phase = 'perform'
-      await this.#withSignalTarget(handle, () =>
+      const commandId = this.#createPointerCommandId()
+      await this.#withSignalTarget(handle, commandId, () =>
         this.#gesture.hover(point, publicPointerMovementOptions(options)),
       )
       phase = 'wait'
@@ -335,7 +358,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'perform'
       performStarted = true
       const clickTarget = handle
-      const result = await this.#withSignalTarget(clickTarget, () =>
+      const commandId = this.#createPointerCommandId()
+      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
         this.#gesture.click(clickTarget, point, publicPointerMovementOptions(options)),
       )
       const activationDispatched = this.#dispatchActivationClick(clickTarget, point)
@@ -427,7 +451,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#clickDispatchState = createClickDispatchState(clickOptions)
         clickFocusNeedsCleanup = true
 
-        const result = await this.#withSignalTarget(typeTarget, () =>
+        const commandId = this.#createPointerCommandId()
+        const result = await this.#withSignalTarget(typeTarget, commandId, () =>
           this.#gesture.click(typeTarget, point, publicPointerMovementOptions(clickOptions)),
         )
 
@@ -566,23 +591,33 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return this.#resolver.validate(resolved)
   }
 
+  #createPointerCommandId(): number {
+    const commandId = this.#nextPointerCommandId
+
+    this.#nextPointerCommandId += 1
+
+    return commandId
+  }
+
   async #withSignalTarget<TValue>(
     target: TargetHandle,
+    commandId: number,
     operation: () => Promise<TValue>,
   ): Promise<TValue> {
-    const previousTarget = this.#signalTarget
+    const previousContext = this.#signalContext
 
-    this.#signalTarget = target
+    this.#signalContext = { target, commandId }
 
     try {
       return await operation()
     } finally {
-      this.#signalTarget = previousTarget
+      this.#signalContext = previousContext
     }
   }
 
   #applyPointerSignal(signal: PointerSignal): void {
-    const target = this.#signalTarget
+    const context = this.#signalContext
+    const target = context?.target ?? null
     const diff =
       target && signal.type !== 'pointer:cancelled'
         ? this.#store.dispatch({ ...signal, hitTarget: target })
@@ -593,16 +628,17 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     if (signal.type === 'pointer:cancelled') {
       this.#cursorPressedButtons.clear()
       this.#restorePressedCursorVisual()
+      this.#clearPointerVisualMode()
       return
     }
 
-    if (!target) {
+    if (!context || !target) {
       return
     }
 
     switch (signal.type) {
       case 'pointer:moved':
-        this.#showPointerCursor(signal.point, target)
+        this.#showPointerCursor(signal.point, target, false, context.commandId)
         this.#events.dispatchPointerEvent({
           type: 'pointermove',
           target: target.element,
@@ -612,7 +648,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       case 'pointer:down': {
         this.#cursorPressedButtons.add(signal.button)
-        this.#showPointerCursor(signal.point, target, this.#hasPressedCursorButtons())
+        this.#showPointerCursor(
+          signal.point,
+          target,
+          this.#hasPressedCursorButtons(),
+          context.commandId,
+        )
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
           target: target.element,
@@ -631,7 +672,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       }
       case 'pointer:up': {
         this.#cursorPressedButtons.delete(signal.button)
-        this.#showPointerCursor(signal.point, target, this.#hasPressedCursorButtons())
+        this.#showPointerCursor(
+          signal.point,
+          target,
+          this.#hasPressedCursorButtons(),
+          context.commandId,
+        )
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerup',
           target: target.element,
@@ -703,6 +749,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     this.#cursorPressedButtons.clear()
     this.#restorePressedCursorVisual()
+    this.#clearPointerVisualMode()
     this.#clearVisualFeedback()
   }
 
@@ -814,11 +861,38 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     point: Point,
     target: TargetHandle,
     pressed = this.#hasPressedCursorButtons(),
+    commandId?: number,
   ): void {
     if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
       return
     }
 
+    const visualPoint = this.#renderPointerCursor(point, target, pressed)
+
+    if (commandId === undefined) {
+      this.#setPointerVisualMode({
+        kind: 'freePoint',
+        point: visualPoint,
+        pressed,
+      })
+      return
+    }
+
+    this.#setPointerVisualMode({
+      kind: 'targetAnchor',
+      target,
+      anchor: { kind: 'clickablePoint' },
+      commandId,
+      pressed,
+      lastPoint: visualPoint,
+    })
+  }
+
+  #renderPointerCursor(
+    point: Point,
+    target: TargetHandle,
+    pressed = this.#hasPressedCursorButtons(),
+  ): Point {
     const cursor = this.#resolveCursor(target)
     const visualPoint = { x: point.x, y: point.y }
 
@@ -835,11 +909,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       ...(cursor === undefined ? {} : { cursor }),
       pressed,
     }
-    this.#pointerVisual.setMode({
-      kind: 'freePoint',
-      point: visualPoint,
-      pressed,
-    })
+
+    return visualPoint
   }
 
   #restorePressedCursorVisual(): void {
@@ -849,7 +920,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return
     }
 
-    this.#showPointerCursor(state.point, state.target, false)
+    this.#renderPointerCursor(state.point, state.target, false)
   }
 
   #hasPressedCursorButtons(): boolean {
@@ -963,8 +1034,29 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
+  #setPointerVisualMode(mode: Parameters<PointerVisualTracker['setMode']>[0]): void {
+    try {
+      this.#pointerVisual.setMode(mode)
+    } catch (error) {
+      this.#trace.warn('Pointer visual tracker update failed.', {
+        mode: mode.kind,
+        error: describeUnknownError(error),
+      })
+    }
+  }
+
+  #clearPointerVisualMode(): void {
+    try {
+      this.#pointerVisual.clear()
+    } catch (error) {
+      this.#trace.warn('Pointer visual tracker cleanup failed.', {
+        error: describeUnknownError(error),
+      })
+    }
+  }
+
   #clearPointerContext(): void {
-    this.#signalTarget = null
+    this.#signalContext = null
   }
 }
 

@@ -835,7 +835,7 @@ actorble-facade
 
 ### T38. Target-anchor cursor visual tracking
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: cursor visual은 마지막 viewport 좌표가 아니라 현재 명령이 가리키는 target anchor를 따라가야 한다. runner가 delay 또는 wait 중이어도 target이 scroll/resize/animation으로 움직이면 cursor visual은 최신 geometry에 맞게 업데이트되어야 한다.
 

@@ -142,6 +142,16 @@ function cursorFromStyle(style) {
   return { cursor: style }
 }
 
+function createPointerVisualTrackerDouble() {
+  return {
+    setMode: vi.fn(),
+    refresh: vi.fn(async () => {}),
+    clear: vi.fn(),
+    getSnapshot: vi.fn(() => ({ mode: null })),
+    dispose: vi.fn(),
+  }
+}
+
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
@@ -379,6 +389,8 @@ function createHarness(options = {}) {
     signals,
     visual,
     visualFeedback: options.visualFeedback,
+    pointerVisual: options.pointerVisual,
+    layoutInvalidation: options.layoutInvalidation,
   })
 
   return {
@@ -839,6 +851,69 @@ describe('BrowserActionOrchestrator', () => {
       pressed: false,
     })
     expect(visual.showClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('stores target-anchor cursor visual mode with command ids for pointer-producing commands', async () => {
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const { orchestrator, target } = createHarness({ pointerVisual })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    const targetAnchorModes = pointerVisual.setMode.mock.calls
+      .map(([mode]) => mode)
+      .filter((mode) => mode.kind === 'targetAnchor')
+
+    expect(targetAnchorModes).toHaveLength(4)
+    expect(targetAnchorModes[0]).toMatchObject({
+      kind: 'targetAnchor',
+      target,
+      anchor: { kind: 'clickablePoint' },
+      commandId: 1,
+      pressed: false,
+      lastPoint: { x: 20, y: 30 },
+    })
+    expect(targetAnchorModes[1]).toMatchObject({
+      kind: 'targetAnchor',
+      commandId: 2,
+      pressed: false,
+      lastPoint: { x: 20, y: 30 },
+    })
+    expect(targetAnchorModes[2]).toMatchObject({
+      kind: 'targetAnchor',
+      commandId: 2,
+      pressed: true,
+      lastPoint: { x: 20, y: 30 },
+    })
+    expect(targetAnchorModes[3]).toMatchObject({
+      kind: 'targetAnchor',
+      commandId: 2,
+      pressed: false,
+      lastPoint: { x: 20, y: 30 },
+    })
+  })
+
+  it('clears target-anchor cursor follow state when pointer perform is cancelled', async () => {
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const { orchestrator } = createHarness({
+      pointerVisual,
+      clickFailure: cancellationError('click', 'scenario stopped'),
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+
+    expect(pointerVisual.setMode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'targetAnchor',
+        commandId: 1,
+        pressed: true,
+      }),
+    )
+    expect(pointerVisual.clear).toHaveBeenCalled()
   })
 
   it('honors granular visual feedback options at the orchestrator boundary', async () => {
