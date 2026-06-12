@@ -529,7 +529,7 @@ actorble-facade
 
 ### T24. CSS cursor resolution and visual routing
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: CSS `cursor`는 target style과 pseudo-state mirror 결과에 의해 바뀔 수 있다. 이 태스크는 pointer lifecycle 중 현재 target의 computed cursor를 읽고 Visual Layer에 전달한다. CSS/DOM 읽기는 adapter 또는 orchestrator 경계에 남기고, Visual Layer가 target/style resolution을 직접 수행하지 않게 한다.
 

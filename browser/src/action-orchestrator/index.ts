@@ -138,6 +138,7 @@ type ClickDispatchState = {
 }
 
 export class BrowserActionOrchestrator implements ActionOrchestrator {
+  readonly #dom: DomPort
   readonly #events: EventDispatchPort
   readonly #geometry: GeometryEngine
   readonly #gesture: GestureEngine
@@ -172,6 +173,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       options.geometry ?? new BrowserGeometryEngine({ dom, surface, clock: timeline })
     const focus = options.focus ?? new BrowserFocusEngine({ dom, store })
 
+    this.#dom = dom
     this.#trace = trace
     this.#events = events
     this.#geometry = geometry
@@ -502,6 +504,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         })
         break
       case 'pointer:down': {
+        this.#showPointerCursor(signal.point, target)
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
           target: target.element,
@@ -519,6 +522,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       }
       case 'pointer:up': {
+        this.#showPointerCursor(signal.point, target)
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerup',
           target: target.element,
@@ -633,8 +637,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     )
   }
 
-  #showPointerCursor(point: Point, _target: TargetHandle): void {
-    this.#tryVisual('showCursor', () => this.#visual.showCursor(point))
+  #showPointerCursor(point: Point, target: TargetHandle): void {
+    const cursor = this.#resolveCursor(target)
+
+    this.#tryVisual('showCursor', () =>
+      this.#visual.showCursor(cursor === undefined ? { point } : { point, cursor }),
+    )
+  }
+
+  #resolveCursor(target: TargetHandle): string | undefined {
+    try {
+      return resolveCursorFromAncestors(this.#dom, target.element)
+    } catch (error) {
+      this.#trace.warn('Cursor style resolution failed.', {
+        targetId: target.id,
+        error: describeUnknownError(error),
+      })
+
+      return undefined
+    }
   }
 
   #applyInteractionStateEffects(effects: readonly StateEffect[]): void {
@@ -710,6 +731,45 @@ function createClickDispatchState(options: ClickOptions): ClickDispatchState {
     upSeen: false,
   }
 }
+
+function resolveCursorFromAncestors(dom: DomPort, element: Element): string | undefined {
+  let current: Element | null = element
+  const visited = new Set<Element>()
+
+  while (current && !visited.has(current)) {
+    visited.add(current)
+    const cursor = normalizeCursorValue(dom.getComputedStyle(current).cursor)
+
+    if (cursor && !isIndirectCursorValue(cursor)) {
+      return cursor
+    }
+
+    current = dom.getParentElement(current)
+  }
+
+  return undefined
+}
+
+function normalizeCursorValue(cursor: string): string | undefined {
+  const normalized = cursor.trim()
+
+  return normalized ? normalized : undefined
+}
+
+function isIndirectCursorValue(cursor: string): boolean {
+  const normalized = cursor.toLowerCase()
+
+  return indirectCursorValues.has(normalized)
+}
+
+const indirectCursorValues = new Set([
+  'auto',
+  'inherit',
+  'initial',
+  'revert',
+  'revert-layer',
+  'unset',
+])
 
 function clickablePointOrThrow(
   action: 'moveTo' | 'click',

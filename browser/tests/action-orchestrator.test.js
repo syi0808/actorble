@@ -50,6 +50,10 @@ function createTrace() {
   })
 }
 
+function cursorFromStyle(style) {
+  return { cursor: style }
+}
+
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
@@ -202,12 +206,30 @@ function createHarness(options = {}) {
       calls.push('state.cleanup')
     }),
   }
+  const dom = options.dom ?? {
+    getComputedStyle: vi.fn((element) => {
+      if (options.trackCursorReads) {
+        calls.push(`dom.cursor:${element.id}`)
+      }
+
+      const cursor =
+        typeof options.cursorStyle === 'function'
+          ? options.cursorStyle(element)
+          : (options.cursorStyles?.get(element) ?? 'default')
+
+      return cursorFromStyle(cursor)
+    }),
+    getParentElement: vi.fn((element) => element.parentElement),
+  }
   const visual =
     options.visual ??
     (options.enableVisual
       ? {
-          showCursor: vi.fn((point) => {
-            calls.push(`visual.cursor:${point.x},${point.y}`)
+          showCursor: vi.fn((request) => {
+            const point = 'point' in request ? request.point : request
+            const cursor = 'point' in request ? (request.cursor ?? 'default') : 'default'
+
+            calls.push(`visual.cursor:${point.x},${point.y}:${cursor}`)
           }),
           highlightTarget: vi.fn(() => {
             calls.push('visual.highlight')
@@ -245,12 +267,14 @@ function createHarness(options = {}) {
     store,
     events,
     state,
+    dom,
     signals,
     visual,
   })
 
   return {
     calls,
+    dom,
     events,
     gesture,
     geometry,
@@ -486,11 +510,13 @@ describe('BrowserActionOrchestrator', () => {
       'interactability.canClick',
       'gesture.click',
       'state.hover:true',
-      'visual.cursor:20,30',
+      'visual.cursor:20,30:default',
       'event.pointermove',
       'state.active:true',
+      'visual.cursor:20,30:default',
       'event.pointerdown',
       'state.active:false',
+      'visual.cursor:20,30:default',
       'event.pointerup',
       'event.click',
       'visual.click',
@@ -500,6 +526,139 @@ describe('BrowserActionOrchestrator', () => {
       target: expect.objectContaining({ id: 'target-1' }),
       rect: { x: 10, y: 20, width: 20, height: 20 },
     })
+  })
+
+  it('routes computed cursor after hover state effects on pointer move', async () => {
+    const target = targetHandle()
+    const cursorStyles = new Map([[target.element, 'pointer']])
+    const { calls, orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyles,
+      trackCursorReads: true,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'gesture.hover',
+      'state.hover:true',
+      'dom.cursor:target-1',
+      'visual.cursor:20,30:pointer',
+      'event.pointermove',
+      'wait.settle',
+    ])
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+    })
+  })
+
+  it('refreshes cursor visuals after active state effects on pointer down and up', async () => {
+    const target = targetHandle()
+    const cursors = ['pointer', 'grabbing', 'pointer']
+    const { calls, orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyle: () => cursors.shift() ?? 'pointer',
+      trackCursorReads: true,
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'interactability.canClick',
+      'gesture.click',
+      'state.hover:true',
+      'dom.cursor:target-1',
+      'visual.cursor:20,30:pointer',
+      'event.pointermove',
+      'state.active:true',
+      'dom.cursor:target-1',
+      'visual.cursor:20,30:grabbing',
+      'event.pointerdown',
+      'state.active:false',
+      'dom.cursor:target-1',
+      'visual.cursor:20,30:pointer',
+      'event.pointerup',
+      'event.click',
+      'visual.click',
+      'wait.settle',
+    ])
+    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'grabbing',
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+    })
+  })
+
+  it('falls back through indirect cursor values and lets unsupported cursors reach the visual layer', async () => {
+    const parent = document.createElement('section')
+    parent.id = 'parent'
+    const target = targetHandle()
+    parent.append(target.element)
+    document.body.append(parent)
+    const cursorStyles = new Map([
+      [target.element, 'inherit'],
+      [parent, 'url(cursor.svg), copy'],
+    ])
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyles,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'url(cursor.svg), copy',
+    })
+  })
+
+  it('records cursor resolution failures as warnings without failing the action', async () => {
+    const dom = {
+      getComputedStyle: vi.fn(() => {
+        throw new Error('style read blocked')
+      }),
+      getParentElement: vi.fn((element) => element.parentElement),
+    }
+    const { orchestrator, trace, visual } = createHarness({
+      enableVisual: true,
+      dom,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(visual.showCursor).toHaveBeenCalledWith({ point: { x: 20, y: 30 } })
+    expect(trace.getTrace().warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Cursor style resolution failed.',
+          details: expect.objectContaining({
+            error: 'style read blocked',
+            targetId: 'target-1',
+          }),
+        }),
+      ]),
+    )
   })
 
   it('typeInto resolves and checks type interactability before delegating text input', async () => {
