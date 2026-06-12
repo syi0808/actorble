@@ -201,6 +201,167 @@ describe('BrowserScenarioRunner', () => {
     )
   })
 
+  it('applies run-level pacing between successful steps and skips the final step', async () => {
+    const calls = []
+    const clickTarget = css('#save')
+    const inputTarget = css('#name')
+    const condition = { kind: 'custom', predicate: () => true }
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async (target, options) => {
+        calls.push(['click', target, options])
+      }),
+      typeInto: vi.fn(async (target, input, options) => {
+        calls.push(['typeInto', target, input, options])
+      }),
+      waitFor: vi.fn(async (input, options) => {
+        calls.push(['waitFor', input, options])
+        return { condition: input, satisfied: true, strategy: 'settled' }
+      }),
+    })
+    const timeline = createTimeline({
+      delay: vi.fn(async (duration, options) => {
+        calls.push(['delay', duration, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator, timeline })
+
+    await expect(
+      runner.run(
+        {
+          steps: [
+            { action: 'click', target: clickTarget },
+            { action: 'typeInto', target: inputTarget, input: 'actorble' },
+            { action: 'waitFor', input: condition },
+          ],
+        },
+        { pacing: { betweenSteps: 12 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      ['click', clickTarget, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['delay', 12, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      [
+        'typeInto',
+        inputTarget,
+        'actorble',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ],
+      ['delay', 12, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['waitFor', condition, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+    ])
+    expect(timeline.delay).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats missing or non-positive run-level pacing as no pacing', async () => {
+    const values = [undefined, 0, -1, Number.POSITIVE_INFINITY, Number.NaN]
+
+    for (const betweenSteps of values) {
+      const timeline = createTimeline()
+      const runner = new BrowserScenarioRunner({
+        orchestrator: createOrchestrator(),
+        timeline,
+      })
+      const options =
+        betweenSteps === undefined ? undefined : { pacing: { betweenSteps } }
+
+      await expect(
+        runner.run(
+          {
+            steps: [
+              { action: 'click', target: css('#save') },
+              { action: 'waitFor', input: { kind: 'custom', predicate: () => true } },
+            ],
+          },
+          options,
+        ),
+      ).resolves.toBeUndefined()
+      expect(timeline.delay).not.toHaveBeenCalled()
+    }
+  })
+
+  it('keeps explicit delay steps separate from run-level pacing in order and trace', async () => {
+    const calls = []
+    const clickTarget = css('#save')
+    const condition = { kind: 'custom', predicate: () => true }
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async (target, options) => {
+        calls.push(['click', target, options])
+      }),
+      waitFor: vi.fn(async (input, options) => {
+        calls.push(['waitFor', input, options])
+        return { condition: input, satisfied: true, strategy: 'settled' }
+      }),
+    })
+    const timeline = createTimeline({
+      delay: vi.fn(async (duration, options) => {
+        calls.push(['delay', duration, options])
+      }),
+    })
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const runner = new BrowserScenarioRunner({ orchestrator, timeline, trace })
+
+    await expect(
+      runner.run(
+        {
+          id: 'pacing-and-delay-flow',
+          steps: [
+            { action: 'click', target: clickTarget },
+            { id: 'settle-ui', action: 'delay', duration: 35, reason: 'let UI settle' },
+            { action: 'waitFor', input: condition },
+          ],
+        },
+        { pacing: { betweenSteps: 7 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      ['click', clickTarget, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['delay', 7, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['delay', 35, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['delay', 7, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+      ['waitFor', condition, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+    ])
+
+    const spans = trace.getTrace().spans
+    const explicitDelaySpan = spans.find((span) => span.name === 'scenario.step.delay')
+    const pacingSpans = spans.filter((span) => span.name === 'scenario.pacing.delay')
+
+    expect(explicitDelaySpan).toEqual(
+      expect.objectContaining({
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'delay',
+          stepIndex: 1,
+          duration: 35,
+          completed: true,
+        }),
+      }),
+    )
+    expect(pacingSpans).toEqual([
+      expect.objectContaining({
+        status: 'ok',
+        attributes: expect.objectContaining({
+          kind: 'run-pacing',
+          stepIndex: 0,
+          nextStepIndex: 1,
+          duration: 7,
+          completed: true,
+        }),
+      }),
+      expect.objectContaining({
+        status: 'ok',
+        attributes: expect.objectContaining({
+          kind: 'run-pacing',
+          stepIndex: 1,
+          nextStepIndex: 2,
+          duration: 7,
+          completed: true,
+        }),
+      }),
+    ])
+  })
+
   it('rejects delay steps without a positive finite duration', async () => {
     const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
 
@@ -298,6 +459,59 @@ describe('BrowserScenarioRunner', () => {
     )
   })
 
+  it('stops an in-flight pacing delay through the scenario abort signal', async () => {
+    let pacingSignal
+    const orchestrator = createOrchestrator({
+      waitFor: vi.fn(async (condition) => ({ condition, satisfied: true, strategy: 'settled' })),
+    })
+    const timeline = createTimeline({
+      delay: vi.fn((_duration, options) => {
+        pacingSignal = options.signal
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              reject(actorbleError('ACTION_CANCELLED', 'pacing cancelled', {
+                details: { operation: 'timeline.delay', reason: options.signal.reason },
+              }))
+            },
+            { once: true },
+          )
+        })
+      }),
+    })
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const runner = new BrowserScenarioRunner({ orchestrator, timeline, trace })
+    const run = runner.run(
+      {
+        steps: [
+          { action: 'click', target: css('#save') },
+          { action: 'waitFor', input: { kind: 'custom', predicate: () => true } },
+        ],
+      },
+      { pacing: { betweenSteps: 50 } },
+    )
+
+    await vi.waitFor(() => expect(pacingSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(pacingSignal.aborted).toBe(true)
+    expect(trace.getTrace().spans).toContainEqual(
+      expect.objectContaining({
+        name: 'scenario.pacing.delay',
+        status: 'cancelled',
+        attributes: expect.objectContaining({
+          kind: 'run-pacing',
+          reason: 'scenario stopped',
+        }),
+      }),
+    )
+  })
+
   it('times out the scenario while a delay is in flight', async () => {
     vi.useFakeTimers()
     let delaySignal
@@ -340,6 +554,52 @@ describe('BrowserScenarioRunner', () => {
     await vi.advanceTimersByTimeAsync(25)
     await expectation
     expect(delaySignal.aborted).toBe(true)
+  })
+
+  it('times out the scenario while a pacing delay is in flight', async () => {
+    let pacingSignal
+    const timeline = createTimeline({
+      delay: vi.fn((_duration, options) => {
+        pacingSignal = options.signal
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              reject(actorbleError('ACTION_CANCELLED', 'pacing cancelled', {
+                details: { operation: 'timeline.delay', reason: options.signal.reason },
+              }))
+            },
+            { once: true },
+          )
+        })
+      }),
+    })
+    const runner = new BrowserScenarioRunner({
+      orchestrator: createOrchestrator(),
+      timeline,
+    })
+    const run = runner.run(
+      {
+        id: 'pacing-timeout',
+        steps: [
+          { action: 'click', target: css('#save') },
+          { action: 'waitFor', input: { kind: 'custom', predicate: () => true } },
+        ],
+      },
+      { timeout: 25, pacing: { betweenSteps: 100 } },
+    )
+    const expectation = expect(run).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'scenario.run',
+        timeout: 25,
+        scenarioId: 'pacing-timeout',
+      },
+    })
+
+    await vi.waitFor(() => expect(pacingSignal).toBeDefined())
+    await expectation
+    expect(pacingSignal.aborted).toBe(true)
   })
 
   it('cancels an in-flight delay when the external run signal aborts', async () => {

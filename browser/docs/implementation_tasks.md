@@ -769,7 +769,7 @@ actorble-facade
 
 ### T35. Run-level scenario pacing
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: 명시적 `delay` step과 별개로, runner 실행 전체에 적용되는 기본 step 간격을 제공한다. 이 pacing은 scenario의 모든 대기를 대체하지 않고, 반복 실행이나 demo flow에서 기본 리듬을 주기 위한 runner option이다.
 

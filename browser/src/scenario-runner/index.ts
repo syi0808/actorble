@@ -119,6 +119,12 @@ export class BrowserScenarioRunner implements ScenarioRunner {
           this.#executeStep(step, index, controller.signal),
           controller.signal,
         )
+        await this.#executePacingDelay(
+          options.pacing?.betweenSteps,
+          index,
+          scenario.steps.length,
+          controller.signal,
+        )
       }
 
       this.#status = 'completed'
@@ -274,6 +280,32 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     }
   }
 
+  async #executePacingDelay(
+    duration: number | undefined,
+    stepIndex: number,
+    stepCount: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (stepIndex >= stepCount - 1 || !isPositiveFiniteDuration(duration)) {
+      return
+    }
+
+    const span = this.#trace.startSpan(
+      'scenario.pacing.delay',
+      pacingDelayTraceAttributes(duration, stepIndex),
+    )
+
+    try {
+      await raceWithScenarioSignal(this.#timeline.delay(duration, { signal }), signal)
+      span.end({ completed: true })
+    } catch (error) {
+      const normalized = normalizeScenarioError(error, signal)
+
+      finishStepSpan(span, normalized)
+      throw normalized
+    }
+  }
+
   #resolvePausedRun(): void {
     const resume = this.#resumePausedRun
     this.#resumePausedRun = null
@@ -418,7 +450,7 @@ function assertPositiveDuration(
   action: string,
   stepIndex: number,
 ): asserts duration is number {
-  if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
+  if (isPositiveFiniteDuration(duration)) {
     return
   }
 
@@ -491,6 +523,10 @@ function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: 
   return typeof step === 'object' && step !== null && 'action' in step
 }
 
+function isPositiveFiniteDuration(duration: unknown): duration is number {
+  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+}
+
 function delayStepTraceAttributes(
   step: ScenarioDelayStep,
   stepIndex: number,
@@ -501,5 +537,17 @@ function delayStepTraceAttributes(
     ...(step.id === undefined ? {} : { stepId: step.id }),
     duration: step.duration,
     ...(step.reason === undefined ? {} : { reason: step.reason }),
+  }
+}
+
+function pacingDelayTraceAttributes(
+  duration: number,
+  stepIndex: number,
+): Record<string, unknown> {
+  return {
+    kind: 'run-pacing',
+    stepIndex,
+    nextStepIndex: stepIndex + 1,
+    duration,
   }
 }
