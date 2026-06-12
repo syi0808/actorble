@@ -1,7 +1,14 @@
 import { actorbleError } from '../shared/index.js'
 import { BrowserPointerEngine } from '../pointer-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
-import type { ClickOptions, DragOptions, MoveOptions, Point, TargetHandle } from '../shared/index.js'
+import type {
+  CancellationOptions,
+  ClickOptions,
+  DragOptions,
+  MoveOptions,
+  Point,
+  TargetHandle,
+} from '../shared/index.js'
 import type { PointerEngine } from '../pointer-engine/index.js'
 import type { TimelineEngine } from '../timeline-engine/index.js'
 
@@ -21,6 +28,8 @@ export type GestureEngineOptions = Readonly<{
   timeline?: TimelineEngine
 }>
 
+const DEFAULT_CLICK_PRESS_DWELL = 80
+
 export interface GestureEngine {
   click(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
   doubleClick(target: TargetHandle, point: Point, options?: ClickOptions): Promise<GestureResult>
@@ -31,12 +40,16 @@ export interface GestureEngine {
 
 export class BrowserGestureEngine implements GestureEngine {
   readonly #pointer: PointerEngine
+  readonly #timeline: TimelineEngine
 
   constructor(options: GestureEngineOptions = {}) {
+    const timeline = options.timeline ?? new BrowserTimelineEngine()
+
+    this.#timeline = timeline
     this.#pointer =
       options.pointer ??
       new BrowserPointerEngine({
-        timeline: options.timeline ?? new BrowserTimelineEngine(),
+        timeline,
       })
   }
 
@@ -56,6 +69,12 @@ export class BrowserGestureEngine implements GestureEngine {
 
     await this.#pointer.moveTo(point, pointerMovementOptions(options))
     await this.#pointer.down(button)
+    const pressDwell = normalizePressDwell(options.pressDwell)
+
+    if (pressDwell > 0) {
+      await this.#timeline.delay(pressDwell, cancellationOptions(options))
+    }
+
     await this.#pointer.up(button)
 
     return { completed: true }
@@ -117,4 +136,20 @@ function pointerMovementOptions(options: ClickOptions): MoveOptions | undefined 
   }
 
   return Object.keys(movement).length === 0 ? undefined : movement
+}
+
+function cancellationOptions(options: ClickOptions): CancellationOptions {
+  return options.signal === undefined ? {} : { signal: options.signal }
+}
+
+function normalizePressDwell(pressDwell: number | undefined): number {
+  if (pressDwell === undefined) {
+    return DEFAULT_CLICK_PRESS_DWELL
+  }
+
+  if (!Number.isFinite(pressDwell) || pressDwell <= 0) {
+    return 0
+  }
+
+  return pressDwell
 }

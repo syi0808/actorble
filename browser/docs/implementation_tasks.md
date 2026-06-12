@@ -617,7 +617,7 @@ actorble-facade
 
 ### T28. Perceptible click press dwell and cursor shrink
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `pointerdown` 직후 `pointerup`이 같은 tick에 가까워 cursor shrink transition이 렌더링될 시간이 없다. click correctness와 event order는 유지하되, visual runtime에서는 down 상태가 최소 한 frame 이상 관찰 가능해야 한다.
 

@@ -3,10 +3,16 @@ import { BrowserGestureEngine, createGestureEngine } from '../src/gesture-engine
 import { BrowserPointerEngine } from '../src/pointer-engine/index.js'
 import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
 
-function createTimeline() {
+function createTimeline(calls) {
   return {
     now: vi.fn(() => 0),
-    delay: vi.fn(async () => {}),
+    delay: vi.fn(async (duration, options) => {
+      if (calls) {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['delay', duration, options] : ['delay', duration])
+      }
+    }),
     nextFrame: vi.fn(async () => 0),
     settle: vi.fn(async () => {}),
     withTimeout: vi.fn(async (operation) => operation),
@@ -28,6 +34,7 @@ function createTarget(id = 'target-1') {
 
 function createFakePointer() {
   const calls = []
+  const timeline = createTimeline(calls)
   const state = {
     id: 'pointer-1',
     position: { x: 0, y: 0 },
@@ -60,13 +67,14 @@ function createFakePointer() {
         return state
       }),
     },
+    timeline,
   }
 }
 
 describe('BrowserGestureEngine', () => {
-  it('click composes move, down, and up pointer operations in order', async () => {
-    const { calls, pointer } = createFakePointer()
-    const engine = new BrowserGestureEngine({ pointer })
+  it('click composes move, down, press dwell, and up pointer operations in order', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
 
     await expect(engine.click(createTarget(), { x: 40, y: 24 })).resolves.toEqual({
       completed: true,
@@ -75,6 +83,7 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([
       ['moveTo', { x: 40, y: 24 }],
       ['down', 'primary'],
+      ['delay', 80],
       ['up', 'primary'],
     ])
   })
@@ -112,21 +121,22 @@ describe('BrowserGestureEngine', () => {
   })
 
   it('click passes the requested pointer button through down and up', async () => {
-    const { calls, pointer } = createFakePointer()
-    const engine = new BrowserGestureEngine({ pointer })
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
 
     await engine.click(createTarget(), { x: 5, y: 9 }, { button: 'secondary' })
 
     expect(calls).toEqual([
       ['moveTo', { x: 5, y: 9 }],
       ['down', 'secondary'],
+      ['delay', 80],
       ['up', 'secondary'],
     ])
   })
 
   it('routes explicit click movement options into pointer movement before pressing', async () => {
-    const { calls, pointer } = createFakePointer()
-    const engine = new BrowserGestureEngine({ pointer })
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
 
     await engine.click(createTarget(), { x: 12, y: 18 }, {
       motion: { kind: 'spring', duration: 260 },
@@ -139,6 +149,43 @@ describe('BrowserGestureEngine', () => {
         timeout: 1500,
       }],
       ['down', 'primary'],
+      ['delay', 80],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('lets callers disable or customize click press dwell', async () => {
+    const first = createFakePointer()
+    const firstEngine = new BrowserGestureEngine({
+      pointer: first.pointer,
+      timeline: first.timeline,
+    })
+
+    await firstEngine.click(createTarget(), { x: 1, y: 2 }, { pressDwell: 0 })
+
+    expect(first.calls).toEqual([
+      ['moveTo', { x: 1, y: 2 }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+    ])
+    expect(first.timeline.delay).not.toHaveBeenCalled()
+
+    const second = createFakePointer()
+    const secondEngine = new BrowserGestureEngine({
+      pointer: second.pointer,
+      timeline: second.timeline,
+    })
+    const controller = new AbortController()
+
+    await secondEngine.click(createTarget(), { x: 3, y: 4 }, {
+      pressDwell: 24,
+      signal: controller.signal,
+    })
+
+    expect(second.calls).toEqual([
+      ['moveTo', { x: 3, y: 4 }, { signal: controller.signal }],
+      ['down', 'primary'],
+      ['delay', 24, { signal: controller.signal }],
       ['up', 'primary'],
     ])
   })

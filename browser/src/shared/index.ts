@@ -346,6 +346,7 @@ export type ClickOptions = OperationOptions &
     button?: PointerButtonName
     clickCount?: number
     force?: boolean
+    pressDwell?: DurationMs
   }>
 
 export type ClickCurrentOptions = Omit<ClickOptions, 'force'>

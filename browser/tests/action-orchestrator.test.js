@@ -132,6 +132,12 @@ function createBlockingTimeline() {
   }
 }
 
+async function flushMicrotasks(count = 10) {
+  for (let index = 0; index < count; index += 1) {
+    await Promise.resolve()
+  }
+}
+
 function cursorFromStyle(style) {
   return { cursor: style }
 }
@@ -731,6 +737,7 @@ describe('BrowserActionOrchestrator', () => {
     await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
 
     expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
+    expect(timeline.delay).toHaveBeenCalledWith(80, {})
     expect(calls.filter((call) => call.startsWith('event.'))).toEqual([
       'event.pointermove',
       'event.pointermove',
@@ -894,6 +901,42 @@ describe('BrowserActionOrchestrator', () => {
       pressed: true,
     })
     expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+  })
+
+  it('restores pressed cursor visual when click is cancelled during press dwell', async () => {
+    const controlled = createBlockingTimeline()
+    const controller = new AbortController()
+    const { orchestrator, visual } = createHarness({
+      enableVisual: true,
+      useRealGesture: true,
+      timeline: controlled.timeline,
+      cursorStyle: () => 'pointer',
+    })
+
+    const click = orchestrator.click(css('#target-1'), {
+      duration: 0,
+      signal: controller.signal,
+    })
+
+    await flushMicrotasks()
+
+    expect(controlled.pendingDelayCount).toBe(1)
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+
+    controller.abort('scenario stopped')
+
+    await expect(click).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+    expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,

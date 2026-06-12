@@ -524,16 +524,17 @@ function normalizeCursorText(cursor: string | undefined): string | undefined {
 
 function cursorTransform(baseTransform: string, pressed: boolean): string {
   const normalized = baseTransform.trim() || 'none'
+  const pressedScale = 'scale(0.88)'
 
   if (!pressed) {
     return normalized
   }
 
   if (normalized === 'none') {
-    return 'scale(0.92)'
+    return pressedScale
   }
 
-  return `${normalized} scale(0.92)`
+  return `${normalized} ${pressedScale}`
 }
 
 function cursorVisualKindFor(cursor: string | undefined): SupportedCursorVisualKind {

@@ -162,7 +162,7 @@ describe('BrowserVisualLayer', () => {
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('default')
     expect(cursor.getAttribute('data-actorble-css-cursor')).toBe('url(cursor.svg), copy')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
-    expect(cursor.style.transform).toBe('scale(0.92)')
+    expect(cursor.style.transform).toBe('scale(0.88)')
     expect(cursor.style.transition).toBe('transform 80ms ease-out')
     expect(cursor.style.left).toBe('30px')
     expect(cursor.style.top).toBe('40px')
@@ -194,7 +194,7 @@ describe('BrowserVisualLayer', () => {
 
     const cursor = getCursorElement()
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
-    expect(cursor.style.transform).toBe('rotate(-18deg) scale(0.92)')
+    expect(cursor.style.transform).toBe('rotate(-18deg) scale(0.88)')
     expect(cursor.style.transformOrigin).toBe('5px 1px')
     expect(cursor.style.transition).toBe('transform 80ms ease-out')
 
