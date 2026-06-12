@@ -318,10 +318,26 @@ export type MoveOptions = OperationOptions &
     motion?: PointerMotionProfile
   }>
 
-export type PointerMotionProfile = Readonly<{
-  kind: 'linear'
-  duration?: DurationMs
-}>
+export type PointerEasingName = 'ease-in' | 'ease-out' | 'ease-in-out'
+
+export type PointerMotionProfile =
+  | Readonly<{
+      kind: 'linear'
+      duration?: DurationMs
+    }>
+  | Readonly<{
+      kind: 'ease'
+      easing?: PointerEasingName
+      duration?: DurationMs
+    }>
+  | Readonly<{
+      kind: 'inertia'
+      duration?: DurationMs
+    }>
+  | Readonly<{
+      kind: 'spring'
+      duration?: DurationMs
+    }>
 
 export type ClickOptions = OperationOptions &
   Readonly<{

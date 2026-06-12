@@ -1,4 +1,10 @@
-import type { CoordinateSpace, MoveOptions, Point, PointerButtonName } from '../shared/index.js'
+import type {
+  CoordinateSpace,
+  MoveOptions,
+  Point,
+  PointerButtonName,
+  PointerEasingName,
+} from '../shared/index.js'
 import { BrowserPointerSignalBus } from '../pointer-signals/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type { PointerSignalBus } from '../pointer-signals/index.js'
@@ -47,10 +53,17 @@ export type PointerEngineOptions = Readonly<{
   }>
 }>
 
+type NormalizedMotionProfile = Readonly<{
+  kind: 'linear' | 'ease' | 'inertia' | 'spring'
+  duration: number
+  easing?: PointerEasingName
+}>
+
 export class BrowserPointerEngine implements PointerEngine {
   readonly #signals: PointerSignalBus
   readonly #timeline: TimelineEngine
   #state: PointerState
+  #motionRunId = 0
 
   constructor(options: PointerEngineOptions = {}) {
     const position = clonePoint(options.initialPosition ?? { x: 0, y: 0 })
@@ -76,19 +89,20 @@ export class BrowserPointerEngine implements PointerEngine {
   async moveTo(point: Point, options: MoveOptions = {}): Promise<PointerState> {
     const target = clonePoint(point)
     const from = clonePoint(this.#state.position)
-    const duration = normalizeDuration(options.duration ?? options.motion?.duration ?? 0)
+    const motion = normalizeMotionProfile(options)
+    const motionRunId = ++this.#motionRunId
 
     this.#state = {
       ...this.#state,
       motion: {
-        status: duration > 0 ? 'moving' : 'idle',
+        status: motion.duration > 0 ? 'moving' : 'idle',
         from,
         to: target,
         path: [],
       },
     }
 
-    if (duration === 0 || samePoint(from, target)) {
+    if (motion.duration === 0 || samePoint(from, target)) {
       this.#applyMovement(target)
       this.#finishMovement(from, target)
       return this.getState()
@@ -96,18 +110,53 @@ export class BrowserPointerEngine implements PointerEngine {
 
     const startedAt = this.#timeline.now()
 
-    while (true) {
-      await this.#timeline.nextFrame(options)
-      const progress = Math.min(1, (this.#timeline.now() - startedAt) / duration)
-      const nextPoint = progress >= 1 ? target : interpolatePoint(from, target, progress)
+    try {
+      while (true) {
+        await this.#timeline.nextFrame(options)
 
-      this.#applyMovement(nextPoint)
+        if (!this.#isActiveMotion(motionRunId)) {
+          return this.getState()
+        }
 
-      if (progress >= 1) {
-        this.#finishMovement(from, target)
-        return this.getState()
+        const progress = Math.min(1, (this.#timeline.now() - startedAt) / motion.duration)
+        const nextPoint =
+          progress >= 1
+            ? target
+            : interpolatePoint(from, target, sampleMotionProgress(motion, progress))
+
+        this.#applyMovement(nextPoint)
+
+        if (progress >= 1) {
+          this.#finishMovement(from, target)
+          return this.getState()
+        }
       }
+    } catch (error) {
+      if (this.#isActiveMotion(motionRunId)) {
+        this.#cancelMotion()
+      }
+
+      throw error
     }
+  }
+
+  #isActiveMotion(motionRunId: number): boolean {
+    return this.#motionRunId === motionRunId && this.#state.motion.status !== 'cancelled'
+  }
+
+  #cancelMotion(): void {
+    this.#state = {
+      ...this.#state,
+      motion: {
+        ...this.#state.motion,
+        status: 'cancelled',
+      },
+      buttons: {
+        pressed: [],
+        primary: null,
+      },
+    }
+    this.#signals.emit({ type: 'pointer:cancelled' })
   }
 
   async down(button: PointerButtonName = 'primary'): Promise<PointerState> {
@@ -156,18 +205,8 @@ export class BrowserPointerEngine implements PointerEngine {
   }
 
   async cancel(): Promise<PointerState> {
-    this.#state = {
-      ...this.#state,
-      motion: {
-        ...this.#state.motion,
-        status: 'cancelled',
-      },
-      buttons: {
-        pressed: [],
-        primary: null,
-      },
-    }
-    this.#signals.emit({ type: 'pointer:cancelled' })
+    this.#motionRunId += 1
+    this.#cancelMotion()
 
     return this.getState()
   }
@@ -243,6 +282,26 @@ function normalizeDuration(duration: number): number {
   return duration
 }
 
+function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
+  const motion = options.motion
+  const duration = normalizeDuration(motion?.duration ?? options.duration ?? 0)
+
+  if (!motion) {
+    return { kind: 'linear', duration }
+  }
+
+  switch (motion.kind) {
+    case 'linear':
+      return { kind: 'linear', duration }
+    case 'ease':
+      return { kind: 'ease', duration, easing: motion.easing ?? 'ease-in-out' }
+    case 'inertia':
+      return { kind: 'inertia', duration }
+    case 'spring':
+      return { kind: 'spring', duration }
+  }
+}
+
 function samePoint(left: Point, right: Point): boolean {
   return left.x === right.x && left.y === right.y
 }
@@ -256,4 +315,56 @@ function interpolatePoint(from: Point, to: Point, progress: number): Point {
 
 function interpolate(from: number, to: number, progress: number): number {
   return from + (to - from) * progress
+}
+
+function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number): number {
+  const clampedProgress = clampProgress(progress)
+
+  switch (motion.kind) {
+    case 'linear':
+      return clampedProgress
+    case 'ease':
+      return sampleEasingProgress(motion.easing ?? 'ease-in-out', clampedProgress)
+    case 'inertia':
+      return sampleInertiaProgress(clampedProgress)
+    case 'spring':
+      return sampleSpringProgress(clampedProgress)
+  }
+}
+
+function sampleEasingProgress(easing: PointerEasingName, progress: number): number {
+  switch (easing) {
+    case 'ease-in':
+      return progress * progress
+    case 'ease-out':
+      return 1 - (1 - progress) * (1 - progress)
+    case 'ease-in-out':
+      return progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2
+  }
+}
+
+function sampleInertiaProgress(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3)
+}
+
+function sampleSpringProgress(progress: number): number {
+  if (progress >= 1) {
+    return 1
+  }
+
+  return 1 - Math.exp(-4 * progress) * Math.cos(progress * Math.PI * 4)
+}
+
+function clampProgress(progress: number): number {
+  if (!Number.isFinite(progress) || progress <= 0) {
+    return 0
+  }
+
+  if (progress >= 1) {
+    return 1
+  }
+
+  return progress
 }

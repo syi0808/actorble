@@ -419,7 +419,7 @@ actorble-facade
 
 ### T19. Pointer motion profile과 easing
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: Pointer Engine의 현재 선형 `duration` 이동을 확장해 사람이 조작하는 듯한 motion profile을 지원한다. Pointer Engine은 좌표와 path만 소유하고, target 의미 상태와 Visual Layer 표현은 계속 외부 계층에 둔다.
 

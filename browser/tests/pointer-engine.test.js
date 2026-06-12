@@ -19,6 +19,46 @@ function createTimeline(frameInterval = 16) {
   }
 }
 
+function createControlledTimeline() {
+  let now = 0
+  const pendingFrames = []
+
+  return {
+    timeline: {
+      now: vi.fn(() => now),
+      delay: vi.fn(async (duration) => {
+        now += duration
+      }),
+      nextFrame: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            pendingFrames.push(resolve)
+          }),
+      ),
+      settle: vi.fn(async () => {}),
+      withTimeout: vi.fn(async (operation) => operation),
+    },
+    get pendingFrameCount() {
+      return pendingFrames.length
+    },
+    step(frameInterval = 16) {
+      const resolve = pendingFrames.shift()
+
+      if (!resolve) {
+        throw new Error('No pending frame to resolve.')
+      }
+
+      now += frameInterval
+      resolve(now)
+    },
+  }
+}
+
+async function flushResolvedFrame(controlledTimeline, frameInterval = 16) {
+  controlledTimeline.step(frameInterval)
+  await Promise.resolve()
+}
+
 function createEngine(options = {}) {
   const signals = options.signals ?? new BrowserPointerSignalBus()
   const timeline = options.timeline ?? createTimeline()
@@ -147,6 +187,76 @@ describe('BrowserPointerEngine', () => {
     })
   })
 
+  it('emits deterministic eased frame positions for an explicit easing profile', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+
+    await engine.moveTo(
+      { x: 100, y: 0 },
+      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 100 } },
+    )
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(events.map((event) => event.point)).toEqual([
+      { x: 12.5, y: 0 },
+      { x: 50, y: 0 },
+      { x: 87.5, y: 0 },
+      { x: 100, y: 0 },
+    ])
+    expect(engine.getState().motion).toMatchObject({
+      status: 'idle',
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+    })
+  })
+
+  it('emits deterministic inertia frame positions that decelerate onto the target', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+
+    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'inertia', duration: 100 } })
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(events.map((event) => event.point)).toEqual([
+      { x: 57.8125, y: 0 },
+      { x: 87.5, y: 0 },
+      { x: 98.4375, y: 0 },
+      { x: 100, y: 0 },
+    ])
+    expect(engine.getState()).toMatchObject({
+      position: { x: 100, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 100, y: 0 },
+      },
+    })
+  })
+
+  it('settles spring-like motion on the exact target after deterministic overshoot', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+
+    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'spring', duration: 100 } })
+
+    const path = engine.getState().motion.path
+
+    expect(path).toHaveLength(4)
+    expect(path[0].x).toBeCloseTo(136.7879, 4)
+    expect(path[1].x).toBeCloseTo(86.4665, 4)
+    expect(path[2].x).toBeCloseTo(104.9787, 4)
+    expect(path[3]).toEqual({ x: 100, y: 0 })
+    expect(events.map((event) => event.point).at(-1)).toEqual({ x: 100, y: 0 })
+    expect(engine.getState()).toMatchObject({
+      position: { x: 100, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 100, y: 0 },
+      },
+    })
+  })
+
   it('updates pressed buttons and primary button while emitting down and up signals', async () => {
     const { engine, events } = createEngine()
 
@@ -194,5 +304,37 @@ describe('BrowserPointerEngine', () => {
       buttons: { pressed: [], primary: null },
     })
     expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' })
+  })
+
+  it('cancels in-flight motion, clears buttons, and emits no later movement frames', async () => {
+    const controlledTimeline = createControlledTimeline()
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+
+    await engine.down('primary')
+    const movement = engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'ease', duration: 100 } })
+
+    await Promise.resolve()
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await flushResolvedFrame(controlledTimeline, 25)
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await engine.cancel()
+    const eventsAtCancellation = [...events]
+
+    expect(engine.getState()).toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+
+    await flushResolvedFrame(controlledTimeline, 25)
+
+    await expect(movement).resolves.toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(events).toEqual(eventsAtCancellation)
   })
 })
