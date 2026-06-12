@@ -31,6 +31,7 @@ import {
 import type { SpanRecorder, TraceSpanHandle } from '../diagnostics-trace/index.js'
 import type { FocusEngine } from '../focus-engine/index.js'
 import type {
+  CancellationOptions,
   ClickCurrentOptions,
   ClickOptions,
   DomPort,
@@ -163,6 +164,7 @@ const DEFAULT_PUBLIC_TYPING_DELAY = 60
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
   readonly #events: EventDispatchPort
+  readonly #focus: FocusEngine
   readonly #geometry: GeometryEngine
   readonly #gesture: GestureEngine
   readonly #interactability: InteractabilityEngine
@@ -171,6 +173,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #store: InteractionStateStore
   readonly #surface: SurfaceEngine
   readonly #text: TextInputEngine
+  readonly #timeline: TimelineEngine
   readonly #trace: SpanRecorder
   readonly #visual: VisualLayer
   readonly #visualFeedback: ResolvedVisualFeedbackOptions
@@ -203,6 +206,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#dom = dom
     this.#trace = trace
     this.#events = events
+    this.#focus = focus
     this.#geometry = geometry
     this.#gesture =
       options.gesture ??
@@ -216,6 +220,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#state = state
     this.#store = store
     this.#surface = surface
+    this.#timeline = timeline
     this.#visual = options.visual ?? new NoopVisualLayer()
     this.#pointerVisual = options.pointerVisual ?? new NoopPointerVisualTracker()
     this.#visualFeedback =
@@ -388,6 +393,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     })
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
+    let clickFocusNeedsCleanup = false
 
     try {
       handle = await this.#resolveTarget(target, options)
@@ -402,10 +408,46 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
       phase = 'perform'
       const typeTarget = handle
+      const focusStrategy = typeFocusStrategy(options)
+      let clickFocusOutput: object = {}
+
+      if (focusStrategy === 'click') {
+        const point = clickablePointOrThrow('typeInto', typeTarget, snapshot)
+        const clickOptions = typeFocusClickOptions(options)
+
+        this.#clickDispatchState = createClickDispatchState(clickOptions)
+        clickFocusNeedsCleanup = true
+
+        const result = await this.#withSignalTarget(typeTarget, () =>
+          this.#gesture.click(typeTarget, point, publicPointerMovementOptions(clickOptions)),
+        )
+
+        clickFocusNeedsCleanup = false
+
+        const activationDispatched = this.#dispatchActivationClick(typeTarget, point)
+
+        this.#showClickFeedback(point)
+
+        const focused = await this.#focus.getFocused()
+        const focusedTarget = this.#assertClickFocusAcquired(typeTarget, focused.active)
+
+        await this.#delayAfterClickFocus(options)
+
+        clickFocusOutput = {
+          focusPoint: point,
+          focusedTargetId: focusedTarget.id,
+          gestureCompleted: result.completed,
+          activationDispatched,
+        }
+      }
 
       this.#showTypingFeedback(typeTarget, true)
       try {
-        await this.#text.typeInto(typeTarget, text, typeOptions(options))
+        await this.#text.typeInto(
+          typeTarget,
+          text,
+          typeOptions(options, textFocusStrategyFor(focusStrategy)),
+        )
       } finally {
         this.#showTypingFeedback(typeTarget, false)
       }
@@ -416,15 +458,28 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         action: 'typeInto',
         completed: true,
         targetId: handle.id,
-        output: { textLength: Array.from(text).length },
+        output: {
+          textLength: Array.from(text).length,
+          focusStrategy,
+          ...clickFocusOutput,
+        },
       })
     } catch (error) {
-      this.#clearVisualFeedback()
+      const failurePhase = phase
+
+      if (clickFocusNeedsCleanup) {
+        await this.#cleanupFailedPerform(span, 'typeInto')
+      } else {
+        this.#clearVisualFeedback()
+      }
       throw this.#finishActionFailure(span, error, {
         action: 'typeInto',
-        phase,
+        phase: failurePhase,
         targetId: handle?.id,
       })
+    } finally {
+      this.#clickDispatchState = null
+      this.#clearPointerContext()
     }
   }
 
@@ -612,12 +667,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return true
   }
 
-  async #cleanupFailedPerform(span: TraceSpanHandle): Promise<void> {
+  async #cleanupFailedPerform(
+    span: TraceSpanHandle,
+    action: ActionName = 'click',
+  ): Promise<void> {
     try {
       await this.#gesture.cancel()
     } catch (error) {
       this.#trace.warn('Action gesture cleanup failed.', {
-        action: 'click',
+        action,
         error: describeUnknownError(error),
       })
     }
@@ -629,7 +687,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     } catch (error) {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action state cleanup failed.', {
-        action: 'click',
+        action,
         error: describeUnknownError(error),
       })
     }
@@ -674,6 +732,60 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       targetId: target.id,
       reasons: report.forceBypassedReasons,
     })
+  }
+
+  #assertClickFocusAcquired(
+    target: TargetHandle,
+    focusedTarget: TargetHandle | null,
+  ): TargetHandle {
+    if (focusedTarget && this.#isFocusedTargetForTyping(target, focusedTarget)) {
+      return focusedTarget
+    }
+
+    throw actorbleError(
+      'INTERACTABILITY_FAILED',
+      'typeInto click focus did not focus the target.',
+      {
+        details: {
+          action: 'typeInto',
+          focusStrategy: 'click',
+          targetId: target.id,
+          focusedTargetId: focusedTarget?.id,
+          focusedDescription: focusedTarget?.debug.description,
+        },
+      },
+    )
+  }
+
+  #isFocusedTargetForTyping(target: TargetHandle, focusedTarget: TargetHandle): boolean {
+    if (focusedTarget.element === target.element) {
+      return true
+    }
+
+    try {
+      return (
+        this.#dom.contains(target.element, focusedTarget.element) ||
+        this.#dom.contains(focusedTarget.element, target.element)
+      )
+    } catch (error) {
+      this.#trace.warn('Focus target containment check failed.', {
+        targetId: target.id,
+        focusedTargetId: focusedTarget.id,
+        error: describeUnknownError(error),
+      })
+
+      return false
+    }
+  }
+
+  async #delayAfterClickFocus(options: TypeOptions): Promise<void> {
+    const delay = options.afterFocusDelay
+
+    if (delay === undefined || !Number.isFinite(delay) || delay <= 0) {
+      return
+    }
+
+    await this.#timeline.delay(delay, cancellationOptions(options))
   }
 
   #showTargetHighlight(target: TargetHandle, geometry: GeometrySnapshot): void {
@@ -991,7 +1103,7 @@ function cursorTagNameFor(debug: TargetDebugInfo): string | undefined {
 }
 
 function clickablePointOrThrow(
-  action: 'moveTo' | 'click',
+  action: 'moveTo' | 'click' | 'typeInto',
   target: TargetHandle,
   geometry: GeometrySnapshot,
 ): Point {
@@ -1068,10 +1180,40 @@ function operationOptions(options: OperationOptions): WaitOptions {
   }
 }
 
-function typeOptions(options: TypeOptions): TypeOptions {
-  return {
+function cancellationOptions(options: OperationOptions): CancellationOptions {
+  return options.signal === undefined ? {} : { signal: options.signal }
+}
+
+function typeOptions(
+  options: TypeOptions,
+  focusStrategy?: Extract<TypeOptions['focusStrategy'], 'none'>,
+): TypeOptions {
+  const normalized: TypeOptions = {
     ...operationOptions(options),
     delay: options.delay ?? DEFAULT_PUBLIC_TYPING_DELAY,
+  }
+
+  return focusStrategy === undefined ? normalized : { ...normalized, focusStrategy }
+}
+
+function typeFocusStrategy(options: TypeOptions): NonNullable<TypeOptions['focusStrategy']> {
+  if (options.focusStrategy === 'click' || options.focusStrategy === 'none') {
+    return options.focusStrategy
+  }
+
+  return 'programmatic'
+}
+
+function textFocusStrategyFor(
+  focusStrategy: NonNullable<TypeOptions['focusStrategy']>,
+): Extract<TypeOptions['focusStrategy'], 'none'> | undefined {
+  return focusStrategy === 'click' || focusStrategy === 'none' ? 'none' : undefined
+}
+
+function typeFocusClickOptions(options: TypeOptions): ClickOptions {
+  return {
+    ...operationOptions(options),
+    ...options.focusClick,
   }
 }
 

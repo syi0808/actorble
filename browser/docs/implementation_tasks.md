@@ -791,7 +791,7 @@ actorble-facade
 
 ### T36. Click-based focus acquisition for typeInto
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `typeInto`는 현재 programmatic focus 뒤 바로 입력한다. interactive flow에서는 target으로 pointer가 이동하고 click으로 focus를 획득한 뒤 typing cadence가 시작되는 경로가 필요하다. 이 동작은 `type`/`fill`과 섞지 않고 `typeInto`의 focus acquisition option으로 둔다.
 

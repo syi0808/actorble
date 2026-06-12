@@ -14,6 +14,7 @@ import type {
   CancellationSignalLike,
   DurationMs,
   FillOptions,
+  Locator,
   TargetHandle,
   TargetLike,
   TypeOptions,
@@ -94,11 +95,27 @@ export class BrowserTextInputEngine implements TextInputEngine {
     text: string,
     options: TypeOptions = {},
   ): Promise<TextInputResult> {
-    const focused = await this.#focus.focus(target)
+    const focused =
+      options.focusStrategy === 'none'
+        ? await this.#focus.getFocused()
+        : await this.#focus.focus(target)
 
     if (!focused.active) {
       throw textInputError('typeInto could not focus an editable target.', {
         strategy: 'typeInto',
+        focusStrategy: options.focusStrategy ?? 'programmatic',
+      })
+    }
+
+    if (
+      options.focusStrategy === 'none' &&
+      !focusedTargetMatchesRequest(focused.active, target)
+    ) {
+      throw textInputError('typeInto requires the requested target to already be focused.', {
+        strategy: 'typeInto',
+        focusStrategy: 'none',
+        targetId: isTargetHandle(target) ? target.id : undefined,
+        focusedTargetId: focused.active.id,
       })
     }
 
@@ -442,4 +459,52 @@ function textInputError(
       ...details,
     },
   })
+}
+
+function focusedTargetMatchesRequest(
+  focusedTarget: TargetHandle,
+  requestedTarget: TargetLike,
+): boolean {
+  const requestedElement = comparableTargetElement(requestedTarget)
+
+  if (!requestedElement) {
+    return false
+  }
+
+  return (
+    focusedTarget.element === requestedElement ||
+    requestedElement.contains(focusedTarget.element) ||
+    focusedTarget.element.contains(requestedElement)
+  )
+}
+
+function comparableTargetElement(target: TargetLike): Element | null {
+  if (isTargetHandle(target)) {
+    return target.element
+  }
+
+  if (isLocator(target)) {
+    return target.kind === 'element' ? target.element : null
+  }
+
+  return isElementLike(target) ? target : null
+}
+
+function isTargetHandle(target: TargetLike): target is TargetHandle {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    'id' in target &&
+    'element' in target &&
+    'resolvedAt' in target &&
+    'debug' in target
+  )
+}
+
+function isLocator(target: TargetLike): target is Locator {
+  return typeof target === 'object' && target !== null && 'kind' in target
+}
+
+function isElementLike(target: TargetLike): target is Element {
+  return typeof target === 'object' && target !== null && 'nodeType' in target
 }

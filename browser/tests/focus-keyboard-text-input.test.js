@@ -318,6 +318,40 @@ describe('BrowserTextInputEngine', () => {
     })
   })
 
+  it('typeInto can use an already-focused target without requesting focus again', async () => {
+    const input = document.createElement('input')
+    document.body.append(input)
+    const target = handle('message', input)
+    const focus = {
+      focus: vi.fn(),
+      blur: vi.fn(),
+      getFocused: vi.fn(async () => ({
+        active: target,
+        previous: null,
+        focusVisible: false,
+      })),
+      tab: vi.fn(),
+    }
+    const store = new BrowserInteractionStateStore()
+    const engine = new BrowserTextInputEngine({
+      focus,
+      events: new BrowserEventDispatcher(),
+      store,
+    })
+
+    await expect(
+      engine.typeInto(target, 'A', { focusStrategy: 'none' }),
+    ).resolves.toEqual({
+      strategy: 'typeInto',
+      text: 'A',
+    })
+
+    expect(focus.focus).not.toHaveBeenCalled()
+    expect(focus.getFocused).toHaveBeenCalledOnce()
+    expect(input.value).toBe('A')
+    expect(store.snapshot().typing).toBeNull()
+  })
+
   it('type uses the currently focused editable target without replacing content', async () => {
     const textarea = document.createElement('textarea')
     textarea.value = 'A'

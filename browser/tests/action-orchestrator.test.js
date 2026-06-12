@@ -255,10 +255,16 @@ function createHarness(options = {}) {
     }),
   }
   const gesture = options.gesture ?? (options.useRealGesture ? undefined : fakeGesture)
-  const focus = {
+  const focus = options.focus ?? {
     focus: vi.fn(),
     blur: vi.fn(),
-    getFocused: vi.fn(),
+    getFocused: vi.fn(async () => (
+      options.focusedSnapshot ?? {
+        active: target,
+        previous: null,
+        focusVisible: false,
+      }
+    )),
     tab: vi.fn(),
   }
   const text = {
@@ -313,6 +319,7 @@ function createHarness(options = {}) {
       return cursorFromStyle(cursor)
     }),
     getParentElement: vi.fn((element) => element.parentElement),
+    contains: vi.fn((root, node) => root.contains(node)),
     describeElement: vi.fn((element) => ({
       description: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`,
       selector: element.id ? `#${element.id}` : undefined,
@@ -378,6 +385,7 @@ function createHarness(options = {}) {
     calls,
     dom,
     events,
+    focus,
     gesture,
     geometry,
     interactability,
@@ -1213,6 +1221,131 @@ describe('BrowserActionOrchestrator', () => {
       delay: 8,
       timeout: 100,
       signal: controller.signal,
+    })
+  })
+
+  it('keeps explicit programmatic typeInto focus from performing a pointer click', async () => {
+    const { gesture, orchestrator, target, text } = createHarness()
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'hello', {
+        delay: 0,
+        focusStrategy: 'programmatic',
+        focusClick: { duration: 0, pressDwell: 0 },
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(gesture.click).not.toHaveBeenCalled()
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {
+      delay: 0,
+    })
+  })
+
+  it('clicks to acquire focus before dispatching typeInto input events', async () => {
+    const { input, orchestrator, timeline } = createRealTextHarness()
+    const seen = []
+
+    for (const eventName of [
+      'pointermove',
+      'pointerdown',
+      'pointerup',
+      'beforeinput',
+      'input',
+      'change',
+    ]) {
+      input.addEventListener(eventName, (event) => {
+        seen.push(event.type)
+      })
+    }
+    input.addEventListener('click', (event) => {
+      seen.push(event.type)
+      input.focus()
+    })
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'H', {
+        delay: 0,
+        focusStrategy: 'click',
+        focusClick: { duration: 0, pressDwell: 0 },
+        afterFocusDelay: 5,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(seen).toEqual([
+      'pointermove',
+      'pointerdown',
+      'pointerup',
+      'click',
+      'beforeinput',
+      'input',
+      'change',
+    ])
+    expect(input.value).toBe('H')
+    expect(timeline.delay).toHaveBeenCalledWith(5, {})
+  })
+
+  it('fails click-focused typeInto when the click does not focus the target', async () => {
+    const other = inputTargetHandle('other-target')
+    const { events, orchestrator, text } = createHarness({
+      target: inputTargetHandle(),
+      focusedSnapshot: {
+        active: other,
+        previous: null,
+        focusVisible: false,
+      },
+    })
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'hello', {
+        focusStrategy: 'click',
+        focusClick: { duration: 0, pressDwell: 0 },
+      }),
+    ).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'typeInto',
+        focusStrategy: 'click',
+        targetId: 'target-1',
+        focusedTargetId: 'other-target',
+      }),
+    })
+
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'click' }),
+    )
+    expect(text.typeInto).not.toHaveBeenCalled()
+  })
+
+  it('cleans up pointer state when click-focused typeInto is cancelled during press', async () => {
+    const { gesture, orchestrator, state, text, visual } = createHarness({
+      enableVisual: true,
+      target: inputTargetHandle(),
+      clickFailure: cancellationError('typeInto click focus', 'scenario stopped'),
+      cursorStyle: () => 'text',
+    })
+
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'hello', {
+        focusStrategy: 'click',
+        focusClick: { duration: 0, pressDwell: 0 },
+      }),
+    ).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+
+    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(text.typeInto).not.toHaveBeenCalled()
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 20, y: 30 },
+      cursor: 'text',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenLastCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'text',
+      pressed: false,
     })
   })
 
