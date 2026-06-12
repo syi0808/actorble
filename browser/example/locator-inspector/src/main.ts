@@ -11,7 +11,14 @@ import {
   type TargetHandle,
   type TargetInspection,
 } from '../../../src/index.js'
-import { byId, escapeHtml, formatNumber, runWithStatus } from '../../shared/example-utils.js'
+import {
+  byId,
+  escapeHtml,
+  formatNumber,
+  renderUtilityPanel,
+  runWithStatus,
+  setupUtilityPanel,
+} from '../../shared/example-utils.js'
 
 type LookupCase = Readonly<{
   name: string
@@ -35,7 +42,7 @@ app.innerHTML = `
         <p class="eyebrow">Example 01</p>
         <h1>Locator inspector</h1>
       </div>
-      <div class="status-pill" id="run-status">Ready</div>
+      <a class="secondary-action" href="/">Examples</a>
     </header>
 
     <section class="workspace" aria-label="Locator inspector">
@@ -45,7 +52,6 @@ app.innerHTML = `
             <p class="eyebrow">Target surface</p>
             <h2>Project console</h2>
           </div>
-          <a class="secondary-action" href="/">Examples</a>
         </div>
 
         <form class="project-form">
@@ -74,25 +80,38 @@ app.innerHTML = `
           </ul>
         </div>
       </div>
-
-      <div class="control-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Resolve</p>
-            <h2>Targets</h2>
-          </div>
-        </div>
-        <div class="action-grid">
-          <button id="run-locators" type="button">Resolve all</button>
-        </div>
-        <div class="result-block">
-          <h3>Resolution</h3>
-          <div id="locator-output" class="output-list" aria-live="polite"></div>
-        </div>
-      </div>
     </section>
+
+    ${renderUtilityPanel({
+      id: 'locator-utility-panel',
+      label: 'Locator inspector controls',
+      title: 'Locator inspector',
+      sections: [
+        {
+          id: 'locator-actions',
+          eyebrow: 'Resolve',
+          title: 'Targets',
+          body: `
+            <div class="status-pill" id="run-status">Ready</div>
+            <div class="result-block">
+              <div class="action-grid">
+                <button id="run-locators" type="button">Resolve all</button>
+              </div>
+            </div>
+          `,
+        },
+        {
+          id: 'locator-diagnostics',
+          eyebrow: 'Diagnostics',
+          title: 'Resolution',
+          body: '<div id="locator-output" class="output-list" aria-live="polite"></div>',
+        },
+      ],
+    })}
   </main>
 `
+
+setupUtilityPanel('locator-utility-panel')
 
 const runStatus = byId<HTMLDivElement>('run-status')
 const runLocatorsButton = byId<HTMLButtonElement>('run-locators')

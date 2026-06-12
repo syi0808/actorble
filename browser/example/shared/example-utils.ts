@@ -1,5 +1,25 @@
 import type { Trace } from '../../src/index.js'
 
+export type UtilityPanelSection = Readonly<{
+  id: string
+  eyebrow?: string
+  title: string
+  body: string
+}>
+
+export type UtilityPanelOptions = Readonly<{
+  id: string
+  label: string
+  title: string
+  sections: readonly UtilityPanelSection[]
+}>
+
+export type UtilityPanelController = Readonly<{
+  setExpanded(expanded: boolean): void
+  expand(): void
+  collapse(): void
+}>
+
 export function byId<TElement extends HTMLElement>(id: string): TElement {
   const element = document.getElementById(id)
 
@@ -8,6 +28,67 @@ export function byId<TElement extends HTMLElement>(id: string): TElement {
   }
 
   return element as TElement
+}
+
+export function renderUtilityPanel(options: UtilityPanelOptions): string {
+  const panelId = escapeHtml(options.id)
+  const contentId = `${panelId}-content`
+
+  return `
+    <aside
+      class="utility-panel"
+      id="${panelId}"
+      data-testid="${panelId}"
+      data-state="collapsed"
+      aria-label="${escapeHtml(options.label)}"
+    >
+      <button
+        class="utility-panel-toggle"
+        id="${panelId}-toggle"
+        data-testid="${panelId}-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="${contentId}"
+      >
+        <span>Controls</span>
+      </button>
+      <div
+        class="utility-panel-content"
+        id="${contentId}"
+        data-testid="${contentId}"
+        hidden
+      >
+        <div class="utility-panel-header">
+          <p class="eyebrow">Utility panel</p>
+          <h2>${escapeHtml(options.title)}</h2>
+        </div>
+        ${options.sections.map(renderUtilityPanelSection).join('')}
+      </div>
+    </aside>
+  `
+}
+
+export function setupUtilityPanel(id: string): UtilityPanelController {
+  const panel = byId<HTMLElement>(id)
+  const toggle = byId<HTMLButtonElement>(`${id}-toggle`)
+  const content = byId<HTMLElement>(`${id}-content`)
+
+  const setExpanded = (expanded: boolean): void => {
+    panel.dataset.state = expanded ? 'expanded' : 'collapsed'
+    toggle.setAttribute('aria-expanded', String(expanded))
+    content.hidden = !expanded
+  }
+
+  toggle.addEventListener('click', () => {
+    setExpanded(toggle.getAttribute('aria-expanded') !== 'true')
+  })
+  setExpanded(false)
+
+  return {
+    setExpanded,
+    expand: () => setExpanded(true),
+    collapse: () => setExpanded(false),
+  }
 }
 
 export async function runWithStatus(
@@ -118,4 +199,20 @@ export function escapeHtml(value: string): string {
         return character
     }
   })
+}
+
+function renderUtilityPanelSection(section: UtilityPanelSection): string {
+  const sectionId = escapeHtml(section.id)
+
+  return `
+    <section class="utility-section" id="${sectionId}">
+      <div class="utility-section-heading">
+        <div>
+          ${section.eyebrow ? `<p class="eyebrow">${escapeHtml(section.eyebrow)}</p>` : ''}
+          <h3>${escapeHtml(section.title)}</h3>
+        </div>
+      </div>
+      <div class="utility-section-body">${section.body}</div>
+    </section>
+  `
 }

@@ -36,16 +36,28 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
   page.setDefaultTimeout(10_000)
 
+  await page.goto(new URL('locator-inspector/', baseUrl).toString())
+  await page.waitForSelector('#locator-utility-panel-toggle')
+  await expectUtilityPanelCollapsed(page, 'locator-utility-panel')
+  await openUtilityPanel(page, 'locator-utility-panel')
+  await page.locator('#run-locators').click()
+  await expectStatus(page, 'Resolved targets')
+  await expectLocatorOutput(page)
+
   await page.goto(new URL('action-playground/', baseUrl).toString())
-  await page.waitForSelector('#run-flow')
+  await page.waitForSelector('#action-utility-panel-toggle')
+  await expectUtilityPanelCollapsed(page, 'action-utility-panel')
+  await openUtilityPanel(page, 'action-utility-panel')
   await expectChecked(page, '[data-testid="visual-mode-quiet"]', true)
   await expectFidelityRuntime(page, 'enabled')
   await runFlow(page)
   await expectProjectCreated(page, 'Atlas 1')
   await expectInputValue(page, 'Atlas 1')
   await expectEventLogIncludes(page, ['button.click'])
+  await closeUtilityPanel(page, 'action-utility-panel')
   await expectOverlayHitTesting(page)
   await expectQuietOverlay(page)
+  await openUtilityPanel(page, 'action-utility-panel')
 
   await setVisualMode(page, 'debug')
   await runFlow(page)
@@ -59,11 +71,14 @@ try {
   await expectNoOverlayRoot(page)
 
   await page.goto(new URL('scenario-runner/', baseUrl).toString())
-  await page.waitForSelector('#run-scenario')
+  await page.waitForSelector('#scenario-utility-panel-toggle')
+  await expectUtilityPanelCollapsed(page, 'scenario-utility-panel')
+  await openUtilityPanel(page, 'scenario-utility-panel')
   await expectChecked(page, '[data-testid="scenario-visual-mode-quiet"]', true)
   await expectCapabilityRow(page, '#capability-output', 'visualRuntime', 'enabled')
 
-  const quietTracking = await runScenario(page)
+  await selectScenarioPreset(page, 'create-project')
+  const quietTracking = await runScenario(page, 'Scenario complete')
   await expectCursorMoved(quietTracking.before, quietTracking.after)
   await expectProjectCreated(page, 'Scenario 1')
   await expectInputValue(page, 'Scenario 1')
@@ -81,18 +96,37 @@ try {
     'scenario.step.delay',
     'scenario.pacing.delay',
   ])
+  await closeUtilityPanel(page, 'scenario-utility-panel')
   await expectOverlayHitTesting(page)
   await expectQuietOverlay(page)
+  await openUtilityPanel(page, 'scenario-utility-panel')
+
+  await selectScenarioPreset(page, 'complete-checklist')
+  await runScenario(page, 'Checklist complete')
+  await expectState(page, '[data-testid="task-state"]', 'complete')
+  await expectProjectCreated(page, 'Checklist 2')
+
+  await selectScenarioPreset(page, 'invite-operator')
+  await runScenario(page, 'Operator invited')
+  await expectState(page, '[data-testid="operator-state"]', 'invited')
+  await expectProjectCreated(page, 'Invite 3')
+
+  await selectScenarioPreset(page, 'ready-for-review')
+  await runScenario(page, 'Ready for review')
+  await expectState(page, '[data-testid="review-state"]', 'ready')
+  await expectProjectCreated(page, 'Review 4')
 
   await setScenarioVisualMode(page, 'debug')
-  const debugTracking = await runScenario(page)
+  await selectScenarioPreset(page, 'create-project')
+  const debugTracking = await runScenario(page, 'Scenario complete')
   await expectCursorMoved(debugTracking.before, debugTracking.after)
-  await expectProjectCreated(page, 'Scenario 2')
+  await expectProjectCreated(page, 'Scenario 5')
   await expectTraceIncludes(page, [
     'scenario.run',
     'scenario.step.delay',
     'scenario.pacing.delay',
   ])
+  await closeUtilityPanel(page, 'scenario-utility-panel')
   await expectOverlayHitTesting(page)
   await expectDebugOverlay(page)
 } finally {
@@ -120,16 +154,80 @@ async function setScenarioVisualMode(page, mode) {
   await expectChecked(page, `[data-testid="scenario-visual-mode-${mode}"]`, true)
 }
 
-async function runScenario(page) {
+async function selectScenarioPreset(page, preset) {
+  await page.locator('[data-testid="scenario-preset"]').selectOption(preset)
+}
+
+async function runScenario(page, expectedStatus) {
   await page.locator('#run-scenario').click()
   await expectTrackingState(page, 'pending')
   const before = await readCursorPoint(page)
   await expectTrackingState(page, 'shifted')
   await expectCursorTracksTarget(page, '#project-name')
   const after = await readCursorPoint(page)
-  await expectStatus(page, 'Scenario complete')
+  await expectStatus(page, expectedStatus)
 
   return { before, after }
+}
+
+async function expectUtilityPanelCollapsed(page, panelId) {
+  const details = await page.locator(`#${panelId}`).evaluate((panel, id) => {
+    const content = document.getElementById(`${id}-content`)
+    const toggle = document.getElementById(`${id}-toggle`)
+    const style = getComputedStyle(panel)
+
+    return {
+      state: panel.getAttribute('data-state'),
+      position: style.position,
+      hidden: content instanceof HTMLElement ? content.hidden : null,
+      expanded: toggle?.getAttribute('aria-expanded'),
+    }
+  }, panelId)
+
+  assertEqual(details.state, 'collapsed', `${panelId} state`)
+  assertEqual(details.position, 'fixed', `${panelId} position`)
+  assertEqual(details.hidden, true, `${panelId} content hidden`)
+  assertEqual(details.expanded, 'false', `${panelId} aria-expanded`)
+}
+
+async function openUtilityPanel(page, panelId) {
+  await page.locator(`#${panelId}-toggle`).click()
+  await page.waitForFunction((id) => {
+    const panel = document.getElementById(id)
+    const content = document.getElementById(`${id}-content`)
+    const toggle = document.getElementById(`${id}-toggle`)
+
+    return (
+      panel?.getAttribute('data-state') === 'expanded' &&
+      content instanceof HTMLElement &&
+      !content.hidden &&
+      toggle?.getAttribute('aria-expanded') === 'true'
+    )
+  }, panelId)
+}
+
+async function closeUtilityPanel(page, panelId) {
+  const expanded = await page
+    .locator(`#${panelId}-toggle`)
+    .evaluate((toggle) => toggle.getAttribute('aria-expanded') === 'true')
+
+  if (!expanded) {
+    return
+  }
+
+  await page.locator(`#${panelId}-toggle`).click()
+  await page.waitForFunction((id) => {
+    const panel = document.getElementById(id)
+    const content = document.getElementById(`${id}-content`)
+    const toggle = document.getElementById(`${id}-toggle`)
+
+    return (
+      panel?.getAttribute('data-state') === 'collapsed' &&
+      content instanceof HTMLElement &&
+      content.hidden &&
+      toggle?.getAttribute('aria-expanded') === 'false'
+    )
+  }, panelId)
 }
 
 async function expectStatus(page, text) {
@@ -203,6 +301,19 @@ async function expectEventSequence(page, expectedEvents) {
     )
     searchStart = foundIndex + 1
   }
+}
+
+async function expectLocatorOutput(page) {
+  await page.waitForFunction(
+    () => document.querySelectorAll('#locator-output .lookup-row').length === 5,
+  )
+}
+
+async function expectState(page, selector, expected) {
+  await page.waitForFunction(
+    ({ selector, expected }) => document.querySelector(selector)?.textContent === expected,
+    { selector, expected },
+  )
 }
 
 async function expectTrackingState(page, state) {
