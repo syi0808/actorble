@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Actorble, createActorble } from '../src/actorble-facade/index.js'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
+import { Actorble, createActorble } from '../src/api/actorble-facade/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { css } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {

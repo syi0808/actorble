@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserGestureEngine, createGestureEngine } from '../src/gesture-engine/index.js'
-import { BrowserPointerEngine } from '../src/pointer-engine/index.js'
-import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
+import { BrowserGestureEngine, createGestureEngine } from '../src/input/gesture-engine/index.js'
+import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 
 function createTimeline(calls) {
   return {

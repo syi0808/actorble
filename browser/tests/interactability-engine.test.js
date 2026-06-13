@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserInteractabilityEngine } from '../src/interactability-engine/index.js'
+import { BrowserInteractabilityEngine } from '../src/targeting/interactability-engine/index.js'
 
 function targetHandle(id, target, options = {}) {
   return {

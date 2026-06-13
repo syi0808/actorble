@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
-import { BrowserLayoutInvalidationTracker } from '../src/layout-invalidation-tracker/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
 import { css } from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
   createWaitObservationEngine,
-} from '../src/wait-observation-engine/index.js'
+} from '../src/runtime/wait-observation-engine/index.js'
 
 function createTimeline(overrides = {}) {
   return {

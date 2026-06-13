@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
-import { BrowserScenarioRunner } from '../src/scenario-runner/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserScenarioRunner } from '../src/runtime/scenario-runner/index.js'
 import { actorbleError, css } from '../src/shared/index.js'
 
 function deferred() {

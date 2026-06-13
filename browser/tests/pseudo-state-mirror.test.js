@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
-import { BrowserStateApplier, BrowserStyleAdapter } from '../src/platform-adapter/index.js'
-import { BrowserPseudoStateMirror } from '../src/pseudo-state-mirror/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserStateApplier, BrowserStyleAdapter } from '../src/platform/platform-adapter/index.js'
+import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
 
 function targetHandle(id = 'target-1') {
   const element = document.createElement('button')

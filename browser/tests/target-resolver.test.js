@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
-import { BrowserDomAdapter } from '../src/platform-adapter/dom-adapter/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/dom-adapter/index.js'
 import { css, element, label, point, role, testId, text } from '../src/shared/index.js'
-import { BrowserTargetResolver, createTargetResolver } from '../src/target-resolver/index.js'
+import { BrowserTargetResolver, createTargetResolver } from '../src/targeting/target-resolver/index.js'
 
 function createClock(start = 1000) {
   let current = start

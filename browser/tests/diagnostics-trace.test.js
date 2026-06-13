@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { actorbleError } from '../src/shared/index.js'
-import { BrowserDiagnosticsTrace, createDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
+import { BrowserDiagnosticsTrace, createDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 
 function deterministicClock(start = 1000) {
   let current = start
@@ -115,11 +115,14 @@ describe('diagnostics trace', () => {
   })
 
   it('keeps the diagnostics trace boundary limited to shared primitives', async () => {
-    const source = await readFile(join(process.cwd(), 'src/diagnostics-trace/index.ts'), 'utf8')
+    const source = await readFile(
+      join(process.cwd(), 'src/diagnostics/diagnostics-trace/index.ts'),
+      'utf8',
+    )
     const imports = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((match) => match[1])
 
     expect(imports.length).toBeGreaterThan(0)
-    expect(imports.every((specifier) => specifier === '../shared/index.js')).toBe(true)
-    expect(source).not.toMatch(/from\s+['"]\.\.\/(action-orchestrator|target-resolver|geometry-engine)\//)
+    expect(imports.every((specifier) => specifier === '../../shared/index.js')).toBe(true)
+    expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/(runtime|targeting)\//)
   })
 })

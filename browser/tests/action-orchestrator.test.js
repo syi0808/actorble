@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserActionOrchestrator } from '../src/action-orchestrator/index.js'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
-import { BrowserInteractionStateStore } from '../src/interaction-state-store/index.js'
-import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
-import { BrowserDomAdapter } from '../src/platform-adapter/index.js'
-import { BrowserPseudoStateMirror } from '../src/pseudo-state-mirror/index.js'
+import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
+import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
 import { actorbleError, cancellationError, css } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {

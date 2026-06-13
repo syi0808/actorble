@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserTimelineEngine } from '../src/timeline-engine/index.js'
+import { BrowserTimelineEngine } from '../src/runtime/timeline-engine/index.js'
 
 describe('timeline engine', () => {
   beforeEach(() => {

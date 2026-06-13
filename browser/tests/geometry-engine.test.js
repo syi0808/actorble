@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserGeometryEngine, createGeometryEngine } from '../src/geometry-engine/index.js'
+import { BrowserGeometryEngine, createGeometryEngine } from '../src/targeting/geometry-engine/index.js'
 import { css, element } from '../src/shared/index.js'
 
 function targetHandle(id, target, options = {}) {

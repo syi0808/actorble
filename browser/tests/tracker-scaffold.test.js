@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   BrowserLayoutInvalidationTracker,
   NoopLayoutInvalidationTracker,
-} from '../src/layout-invalidation-tracker/index.js'
+} from '../src/targeting/layout-invalidation-tracker/index.js'
 import {
   BrowserPointerVisualTracker,
   NoopPointerVisualTracker,
-} from '../src/pointer-visual-tracker/index.js'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics-trace/index.js'
+} from '../src/visual/pointer-visual-tracker/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { actorbleError } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {

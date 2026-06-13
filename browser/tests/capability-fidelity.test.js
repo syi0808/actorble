@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createActorble } from '../src/actorble-facade/index.js'
-import { BrowserCapabilityFidelityReporter } from '../src/capability-fidelity/index.js'
+import { createActorble } from '../src/api/actorble-facade/index.js'
+import { BrowserCapabilityFidelityReporter } from '../src/capability/capability-fidelity/index.js'
 
 describe('BrowserCapabilityFidelityReporter', () => {
   it('reports browser in-page synthetic input capabilities and hard limits', () => {

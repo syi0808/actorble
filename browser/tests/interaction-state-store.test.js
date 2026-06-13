@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserInteractionStateStore } from '../src/interaction-state-store/index.js'
+import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
 
 function targetHandle(id) {
   const element = document.createElement('button')
@@ -238,11 +238,11 @@ describe('BrowserInteractionStateStore', () => {
 describe('interaction state store boundary', () => {
   it('does not import platform adapter or visual layer concrete modules', async () => {
     const source = await readFile(
-      join(process.cwd(), 'src/interaction-state-store/index.ts'),
+      join(process.cwd(), 'src/state/interaction-state-store/index.ts'),
       'utf8',
     )
 
-    expect(source).not.toMatch(/from\s+['"]\.\.\/platform-adapter/)
-    expect(source).not.toMatch(/from\s+['"]\.\.\/visual-layer/)
+    expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/platform\//)
+    expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/visual\//)
   })
 })

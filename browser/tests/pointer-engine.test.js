@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserPointerEngine } from '../src/pointer-engine/index.js'
-import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
+import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 
 function createTimeline(frameInterval = 16) {
   let now = 0

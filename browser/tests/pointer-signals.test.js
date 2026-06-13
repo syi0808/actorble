@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserPointerSignalBus } from '../src/pointer-signals/index.js'
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 
 const movedSignal = {
   type: 'pointer:moved',

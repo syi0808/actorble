@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rewritePseudoStateSelector } from '../src/pseudo-state-mirror/selector-rewriter.js'
+import { rewritePseudoStateSelector } from '../src/visual/pseudo-state-mirror/selector-rewriter.js'
 
 describe('rewritePseudoStateSelector', () => {
   it('rewrites class, id, and compound pseudo-state selectors to actorble attributes', () => {

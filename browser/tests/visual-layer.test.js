@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserDomAdapter } from '../src/platform-adapter/index.js'
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
 import {
   BrowserVisualLayer,
   NoopVisualLayer,
   createVisualLayer,
-} from '../src/visual-layer/index.js'
+} from '../src/visual/visual-layer/index.js'
 
 function targetHandle(id = 'target-1') {
   const element = document.createElement('button')

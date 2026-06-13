@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserInteractionStateStore } from '../src/interaction-state-store/index.js'
-import { BrowserEventDispatcher } from '../src/platform-adapter/event-dispatcher/index.js'
-import { BrowserDomAdapter } from '../src/platform-adapter/dom-adapter/index.js'
+import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
+import { BrowserEventDispatcher } from '../src/platform/platform-adapter/event-dispatcher/index.js'
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/dom-adapter/index.js'
 import { cancellationError, element } from '../src/shared/index.js'
-import { BrowserFocusEngine, createFocusEngine } from '../src/focus-engine/index.js'
-import { BrowserKeyboardEngine, createKeyboardEngine } from '../src/keyboard-engine/index.js'
+import { BrowserFocusEngine, createFocusEngine } from '../src/input/focus-engine/index.js'
+import { BrowserKeyboardEngine, createKeyboardEngine } from '../src/input/keyboard-engine/index.js'
 import {
   BrowserTextInputEngine,
   createTextInputEngine,
-} from '../src/text-input-engine/index.js'
+} from '../src/input/text-input-engine/index.js'
 
 function handle(id, target) {
   return {

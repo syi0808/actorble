@@ -4,7 +4,7 @@ import {
   BrowserEventDispatcher,
   BrowserStateApplier,
   BrowserStyleAdapter,
-} from '../src/platform-adapter/index.js'
+} from '../src/platform/platform-adapter/index.js'
 
 function targetHandle(id, element) {
   return {
