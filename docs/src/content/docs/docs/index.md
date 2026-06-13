@@ -15,6 +15,7 @@ The browser implementation is the active package today. The macOS, Windows, and 
 - [Browser getting started](./browser/getting-started/)
 - [Browser architecture](./browser/architecture/)
 - [Browser API surface](./browser/api/)
+- [Browser advanced API](./browser/advanced-api/)
 - [Browser examples](./browser/examples/)
 
 ## Repository sources

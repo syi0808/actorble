@@ -40,4 +40,4 @@ actorble.destroy()
 
 The facade currently delegates the core browser path for resolving targets, clicking, typing into a target, running scenarios, waiting, diagnostics, and capability/fidelity reports.
 
-Some public facade methods are still planned shells. Check [API Surface](./api/) before treating a method as production-ready.
+Some public facade methods are still planned shells. Check [API Surface](../api/) before treating a method as production-ready.

@@ -1,46 +1,582 @@
 ---
 title: API Surface
-description: Current and planned public API for @actorble/browser.
+description: User-facing API reference for @actorble/browser.
 sidebar:
   order: 4
 ---
 
-The public package barrel is `browser/src/index.ts`. The browser facade exports `Actorble` and `createActorble`.
-
-## Current facade entrypoints
-
-| Area | Methods |
-| --- | --- |
-| Target lookup | `resolve`, `resolveAll`, `exists`, `inspect` |
-| Geometry | `geometry` |
-| Core actions | `moveTo`, `click`, `typeInto` |
-| Waiting and scenarios | `waitFor`, `run`, `pause`, `resume`, `stop` |
-| Reports | `getCapabilities`, `getFidelity`, `getTrace` |
-| Lifecycle | `destroy` |
-
-## Planned facade shells
-
-These methods exist on the facade shape but still return a not-implemented path in the current source:
-
-- `clickCurrent`
-- `doubleClick`
-- `focus`
-- `type`
-- `fill`
-- `press`
-- `scrollTo`
-- `drag`
-- `on`
-- `off`
-
-## Locator helper
-
-The current examples use the CSS locator helper:
+The package entrypoint is `@actorble/browser`. Start with `createActorble()`, locator helpers, and facade methods.
 
 ```ts
-import { css } from '@actorble/browser'
-
-await actorble.click(css('#save'))
+import { createActorble, css } from '@actorble/browser'
 ```
 
-Additional locator and browser fidelity work is tracked in `browser/docs/implementation_tasks.md`.
+Low-level target types, engine interfaces, platform adapters, and custom composition hooks are documented in [Advanced API](../advanced-api/).
+
+## createActorble
+
+```ts
+function createActorble(options?: ActorbleFacadeOptions): Actorble
+```
+
+Creates the browser facade and wires the default browser modules for target resolution, geometry, action orchestration, scenario execution, diagnostics, visual feedback, and fidelity reports.
+
+```ts
+import { createActorble, css } from '@actorble/browser'
+
+const actorble = createActorble({ visual: true })
+
+await actorble.click(css('#save'))
+actorble.destroy()
+```
+
+### Options
+
+`createActorble()` and `new Actorble()` accept the same options object. Most users only need `root`, `mode`, and `visual`.
+
+```ts
+type CommonActorbleOptions = Pick<
+  ActorbleFacadeOptions,
+  'root' | 'mode' | 'debug' | 'visual'
+>
+
+type CommonActorbleOptionsShape = {
+  root?: Document | ShadowRoot | Element
+  mode?: 'interactive' | 'headless'
+  debug?: boolean
+  visual?: boolean | VisualFeedbackOptions | VisualLayer
+}
+```
+
+### root
+
+- Type: `Document | ShadowRoot | Element`
+
+Limits DOM access to a document or shadow root. Passing an element uses its owner document.
+
+```ts
+const actorble = createActorble({ root: document })
+```
+
+### mode
+
+- Type: `'interactive' | 'headless'`
+
+`headless` disables the built-in visual layer. Omit it for normal interactive browser use.
+
+```ts
+const actorble = createActorble({ mode: 'headless' })
+```
+
+### debug
+
+- Type: `boolean`
+
+Reserved on the shared options shape. It is not wired to facade behavior yet.
+
+### visual
+
+- Type: `boolean | VisualFeedbackOptions | VisualLayer`
+
+`visual: true` creates the built-in browser overlay with the quiet preset. Passing an object enables the overlay unless `enabled` is `false`. Passing a custom `VisualLayer` lets advanced integrations own visual behavior.
+
+```ts
+const actorble = createActorble({
+  visual: {
+    enabled: true,
+    preset: 'quiet',
+    targetHighlight: true,
+  },
+})
+```
+
+```ts
+type VisualFeedbackOptions = {
+  enabled?: boolean
+  preset?: 'quiet' | 'debug'
+  cursor?: boolean
+  cursorScale?: number
+  targetHighlight?: boolean
+  clickFeedback?: boolean
+  focusOverlay?: boolean
+  typingIndicator?: boolean
+  keystrokeOverlay?: boolean
+  textVisibility?: 'hidden' | 'masked' | 'plain'
+}
+```
+
+`quiet` shows the cursor by default. `debug` enables cursor, target highlight, click, focus, typing, and keystroke feedback by default.
+
+Dependency injection options such as `resolver`, `orchestrator`, `trace`, and `dom` are advanced composition hooks. See [Advanced API](../advanced-api/) for the interfaces those injected modules must satisfy.
+
+## Actorble
+
+```ts
+class Actorble {
+  constructor(options?: ActorbleFacadeOptions)
+}
+```
+
+`Actorble` is the facade for resolving targets, running actions, waiting, executing scenarios, reading reports, and cleaning up runtime state.
+
+```ts
+import { Actorble, testId } from '@actorble/browser'
+
+const actorble = new Actorble()
+await actorble.typeInto(testId('project-name'), 'Orbit')
+```
+
+### actorble.resolve
+
+```ts
+resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle>
+```
+
+Resolves one locator into a target handle. Use `strict: true` when ambiguous matches should reject instead of returning the highest-ranked match.
+
+```ts
+const save = await actorble.resolve(css('#save'), { strict: true })
+```
+
+`TargetHandle` is usually passed back into Actorble methods. Its full shape is documented in [Advanced API](../advanced-api/#targethandle).
+
+### actorble.resolveAll
+
+```ts
+resolveAll(locator: Locator, options?: ResolveOptions): Promise<readonly TargetHandle[]>
+```
+
+Returns every target that matches a locator.
+
+```ts
+const rows = await actorble.resolveAll(css('[data-row]'))
+```
+
+### actorble.exists
+
+```ts
+exists(locator: Locator, options?: ResolveOptions): Promise<boolean>
+```
+
+Returns whether at least one target matches the locator.
+
+```ts
+if (await actorble.exists(text('Saved'))) {
+  // ...
+}
+```
+
+### actorble.inspect
+
+```ts
+inspect(target: TargetLike): Promise<TargetInspection>
+```
+
+Returns the current target handle, debug information, and validity.
+
+```ts
+const info = await actorble.inspect(css('#save'))
+console.log(info.validity)
+```
+
+### actorble.geometry
+
+```ts
+geometry(target: TargetLike): Promise<GeometrySnapshot>
+```
+
+Computes the target rectangle, visible rectangle, center point, and clickable-point result.
+
+```ts
+const snapshot = await actorble.geometry(css('#save'))
+console.log(snapshot.center)
+```
+
+### actorble.moveTo
+
+```ts
+moveTo(target: TargetLike, options?: MoveOptions): Promise<void>
+```
+
+Resolves and reveals a target, computes geometry, moves the synthetic pointer, and waits for settlement.
+
+```ts
+await actorble.moveTo(css('#save'), { duration: 200 })
+```
+
+### actorble.click
+
+```ts
+click(target: TargetLike, options?: ClickOptions): Promise<void>
+```
+
+Runs the full click transaction: resolve, validate, reveal, geometry, interactability preflight, pointer gesture, wait, cleanup, and trace recording.
+
+```ts
+await actorble.click(css('#create-project'), {
+  timeout: 2_000,
+  force: false,
+  pressDwell: 80,
+})
+```
+
+### actorble.typeInto
+
+```ts
+typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void>
+```
+
+Resolves and reveals a target, focuses it, types text through synthetic browser input events, and records typing visual feedback when enabled.
+
+```ts
+await actorble.typeInto(label('Project name'), 'Orbit', {
+  focusStrategy: 'programmatic',
+  delay: 40,
+})
+```
+
+### actorble.waitFor
+
+```ts
+waitFor(condition: WaitCondition, options?: WaitOptions): Promise<void>
+```
+
+Waits for a browser condition to be satisfied.
+
+```ts
+await actorble.waitFor({
+  kind: 'custom',
+  predicate: () => document.body.textContent?.includes('Saved') ?? false,
+})
+```
+
+### actorble.run
+
+```ts
+run(scenario: Scenario, options?: RunOptions): Promise<void>
+```
+
+Runs ordered scenario steps with cancellation, timeout, pacing, pause, resume, stop, trace, and layout-invalidation handling.
+
+```ts
+await actorble.run({
+  name: 'create project',
+  steps: [
+    { action: 'click', target: css('#project-name') },
+    { action: 'typeInto', target: css('#project-name'), input: 'Orbit' },
+    { action: 'click', target: css('#create-project') },
+  ],
+})
+```
+
+### actorble.pause
+
+```ts
+pause(): void
+```
+
+Requests a running scenario to pause between steps.
+
+### actorble.resume
+
+```ts
+resume(): void
+```
+
+Resumes a paused scenario.
+
+### actorble.stop
+
+```ts
+stop(): void
+```
+
+Stops the active scenario and aborts the current action signal when one is active.
+
+### actorble.getCapabilities
+
+```ts
+getCapabilities(): CapabilityReport
+```
+
+Returns the browser implementation capability report, including synthetic input limits.
+
+### actorble.getFidelity
+
+```ts
+getFidelity(): FidelityReport
+```
+
+Returns the current input and visual overlay fidelity report.
+
+### actorble.getTrace
+
+```ts
+getTrace(): Trace
+```
+
+Returns trace spans, events, snapshots, and warnings recorded by the facade modules.
+
+### actorble.destroy
+
+```ts
+destroy(): void
+```
+
+Stops scenario execution, disposes layout invalidation tracking, clears visual feedback, and destroys the visual layer.
+
+### Planned facade methods
+
+These methods exist on the class shape but currently return `NOT_IMPLEMENTED`.
+
+```ts
+clickCurrent(options?: ClickCurrentOptions): Promise<void>
+doubleClick(target: TargetLike, options?: ClickOptions): Promise<void>
+focus(target: TargetLike, options?: FocusOptions): Promise<void>
+type(text: string, options?: TypeOptions): Promise<void>
+fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
+press(keys: string, options?: PressOptions): Promise<void>
+scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
+on(event: DebugEventName, listener: ActorbleListener): void
+off(event: DebugEventName, listener: ActorbleListener): void
+```
+
+Do not treat these as ready facade APIs until the implementation delegates to the orchestrator.
+
+## Locator helpers
+
+Locator helpers create typed locator objects consumed by the facade, resolver, orchestrator, and scenario runner.
+
+```ts
+type Locator =
+  | CssLocator
+  | ElementLocator
+  | RoleLocator
+  | TextLocator
+  | LabelLocator
+  | TestIdLocator
+  | PointLocator
+```
+
+### css
+
+```ts
+function css(selector: string, options?: { root?: ParentNode }): CssLocator
+```
+
+Creates a CSS selector locator. Use `root` to limit lookup to a parent node.
+
+```ts
+await actorble.click(css('button.primary'))
+```
+
+### element
+
+```ts
+function element(target: Element): ElementLocator
+```
+
+Wraps an existing DOM element as a locator.
+
+### role
+
+```ts
+function role(
+  roleName: string,
+  options?: {
+    name?: string | RegExp
+    exact?: boolean
+    includeHidden?: boolean
+  },
+): RoleLocator
+```
+
+Creates an accessibility role locator.
+
+### text
+
+```ts
+function text(
+  value: string | RegExp,
+  options?: { exact?: boolean },
+): TextLocator
+```
+
+Creates a text-content locator.
+
+### label
+
+```ts
+function label(
+  value: string | RegExp,
+  options?: { exact?: boolean },
+): LabelLocator
+```
+
+Creates a form-label locator.
+
+### testId
+
+```ts
+function testId(
+  value: string,
+  options?: { attribute?: string },
+): TestIdLocator
+```
+
+Creates a test id locator. The default attribute is resolved by the target resolver.
+
+### point
+
+```ts
+function point(
+  xOrPoint: number | Point,
+  y?: number,
+  options?: { coordinateSpace?: CoordinateSpace },
+): PointLocator
+```
+
+Creates a point locator.
+
+## Operation options
+
+Most public methods accept operation options.
+
+```ts
+type OperationOptions = {
+  timeout?: DurationMs
+  signal?: CancellationSignalLike
+}
+```
+
+### ResolveOptions
+
+```ts
+type ResolveOptions = OperationOptions & {
+  strict?: boolean
+}
+```
+
+### Pointer movement options
+
+```ts
+type PointerMovementOptions = {
+  duration?: DurationMs
+  motion?: PointerMotionProfile
+}
+```
+
+```ts
+type PointerMotionProfile =
+  | { kind: 'linear'; duration?: DurationMs }
+  | { kind: 'ease'; easing?: 'ease-in' | 'ease-out' | 'ease-in-out'; duration?: DurationMs }
+  | { kind: 'inertia'; duration?: DurationMs }
+  | { kind: 'spring'; duration?: DurationMs }
+```
+
+### ClickOptions
+
+```ts
+type ClickOptions = OperationOptions & PointerMovementOptions & {
+  button?: PointerButtonName
+  clickCount?: number
+  force?: boolean
+  pressDwell?: DurationMs
+}
+```
+
+`force` bypasses forceable interactability blockers but does not bypass unforceable blockers.
+
+### TypeOptions
+
+```ts
+type TypeOptions = OperationOptions & {
+  delay?: DurationMs
+  focusStrategy?: 'programmatic' | 'click' | 'none'
+  focusClick?: TypeFocusClickOptions
+  afterFocusDelay?: DurationMs
+}
+```
+
+Use `focusStrategy: 'none'` only when the target is already focused.
+
+## WaitCondition
+
+```ts
+type WaitCondition =
+  | { kind: 'visible'; target: TargetLike }
+  | { kind: 'hidden'; target: TargetLike }
+  | { kind: 'text'; value: string | RegExp }
+  | { kind: 'custom'; predicate: () => boolean | Promise<boolean> }
+```
+
+`waitFor()` resolves when the condition is satisfied or rejects on timeout/cancellation.
+
+## Scenario
+
+```ts
+type Scenario = {
+  id?: string
+  name?: string
+  steps: readonly ScenarioStep[]
+}
+```
+
+```ts
+type ScenarioStep =
+  | { id?: string; action: 'click'; target: TargetLike; options?: Omit<ClickOptions, 'signal'> }
+  | { id?: string; action: 'typeInto'; target: TargetLike; input: string; options?: Omit<TypeOptions, 'signal'> }
+  | { id?: string; action: 'waitFor'; input: WaitCondition; options?: Omit<WaitOptions, 'signal'> }
+  | { id?: string; action: 'delay'; duration: DurationMs; reason?: string }
+```
+
+Scenario step options omit `signal` because the runner owns cancellation for the active run.
+
+## Reports
+
+### CapabilityReport
+
+```ts
+type CapabilityReport = {
+  pointerInput: 'none' | 'visual' | 'synthetic' | 'native'
+  keyboardInput: 'none' | 'synthetic' | 'native'
+  textInput: 'none' | 'set-value' | 'insert-text' | 'composition' | 'native'
+  pseudoState: 'none' | 'mirror' | 'native'
+  trustedEvents: boolean
+  crossOriginFrame: boolean
+  closedShadowRoot: boolean
+  dragAndDrop: DragAndDropCapability
+}
+```
+
+### FidelityReport
+
+```ts
+type FidelityReport = {
+  pointerInput: InputFidelity
+  keyboardInput: InputFidelity
+  textInput: InputFidelity
+  pseudoState: PseudoStateCapability
+  visualOverlay: VisualOverlayFidelity
+  trustedEvents: boolean
+  limits: readonly string[]
+}
+```
+
+## Error helpers
+
+```ts
+class ActorbleError extends Error {
+  readonly code: ActorbleErrorCode
+  readonly details?: ActorbleErrorDetails
+}
+
+function actorbleError(
+  code: ActorbleErrorCode,
+  message: string,
+  options?: ActorbleErrorOptions,
+): ActorbleError
+```
+
+`ActorbleErrorCode` currently includes `NOT_IMPLEMENTED`, `TARGET_NOT_FOUND`, `TARGET_AMBIGUOUS`, `TARGET_STALE`, `TARGET_DETACHED`, `ACTION_TIMEOUT`, `ACTION_CANCELLED`, `INTERACTABILITY_FAILED`, and `PLATFORM_UNSUPPORTED`.

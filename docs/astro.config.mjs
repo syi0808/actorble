@@ -33,6 +33,7 @@ export default defineConfig({
             { label: 'Getting Started', slug: 'docs/browser/getting-started' },
             { label: 'Architecture', slug: 'docs/browser/architecture' },
             { label: 'API Surface', slug: 'docs/browser/api' },
+            { label: 'Advanced API', slug: 'docs/browser/advanced-api' },
             { label: 'Examples', slug: 'docs/browser/examples' },
           ],
         },

@@ -2,7 +2,7 @@
 title: Examples
 description: Small examples for the Actorble browser package.
 sidebar:
-  order: 5
+  order: 8
 ---
 
 ## Click a target
@@ -40,7 +40,7 @@ const actorble = createActorble({ visual: true })
 await actorble.run({
   steps: [
     { action: 'click', target: css('#project-name') },
-    { action: 'typeInto', target: css('#project-name'), text: 'Orbit' },
+    { action: 'typeInto', target: css('#project-name'), input: 'Orbit' },
     { action: 'click', target: css('#create-project') },
   ],
 })
