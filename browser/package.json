@@ -24,7 +24,7 @@
   },
   "keywords": [],
   "author": "Yein Sung",
-  "license": "MIT",
+  "license": "Apache-2.0 OR MIT",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
