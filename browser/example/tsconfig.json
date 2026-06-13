@@ -11,8 +11,6 @@
   },
   "include": [
     "shared/**/*.ts",
-    "locator-inspector/src/**/*.ts",
-    "action-playground/src/**/*.ts",
-    "scenario-runner/src/**/*.ts"
+    "action-playground/src/**/*.ts"
   ]
 }

@@ -1,5 +1,5 @@
 import '../../shared/styles.css'
-import { createActorble, label, testId } from '../../../src/index.js'
+import { createActorble, testId, type TypeOptions } from '../../../src/index.js'
 import {
   byId,
   escapeHtml,
@@ -12,117 +12,137 @@ import {
 
 type DemoActorble = ReturnType<typeof createActorble>
 type VisualMode = 'quiet' | 'debug' | 'off'
+type ScenarioId = 'github' | 'form' | 'search'
 
+type ScenarioDefinition = Readonly<{
+  id: ScenarioId
+  navLabel: string
+  eyebrow: string
+  title: string
+  summary: string
+  successMessage: string
+  render(): string
+  bind(): void
+  run(): Promise<void>
+  typeFirstField(): Promise<void>
+  clickPrimary(): Promise<void>
+}>
+
+const scenarios: readonly ScenarioDefinition[] = [
+  {
+    id: 'github',
+    navLabel: 'GitHub',
+    eyebrow: 'Repository work',
+    title: 'GitHub issue triage',
+    summary: 'Search a repository, open the issues tab, and inspect a specific issue.',
+    successMessage: 'GitHub scenario complete',
+    render: renderGitHubScenario,
+    bind: bindGitHubScenario,
+    run: runGitHubScenario,
+    typeFirstField: typeGitHubQuery,
+    clickPrimary: clickGitHubPrimary,
+  },
+  {
+    id: 'form',
+    navLabel: 'Form',
+    eyebrow: 'Data entry',
+    title: 'Request form fill',
+    summary: 'Fill a realistic request form, toggle a confirmation checkbox, and submit it.',
+    successMessage: 'Form scenario complete',
+    render: renderFormScenario,
+    bind: bindFormScenario,
+    run: runFormScenario,
+    typeFirstField: typeFormFirstField,
+    clickPrimary: clickFormPrimary,
+  },
+  {
+    id: 'search',
+    navLabel: 'Search',
+    eyebrow: 'Web search',
+    title: 'Search result exploration',
+    summary: 'Run a search query and open a result from a browser-like result page.',
+    successMessage: 'Search scenario complete',
+    render: renderSearchScenario,
+    bind: bindSearchScenario,
+    run: runSearchScenario,
+    typeFirstField: typeSearchQuery,
+    clickPrimary: clickSearchPrimary,
+  },
+]
+
+let currentScenarioId: ScenarioId = 'github'
 let visualMode: VisualMode = 'quiet'
 let actorble: DemoActorble = createDemoActorble()
+const domEvents: string[] = []
 const app = byId<HTMLDivElement>('app')
+const humanFocusClick = {
+  motion: { kind: 'ease', easing: 'ease-in-out', duration: 180 },
+  pressDwell: 80,
+} as const
 
 app.innerHTML = `
-  <main class="app-shell">
+  <main class="app-shell task-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Example 02</p>
-        <h1>Action playground</h1>
+        <p class="eyebrow">Actorble browser</p>
+        <h1>Browser task scenarios</h1>
       </div>
       <a class="secondary-action" href="/">Examples</a>
     </header>
 
-    <section class="workspace" aria-label="Action playground">
-      <div class="stage-panel">
+    <section class="task-workspace" aria-label="Browser task scenarios">
+      <aside class="scenario-rail" aria-label="Scenario list">
+        ${scenarios
+          .map(
+            (scenario) => `
+              <button
+                class="scenario-tab"
+                id="scenario-${scenario.id}"
+                data-testid="scenario-${scenario.id}"
+                data-scenario-id="${scenario.id}"
+                type="button"
+              >
+                <span>${escapeHtml(scenario.navLabel)}</span>
+                <strong>${escapeHtml(scenario.title)}</strong>
+              </button>
+            `,
+          )
+          .join('')}
+      </aside>
+
+      <section class="stage-panel task-stage-panel" id="stage-panel" aria-live="polite">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Target surface</p>
-            <h2>Project console</h2>
+            <p class="eyebrow" id="scenario-eyebrow"></p>
+            <h2 id="scenario-title"></h2>
           </div>
+          <small class="scenario-summary" id="scenario-summary"></small>
         </div>
-
-        <div class="surface-stack">
-          <form class="project-form" id="project-form">
-            <label for="project-name">Project name</label>
-            <input
-              id="project-name"
-              data-testid="project-name"
-              name="projectName"
-              autocomplete="off"
-              placeholder="Untitled project"
-            />
-            <button id="create-project" data-testid="create-project" type="submit">
-              Create project
-            </button>
-          </form>
-
-          <div class="project-board" aria-live="polite">
-            <div class="board-header">
-              <span class="board-marker"></span>
-              <strong id="project-status" data-state="idle">No project created</strong>
-            </div>
-            <ul class="task-list">
-              <li>
-                <span>Launch checklist</span>
-                <small id="task-state" data-testid="task-state">waiting</small>
-                <button id="complete-checklist" data-testid="complete-checklist" type="button">
-                  Complete
-                </button>
-              </li>
-              <li>
-                <span>Invite operators</span>
-                <small id="operator-state" data-testid="operator-state">queued</small>
-                <span></span>
-              </li>
-              <li>
-                <span>Review traces</span>
-                <small id="review-state" data-testid="review-state">blocked</small>
-                <span></span>
-              </li>
-            </ul>
-          </div>
-
-          <form class="operator-form" id="operator-form">
-            <label for="operator-email">Operator email</label>
-            <input
-              id="operator-email"
-              data-testid="operator-email"
-              name="operatorEmail"
-              autocomplete="off"
-              placeholder="operator@example.com"
-            />
-            <button id="invite-operator" data-testid="invite-operator" type="submit">
-              Invite operator
-            </button>
-          </form>
-
-          <div class="review-panel">
-            <div>
-              <strong>Review readiness</strong>
-              <small id="review-state-detail">Blocked</small>
-            </div>
-            <button id="mark-review-ready" data-testid="mark-review-ready" type="button">
-              Mark ready
-            </button>
-          </div>
-        </div>
-      </div>
+        <div class="scenario-stage" id="scenario-stage"></div>
+      </section>
     </section>
 
     ${renderUtilityPanel({
       id: 'action-utility-panel',
-      label: 'Action playground controls',
-      title: 'Action playground',
+      label: 'Task scenario controls',
+      title: 'Task scenarios',
       sections: [
         {
           id: 'action-actions',
           eyebrow: 'Actions',
-          title: 'Success flows',
+          title: 'Run browser tasks',
           body: `
             <div class="status-pill" id="run-status">Ready</div>
+            <div class="scenario-readout result-block">
+              <strong id="selected-scenario-title"></strong>
+              <small id="selected-scenario-summary"></small>
+            </div>
             <div class="result-block">
               <div class="action-grid">
-                <button id="run-flow" type="button">Create project</button>
-                <button id="run-complete-checklist" type="button">Complete checklist</button>
-                <button id="run-invite-operator" type="button">Invite operator</button>
-                <button id="run-ready-review" type="button">Ready for review</button>
-                <button id="run-type" type="button">Type project name</button>
-                <button id="run-click" type="button">Click create</button>
+                <button id="run-current" data-testid="run-current" type="button">Run scenario</button>
+                <button id="run-type-first" data-testid="run-type-first" type="button">Type first field</button>
+                <button id="run-click-primary" data-testid="run-click-primary" type="button">Click primary</button>
+                <button id="reset-stage" type="button">Reset</button>
               </div>
             </div>
           `,
@@ -165,9 +185,6 @@ app.innerHTML = `
                 <span>Off</span>
               </label>
             </fieldset>
-            <div class="result-block">
-              <button class="secondary-action" id="reset-stage" type="button">Reset</button>
-            </div>
           `,
         },
         {
@@ -191,64 +208,86 @@ app.innerHTML = `
 `
 
 const actionUtilityPanel = setupUtilityPanel('action-utility-panel')
-
+const stagePanel = byId<HTMLElement>('stage-panel')
+const scenarioEyebrow = byId<HTMLElement>('scenario-eyebrow')
+const scenarioTitle = byId<HTMLElement>('scenario-title')
+const scenarioSummary = byId<HTMLElement>('scenario-summary')
+const scenarioStage = byId<HTMLDivElement>('scenario-stage')
+const selectedScenarioTitle = byId<HTMLElement>('selected-scenario-title')
+const selectedScenarioSummary = byId<HTMLElement>('selected-scenario-summary')
 const runStatus = byId<HTMLDivElement>('run-status')
-const projectForm = byId<HTMLFormElement>('project-form')
-const projectNameInput = byId<HTMLInputElement>('project-name')
-const createProjectButton = byId<HTMLButtonElement>('create-project')
-const completeChecklistButton = byId<HTMLButtonElement>('complete-checklist')
-const operatorForm = byId<HTMLFormElement>('operator-form')
-const operatorEmailInput = byId<HTMLInputElement>('operator-email')
-const inviteOperatorButton = byId<HTMLButtonElement>('invite-operator')
-const markReviewReadyButton = byId<HTMLButtonElement>('mark-review-ready')
-const projectStatus = byId<HTMLElement>('project-status')
-const taskState = byId<HTMLElement>('task-state')
-const operatorState = byId<HTMLElement>('operator-state')
-const reviewState = byId<HTMLElement>('review-state')
-const reviewStateDetail = byId<HTMLElement>('review-state-detail')
 const resetStageButton = byId<HTMLButtonElement>('reset-stage')
+const runCurrentButton = byId<HTMLButtonElement>('run-current')
+const runTypeFirstButton = byId<HTMLButtonElement>('run-type-first')
+const runClickPrimaryButton = byId<HTMLButtonElement>('run-click-primary')
+const eventLog = byId<HTMLOListElement>('event-log')
+const fidelityOutput = byId<HTMLDivElement>('fidelity-output')
 const visualModeInputs = Array.from(
   document.querySelectorAll<HTMLInputElement>('input[name="visual-mode"]'),
 )
-const runFlowButton = byId<HTMLButtonElement>('run-flow')
-const runCompleteChecklistButton = byId<HTMLButtonElement>('run-complete-checklist')
-const runInviteOperatorButton = byId<HTMLButtonElement>('run-invite-operator')
-const runReadyReviewButton = byId<HTMLButtonElement>('run-ready-review')
-const runTypeButton = byId<HTMLButtonElement>('run-type')
-const runClickButton = byId<HTMLButtonElement>('run-click')
-const eventLog = byId<HTMLOListElement>('event-log')
-const fidelityOutput = byId<HTMLDivElement>('fidelity-output')
+const scenarioButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-scenario-id]'),
+)
 
-let createdCount = 0
-const domEvents: string[] = []
-
-projectForm.addEventListener('submit', (event) => {
-  event.preventDefault()
-  createProject()
-})
-
-operatorForm.addEventListener('submit', (event) => {
-  event.preventDefault()
-  inviteOperator()
-})
-
-completeChecklistButton.addEventListener('click', completeChecklist)
-markReviewReadyButton.addEventListener('click', markReviewReady)
-
-bindDomEvents('input', projectNameInput)
-bindDomEvents('button', createProjectButton)
-bindDomEvents('checklist', completeChecklistButton)
-bindDomEvents('operatorInput', operatorEmailInput)
-bindDomEvents('invite', inviteOperatorButton)
-bindDomEvents('review', markReviewReadyButton)
-
-operatorEmailInput.addEventListener('click', () => {
-  operatorEmailInput.focus()
-})
+for (const button of scenarioButtons) {
+  button.addEventListener('click', () => {
+    currentScenarioId = button.dataset.scenarioId as ScenarioId
+    renderCurrentScenario()
+    setStatus(runStatus, 'Ready')
+  })
+}
 
 resetStageButton.addEventListener('click', () => {
-  resetStage()
+  renderCurrentScenario()
   setStatus(runStatus, 'Ready')
+})
+
+runCurrentButton.addEventListener('click', () => {
+  const scenario = getCurrentScenario()
+
+  void runWithStatus(
+    runStatus,
+    scenario.successMessage,
+    runCurrentButton,
+    async () => {
+      actionUtilityPanel.collapse()
+      renderCurrentScenario()
+      await scenario.run()
+    },
+    afterActionRun,
+  )
+})
+
+runTypeFirstButton.addEventListener('click', () => {
+  const scenario = getCurrentScenario()
+
+  void runWithStatus(
+    runStatus,
+    'First field typed',
+    runTypeFirstButton,
+    async () => {
+      actionUtilityPanel.collapse()
+      renderCurrentScenario()
+      await scenario.typeFirstField()
+    },
+    afterActionRun,
+  )
+})
+
+runClickPrimaryButton.addEventListener('click', () => {
+  const scenario = getCurrentScenario()
+
+  void runWithStatus(
+    runStatus,
+    'Primary click complete',
+    runClickPrimaryButton,
+    async () => {
+      actionUtilityPanel.collapse()
+      renderCurrentScenario()
+      await scenario.clickPrimary()
+    },
+    afterActionRun,
+  )
 })
 
 for (const input of visualModeInputs) {
@@ -265,107 +304,41 @@ for (const input of visualModeInputs) {
   })
 }
 
-runFlowButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Flow complete',
-    runFlowButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      resetStage()
-      await createProjectFlow(`Atlas ${createdCount + 1}`)
-    },
-    afterActionRun,
-  )
-})
-
-runCompleteChecklistButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Checklist complete',
-    runCompleteChecklistButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      resetStage()
-      await createProjectFlow(`Checklist ${createdCount + 1}`)
-      await completeChecklistFlow()
-    },
-    afterActionRun,
-  )
-})
-
-runInviteOperatorButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Operator invited',
-    runInviteOperatorButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      resetStage()
-      await createProjectFlow(`Invite ${createdCount + 1}`)
-      await inviteOperatorFlow('operator@example.com')
-    },
-    afterActionRun,
-  )
-})
-
-runReadyReviewButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Ready for review',
-    runReadyReviewButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      resetStage()
-      await createProjectFlow(`Review ${createdCount + 1}`)
-      await completeChecklistFlow()
-      await inviteOperatorFlow('reviewer@example.com')
-      await actorble.click(testId('mark-review-ready'), { pressDwell: 100, timeout: 1500 })
-      await actorble.waitFor({
-        kind: 'custom',
-        predicate: () => reviewState.dataset.state === 'ready',
-      })
-    },
-    afterActionRun,
-  )
-})
-
-runTypeButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Typed name',
-    runTypeButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      prepareInput('')
-      await actorble.typeInto(label('Project name', { exact: true }), 'Atlas', {
-        delay: 80,
-        timeout: 3000,
-      })
-    },
-    afterActionRun,
-  )
-})
-
-runClickButton.addEventListener('click', () => {
-  void runWithStatus(
-    runStatus,
-    'Clicked create',
-    runClickButton,
-    async () => {
-      actionUtilityPanel.collapse()
-      if (projectNameInput.value.trim().length === 0) {
-        prepareInput('Manual launch')
-      }
-
-      await actorble.click(testId('create-project'), { timeout: 1500 })
-    },
-    afterActionRun,
-  )
-})
-
-renderEvents()
+renderCurrentScenario()
 renderFidelity()
+
+function renderCurrentScenario(): void {
+  const scenario = getCurrentScenario()
+
+  stagePanel.dataset.scenario = scenario.id
+  scenarioEyebrow.textContent = scenario.eyebrow
+  scenarioTitle.textContent = scenario.title
+  scenarioSummary.textContent = scenario.summary
+  selectedScenarioTitle.textContent = scenario.title
+  selectedScenarioSummary.textContent = scenario.summary
+  scenarioStage.innerHTML = scenario.render()
+
+  for (const button of scenarioButtons) {
+    const isCurrent = button.dataset.scenarioId === scenario.id
+
+    button.dataset.state = isCurrent ? 'active' : 'idle'
+    button.setAttribute('aria-pressed', String(isCurrent))
+  }
+
+  domEvents.splice(0)
+  renderEvents()
+  scenario.bind()
+}
+
+function getCurrentScenario(): ScenarioDefinition {
+  const scenario = scenarios.find((candidate) => candidate.id === currentScenarioId)
+
+  if (!scenario) {
+    throw new Error(`Unknown scenario: ${currentScenarioId}`)
+  }
+
+  return scenario
+}
 
 function createDemoActorble(): DemoActorble {
   return createActorble({
@@ -404,95 +377,566 @@ function afterActionRun(): void {
   actionUtilityPanel.expand()
 }
 
-async function createProjectFlow(projectName: string): Promise<void> {
-  await actorble.moveTo(label('Project name', { exact: true }), {
-    motion: { kind: 'ease', easing: 'ease-in-out', duration: 180 },
+function renderGitHubScenario(): string {
+  return `
+    <div class="browser-frame github-surface" data-testid="github-surface">
+      <div class="browser-chrome" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <div class="address-bar">https://github.com/actorble/browser</div>
+      </div>
+
+      <div class="github-workspace">
+        <aside class="surface-panel repo-jump">
+          <div>
+            <p class="eyebrow">GitHub</p>
+            <h3>Repository jump</h3>
+          </div>
+          <label for="github-query">Repository or issue</label>
+          <div class="inline-form">
+            <input
+              id="github-query"
+              data-testid="github-query"
+              autocomplete="off"
+              placeholder="actorble browser"
+            />
+            <button id="github-search" data-testid="github-search" type="button">Open</button>
+          </div>
+          <button
+            class="repo-result"
+            id="github-repo-result"
+            data-testid="github-repo-result"
+            data-state="empty"
+            type="button"
+            disabled
+          >
+            No repository selected
+          </button>
+        </aside>
+
+        <section class="surface-panel repo-main">
+          <div class="repo-header">
+            <div>
+              <strong>actorble/browser</strong>
+              <small id="github-repo-status" data-state="idle">Ready for repository search</small>
+            </div>
+            <span class="repo-chip">TypeScript</span>
+          </div>
+
+          <nav class="repo-tabs" aria-label="Repository sections">
+            <button id="github-code-tab" type="button" disabled>Code</button>
+            <button
+              id="github-issues-tab"
+              data-testid="github-issues-tab"
+              data-state="idle"
+              type="button"
+              disabled
+            >
+              Issues <span>3</span>
+            </button>
+          </nav>
+
+          <div class="issue-list" id="github-issues" data-state="idle">
+            <div class="issue-placeholder">Open the repository, then choose Issues.</div>
+            <button
+              class="issue-row"
+              id="github-issue-example"
+              data-testid="github-issue-example"
+              type="button"
+              hidden
+            >
+              <span class="issue-state"></span>
+              <span>
+                <strong>Improve browser examples</strong>
+                <small>#42 opened by yein-agent</small>
+              </span>
+              <small>needs-design</small>
+            </button>
+            <button class="issue-row secondary-issue" type="button" hidden>
+              <span class="issue-state"></span>
+              <span>
+                <strong>Document visual fidelity limits</strong>
+                <small>#41 opened by docs-bot</small>
+              </span>
+              <small>docs</small>
+            </button>
+          </div>
+
+          <div class="outcome-strip" id="github-outcome" data-state="idle">
+            Waiting for an issue selection
+          </div>
+        </section>
+      </div>
+    </div>
+  `
+}
+
+function bindGitHubScenario(): void {
+  const queryInput = byId<HTMLInputElement>('github-query')
+  const searchButton = byId<HTMLButtonElement>('github-search')
+  const repoResult = byId<HTMLButtonElement>('github-repo-result')
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
+  const issueButton = byId<HTMLButtonElement>('github-issue-example')
+
+  searchButton.addEventListener('click', openGitHubSearch)
+  repoResult.addEventListener('click', openGitHubRepository)
+  issuesTab.addEventListener('click', openGitHubIssues)
+  issueButton.addEventListener('click', openGitHubIssue)
+
+  bindDomEvents('repoInput', queryInput)
+  bindDomEvents('openRepo', searchButton)
+  bindDomEvents('repoResult', repoResult)
+  bindDomEvents('issuesTab', issuesTab)
+  bindDomEvents('issueRow', issueButton)
+}
+
+async function runGitHubScenario(): Promise<void> {
+  await typeGitHubQuery()
+  await actorble.click(testId('github-search'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
+  })
+  await actorble.click(testId('github-repo-result'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('github-issues-tab'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('github-issues')?.dataset.state === 'open',
+  })
+  await actorble.click(testId('github-issue-example'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('github-outcome')?.dataset.state === 'issue-open',
+  })
+}
+
+async function typeGitHubQuery(): Promise<void> {
+  await actorble.moveTo(testId('github-query'), {
+    motion: { kind: 'ease', easing: 'ease-in-out', duration: 160 },
     timeout: 1500,
   })
-  await actorble.typeInto(label('Project name', { exact: true }), projectName, {
-    delay: 80,
-    timeout: 5000,
-  })
-  await actorble.moveTo(testId('create-project'), { timeout: 1500 })
-  await actorble.click(testId('create-project'), { pressDwell: 120, timeout: 1500 })
-  await actorble.waitFor({
-    kind: 'custom',
-    predicate: () => projectStatus.dataset.state === 'created',
+  await actorble.typeInto(testId('github-query'), 'actorble browser', {
+    ...clickFocusTyping(45, 5000),
   })
 }
 
-async function completeChecklistFlow(): Promise<void> {
-  await actorble.click(testId('complete-checklist'), { pressDwell: 100, timeout: 1500 })
+async function clickGitHubPrimary(): Promise<void> {
+  ensureInputValue('github-query', 'actorble browser')
+  await actorble.click(testId('github-search'), { pressDwell: 90, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
-    predicate: () => taskState.dataset.state === 'complete',
+    predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
   })
 }
 
-async function inviteOperatorFlow(email: string): Promise<void> {
-  await actorble.typeInto(label('Operator email', { exact: true }), email, {
-    delay: 35,
-    timeout: 5000,
+function openGitHubSearch(): void {
+  const query = byId<HTMLInputElement>('github-query').value.trim() || 'actorble browser'
+  const repoResult = byId<HTMLButtonElement>('github-repo-result')
+  const repoStatus = byId<HTMLElement>('github-repo-status')
+  const outcome = byId<HTMLElement>('github-outcome')
+
+  repoResult.disabled = false
+  repoResult.dataset.state = 'ready'
+  repoResult.textContent = `actorble/browser matches "${query}"`
+  repoStatus.dataset.state = 'searched'
+  repoStatus.textContent = 'Repository result ready'
+  outcome.dataset.state = 'searched'
+  outcome.textContent = 'Repository result is ready to open'
+}
+
+function openGitHubRepository(): void {
+  const repoStatus = byId<HTMLElement>('github-repo-status')
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
+  const outcome = byId<HTMLElement>('github-outcome')
+
+  repoStatus.dataset.state = 'repo-open'
+  repoStatus.textContent = 'Repository opened'
+  issuesTab.disabled = false
+  outcome.dataset.state = 'repo-open'
+  outcome.textContent = 'Repository open; Issues tab is available'
+}
+
+function openGitHubIssues(): void {
+  const issues = byId<HTMLElement>('github-issues')
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
+  const issueButton = byId<HTMLButtonElement>('github-issue-example')
+  const secondaryIssue = document.querySelector<HTMLButtonElement>('.secondary-issue')
+  const placeholder = document.querySelector<HTMLElement>('.issue-placeholder')
+  const outcome = byId<HTMLElement>('github-outcome')
+
+  issues.dataset.state = 'open'
+  issuesTab.dataset.state = 'active'
+  issueButton.hidden = false
+
+  if (secondaryIssue) {
+    secondaryIssue.hidden = false
+  }
+
+  if (placeholder) {
+    placeholder.hidden = true
+  }
+
+  outcome.dataset.state = 'issues-open'
+  outcome.textContent = 'Issues loaded; choose an issue to inspect'
+}
+
+function openGitHubIssue(): void {
+  const outcome = byId<HTMLElement>('github-outcome')
+
+  outcome.dataset.state = 'issue-open'
+  outcome.textContent = 'Opened issue #42: Improve browser examples'
+}
+
+function renderFormScenario(): string {
+  return `
+    <div class="browser-frame form-surface" data-testid="form-surface">
+      <div class="browser-chrome" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <div class="address-bar">https://ops.example/request/new</div>
+      </div>
+
+      <div class="form-workspace">
+        <section class="surface-panel form-card">
+          <div>
+            <p class="eyebrow">Ops form</p>
+            <h3>Automation support request</h3>
+          </div>
+          <form class="scenario-form" id="request-form">
+            <label for="request-name">Full name</label>
+            <input
+              id="request-name"
+              data-testid="request-name"
+              autocomplete="off"
+              placeholder="Mina Park"
+            />
+
+            <label for="request-email">Email</label>
+            <input
+              id="request-email"
+              data-testid="request-email"
+              autocomplete="off"
+              placeholder="mina@example.com"
+            />
+
+            <label for="request-company">Company</label>
+            <input
+              id="request-company"
+              data-testid="request-company"
+              autocomplete="off"
+              placeholder="Northstar Labs"
+            />
+
+            <label for="request-details">Request details</label>
+            <textarea
+              id="request-details"
+              data-testid="request-details"
+              rows="4"
+              placeholder="Describe the workflow to automate"
+            ></textarea>
+
+            <label class="check-row" for="request-copy">
+              <input id="request-copy" data-testid="request-copy" type="checkbox" />
+              <span>Send me a copy of this request</span>
+            </label>
+
+            <button id="request-submit" data-testid="request-submit" type="submit">
+              Submit request
+            </button>
+          </form>
+        </section>
+
+        <aside class="surface-panel submission-panel">
+          <p class="eyebrow">Submission</p>
+          <h3>Request state</h3>
+          <div class="outcome-strip" id="form-status" data-state="idle">Draft not submitted</div>
+          <dl class="submission-summary" id="form-summary">
+            <div>
+              <dt>Name</dt>
+              <dd>Waiting</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>Waiting</dd>
+            </div>
+            <div>
+              <dt>Copy</dt>
+              <dd>No</dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+    </div>
+  `
+}
+
+function bindFormScenario(): void {
+  const requestForm = byId<HTMLFormElement>('request-form')
+  const nameInput = byId<HTMLInputElement>('request-name')
+  const emailInput = byId<HTMLInputElement>('request-email')
+  const companyInput = byId<HTMLInputElement>('request-company')
+  const detailsInput = byId<HTMLTextAreaElement>('request-details')
+  const copyCheckbox = byId<HTMLInputElement>('request-copy')
+  const submitButton = byId<HTMLButtonElement>('request-submit')
+
+  requestForm.addEventListener('submit', (event) => {
+    event.preventDefault()
+    submitRequestForm()
+  })
+
+  bindDomEvents('requestForm', requestForm)
+  bindDomEvents('nameInput', nameInput)
+  bindDomEvents('emailInput', emailInput)
+  bindDomEvents('companyInput', companyInput)
+  bindDomEvents('detailsInput', detailsInput)
+  bindDomEvents('copyCheckbox', copyCheckbox)
+  bindDomEvents('submitRequest', submitButton)
+}
+
+async function runFormScenario(): Promise<void> {
+  await typeFormFirstField()
+  await actorble.typeInto(testId('request-email'), 'mina@example.com', {
+    ...clickFocusTyping(25, 5000),
+  })
+  await actorble.typeInto(testId('request-company'), 'Northstar Labs', {
+    ...clickFocusTyping(25, 5000),
+  })
+  await actorble.typeInto(
+    testId('request-details'),
+    'Please automate a browser QA pass for the new onboarding form.',
+    {
+      ...clickFocusTyping(15, 7000),
+    },
+  )
+  await actorble.click(testId('request-copy'), { pressDwell: 80, timeout: 1500 })
+  await actorble.click(testId('request-submit'), { pressDwell: 100, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',
+  })
+}
+
+async function typeFormFirstField(): Promise<void> {
+  await actorble.moveTo(testId('request-name'), {
+    motion: { kind: 'ease', easing: 'ease-in-out', duration: 160 },
+    timeout: 1500,
+  })
+  await actorble.typeInto(testId('request-name'), 'Mina Park', {
+    ...clickFocusTyping(35, 5000),
+  })
+}
+
+async function clickFormPrimary(): Promise<void> {
+  ensureInputValue('request-name', 'Mina Park')
+  ensureInputValue('request-email', 'mina@example.com')
+  ensureInputValue('request-company', 'Northstar Labs')
+  ensureInputValue('request-details', 'Please review this automated request.')
+  await actorble.click(testId('request-submit'), { pressDwell: 100, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',
+  })
+}
+
+function submitRequestForm(): void {
+  const nameInput = byId<HTMLInputElement>('request-name')
+  const emailInput = byId<HTMLInputElement>('request-email')
+  const copyCheckbox = byId<HTMLInputElement>('request-copy')
+  const status = byId<HTMLElement>('form-status')
+  const summary = byId<HTMLElement>('form-summary')
+  const name = nameInput.value.trim() || 'Unknown requester'
+  const email = emailInput.value.trim() || 'unknown@example.com'
+
+  status.dataset.state = 'submitted'
+  status.textContent = `Submitted request for ${name}`
+  summary.innerHTML = `
+    <div>
+      <dt>Name</dt>
+      <dd>${escapeHtml(name)}</dd>
+    </div>
+    <div>
+      <dt>Email</dt>
+      <dd>${escapeHtml(email)}</dd>
+    </div>
+    <div>
+      <dt>Copy</dt>
+      <dd>${copyCheckbox.checked ? 'Yes' : 'No'}</dd>
+    </div>
+  `
+}
+
+function renderSearchScenario(): string {
+  return `
+    <div class="browser-frame search-surface" data-testid="search-surface">
+      <div class="browser-chrome" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <div class="address-bar">https://google.com/search</div>
+      </div>
+
+      <div class="search-workspace">
+        <section class="surface-panel search-main">
+          <form class="search-form" id="search-form">
+            <label for="search-query">Search query</label>
+            <div class="search-box">
+              <input
+                id="search-query"
+                data-testid="search-query"
+                autocomplete="off"
+                placeholder="browser automation event dispatch"
+              />
+              <button id="search-submit" data-testid="search-submit" type="submit">Search</button>
+            </div>
+          </form>
+
+          <div class="search-results" id="search-results" data-state="empty">
+            <p id="search-count">Results will appear here.</p>
+            <button
+              class="search-result"
+              id="search-result-docs"
+              data-testid="search-result-docs"
+              type="button"
+              hidden
+            >
+              <span>actorble.dev/docs</span>
+              <strong>Actorble browser automation API</strong>
+              <small>Target resolution, pointer actions, text input, and wait observation.</small>
+            </button>
+            <button class="search-result secondary-result" type="button" hidden>
+              <span>developer.example/blog</span>
+              <strong>Testing synthetic browser interactions</strong>
+              <small>Patterns for deterministic DOM event dispatch in local demos.</small>
+            </button>
+          </div>
+        </section>
+
+        <aside class="surface-panel search-preview" id="search-preview" data-state="idle">
+          <p class="eyebrow">Preview</p>
+          <h3>Selected result</h3>
+          <div class="outcome-strip">No result opened</div>
+        </aside>
+      </div>
+    </div>
+  `
+}
+
+function bindSearchScenario(): void {
+  const searchForm = byId<HTMLFormElement>('search-form')
+  const queryInput = byId<HTMLInputElement>('search-query')
+  const submitButton = byId<HTMLButtonElement>('search-submit')
+  const resultButton = byId<HTMLButtonElement>('search-result-docs')
+
+  searchForm.addEventListener('submit', (event) => {
+    event.preventDefault()
+    runSearch()
+  })
+  resultButton.addEventListener('click', openSearchResult)
+
+  bindDomEvents('searchForm', searchForm)
+  bindDomEvents('searchInput', queryInput)
+  bindDomEvents('searchButton', submitButton)
+  bindDomEvents('searchResult', resultButton)
+}
+
+async function runSearchScenario(): Promise<void> {
+  await typeSearchQuery()
+  await actorble.click(testId('search-submit'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',
+  })
+  await actorble.click(testId('search-result-docs'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('search-preview')?.dataset.state === 'open',
+  })
+}
+
+async function typeSearchQuery(): Promise<void> {
+  await actorble.moveTo(testId('search-query'), {
+    motion: { kind: 'ease', easing: 'ease-in-out', duration: 160 },
+    timeout: 1500,
+  })
+  await actorble.typeInto(
+    testId('search-query'),
+    'browser automation event dispatch',
+    {
+      ...clickFocusTyping(30, 5000),
+    },
+  )
+}
+
+async function clickSearchPrimary(): Promise<void> {
+  ensureInputValue('search-query', 'browser automation event dispatch')
+  await actorble.click(testId('search-submit'), { pressDwell: 90, timeout: 1500 })
+  await actorble.waitFor({
+    kind: 'custom',
+    predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',
+  })
+}
+
+function runSearch(): void {
+  const query = byId<HTMLInputElement>('search-query').value.trim() || 'browser automation'
+  const results = byId<HTMLElement>('search-results')
+  const count = byId<HTMLElement>('search-count')
+  const resultButton = byId<HTMLButtonElement>('search-result-docs')
+  const secondaryResult = document.querySelector<HTMLButtonElement>('.secondary-result')
+
+  results.dataset.state = 'ready'
+  count.textContent = `Top results for "${query}"`
+  resultButton.hidden = false
+
+  if (secondaryResult) {
+    secondaryResult.hidden = false
+  }
+}
+
+function openSearchResult(): void {
+  const preview = byId<HTMLElement>('search-preview')
+
+  preview.dataset.state = 'open'
+  preview.innerHTML = `
+    <p class="eyebrow">Preview</p>
+    <h3>Actorble browser automation API</h3>
+    <div class="outcome-strip" data-state="open">
+      Opened result about target resolution and DOM event dispatch
+    </div>
+  `
+}
+
+function ensureInputValue(id: string, value: string): void {
+  const input = byId<HTMLInputElement | HTMLTextAreaElement>(id)
+
+  input.value = value
+  input.focus()
+
+  try {
+    input.setSelectionRange(value.length, value.length)
+  } catch {
+    // Some text controls do not expose selection.
+  }
+}
+
+function clickFocusTyping(delay: number, timeout: number): TypeOptions {
+  return {
+    delay,
+    timeout,
     focusStrategy: 'click',
-  })
-  await actorble.click(testId('invite-operator'), { pressDwell: 100, timeout: 1500 })
-  await actorble.waitFor({
-    kind: 'custom',
-    predicate: () => operatorState.dataset.state === 'invited',
-  })
-}
-
-function createProject(): void {
-  createdCount += 1
-
-  const projectName = projectNameInput.value.trim() || 'Untitled project'
-  projectStatus.dataset.state = 'created'
-  projectStatus.textContent = `Created ${projectName} (#${createdCount})`
-}
-
-function completeChecklist(): void {
-  taskState.dataset.state = 'complete'
-  taskState.textContent = 'complete'
-}
-
-function inviteOperator(): void {
-  const email = operatorEmailInput.value.trim() || 'operator@example.com'
-
-  operatorState.dataset.state = 'invited'
-  operatorState.textContent = 'invited'
-  operatorEmailInput.value = email
-}
-
-function markReviewReady(): void {
-  reviewState.dataset.state = 'ready'
-  reviewState.textContent = 'ready'
-  reviewStateDetail.textContent = 'Ready'
-}
-
-function resetStage(): void {
-  prepareInput('')
-  operatorEmailInput.value = ''
-  operatorEmailInput.setSelectionRange(0, 0)
-  projectStatus.dataset.state = 'idle'
-  projectStatus.textContent = 'No project created'
-  taskState.dataset.state = 'waiting'
-  taskState.textContent = 'waiting'
-  operatorState.dataset.state = 'queued'
-  operatorState.textContent = 'queued'
-  reviewState.dataset.state = 'blocked'
-  reviewState.textContent = 'blocked'
-  reviewStateDetail.textContent = 'Blocked'
-  domEvents.splice(0)
-  renderEvents()
-}
-
-function prepareInput(value: string): void {
-  projectNameInput.value = value
-  projectNameInput.focus()
-  projectNameInput.setSelectionRange(value.length, value.length)
+    focusClick: humanFocusClick,
+    afterFocusDelay: 40,
+  }
 }
 
 function bindDomEvents(labelText: string, target: HTMLElement): void {
+  if (isTextEntryControl(target)) {
+    target.addEventListener('click', () => {
+      target.focus()
+    })
+  }
+
   for (const eventName of [
     'pointermove',
     'pointerdown',
@@ -504,9 +948,30 @@ function bindDomEvents(labelText: string, target: HTMLElement): void {
     'beforeinput',
     'input',
     'change',
+    'submit',
   ] as const) {
     target.addEventListener(eventName, (event) => recordDomEvent(labelText, event))
   }
+}
+
+function isTextEntryControl(target: HTMLElement): target is HTMLInputElement | HTMLTextAreaElement {
+  if (target instanceof HTMLTextAreaElement) {
+    return true
+  }
+
+  if (!(target instanceof HTMLInputElement)) {
+    return false
+  }
+
+  return [
+    '',
+    'email',
+    'password',
+    'search',
+    'tel',
+    'text',
+    'url',
+  ].includes(target.type)
 }
 
 function recordDomEvent(labelText: string, event: Event): void {
@@ -520,7 +985,7 @@ function recordDomEvent(labelText: string, event: Event): void {
       : ''
 
   domEvents.unshift(`${labelText}.${event.type}${inputData}`)
-  domEvents.splice(12)
+  domEvents.splice(40)
   renderEvents()
 }
 

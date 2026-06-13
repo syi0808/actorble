@@ -1,6 +1,6 @@
-# Actorble Browser Examples
+# Actorble Browser Example
 
-Runnable browser example projects for the current `@actorble/browser` vertical slice.
+Runnable browser example for the current `@actorble/browser` vertical slice.
 
 ```sh
 pnpm example:dev
@@ -8,10 +8,8 @@ pnpm example:typecheck
 pnpm example:build
 ```
 
-Each example imports from `../src` so it reflects the local source implementation.
+The example imports from `../src` so it reflects the local source implementation.
 
-- `locator-inspector/`: target resolution, inspection, and geometry.
-- `action-playground/`: `moveTo`, `typeInto`, `click`, visual feedback, DOM event dispatch, and success-flow action demos.
-- `scenario-runner/`: selectable success scenarios, custom wait, trace, capabilities, and fidelity.
+- `action-playground/`: GitHub navigation, form filling, and web search task scenarios using `moveTo`, `typeInto`, `click`, custom waits, visual feedback, DOM event logging, and fidelity reporting.
 
-The examples intentionally use only implemented APIs: target resolution, inspection, geometry, click, typeInto, scenario run, custom wait, trace, capabilities, and fidelity.
+The example intentionally uses only implemented APIs: target resolution through test ids, pointer movement, click, typeInto, custom wait, capabilities, and fidelity.
