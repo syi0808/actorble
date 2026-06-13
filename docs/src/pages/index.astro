@@ -836,11 +836,7 @@ const github = 'https://github.com/syi0808/actorble'
   body {
     margin: 0;
     min-width: 320px;
-    background:
-      linear-gradient(rgba(8, 127, 112, 0.055) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(242, 184, 75, 0.06) 1px, transparent 1px),
-      var(--page);
-    background-size: 36px 36px;
+    background: var(--page);
     color: var(--ink);
   }
 
@@ -850,9 +846,22 @@ const github = 'https://github.com/syi0808/actorble'
     inset: 0;
     z-index: -1;
     background:
-      linear-gradient(132deg, rgba(51, 230, 194, 0.23), transparent 42%),
-      linear-gradient(312deg, rgba(242, 184, 75, 0.22), transparent 38%),
-      linear-gradient(180deg, #ffffff 0%, #f6fffb 54%, #effff8 100%);
+      radial-gradient(ellipse 118% 72% at 14% -10%, rgba(255, 255, 255, 0.96) 0%, rgba(236, 255, 247, 0.76) 45%, rgba(236, 255, 247, 0) 76%),
+      radial-gradient(ellipse 112% 68% at 92% 10%, rgba(255, 232, 175, 0.34) 0%, rgba(255, 232, 175, 0) 64%),
+      linear-gradient(150deg, rgba(51, 230, 194, 0.12), rgba(51, 230, 194, 0) 38%),
+      linear-gradient(180deg, #ffffff 0%, #f6fffb 52%, #effbf6 100%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.46'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+    mix-blend-mode: multiply;
+    opacity: 0.08;
   }
 
   a {
@@ -956,6 +965,20 @@ const github = 'https://github.com/syi0808/actorble'
     overflow: hidden;
   }
 
+  .cinematic-hero::before {
+    content: "";
+    position: absolute;
+    inset: 58px -8vw -18vh;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 920'%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M-80 702C168 520 290 242 520 254C728 265 770 512 1006 490C1205 471 1282 282 1528 210' stroke='%23087f70' stroke-width='2' opacity='.18'/%3E%3Cpath d='M-60 756C202 574 326 326 560 336C782 346 824 574 1056 554C1248 537 1330 382 1510 336' stroke='%23f2b84b' stroke-width='2' opacity='.2'/%3E%3Cpath d='M64 198C248 96 384 82 522 154C684 238 706 404 898 406C1062 408 1160 296 1354 270' stroke='%2317222c' stroke-width='1.4' opacity='.09'/%3E%3Cpath d='M162 650C304 518 432 476 546 522C672 574 688 728 838 744C1010 762 1132 594 1316 564' stroke='%23087f70' stroke-width='1.5' opacity='.13'/%3E%3C/g%3E%3Cg fill='%23ffffff' stroke='%23087f70' stroke-width='1.2' opacity='.35'%3E%3Ccircle cx='520' cy='254' r='7'/%3E%3Ccircle cx='1006' cy='490' r='5'/%3E%3Ccircle cx='546' cy='522' r='5'/%3E%3C/g%3E%3C/svg%3E");
+    background-position: center 8px;
+    background-repeat: no-repeat;
+    background-size: max(1220px, 108vw) auto;
+    opacity: 0.72;
+    animation: heroMotionDrift 26s ease-in-out infinite alternate;
+  }
+
   .demo-theater {
     position: relative;
     display: grid;
@@ -975,8 +998,9 @@ const github = 'https://github.com/syi0808/actorble'
     border: 1px solid rgba(8, 127, 112, 0.22);
     border-radius: 8px;
     background:
-      linear-gradient(135deg, #ffffff 0%, #dffdf5 32%, #fff0c8 66%, #c8faec 100%),
-      repeating-linear-gradient(135deg, rgba(8, 127, 112, 0.08) 0 1px, transparent 1px 18px);
+      radial-gradient(ellipse 116% 82% at 16% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 56%),
+      radial-gradient(ellipse 104% 74% at 86% 14%, rgba(255, 235, 184, 0.38) 0%, rgba(255, 235, 184, 0) 62%),
+      linear-gradient(135deg, #ffffff 0%, #e0fff6 34%, #fff5d8 69%, #d7fff3 100%);
     box-shadow:
       0 42px 120px rgba(8, 127, 112, 0.18),
       0 24px 70px rgba(143, 95, 0, 0.12),
@@ -987,6 +1011,20 @@ const github = 'https://github.com/syi0808/actorble'
       opacity 900ms ease,
       filter 900ms ease,
       transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .desktop-stage::before {
+    content: "";
+    position: absolute;
+    inset: -16% -10%;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 760'%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M92 594C226 404 378 242 548 276C706 308 746 508 910 512C1036 516 1102 408 1184 324' stroke='%23087f70' stroke-width='18' opacity='.06'/%3E%3Cpath d='M120 616C258 436 386 322 536 344C684 366 742 540 900 552C1038 562 1126 458 1210 398' stroke='%23f2b84b' stroke-width='10' opacity='.08'/%3E%3Cpath d='M64 246C202 172 350 156 466 232C610 326 622 466 780 472C928 478 1028 352 1150 312' stroke='%2317222c' stroke-width='5' opacity='.045'/%3E%3Cpath d='M-28 492C154 392 294 368 420 430C566 502 608 658 782 656C958 654 1054 502 1212 482' stroke='%23087f70' stroke-width='5' opacity='.05'/%3E%3C/g%3E%3C/svg%3E");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    transform: translate3d(0, 0, 0);
+    animation: stageMotionDrift 22s ease-in-out infinite alternate;
   }
 
   .cinematic-hero[data-scene="complete"] .desktop-stage {
@@ -1043,6 +1081,7 @@ const github = 'https://github.com/syi0808/actorble'
   .desktop-wallpaper {
     position: absolute;
     inset: 58px 36px 88px;
+    z-index: 1;
     pointer-events: none;
   }
 
@@ -1374,9 +1413,9 @@ const github = 'https://github.com/syi0808/actorble'
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
     background:
-      linear-gradient(rgba(8, 127, 112, 0.05) 1px, transparent 1px),
+      radial-gradient(ellipse 108% 72% at 12% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 62%),
+      linear-gradient(135deg, rgba(51, 230, 194, 0.08), rgba(242, 184, 75, 0.07) 64%, rgba(255, 255, 255, 0)),
       #fbfffd;
-    background-size: 24px 24px;
   }
 
   .target-header {
@@ -1881,6 +1920,26 @@ const github = 'https://github.com/syi0808/actorble'
       linear-gradient(110deg, rgba(51, 230, 194, 0.12), transparent 42%),
       linear-gradient(290deg, rgba(242, 184, 75, 0.16), transparent 44%),
       rgba(255, 255, 255, 0.54);
+  }
+
+  @keyframes heroMotionDrift {
+    from {
+      transform: translate3d(-1.2vw, -0.8vh, 0) scale(1);
+    }
+
+    to {
+      transform: translate3d(1.2vw, 1vh, 0) scale(1.025);
+    }
+  }
+
+  @keyframes stageMotionDrift {
+    from {
+      transform: translate3d(-1.4%, -0.8%, 0) scale(1);
+    }
+
+    to {
+      transform: translate3d(1.4%, 0.8%, 0) scale(1.02);
+    }
   }
 
   .final-cta {
