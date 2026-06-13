@@ -51,6 +51,7 @@ const github = 'https://github.com/syi0808/actorble'
         class="cinematic-hero"
         id="demo"
         data-landing-demo
+        data-demo-running="false"
         data-scene="ready"
         data-actorble="closed"
         data-browser="closed"
@@ -360,6 +361,7 @@ const github = 'https://github.com/syi0808/actorble'
     createActorble,
     testId,
     type Actorble,
+    type Point,
     type Scenario,
   } from '@actorble/browser-source'
 
@@ -443,11 +445,12 @@ const github = 'https://github.com/syi0808/actorble'
       runCount += 1
       setRunButtonsDisabled(true)
       resetDemo()
+      setDemoRunning(true)
       window.scrollTo({ top: activeDemoRoot.offsetTop, behavior: 'auto' })
 
       try {
         await wait(420)
-        const outer = createDemoActorble()
+        const outer = createDemoActorble(getDemoStartPoint())
         setCursorSurface('mac')
 
         try {
@@ -461,7 +464,7 @@ const github = 'https://github.com/syi0808/actorble'
           outer.destroy()
         }
 
-        const inner = createDemoActorble()
+        const inner = createDemoActorble(getElementCenter(startNestedButton) ?? getDemoStartPoint())
         setCursorSurface('browser')
 
         try {
@@ -481,13 +484,15 @@ const github = 'https://github.com/syi0808/actorble'
       } finally {
         setCursorSurface('idle')
         setRunButtonsDisabled(false)
+        setDemoRunning(false)
         running = false
       }
     }
 
-    function createDemoActorble(): Actorble {
+    function createDemoActorble(initialPosition: Point = getDemoStartPoint()): Actorble {
       return createActorble({
         mode: 'interactive',
+        pointer: { initialPosition },
         visual: {
           preset: 'quiet',
           cursorScale: 2.6,
@@ -576,6 +581,7 @@ const github = 'https://github.com/syi0808/actorble'
       activeDemoRoot.dataset.nested = 'idle'
       activeDemoRoot.dataset.request = 'idle'
       activeDemoRoot.dataset.review = 'idle'
+      activeDemoRoot.dataset.demoRunning = 'false'
       document.documentElement.dataset.actorbleCursor = 'idle'
 
       if (runBrowserButton) {
@@ -718,6 +724,10 @@ const github = 'https://github.com/syi0808/actorble'
       document.documentElement.dataset.actorbleCursor = surface
     }
 
+    function setDemoRunning(nextRunning: boolean): void {
+      activeDemoRoot.dataset.demoRunning = nextRunning ? 'true' : 'false'
+    }
+
     function createClickOptions(duration: number) {
       return {
         ...revealNearest(),
@@ -744,6 +754,32 @@ const github = 'https://github.com/syi0808/actorble'
       }
     }
 
+    function getDemoStartPoint(): Point {
+      const stage = activeDemoRoot.querySelector<HTMLElement>('.desktop-stage')
+
+      return getElementCenter(stage) ?? {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      }
+    }
+
+    function getElementCenter(element: Element | null | undefined): Point | null {
+      if (!element) {
+        return null
+      }
+
+      const rect = element.getBoundingClientRect()
+
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      }
+    }
+
     function revealNearest() {
       return {
         block: 'nearest' as ScrollLogicalPosition,
@@ -761,25 +797,32 @@ const github = 'https://github.com/syi0808/actorble'
 
 <style>
   :root {
-    color-scheme: dark;
+    color-scheme: light;
     font-family:
       Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
       sans-serif;
-    background: #080b0f;
-    color: #f7fbff;
+    background: #f6fffb;
+    color: #101418;
     letter-spacing: 0;
-    --ink: #080b0f;
-    --panel: #101820;
-    --panel-2: #16222c;
-    --line: rgba(215, 224, 231, 0.16);
-    --muted: #99a9b5;
-    --soft: #d7e0e7;
+    --ink: #101418;
+    --ink-soft: #17222c;
+    --page: #f6fffb;
+    --page-warm: #fffaf0;
+    --paper: #ffffff;
+    --paper-mint: #eafff8;
+    --line: rgba(16, 20, 24, 0.12);
+    --line-strong: rgba(16, 20, 24, 0.2);
+    --muted: #566875;
+    --soft: #e7f2ee;
     --mint: #33e6c2;
     --mint-dark: #087f70;
+    --mint-deep: #065f55;
     --amber: #f2b84b;
+    --amber-dark: #8f5f00;
     --coral: #ff6b5f;
-    --blue: #5aa8ff;
+    --leaf: #7cd66f;
     --white: #ffffff;
+    --shadow: rgba(33, 48, 38, 0.16);
   }
 
   * {
@@ -794,11 +837,11 @@ const github = 'https://github.com/syi0808/actorble'
     margin: 0;
     min-width: 320px;
     background:
-      linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
-      #080b0f;
+      linear-gradient(rgba(8, 127, 112, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(242, 184, 75, 0.06) 1px, transparent 1px),
+      var(--page);
     background-size: 36px 36px;
-    color: var(--white);
+    color: var(--ink);
   }
 
   body::before {
@@ -807,9 +850,9 @@ const github = 'https://github.com/syi0808/actorble'
     inset: 0;
     z-index: -1;
     background:
-      linear-gradient(130deg, rgba(51, 230, 194, 0.13), transparent 42%),
-      linear-gradient(310deg, rgba(90, 168, 255, 0.12), transparent 38%),
-      linear-gradient(180deg, #0c1116 0%, #080b0f 56%, #111820 100%);
+      linear-gradient(132deg, rgba(51, 230, 194, 0.23), transparent 42%),
+      linear-gradient(312deg, rgba(242, 184, 75, 0.22), transparent 38%),
+      linear-gradient(180deg, #ffffff 0%, #f6fffb 54%, #effff8 100%);
   }
 
   a {
@@ -857,8 +900,9 @@ const github = 'https://github.com/syi0808/actorble'
     justify-content: space-between;
     min-height: 64px;
     padding: 0 clamp(18px, 5vw, 72px);
-    border-bottom: 1px solid rgba(215, 224, 231, 0.12);
-    background: rgba(8, 11, 15, 0.72);
+    border-bottom: 1px solid rgba(8, 127, 112, 0.16);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 14px 40px rgba(8, 127, 112, 0.08);
     backdrop-filter: blur(18px);
   }
 
@@ -891,18 +935,19 @@ const github = 'https://github.com/syi0808/actorble'
     overflow: visible;
   }
 
-  .brand-wordmark .actorble-wordmark-letter {
-    fill: var(--white);
+  .brand-wordmark :global(.actorble-wordmark-letter) {
+    fill: var(--ink);
   }
 
   .nav {
     gap: clamp(14px, 3vw, 24px);
-    color: #c7d2da;
+    color: #42525f;
     font-size: 0.94rem;
+    font-weight: 740;
   }
 
   .nav a:hover {
-    color: var(--mint);
+    color: var(--mint-dark);
   }
 
   .cinematic-hero {
@@ -922,18 +967,20 @@ const github = 'https://github.com/syi0808/actorble'
 
   .desktop-stage {
     position: relative;
+    z-index: 1;
     width: min(1560px, calc(100vw - 28px));
     height: min(900px, calc(100svh - 88px));
     min-height: 620px;
     overflow: hidden;
-    border: 1px solid rgba(215, 224, 231, 0.18);
+    border: 1px solid rgba(8, 127, 112, 0.22);
     border-radius: 8px;
     background:
-      linear-gradient(135deg, #25445e 0%, #1d676c 35%, #172b42 68%, #11151f 100%),
-      repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 18px);
+      linear-gradient(135deg, #ffffff 0%, #dffdf5 32%, #fff0c8 66%, #c8faec 100%),
+      repeating-linear-gradient(135deg, rgba(8, 127, 112, 0.08) 0 1px, transparent 1px 18px);
     box-shadow:
-      0 44px 120px rgba(0, 0, 0, 0.42),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      0 42px 120px rgba(8, 127, 112, 0.18),
+      0 24px 70px rgba(143, 95, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92);
     transform: translateY(0) scale(1);
     transform-origin: center 44%;
     transition:
@@ -943,8 +990,8 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .cinematic-hero[data-scene="complete"] .desktop-stage {
-    opacity: 0.68;
-    filter: brightness(0.72) saturate(0.9);
+    opacity: 0.52;
+    filter: brightness(1.03) saturate(0.86);
     transform: translateY(-10vh) scale(0.78) rotateX(4deg);
   }
 
@@ -955,8 +1002,8 @@ const github = 'https://github.com/syi0808/actorble'
     gap: 14px;
     height: 30px;
     padding: 0 14px;
-    background: rgba(248, 250, 252, 0.74);
-    color: #17202a;
+    background: rgba(255, 255, 255, 0.74);
+    color: var(--ink);
     font-size: 0.78rem;
     font-weight: 730;
     backdrop-filter: blur(18px);
@@ -989,7 +1036,7 @@ const github = 'https://github.com/syi0808/actorble'
     flex: 0 0 auto;
     width: 15px;
     height: 15px;
-    fill: #17202a;
+    fill: var(--ink);
     stroke-width: 1.8;
   }
 
@@ -1005,19 +1052,19 @@ const github = 'https://github.com/syi0808/actorble'
     overflow: visible;
   }
 
-  .wallpaper-mark .actorble-motion-rail,
-  .wallpaper-mark .actorble-motion-cross-rail {
-    opacity: 0.22;
+  .wallpaper-mark :global(.actorble-motion-rail),
+  .wallpaper-mark :global(.actorble-motion-cross-rail) {
+    opacity: 0.2;
   }
 
-  .wallpaper-mark .actorble-motion-path {
-    opacity: 0.18;
-    stroke: rgba(51, 230, 194, 0.22);
+  .wallpaper-mark :global(.actorble-motion-path) {
+    opacity: 0.68;
+    stroke: rgba(51, 230, 194, 0.72);
   }
 
-  .wallpaper-mark .actorble-motion-cross {
-    opacity: 0.25;
-    stroke: rgba(242, 184, 75, 0.28);
+  .wallpaper-mark :global(.actorble-motion-cross) {
+    opacity: 0.72;
+    stroke: rgba(242, 184, 75, 0.74);
   }
 
   .actorble-window,
@@ -1025,9 +1072,9 @@ const github = 'https://github.com/syi0808/actorble'
     position: absolute;
     z-index: 4;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.24);
+    border: 1px solid rgba(16, 20, 24, 0.12);
     border-radius: 8px;
-    box-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
+    box-shadow: 0 30px 90px rgba(33, 48, 38, 0.22);
     opacity: 0;
     pointer-events: none;
     transition:
@@ -1040,7 +1087,10 @@ const github = 'https://github.com/syi0808/actorble'
     top: 74px;
     left: clamp(22px, 4vw, 58px);
     width: min(430px, 36vw);
-    background: rgba(15, 22, 32, 0.92);
+    border-color: rgba(51, 230, 194, 0.28);
+    background:
+      linear-gradient(145deg, rgba(23, 34, 44, 0.94), rgba(16, 20, 24, 0.92)),
+      var(--ink);
     color: var(--white);
     backdrop-filter: blur(20px);
     transform: translateY(18px) scale(0.98);
@@ -1053,8 +1103,8 @@ const github = 'https://github.com/syi0808/actorble'
     width: min(930px, 68vw);
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
-    background: #f5f7fb;
-    color: #17202a;
+    background: var(--paper);
+    color: var(--ink);
     transform: translateY(24px) scale(0.975);
   }
 
@@ -1078,8 +1128,8 @@ const github = 'https://github.com/syi0808/actorble'
   .cinematic-hero[data-nested="running"] .chrome-window,
   .cinematic-hero[data-scene="complete"] .chrome-window {
     box-shadow:
-      0 0 0 1px rgba(51, 230, 194, 0.18),
-      0 36px 98px rgba(0, 0, 0, 0.4);
+      0 0 0 1px rgba(51, 230, 194, 0.28),
+      0 36px 98px rgba(33, 48, 38, 0.24);
   }
 
   .mac-window-bar {
@@ -1087,8 +1137,8 @@ const github = 'https://github.com/syi0808/actorble'
     gap: 12px;
     min-height: 38px;
     padding: 0 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .mac-window-bar strong,
@@ -1097,7 +1147,7 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .mac-window-bar span:last-child {
-    color: #cbd8e2;
+    color: #e7f2ee;
   }
 
   .window-dots {
@@ -1151,7 +1201,7 @@ const github = 'https://github.com/syi0808/actorble'
   .app-copy p,
   .runtime-panel p {
     margin: 8px 0 0;
-    color: #b8c7d3;
+    color: #cfe4dc;
     font-size: 0.94rem;
     line-height: 1.48;
   }
@@ -1176,15 +1226,16 @@ const github = 'https://github.com/syi0808/actorble'
 
   .run-browser-button {
     justify-self: start;
-    background: var(--amber);
+    background: linear-gradient(135deg, var(--amber), #ffd872);
     color: #241700;
+    box-shadow: 0 12px 26px rgba(242, 184, 75, 0.2);
   }
 
   .chrome-tab-strip {
     gap: 9px;
     min-height: 40px;
     padding: 0 12px;
-    background: #dfe5ec;
+    background: #e5f5ef;
   }
 
   .chrome-tab {
@@ -1193,15 +1244,15 @@ const github = 'https://github.com/syi0808/actorble'
     height: 30px;
     border-radius: 8px 8px 0 0;
     padding: 0 12px;
-    background: #f5f7fb;
-    color: #1b2733;
+    background: var(--paper);
+    color: var(--ink);
     font-size: 0.82rem;
     font-weight: 760;
   }
 
   .chrome-tab.muted {
-    background: rgba(255, 255, 255, 0.38);
-    color: #607080;
+    background: rgba(255, 255, 255, 0.48);
+    color: #607367;
   }
 
   .chrome-favicon {
@@ -1211,8 +1262,8 @@ const github = 'https://github.com/syi0808/actorble'
     width: 18px;
     height: 18px;
     border-radius: 999px;
-    background: #e8f1ff;
-    color: #2563eb;
+    background: var(--paper-mint);
+    color: var(--mint-dark);
   }
 
   .chrome-favicon-icon {
@@ -1225,8 +1276,8 @@ const github = 'https://github.com/syi0808/actorble'
     gap: 10px;
     min-height: 42px;
     padding: 0 12px;
-    border-bottom: 1px solid rgba(16, 20, 24, 0.1);
-    background: #f3f6fa;
+    border-bottom: 1px solid rgba(8, 127, 112, 0.13);
+    background: #f8fffb;
   }
 
   .chrome-controls {
@@ -1239,7 +1290,7 @@ const github = 'https://github.com/syi0808/actorble'
     flex: 0 0 auto;
     width: 17px;
     height: 17px;
-    color: #64748b;
+    color: #65756d;
     opacity: 0.92;
     stroke-width: 2.25;
   }
@@ -1257,7 +1308,7 @@ const github = 'https://github.com/syi0808/actorble'
     border-radius: 999px;
     padding: 6px 14px;
     background: #ffffff;
-    color: #536272;
+    color: #52665d;
     font-size: 0.82rem;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -1270,7 +1321,7 @@ const github = 'https://github.com/syi0808/actorble'
     width: 26px;
     height: 26px;
     border-radius: 999px;
-    background: #1f2937;
+    background: var(--ink);
     color: #ffffff;
     font-size: 0.78rem;
     font-weight: 850;
@@ -1286,7 +1337,7 @@ const github = 'https://github.com/syi0808/actorble'
     display: grid;
     grid-template-columns: minmax(190px, 0.33fr) minmax(430px, 1fr);
     min-height: 0;
-    background: #f7f9fc;
+    background: #f8fffb;
   }
 
   .runtime-panel {
@@ -1294,8 +1345,10 @@ const github = 'https://github.com/syi0808/actorble'
     align-content: start;
     gap: 15px;
     padding: 24px;
-    border-right: 1px solid #dde6ee;
-    background: #111827;
+    border-right: 1px solid rgba(8, 127, 112, 0.16);
+    background:
+      linear-gradient(145deg, rgba(16, 20, 24, 0.96), rgba(23, 34, 44, 0.94)),
+      var(--ink);
     color: var(--white);
   }
 
@@ -1311,8 +1364,9 @@ const github = 'https://github.com/syi0808/actorble'
   .nested-run-button {
     justify-self: start;
     margin-top: 4px;
-    background: var(--mint);
+    background: linear-gradient(135deg, var(--mint), #87f4d8);
     color: #06201c;
+    box-shadow: 0 12px 26px rgba(51, 230, 194, 0.2);
   }
 
   .target-app {
@@ -1320,8 +1374,8 @@ const github = 'https://github.com/syi0808/actorble'
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
     background:
-      linear-gradient(rgba(21, 32, 43, 0.035) 1px, transparent 1px),
-      #f8fafc;
+      linear-gradient(rgba(8, 127, 112, 0.05) 1px, transparent 1px),
+      #fbfffd;
     background-size: 24px 24px;
   }
 
@@ -1331,36 +1385,36 @@ const github = 'https://github.com/syi0808/actorble'
     justify-content: space-between;
     gap: 16px;
     padding: 22px 24px 16px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #d9eee6;
   }
 
   .target-eyebrow {
-    color: #64748b;
+    color: var(--mint-dark);
     font-size: 0.84rem;
     font-weight: 850;
   }
 
   .target-header h2 {
     margin-top: 3px;
-    color: #17202a;
+    color: var(--ink);
     font-size: clamp(1.45rem, 2vw, 2rem);
   }
 
   .review-badge {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cce4dc;
     border-radius: 999px;
     padding: 7px 12px;
     background: #ffffff;
-    color: #64748b;
+    color: #607367;
     font-size: 0.84rem;
     font-weight: 850;
     white-space: nowrap;
   }
 
   .cinematic-hero[data-review="ready"] .review-badge {
-    border-color: rgba(8, 127, 112, 0.3);
-    background: rgba(51, 230, 194, 0.14);
-    color: #065f55;
+    border-color: rgba(8, 127, 112, 0.32);
+    background: rgba(51, 230, 194, 0.16);
+    color: var(--mint-deep);
   }
 
   .target-grid {
@@ -1382,16 +1436,16 @@ const github = 'https://github.com/syi0808/actorble'
     display: grid;
     gap: 8px;
     min-height: 118px;
-    border: 1px solid #d6e0ea;
+    border: 1px solid #d7ebe4;
     padding: 15px;
     background: #ffffff;
-    color: #17202a;
+    color: var(--ink);
     text-align: left;
   }
 
   .request-card.active {
-    border-color: rgba(8, 127, 112, 0.3);
-    box-shadow: 0 14px 30px rgba(16, 24, 40, 0.08);
+    border-color: rgba(8, 127, 112, 0.34);
+    box-shadow: 0 14px 30px rgba(8, 127, 112, 0.12);
   }
 
   .request-card.muted {
@@ -1400,7 +1454,7 @@ const github = 'https://github.com/syi0808/actorble'
 
   .request-card span,
   .request-card em {
-    color: #657586;
+    color: #607367;
     font-size: 0.86rem;
     font-style: normal;
   }
@@ -1410,7 +1464,7 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .cinematic-hero[data-request="open"] .request-card.active {
-    border-color: rgba(8, 127, 112, 0.5);
+    border-color: rgba(242, 184, 75, 0.72);
     transform: translateY(-2px);
   }
 
@@ -1428,7 +1482,7 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .field span {
-    color: #334155;
+    color: #32433c;
     font-size: 0.84rem;
     font-weight: 850;
   }
@@ -1437,11 +1491,11 @@ const github = 'https://github.com/syi0808/actorble'
     width: 100%;
     min-width: 0;
     min-height: 46px;
-    border: 1px solid #bac8d6;
+    border: 1px solid #bad7cd;
     border-radius: 8px;
     padding: 0 13px;
     background: #ffffff;
-    color: #111827;
+    color: var(--ink);
     font-size: 0.96rem;
     scroll-margin: 150px 0;
   }
@@ -1456,48 +1510,49 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .field input:focus {
-    outline: 3px solid rgba(51, 230, 194, 0.24);
+    outline: 3px solid rgba(51, 230, 194, 0.26);
     border-color: var(--mint-dark);
   }
 
   .check-button,
   .review-button {
     min-height: 44px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cce4dc;
     background: #ffffff;
-    color: #17202a;
+    color: var(--ink);
   }
 
   .check-button[data-state="confirmed"] {
     border-color: rgba(8, 127, 112, 0.36);
     background: rgba(51, 230, 194, 0.13);
-    color: #065f55;
+    color: var(--mint-deep);
   }
 
   .review-button {
     justify-self: start;
     border: 0;
     padding: 0 16px;
-    background: #101418;
+    background: linear-gradient(135deg, var(--ink), #17222c);
     color: #ffffff;
+    box-shadow: 0 14px 28px rgba(16, 20, 24, 0.16);
   }
 
   .review-confirmation {
     gap: 10px;
     min-height: 50px;
     max-width: 360px;
-    border: 1px solid #d6e0ea;
+    border: 1px solid #d7ebe4;
     border-radius: 8px;
     padding: 0 14px;
     background: #ffffff;
-    color: #64748b;
+    color: #607367;
   }
 
   .review-state-icon {
     width: 18px;
     height: 18px;
     flex: 0 0 auto;
-    color: #94a3b8;
+    color: #8ba097;
     stroke-width: 2.35;
   }
 
@@ -1513,7 +1568,7 @@ const github = 'https://github.com/syi0808/actorble'
   .review-confirmation[data-state="ready"] {
     border-color: rgba(8, 127, 112, 0.32);
     background: rgba(51, 230, 194, 0.12);
-    color: #065f55;
+    color: var(--mint-deep);
   }
 
   .review-confirmation[data-state="ready"] .review-state-idle {
@@ -1522,7 +1577,7 @@ const github = 'https://github.com/syi0808/actorble'
 
   .review-confirmation[data-state="ready"] .review-state-ready {
     display: block;
-    color: #087f70;
+    color: var(--mint-dark);
   }
 
   .dock {
@@ -1532,11 +1587,11 @@ const github = 'https://github.com/syi0808/actorble'
     bottom: 16px;
     gap: 10px;
     min-height: 64px;
-    border: 1px solid rgba(255, 255, 255, 0.24);
+    border: 1px solid rgba(8, 127, 112, 0.18);
     border-radius: 8px;
     padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
+    background: rgba(255, 255, 255, 0.42);
+    box-shadow: 0 18px 46px rgba(8, 127, 112, 0.14);
     backdrop-filter: blur(18px);
     transform: translateX(-50%);
   }
@@ -1546,10 +1601,10 @@ const github = 'https://github.com/syi0808/actorble'
     place-items: center;
     width: 48px;
     height: 48px;
-    border: 1px solid rgba(255, 255, 255, 0.24);
+    border: 1px solid rgba(8, 127, 112, 0.14);
     border-radius: 8px;
     padding: 0;
-    background: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.72);
     scroll-margin: 0;
   }
 
@@ -1564,41 +1619,41 @@ const github = 'https://github.com/syi0808/actorble'
     stroke-width: 2.15;
   }
 
-  .dock-symbol .actorble-mark-base,
-  .dock-symbol .actorble-mark-cross {
+  .dock-symbol :global(.actorble-mark-base),
+  .dock-symbol :global(.actorble-mark-cross) {
     fill: none;
   }
 
-  .dock-symbol .actorble-mark-base {
+  .dock-symbol :global(.actorble-mark-base) {
     stroke: var(--mint-dark);
   }
 
-  .dock-symbol .actorble-mark-rail,
-  .dock-symbol .actorble-mark-cross-rail {
-    stroke: rgba(255, 255, 255, 0.8);
+  .dock-symbol :global(.actorble-mark-rail),
+  .dock-symbol :global(.actorble-mark-cross-rail) {
+    stroke: rgba(255, 255, 255, 0.92);
   }
 
-  .dock-symbol .actorble-mark-cross {
-    stroke: #9a6400;
+  .dock-symbol :global(.actorble-mark-cross) {
+    stroke: var(--amber-dark);
   }
 
   .dock-icon.finder {
-    background: linear-gradient(135deg, #dff6ff, #ffffff 54%, #b8dcff);
-    color: #1679ba;
+    background: linear-gradient(135deg, #eafff8, #ffffff 54%, #bdf5e5);
+    color: var(--mint-dark);
   }
 
   .dock-icon.actorble {
-    background: rgba(255, 255, 255, 0.7);
+    background: linear-gradient(135deg, #ffffff, #fff2cc 54%, #d8fff3);
   }
 
   .dock-icon.browser {
-    background: linear-gradient(135deg, #eef6ff, #ffffff 52%, #dbeafe);
-    color: #2563eb;
+    background: linear-gradient(135deg, #effff9, #ffffff 52%, #ffe7ad);
+    color: var(--mint-dark);
   }
 
   .dock-icon.notes {
-    background: linear-gradient(180deg, #fde68a 0 32%, #ffffff 33% 100%);
-    color: #8a5b00;
+    background: linear-gradient(180deg, #ffd872 0 32%, #ffffff 33% 100%);
+    color: var(--amber-dark);
   }
 
   .hero-reveal {
@@ -1625,20 +1680,22 @@ const github = 'https://github.com/syi0808/actorble'
   .hero-reveal h1 {
     margin: 0;
     max-width: 760px;
-    color: var(--white);
+    color: var(--ink);
     font-size: clamp(3.3rem, 7.2vw, 7.4rem);
     line-height: 0.92;
     text-wrap: balance;
-    text-shadow: 0 18px 44px rgba(0, 0, 0, 0.46);
+    text-shadow:
+      0 8px 24px rgba(255, 255, 255, 0.9),
+      0 18px 44px rgba(8, 127, 112, 0.18);
   }
 
   .hero-reveal p {
     max-width: 660px;
     margin: 24px 0 0;
-    color: #d7e0e7;
+    color: #32433c;
     font-size: clamp(1.04rem, 1.7vw, 1.26rem);
     line-height: 1.58;
-    text-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 8px 22px rgba(255, 255, 255, 0.86);
   }
 
   .hero-actions {
@@ -1656,6 +1713,7 @@ const github = 'https://github.com/syi0808/actorble'
     border-radius: 8px;
     padding: 0 18px;
     font-weight: 850;
+    box-shadow: 0 12px 28px rgba(8, 127, 112, 0.1);
     transition:
       border-color 160ms ease,
       background-color 160ms ease,
@@ -1673,19 +1731,19 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .primary {
-    background: var(--mint);
+    background: linear-gradient(135deg, var(--mint), #8cf3d9);
     color: #06201c;
   }
 
   .secondary {
-    border-color: rgba(215, 224, 231, 0.24);
-    background: rgba(255, 255, 255, 0.09);
-    color: var(--white);
+    border-color: rgba(8, 127, 112, 0.18);
+    background: rgba(255, 255, 255, 0.68);
+    color: var(--ink);
   }
 
   .ghost {
-    border-color: rgba(215, 224, 231, 0.16);
-    color: #d7e0e7;
+    border-color: rgba(242, 184, 75, 0.32);
+    color: #3d4133;
   }
 
   .start-panel {
@@ -1698,8 +1756,8 @@ const github = 'https://github.com/syi0808/actorble'
     transition: opacity 260ms ease;
   }
 
-  .cinematic-hero[data-scene="ready"] .start-panel,
-  .cinematic-hero[data-scene="failed"] .start-panel {
+  .cinematic-hero[data-demo-running="false"][data-scene="ready"] .start-panel,
+  .cinematic-hero[data-demo-running="false"][data-scene="failed"] .start-panel {
     opacity: 1;
     pointer-events: auto;
   }
@@ -1710,22 +1768,28 @@ const github = 'https://github.com/syi0808/actorble'
 
   :global([data-actorble-visual-cursor]) {
     z-index: 1000 !important;
-    filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
+    filter: drop-shadow(0 12px 20px rgba(33, 48, 38, 0.24)) !important;
     transition: filter 180ms ease, transform 80ms ease-out !important;
   }
 
   :global(:root[data-actorble-cursor="mac"] [data-actorble-visual-cursor]) {
     filter:
       drop-shadow(0 0 10px rgba(242, 184, 75, 0.58))
-      drop-shadow(0 0 22px rgba(255, 255, 255, 0.22))
-      drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
+      drop-shadow(0 0 22px rgba(255, 255, 255, 0.38))
+      drop-shadow(0 12px 20px rgba(33, 48, 38, 0.24)) !important;
   }
 
   :global(:root[data-actorble-cursor="browser"] [data-actorble-visual-cursor]) {
     filter:
       drop-shadow(0 0 10px rgba(51, 230, 194, 0.64))
-      drop-shadow(0 0 24px rgba(90, 168, 255, 0.24))
-      drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
+      drop-shadow(0 0 24px rgba(242, 184, 75, 0.22))
+      drop-shadow(0 12px 20px rgba(33, 48, 38, 0.24)) !important;
+    transition:
+      left 320ms cubic-bezier(0.16, 1, 0.3, 1),
+      top 320ms cubic-bezier(0.16, 1, 0.3, 1),
+      filter 180ms ease,
+      transform 80ms ease-out !important;
+    will-change: left, top, transform;
   }
 
   .section {
@@ -1737,14 +1801,14 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .section-heading p {
-    color: #aebbc7;
+    color: var(--muted);
     font-size: 1rem;
     line-height: 1.65;
   }
 
   .section h2 {
     margin: 0;
-    color: var(--white);
+    color: var(--ink);
     font-size: clamp(2rem, 4.6vw, 4.4rem);
     line-height: 1.03;
     text-wrap: balance;
@@ -1768,32 +1832,36 @@ const github = 'https://github.com/syi0808/actorble'
   .feature-grid article,
   .surface-card {
     min-height: 184px;
-    border: 1px solid rgba(215, 224, 231, 0.14);
+    border: 1px solid rgba(8, 127, 112, 0.14);
     border-radius: 8px;
     padding: 20px;
-    background: rgba(255, 255, 255, 0.055);
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 18px 44px rgba(8, 127, 112, 0.08);
   }
 
   .surface-card.active {
-    border-color: rgba(51, 230, 194, 0.4);
-    background: rgba(51, 230, 194, 0.08);
+    border-color: rgba(8, 127, 112, 0.34);
+    background: linear-gradient(135deg, rgba(51, 230, 194, 0.16), rgba(242, 184, 75, 0.1));
   }
 
   h3 {
     margin: 0;
-    color: var(--white);
+    color: var(--ink);
     font-size: 1.08rem;
   }
 
   article p {
     margin: 12px 0 0;
-    color: #aebbc7;
+    color: var(--muted);
     line-height: 1.56;
   }
 
   .surfaces {
-    border-block: 1px solid rgba(215, 224, 231, 0.1);
-    background: rgba(255, 255, 255, 0.035);
+    border-block: 1px solid rgba(8, 127, 112, 0.12);
+    background:
+      linear-gradient(110deg, rgba(51, 230, 194, 0.12), transparent 42%),
+      linear-gradient(290deg, rgba(242, 184, 75, 0.16), transparent 44%),
+      rgba(255, 255, 255, 0.54);
   }
 
   .final-cta {
@@ -1881,7 +1949,7 @@ const github = 'https://github.com/syi0808/actorble'
       gap: 12px;
       padding: 14px;
       border-right: 0;
-      border-bottom: 1px solid #dde6ee;
+      border-bottom: 1px solid rgba(8, 127, 112, 0.16);
     }
 
     .runtime-panel p {
@@ -1906,7 +1974,7 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .cinematic-hero[data-scene="complete"] .desktop-stage {
-      opacity: 0.58;
+      opacity: 0.5;
       transform: translateY(-8vh) scale(0.82);
     }
 
@@ -1914,8 +1982,8 @@ const github = 'https://github.com/syi0808/actorble'
       bottom: 32px;
     }
 
-    .cinematic-hero[data-scene="ready"] .start-panel,
-    .cinematic-hero[data-scene="failed"] .start-panel {
+    .cinematic-hero[data-demo-running="false"][data-scene="ready"] .start-panel,
+    .cinematic-hero[data-demo-running="false"][data-scene="failed"] .start-panel {
       position: fixed;
       left: 18px;
       right: 18px;
