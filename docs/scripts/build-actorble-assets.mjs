@@ -6,6 +6,7 @@ import {
   ACTORBLE_WORDMARK_LETTER_BOUNDS,
   renderActorbleFaviconSvg,
   renderActorbleLogoSvg,
+  renderActorbleWordmarkLightSvg,
   renderActorbleWordmarkSvg,
 } from '../src/brand/actorble-symbol.mjs'
 
@@ -21,6 +22,10 @@ const outputs = [
   {
     path: resolve(docsRoot, 'src/assets/actorble-wordmark.svg'),
     svg: renderActorbleWordmarkSvg(),
+  },
+  {
+    path: resolve(docsRoot, 'src/assets/actorble-wordmark-light.svg'),
+    svg: renderActorbleWordmarkLightSvg(),
   },
   {
     path: resolve(docsRoot, 'public/favicon.svg'),
@@ -58,7 +63,7 @@ function relativeToDocs(path) {
 }
 
 function validateGeneratedSvg(output) {
-  if (!output.path.endsWith('actorble-wordmark.svg')) {
+  if (!output.path.includes('actorble-wordmark')) {
     return
   }
 

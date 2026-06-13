@@ -8,6 +8,7 @@ export const ACTORBLE_COLORS = Object.freeze({
   inkSoft: '#17222C',
   mint: '#33E6C2',
   tile: '#101418',
+  wordmark: '#F7FBFF',
 })
 
 const MARK_PRIMARY_PATH =
@@ -178,7 +179,7 @@ export function renderActorbleSymbolContent(options = {}) {
 }
 
 export function renderActorbleWordmarkContent(options = {}) {
-  const { classNames = false } = options
+  const { classNames = false, letterFill = ACTORBLE_COLORS.wordmark } = options
   const symbol = renderGroup({
     attrs: {
       transform: 'translate(0 0)',
@@ -187,7 +188,7 @@ export function renderActorbleWordmarkContent(options = {}) {
   })
   const letters = renderGroup({
     attrs: {
-      fill: '#F7FBFF',
+      fill: letterFill,
     },
     children: WORDMARK_LETTER_ELEMENTS.map((element) =>
       renderElement(element, classNames),
@@ -209,6 +210,17 @@ export function renderActorbleWordmarkSvg() {
   return renderSvg({
     ariaLabel: 'Actorble',
     content: renderActorbleWordmarkContent({ classNames: true }),
+    viewBox: ACTORBLE_WORDMARK_VIEW_BOX,
+  })
+}
+
+export function renderActorbleWordmarkLightSvg() {
+  return renderSvg({
+    ariaLabel: 'Actorble',
+    content: renderActorbleWordmarkContent({
+      classNames: true,
+      letterFill: ACTORBLE_COLORS.ink,
+    }),
     viewBox: ACTORBLE_WORDMARK_VIEW_BOX,
   })
 }

@@ -28,8 +28,10 @@ export default defineConfig({
         'Scenario-based UI control for browser automation and future native platforms.',
       favicon: '/favicon.svg',
       logo: {
-        src: './src/assets/actorble-logo.svg',
-        alt: 'Actorble',
+        dark: './src/assets/actorble-wordmark.svg',
+        light: './src/assets/actorble-wordmark-light.svg',
+        alt: '',
+        replacesTitle: true,
       },
       customCss: ['./src/styles/starlight.css'],
       social: [
