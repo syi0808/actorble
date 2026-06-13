@@ -1,0 +1,19 @@
+{
+  "name": "@actorble/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "check": "astro check"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@astrojs/starlight": "^0.40.0",
+    "astro": "^6.4.6",
+    "typescript": "^6.0.3"
+  }
+}
