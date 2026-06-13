@@ -93,6 +93,7 @@ export class Actorble {
         layoutInvalidation,
         visual,
         visualFeedback,
+        pointer: options.pointer,
       })
 
     this.#trace = trace

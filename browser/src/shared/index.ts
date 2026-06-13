@@ -182,7 +182,12 @@ export type ActorbleOptions = Readonly<{
   root?: Document | ShadowRoot | Element
   mode?: ActorbleMode
   debug?: boolean
+  pointer?: ActorblePointerOptions
   visual?: boolean | VisualFeedbackOptions
+}>
+
+export type ActorblePointerOptions = Readonly<{
+  initialPosition?: Point
 }>
 
 export function resolveVisualFeedbackOptions(

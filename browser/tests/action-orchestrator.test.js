@@ -436,6 +436,7 @@ function createHarness(options = {}) {
     signals,
     visual,
     visualFeedback: options.visualFeedback,
+    pointer: options.pointer,
     pointerVisual: options.pointerVisual,
     layoutInvalidation: options.layoutInvalidation,
   })
@@ -974,6 +975,30 @@ describe('BrowserActionOrchestrator', () => {
       type: 'pointermove',
       target: expect.any(HTMLButtonElement),
       point: { x: 10, y: 15 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
+      type: 'pointermove',
+      target: expect.any(HTMLButtonElement),
+      point: { x: 20, y: 30 },
+      buttons: [],
+    })
+  })
+
+  it('starts real pointer movement from the configured initial position', async () => {
+    const timeline = createFrameTimeline()
+    const { events, orchestrator } = createHarness({
+      pointer: { initialPosition: { x: 80, y: 90 } },
+      timeline,
+      useRealGesture: true,
+    })
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
+      type: 'pointermove',
+      target: expect.any(HTMLButtonElement),
+      point: { x: 50, y: 60 },
       buttons: [],
     })
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {

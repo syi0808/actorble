@@ -36,6 +36,7 @@ import type {
   ClickOptions,
   DomPort,
   EventDispatchPort,
+  ActorblePointerOptions,
   DragOptions,
   FillOptions,
   FocusOptions,
@@ -130,6 +131,7 @@ export type ActionOrchestratorOptions = Readonly<{
   trace?: SpanRecorder
   visual?: VisualLayer
   visualFeedback?: VisualFeedbackOptions
+  pointer?: ActorblePointerOptions
   pointerVisual?: PointerVisualTracker
   wait?: WaitObservationEngine
 }>
@@ -233,7 +235,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#gesture =
       options.gesture ??
       new BrowserGestureEngine({
-        pointer: new BrowserPointerEngine({ signals, timeline }),
+        pointer: new BrowserPointerEngine({
+          signals,
+          timeline,
+          initialPosition: options.pointer?.initialPosition,
+        }),
         timeline,
       })
     this.#interactability =
