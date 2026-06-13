@@ -171,6 +171,7 @@ function createPointerVisualTrackerDouble() {
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
+  const hitTestResults = [...(options.hitTestResults ?? [])]
   const geometrySnapshots = [...(options.geometrySnapshots ?? [])]
   const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target)
   let currentGeometry = geometry
@@ -349,6 +350,18 @@ function createHarness(options = {}) {
     }),
   }
   const dom = options.dom ?? {
+    getRoot: vi.fn(() => options.root ?? document),
+    elementFromPoint: vi.fn((point, hitOptions) => {
+      if (options.trackHitTests) {
+        calls.push(`dom.hit:${point.x},${point.y}:${hitOptions?.ignoreActorbleInternal}`)
+      }
+
+      if (typeof options.elementFromPoint === 'function') {
+        return options.elementFromPoint(point, hitOptions)
+      }
+
+      return hitTestResults.shift() ?? target.element
+    }),
     getComputedStyle: vi.fn((element) => {
       if (options.trackCursorReads) {
         calls.push(`dom.cursor:${element.id}`)
@@ -363,6 +376,7 @@ function createHarness(options = {}) {
     }),
     getParentElement: vi.fn((element) => element.parentElement),
     contains: vi.fn((root, node) => root.contains(node)),
+    isConnected: vi.fn((element) => element.isConnected),
     describeElement: vi.fn((element) => ({
       description: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`,
       selector: element.id ? `#${element.id}` : undefined,
@@ -876,6 +890,44 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
+  it('applies hover effects to hit-tested elements during timed pointer movement', async () => {
+    const target = targetHandle()
+    const intermediate = targetHandle('intermediate')
+    const timeline = createFrameTimeline()
+    const { dom, orchestrator, state } = createHarness({
+      target,
+      timeline,
+      useRealGesture: true,
+      elementFromPoint: (point) => (point.x < 20 ? intermediate.element : target.element),
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(dom.elementFromPoint).toHaveBeenCalledWith(
+      { x: 10, y: 15 },
+      { ignoreActorbleInternal: true },
+    )
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: intermediate.element }),
+        active: true,
+      },
+    ])
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: intermediate.element }),
+        active: false,
+      },
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: target.element }),
+        active: true,
+      },
+    ])
+  })
+
   it('applies the public ease movement default when moveTo omits movement options', async () => {
     const { gesture, orchestrator } = createHarness()
 
@@ -929,6 +981,64 @@ describe('BrowserActionOrchestrator', () => {
       target: expect.any(HTMLButtonElement),
       point: { x: 20, y: 30 },
       buttons: [],
+    })
+  })
+
+  it('keeps click dispatch on the command target while hover follows pointer hit-testing', async () => {
+    const target = targetHandle()
+    const intermediate = targetHandle('intermediate-click-hover')
+    const timeline = createFrameTimeline()
+    const { events, orchestrator, state } = createHarness({
+      target,
+      timeline,
+      useRealGesture: true,
+      elementFromPoint: (point) => (point.x < 20 ? intermediate.element : target.element),
+    })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: intermediate.element }),
+        active: true,
+      },
+    ])
+    expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: intermediate.element }),
+        active: false,
+      },
+      {
+        kind: 'hover',
+        target: expect.objectContaining({ element: target.element }),
+        active: true,
+      },
+    ])
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: ['primary'],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
+      type: 'pointerup',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: [],
+    })
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
+      type: 'click',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
     })
   })
 
@@ -1143,6 +1253,43 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
+      pressed: false,
+    })
+  })
+
+  it('reads pointer cursor style from the current hit-tested hover target', async () => {
+    const target = targetHandle()
+    const hoverTarget = targetHandle('cursor-hover-target')
+    const cursorStyles = new Map([
+      [target.element, 'pointer'],
+      [hoverTarget.element, 'crosshair'],
+    ])
+    const { calls, orchestrator, visual } = createHarness({
+      enableVisual: true,
+      target,
+      cursorStyles,
+      trackCursorReads: true,
+      hitTestResults: [hoverTarget.element],
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'visual.highlight',
+      'gesture.hover',
+      'state.hover:true',
+      'dom.cursor:cursor-hover-target',
+      'visual.cursor:20,30:crosshair',
+      'event.pointermove',
+      'wait.settle',
+    ])
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'crosshair',
       pressed: false,
     })
   })

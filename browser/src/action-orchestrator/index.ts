@@ -62,7 +62,10 @@ import type {
 import type { GeometryEngine, GeometrySnapshot } from '../geometry-engine/index.js'
 import type { GestureEngine } from '../gesture-engine/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../interactability-engine/index.js'
-import type { InteractionStateStore } from '../interaction-state-store/index.js'
+import type {
+  InteractionStateDiff,
+  InteractionStateStore,
+} from '../interaction-state-store/index.js'
 import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type { PointerVisualTracker } from '../pointer-visual-tracker/index.js'
 import type { PointerSignal, PointerSignalBus } from '../pointer-signals/index.js'
@@ -156,6 +159,11 @@ type CursorVisualState = {
   pressed: boolean
 }
 
+type PointerHitSnapshot = {
+  target: TargetHandle | null
+  hoverChain: readonly TargetHandle[]
+}
+
 type PointerSignalContext = {
   target: TargetHandle
   commandId: number
@@ -167,6 +175,10 @@ const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   duration: 250,
 }
 const DEFAULT_PUBLIC_TYPING_DELAY = 60
+const emptyPointerHit: PointerHitSnapshot = {
+  target: null,
+  hoverChain: [],
+}
 
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
@@ -191,6 +203,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
   #cursorVisualState: CursorVisualState | null = null
   #nextPointerCommandId = 1
+  #nextPointerHitTargetId = 1
+  readonly #pointerHitTargets = new WeakMap<Element, TargetHandle>()
 
   constructor(options: ActionOrchestratorOptions = {}) {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -670,10 +684,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   #applyPointerSignal(signal: PointerSignal): void {
     const context = this.#signalContext
     const target = context?.target ?? null
-    const diff =
-      target && signal.type !== 'pointer:cancelled'
-        ? this.#store.dispatch({ ...signal, hitTarget: target })
-        : this.#store.applyPointerSignal(signal)
+    const pointerHit =
+      signal.type === 'pointer:cancelled'
+        ? emptyPointerHit
+        : this.#resolvePointerHit(signal.point, target)
+    const diff = this.#dispatchPointerInteractionState(signal, target, pointerHit)
 
     this.#state.applyStateEffects(diff.effects)
 
@@ -690,7 +705,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     switch (signal.type) {
       case 'pointer:moved':
-        this.#showPointerCursor(signal.point, target, false, context.commandId)
+        this.#showPointerCursor(
+          signal.point,
+          target,
+          false,
+          context.commandId,
+          pointerHit.target ?? target,
+        )
         this.#events.dispatchPointerEvent({
           type: 'pointermove',
           target: target.element,
@@ -705,6 +726,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           target,
           this.#hasPressedCursorButtons(),
           context.commandId,
+          pointerHit.target ?? target,
         )
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
@@ -729,6 +751,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           target,
           this.#hasPressedCursorButtons(),
           context.commandId,
+          pointerHit.target ?? target,
         )
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerup',
@@ -747,6 +770,115 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       }
     }
+  }
+
+  #dispatchPointerInteractionState(
+    signal: PointerSignal,
+    target: TargetHandle | null,
+    pointerHit: PointerHitSnapshot,
+  ): InteractionStateDiff {
+    if (signal.type === 'pointer:moved') {
+      return this.#store.dispatch({ ...signal, hoverChain: pointerHit.hoverChain })
+    }
+
+    if (target && signal.type !== 'pointer:cancelled') {
+      return this.#store.dispatch({ ...signal, hitTarget: target })
+    }
+
+    return this.#store.applyPointerSignal(signal)
+  }
+
+  #resolvePointerHit(point: Point, preferredTarget: TargetHandle | null): PointerHitSnapshot {
+    try {
+      const element = this.#dom.elementFromPoint(point, { ignoreActorbleInternal: true })
+
+      if (!element || !this.#isPointerHitElementInScope(element)) {
+        return emptyPointerHit
+      }
+
+      const hoverChain = this.#hoverChainFor(element, preferredTarget)
+
+      return {
+        target: hoverChain[0] ?? null,
+        hoverChain,
+      }
+    } catch (error) {
+      this.#trace.warn('Pointer hit-test failed.', {
+        point,
+        error: describeUnknownError(error),
+      })
+
+      return emptyPointerHit
+    }
+  }
+
+  #hoverChainFor(
+    element: Element,
+    preferredTarget: TargetHandle | null,
+  ): readonly TargetHandle[] {
+    const hoverChain: TargetHandle[] = []
+    const visited = new Set<Element>()
+    let current: Element | null = element
+
+    while (current && !visited.has(current)) {
+      visited.add(current)
+
+      if (!this.#isPointerHitElementInScope(current)) {
+        break
+      }
+
+      if (current !== element && this.#isDocumentShellElement(current)) {
+        break
+      }
+
+      hoverChain.push(this.#targetForPointerHitElement(current, preferredTarget))
+      current = this.#dom.getParentElement(current)
+    }
+
+    return hoverChain
+  }
+
+  #targetForPointerHitElement(
+    element: Element,
+    preferredTarget: TargetHandle | null,
+  ): TargetHandle {
+    if (preferredTarget?.element === element) {
+      return preferredTarget
+    }
+
+    const cached = this.#pointerHitTargets.get(element)
+
+    if (cached) {
+      return cached
+    }
+
+    const target: TargetHandle = {
+      id: `pointer-hit-${this.#nextPointerHitTargetId++}`,
+      element,
+      locator: elementLocator(element),
+      resolvedAt: this.#timeline.now(),
+      root: this.#dom.getRoot(),
+      validity: 'live',
+      debug: this.#dom.describeElement(element),
+    }
+
+    this.#pointerHitTargets.set(element, target)
+
+    return target
+  }
+
+  #isPointerHitElementInScope(element: Element): boolean {
+    return this.#dom.isConnected(element) && this.#dom.contains(this.#dom.getRoot(), element)
+  }
+
+  #isDocumentShellElement(element: Element): boolean {
+    const parent = this.#dom.getParentElement(element)
+
+    if (!parent) {
+      return false
+    }
+
+    return this.#dom.getParentElement(parent) === null
   }
 
   #dispatchActivationClick(target: TargetHandle, point: Point): boolean {
@@ -914,12 +1046,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     target: TargetHandle,
     pressed = this.#hasPressedCursorButtons(),
     commandId?: number,
+    cursorTarget: TargetHandle = target,
   ): void {
     if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
       return
     }
 
-    const visualPoint = this.#renderPointerCursor(point, target, pressed)
+    const visualPoint = this.#renderPointerCursor(point, cursorTarget, pressed)
 
     if (commandId === undefined) {
       this.#setPointerVisualMode({
