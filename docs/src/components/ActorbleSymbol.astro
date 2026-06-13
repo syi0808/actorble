@@ -1,0 +1,33 @@
+---
+import {
+  ACTORBLE_MARK_VIEW_BOX,
+  ACTORBLE_MOTION_VIEW_BOX,
+  renderActorbleSymbolContent,
+} from '../brand/actorble-symbol.mjs'
+
+const {
+  class: className,
+  decorative = true,
+  title = 'Actorble',
+  variant = 'mark',
+} = Astro.props
+
+const symbolVariant = variant === 'motion' ? 'motion' : 'mark'
+const content = renderActorbleSymbolContent({
+  classNames: true,
+  variant: symbolVariant,
+})
+const viewBox =
+  symbolVariant === 'motion' ? ACTORBLE_MOTION_VIEW_BOX : ACTORBLE_MARK_VIEW_BOX
+---
+
+<svg
+  aria-hidden={decorative ? 'true' : undefined}
+  aria-label={decorative ? undefined : title}
+  class={className}
+  focusable="false"
+  preserveAspectRatio={symbolVariant === 'motion' ? 'none' : 'xMidYMid meet'}
+  role={decorative ? undefined : 'img'}
+  viewBox={viewBox}
+  set:html={content}
+/>
