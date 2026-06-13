@@ -209,6 +209,12 @@ label {
   align-items: start;
 }
 
+.single-task-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
 .scenario-rail,
 .stage-panel {
   border: 1px solid #d6dde7;
@@ -698,15 +704,11 @@ dd {
 }
 
 .utility-panel {
-  position: fixed;
-  top: auto;
-  right: 14px;
-  bottom: 14px;
-  z-index: 2147483000;
   display: grid;
   justify-items: end;
-  width: min(420px, calc(100vw - 24px));
-  pointer-events: none;
+  width: min(420px, 100%);
+  margin: 16px 0 0 auto;
+  pointer-events: auto;
 }
 
 .utility-panel-toggle,
@@ -805,9 +807,8 @@ dd {
   }
 
   .utility-panel {
-    bottom: 10px;
-    right: 10px;
-    width: calc(100vw - 20px);
+    width: 100%;
+    justify-items: stretch;
   }
 
   .utility-panel-content {
@@ -837,9 +838,6 @@ dd {
   }
 
   .utility-panel {
-    position: static;
-    width: 100%;
-    margin-top: 16px;
     justify-items: stretch;
   }
 

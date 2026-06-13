@@ -37,25 +37,27 @@ try {
   page.setDefaultTimeout(10_000)
 
   await page.goto(baseUrl)
-  await page.locator('#open-task-scenarios').click()
-  await page.waitForURL(/\/action-playground\/$/)
-  await page.waitForSelector('#action-utility-panel-toggle')
+  await expectIndexLinks(page)
 
-  await expectUtilityPanelCollapsed(page, 'action-utility-panel')
-  await openUtilityPanel(page, 'action-utility-panel')
+  await page.goto(new URL('github-explorer/', baseUrl).toString())
+  await expectPageTitle(page, 'GitHub explorer')
+  await openUtilityPanel(page, 'task-utility-panel')
   await expectChecked(page, '[data-testid="visual-mode-quiet"]', true)
   await expectFidelityRuntime(page, 'enabled')
-  await expectSelectedScenario(page, 'GitHub issue triage')
-
   await runCurrentScenario(page, 'GitHub scenario complete')
   await expectState(page, '#github-outcome', 'issue-open')
-  await expectEventLogIncludes(page, ['issueRow.click', 'issuesTab.click'])
-  await closeUtilityPanel(page, 'action-utility-panel')
+  await expectEventLogIncludes(page, ['repoInput.focus', 'issueRow.click', 'issuesTab.click'])
+  await closeUtilityPanel(page, 'task-utility-panel')
   await expectOverlayHitTesting(page, '[data-testid="github-issue-example"]', 'github issue row')
   await expectQuietOverlay(page)
-  await openUtilityPanel(page, 'action-utility-panel')
 
-  await selectScenario(page, 'form', 'Request form fill')
+  await page.goto(new URL('form-filling/', baseUrl).toString())
+  await expectPageTitle(page, 'Form filling')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await runTypeFirst(page)
+  await expectStatus(page, 'First field typed')
+  await expectInputValue(page, '#request-name', 'Mina Park')
+  await expectEventLogIncludes(page, ['nameInput.focus'])
   await runCurrentScenario(page, 'Form scenario complete')
   await expectState(page, '#form-status', 'submitted')
   await expectInputValue(page, '#request-name', 'Mina Park')
@@ -63,25 +65,37 @@ try {
   await expectChecked(page, '[data-testid="request-copy"]', true)
   await expectEventLogIncludes(page, ['submitRequest.click', 'copyCheckbox.click'])
 
-  await selectScenario(page, 'search', 'Search result exploration')
+  await page.goto(new URL('web-search/', baseUrl).toString())
+  await expectPageTitle(page, 'Web search')
+  await openUtilityPanel(page, 'task-utility-panel')
   await setVisualMode(page, 'debug')
   await runCurrentScenario(page, 'Search scenario complete')
   await expectState(page, '#search-preview', 'open')
-  await closeUtilityPanel(page, 'action-utility-panel')
+  await closeUtilityPanel(page, 'task-utility-panel')
   await expectOverlayHitTesting(page, '[data-testid="search-result-docs"]', 'search result')
   await expectDebugOverlay(page)
-  await openUtilityPanel(page, 'action-utility-panel')
-
+  await openUtilityPanel(page, 'task-utility-panel')
   await setVisualMode(page, 'off')
   await expectFidelityRuntime(page, 'disabled')
-  await selectScenario(page, 'github', 'GitHub issue triage')
   await runTypeFirst(page)
   await expectStatus(page, 'First field typed')
-  await expectInputValue(page, '#github-query', 'actorble browser')
+  await expectInputValue(page, '#search-query', 'browser automation event dispatch')
+  await expectEventLogIncludes(page, ['searchInput.focus'])
   await expectNoOverlayRoot(page)
 } finally {
   await browser?.close()
   await server.close()
+}
+
+async function expectIndexLinks(page) {
+  await expectLink(page, '#open-github-explorer', '/github-explorer/')
+  await expectLink(page, '#open-form-filling', '/form-filling/')
+  await expectLink(page, '#open-web-search', '/web-search/')
+}
+
+async function expectLink(page, selector, hrefSuffix) {
+  const href = await page.locator(selector).getAttribute('href')
+  assertEqual(href, hrefSuffix, `${selector} href`)
 }
 
 async function runCurrentScenario(page, expectedStatus) {
@@ -93,19 +107,26 @@ async function runTypeFirst(page) {
   await page.locator('#run-type-first').click()
 }
 
-async function selectScenario(page, scenarioId, expectedTitle) {
-  await page.locator(`#scenario-${scenarioId}`).click()
-  await expectSelectedScenario(page, expectedTitle)
-  await page.waitForFunction(
-    (scenarioId) =>
-      document.getElementById('stage-panel')?.getAttribute('data-scenario') === scenarioId,
-    scenarioId,
-  )
-}
-
 async function setVisualMode(page, mode) {
   await page.locator(`[data-testid="visual-mode-${mode}"]`).check()
   await expectChecked(page, `[data-testid="visual-mode-${mode}"]`, true)
+}
+
+async function openUtilityPanel(page, panelId) {
+  await expectUtilityPanelCollapsed(page, panelId)
+  await page.locator(`#${panelId}-toggle`).click()
+  await page.waitForFunction((id) => {
+    const panel = document.getElementById(id)
+    const content = document.getElementById(`${id}-content`)
+    const toggle = document.getElementById(`${id}-toggle`)
+
+    return (
+      panel?.getAttribute('data-state') === 'expanded' &&
+      content instanceof HTMLElement &&
+      !content.hidden &&
+      toggle?.getAttribute('aria-expanded') === 'true'
+    )
+  }, panelId)
 }
 
 async function expectUtilityPanelCollapsed(page, panelId) {
@@ -123,25 +144,12 @@ async function expectUtilityPanelCollapsed(page, panelId) {
   }, panelId)
 
   assertEqual(details.state, 'collapsed', `${panelId} state`)
-  assertEqual(details.position, 'fixed', `${panelId} position`)
+  assert(
+    details.position === 'fixed' || details.position === 'static',
+    `Expected ${panelId} position to be fixed or static, got ${details.position}.`,
+  )
   assertEqual(details.hidden, true, `${panelId} content hidden`)
   assertEqual(details.expanded, 'false', `${panelId} aria-expanded`)
-}
-
-async function openUtilityPanel(page, panelId) {
-  await page.locator(`#${panelId}-toggle`).click()
-  await page.waitForFunction((id) => {
-    const panel = document.getElementById(id)
-    const content = document.getElementById(`${id}-content`)
-    const toggle = document.getElementById(`${id}-toggle`)
-
-    return (
-      panel?.getAttribute('data-state') === 'expanded' &&
-      content instanceof HTMLElement &&
-      !content.hidden &&
-      toggle?.getAttribute('aria-expanded') === 'true'
-    )
-  }, panelId)
 }
 
 async function closeUtilityPanel(page, panelId) {
@@ -168,17 +176,17 @@ async function closeUtilityPanel(page, panelId) {
   }, panelId)
 }
 
-async function expectStatus(page, text) {
+async function expectPageTitle(page, text) {
   await page.waitForFunction(
-    (expected) => document.querySelector('#run-status')?.textContent === expected,
+    (expected) => document.querySelector('h1')?.textContent === expected,
     text,
   )
 }
 
-async function expectSelectedScenario(page, title) {
+async function expectStatus(page, text) {
   await page.waitForFunction(
-    (expected) => document.querySelector('#selected-scenario-title')?.textContent === expected,
-    title,
+    (expected) => document.querySelector('#run-status')?.textContent === expected,
+    text,
   )
 }
 

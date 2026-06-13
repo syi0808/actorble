@@ -16,7 +16,7 @@
     "example:build": "vite build --config example/vite.config.ts",
     "example:dev": "vite --config example/vite.config.ts --host 127.0.0.1",
     "example:preview": "vite preview --config example/vite.config.ts --host 127.0.0.1",
-    "example:smoke": "node scripts/action-playground-smoke.mjs",
+    "example:smoke": "node scripts/example-smoke.mjs",
     "example:typecheck": "tsc -p example/tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

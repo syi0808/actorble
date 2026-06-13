@@ -9,8 +9,14 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: fileURLToPath(new URL('index.html', import.meta.url)),
-        actionPlayground: fileURLToPath(
-          new URL('action-playground/index.html', import.meta.url),
+        githubExplorer: fileURLToPath(
+          new URL('github-explorer/index.html', import.meta.url),
+        ),
+        formFilling: fileURLToPath(
+          new URL('form-filling/index.html', import.meta.url),
+        ),
+        webSearch: fileURLToPath(
+          new URL('web-search/index.html', import.meta.url),
         ),
       },
     },

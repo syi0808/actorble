@@ -11,6 +11,8 @@
   },
   "include": [
     "shared/**/*.ts",
-    "action-playground/src/**/*.ts"
+    "github-explorer/src/**/*.ts",
+    "form-filling/src/**/*.ts",
+    "web-search/src/**/*.ts"
   ]
 }
