@@ -247,8 +247,8 @@ describe('Actorble facade', () => {
     expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('4')
     expect(cursor.style.left).toBe('36px')
     expect(cursor.style.top).toBe('31px')
-    expect(cursor.style.width).toBe('36px')
-    expect(cursor.style.height).toBe('54px')
+    expect(cursor.style.width).toBe('40px')
+    expect(cursor.style.height).toBe('60px')
   })
 
   it('does not create overlay DOM when visual feedback is disabled', async () => {

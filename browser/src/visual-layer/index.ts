@@ -409,266 +409,252 @@ type CursorVisualSvgPathSpec = Readonly<{
   strokeWidth?: string
 }>
 
-// CC0 source: https://www.svgrepo.com/svg/369973/cursor-default
+const CURSOR_FILL = 'CanvasText'
+const CURSOR_HALO = 'Canvas'
+const CURSOR_ROUND_CAP = 'round'
+const CURSOR_ROUND_JOIN = 'round'
+const CURSOR_FILLED_STROKE_WIDTH = '1.6'
+const CURSOR_LINE_HALO_STROKE_WIDTH = '4'
+const CURSOR_LINE_STROKE_WIDTH = '2'
+const CURSOR_THIN_LINE_HALO_STROKE_WIDTH = '3.4'
+const CURSOR_THIN_LINE_STROKE_WIDTH = '1.6'
+const CURSOR_PRESSED_SCALE = 'scale(0.9)'
+
+const CURSOR_BASE_STYLE: Readonly<Record<string, string>> = {
+  border: '0px',
+  color: CURSOR_FILL,
+  filter: 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32))',
+  overflow: 'visible',
+}
+
 const DEFAULT_CURSOR_ARROW_PATH =
-  'M 29,18L 52.25,41.1667L 43.0865,42.6585L 50.817,56.6949L ' +
-  '43.827,60.4115L 36,46.25L 29,53.25L 29,18 Z'
+  'M 2,2 L 18.4,17.6 L 12,18.8 L 16.8,27.4 L 12.3,29.4 ' +
+  'L 7.2,20.4 L 2,25.8 Z'
+
+const POINTER_CURSOR_HAND_PATH =
+  'M 7,2 C 6.1,2 5.4,2.7 5.4,3.6 L 5.4,11.1 L 4.3,10 ' +
+  'C 3.6,9.3 2.5,9.4 1.9,10.1 C 1.3,10.8 1.3,11.8 1.9,12.5 ' +
+  'L 7.3,21.2 C 8.1,22.5 9.4,23.2 10.9,23.2 L 13,23.2 ' +
+  'C 15.4,23.2 17.2,21.3 17.2,18.9 L 17.2,10.4 ' +
+  'C 17.2,9.4 16.4,8.6 15.4,8.6 C 15,8.6 14.6,8.8 14.3,9 ' +
+  'C 14.1,8.2 13.4,7.6 12.5,7.6 C 12.1,7.6 11.7,7.7 11.4,8 ' +
+  'C 11.1,7.2 10.4,6.7 9.6,6.7 C 9.2,6.7 8.8,6.8 8.6,7 ' +
+  'L 8.6,3.6 C 8.6,2.7 7.9,2 7,2 Z'
+
+const TEXT_CURSOR_PATH = 'M 5,2 L 5,24 M 2,2 L 8,2 M 2,24 L 8,24'
+
+const NOT_ALLOWED_CURSOR_PATH =
+  'M 11,2.5 A 8.5,8.5 0 1 0 11,19.5 A 8.5,8.5 0 1 0 11,2.5 ' +
+  'M 5.2,16.8 L 16.8,5.2'
+
+const WAIT_CURSOR_FRAME_PATH =
+  'M 6,3 L 16,3 M 7,4.5 C 7,7.4 9,9.4 11,11 ' +
+  'C 9,12.6 7,14.6 7,17.5 M 15,4.5 C 15,7.4 13,9.4 11,11 ' +
+  'C 13,12.6 15,14.6 15,17.5 M 6,19 L 16,19'
+
+const WAIT_CURSOR_SAND_PATH =
+  'M 8.2,6 L 13.8,6 L 11,8.4 Z M 8.2,16 L 13.8,16 L 11,13.6 Z'
+
+const PROGRESS_CURSOR_SPINNER_PATH =
+  'M 25.5,8 A 4.5,4.5 0 1 1 22.2,3.7 M 22.2,3.7 L 25,3.3 ' +
+  'M 22.2,3.7 L 23.3,6.3'
+
+const GRAB_CURSOR_HAND_PATH =
+  'M 3.2,10.2 L 3.2,8 C 3.2,7.1 3.9,6.4 4.8,6.4 ' +
+  'C 5.2,6.4 5.6,6.5 5.9,6.8 L 5.9,4.1 C 5.9,3.2 6.6,2.5 7.5,2.5 ' +
+  'C 8.4,2.5 9.1,3.2 9.1,4.1 L 9.1,3.2 C 9.1,2.3 9.8,1.6 10.7,1.6 ' +
+  'C 11.6,1.6 12.3,2.3 12.3,3.2 L 12.3,4 C 12.6,3.4 13.2,3.1 13.9,3.1 ' +
+  'C 14.8,3.1 15.5,3.8 15.5,4.7 L 15.5,6.4 C 15.8,6.1 16.3,5.9 16.8,5.9 ' +
+  'C 17.7,5.9 18.4,6.6 18.4,7.5 L 18.4,12.6 ' +
+  'C 18.4,17.1 15.2,20.7 10.8,20.7 L 8.4,20.7 ' +
+  'C 6.2,20.7 4.5,19.6 3.4,17.7 L 1.4,13.8 ' +
+  'C 0.9,12.9 1.5,11.7 2.5,11.7 C 2.8,11.7 3,11.8 3.2,11.9 Z'
+
+const GRABBING_CURSOR_HAND_PATH =
+  'M 3,8.4 C 3,7.2 3.9,6.3 5.1,6.3 L 6.2,6.3 L 6.2,5 ' +
+  'C 6.2,4 7,3.2 8,3.2 C 8.7,3.2 9.3,3.6 9.6,4.2 ' +
+  'C 9.9,3.3 10.7,2.7 11.7,2.7 C 12.7,2.7 13.5,3.4 13.7,4.3 ' +
+  'C 14.1,3.9 14.7,3.7 15.3,3.7 C 16.3,3.7 17.1,4.5 17.1,5.5 ' +
+  'L 17.1,7.2 L 17.5,7.2 C 18.5,7.2 19.3,8 19.3,9 ' +
+  'L 19.3,12.4 C 19.3,17.1 16,20.7 11.1,20.7 L 8.4,20.7 ' +
+  'C 6.2,20.7 4.4,19.6 3.3,17.7 L 1.4,14.3 ' +
+  'C 0.9,13.4 1.4,12.2 2.5,12 L 3,11.9 Z'
+
+const MOVE_CURSOR_PATH =
+  'M 11,2.5 L 11,19.5 M 11,2.5 L 7.8,5.7 M 11,2.5 L 14.2,5.7 ' +
+  'M 11,19.5 L 7.8,16.3 M 11,19.5 L 14.2,16.3 ' +
+  'M 2.5,11 L 19.5,11 M 2.5,11 L 5.7,7.8 M 2.5,11 L 5.7,14.2 ' +
+  'M 19.5,11 L 16.3,7.8 M 19.5,11 L 16.3,14.2'
+
+const CROSSHAIR_CURSOR_PATH =
+  'M 12,2 L 12,8 M 12,16 L 12,22 M 2,12 L 8,12 M 16,12 L 22,12 ' +
+  'M 12,10.1 A 1.9,1.9 0 1 0 12,13.9 A 1.9,1.9 0 1 0 12,10.1'
+
+function filledCursorPath(
+  d: string,
+  strokeWidth = CURSOR_FILLED_STROKE_WIDTH,
+): CursorVisualSvgPathSpec {
+  return {
+    d,
+    fill: CURSOR_FILL,
+    stroke: CURSOR_HALO,
+    strokeLinejoin: CURSOR_ROUND_JOIN,
+    strokeWidth,
+  }
+}
+
+function haloStrokePath(
+  d: string,
+  strokeWidth = CURSOR_LINE_HALO_STROKE_WIDTH,
+  strokeLinecap = CURSOR_ROUND_CAP,
+): CursorVisualSvgPathSpec {
+  return strokeCursorPath(d, CURSOR_HALO, strokeWidth, strokeLinecap)
+}
+
+function foregroundStrokePath(
+  d: string,
+  strokeWidth = CURSOR_LINE_STROKE_WIDTH,
+  strokeLinecap = CURSOR_ROUND_CAP,
+): CursorVisualSvgPathSpec {
+  return strokeCursorPath(d, CURSOR_FILL, strokeWidth, strokeLinecap)
+}
+
+function strokeCursorPath(
+  d: string,
+  stroke: string,
+  strokeWidth: string,
+  strokeLinecap: string,
+): CursorVisualSvgPathSpec {
+  return {
+    d,
+    fill: 'none',
+    stroke,
+    strokeLinecap,
+    strokeLinejoin: CURSOR_ROUND_JOIN,
+    strokeWidth,
+  }
+}
 
 const CURSOR_VISUAL_SPECS: Readonly<Record<SupportedCursorVisualKind, CursorVisualSpec>> = {
   default: {
-    width: 18,
-    height: 27,
+    width: 20,
+    height: 30,
     hotspot: { x: 2, y: 2 },
     svg: {
-      viewBox: '25 14 34 50',
-      paths: [
-        {
-          d: DEFAULT_CURSOR_ARROW_PATH,
-          fill: 'CanvasText',
-          stroke: 'Canvas',
-          strokeLinejoin: 'round',
-          strokeWidth: '4',
-        },
-      ],
+      viewBox: '0 0 20 30',
+      paths: [filledCursorPath(DEFAULT_CURSOR_ARROW_PATH)],
     },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      filter: 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))',
-      overflow: 'visible',
-    },
+    style: CURSOR_BASE_STYLE,
   },
   pointer: {
-    width: 13,
-    height: 18,
-    hotspot: { x: 5, y: 1 },
+    width: 18,
+    height: 24,
+    hotspot: { x: 7, y: 2 },
     svg: {
-      viewBox: '0 0 13 18',
-      paths: [
-        {
-          d:
-            'M 5,1 C 4.2,1 3.6,1.6 3.6,2.5 L 3.6,8.2 L 2.8,7.4 ' +
-            'C 2.2,6.8 1.3,6.9 0.8,7.5 C 0.3,8.1 0.3,8.9 0.8,9.5 ' +
-            'L 5.4,16.4 C 6,17.4 7,18 8.2,18 L 10.1,18 C 11.7,18 13,16.7 13,15.1 ' +
-            'L 13,8.1 C 13,7.2 12.3,6.5 11.4,6.5 C 11.1,6.5 10.8,6.6 10.5,6.8 ' +
-            'C 10.3,6.1 9.7,5.7 9,5.7 C 8.7,5.7 8.4,5.8 8.2,5.9 ' +
-            'C 7.9,5.3 7.4,5 6.8,5 C 6.5,5 6.2,5.1 6,5.2 L 6,2.5 ' +
-            'C 6,1.6 5.8,1 5,1 Z',
-          fill: 'CanvasText',
-          stroke: 'Canvas',
-          strokeLinejoin: 'round',
-          strokeWidth: '1.4',
-        },
-      ],
+      viewBox: '0 0 18 24',
+      paths: [filledCursorPath(POINTER_CURSOR_HAND_PATH)],
     },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
+    style: CURSOR_BASE_STYLE,
   },
   text: {
-    width: 8,
-    height: 22,
-    hotspot: { x: 4, y: 11 },
+    width: 10,
+    height: 26,
+    hotspot: { x: 5, y: 13 },
     svg: {
-      viewBox: '0 0 8 22',
+      viewBox: '0 0 10 26',
       paths: [
-        {
-          d: 'M 3,0 L 5,0 L 5,22 L 3,22 Z M 0,0 L 8,0 L 8,2 L 0,2 Z M 0,20 L 8,20 L 8,22 L 0,22 Z',
-          fill: 'CanvasText',
-        },
+        haloStrokePath(TEXT_CURSOR_PATH, CURSOR_LINE_HALO_STROKE_WIDTH, 'square'),
+        foregroundStrokePath(TEXT_CURSOR_PATH, CURSOR_THIN_LINE_STROKE_WIDTH, 'square'),
       ],
     },
-    style: {
-      border: '0px',
-      borderRadius: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
+    style: CURSOR_BASE_STYLE,
   },
   'not-allowed': {
-    width: 18,
-    height: 18,
-    hotspot: { x: 9, y: 9 },
-    svg: {
-      viewBox: '0 0 18 18',
-      paths: [
-        {
-          d: 'M 9,2 A 7,7 0 1 0 9,16 A 7,7 0 1 0 9,2 Z M 4.2,13.8 L 13.8,4.2',
-          fill: 'none',
-          stroke: 'CanvasText',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          strokeWidth: '2.2',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  wait: {
-    width: 18,
-    height: 18,
-    hotspot: { x: 9, y: 9 },
-    svg: {
-      viewBox: '0 0 18 18',
-      paths: [
-        {
-          d:
-            'M 4,2 L 14,2 M 5,3 C 5,6 7,8 9,9 C 7,10 5,12 5,15 ' +
-            'M 13,3 C 13,6 11,8 9,9 C 11,10 13,12 13,15 M 4,16 L 14,16',
-          fill: 'none',
-          stroke: 'CanvasText',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          strokeWidth: '2',
-        },
-        {
-          d: 'M 7,5 L 11,5 L 9,7 Z M 7,14 L 11,14 L 9,11 Z',
-          fill: 'CanvasText',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  progress: {
-    width: 18,
-    height: 18,
-    hotspot: { x: 9, y: 9 },
-    svg: {
-      viewBox: '0 0 18 18',
-      paths: [
-        {
-          d: 'M 14.4,9 A 5.4,5.4 0 1 1 10.6,3.9 M 10.6,3.9 L 13.1,3.5 M 10.6,3.9 L 11.6,6.2',
-          fill: 'none',
-          stroke: 'CanvasText',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          strokeWidth: '2',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  grab: {
-    width: 16,
-    height: 16,
-    hotspot: { x: 8, y: 2 },
-    svg: {
-      viewBox: '0 0 16 16',
-      paths: [
-        {
-          d:
-            'M 2,8 L 2,6.5 C 2,5.8 2.6,5.2 3.3,5.2 C 3.7,5.2 4,5.4 4.3,5.7 ' +
-            'L 4.3,3.2 C 4.3,2.5 4.9,1.9 5.6,1.9 C 6.3,1.9 6.9,2.5 6.9,3.2 ' +
-            'L 6.9,2.5 C 6.9,1.8 7.5,1.2 8.2,1.2 C 8.9,1.2 9.5,1.8 9.5,2.5 ' +
-            'L 9.5,3.1 C 9.7,2.6 10.2,2.3 10.8,2.3 C 11.5,2.3 12.1,2.9 12.1,3.6 ' +
-            'L 12.1,5.2 C 12.3,5 12.6,4.9 13,4.9 C 13.7,4.9 14.3,5.5 14.3,6.2 ' +
-            'L 14.3,10 C 14.3,13.1 12.2,16 8.6,16 L 6.6,16 C 4.9,16 3.7,15.2 2.9,13.8 ' +
-            'L 1,10.2 C 0.7,9.5 1.2,8.6 2,8 Z',
-          fill: 'CanvasText',
-          stroke: 'Canvas',
-          strokeLinejoin: 'round',
-          strokeWidth: '1.2',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  grabbing: {
-    width: 16,
-    height: 16,
-    hotspot: { x: 8, y: 2 },
-    svg: {
-      viewBox: '0 0 16 16',
-      paths: [
-        {
-          d:
-            'M 2,6.8 C 2,5.9 2.7,5.2 3.6,5.2 L 4.7,5.2 L 4.7,4 ' +
-            'C 4.7,3.2 5.3,2.6 6.1,2.6 C 6.6,2.6 7,2.8 7.2,3.2 ' +
-            'C 7.4,2.5 8,2 8.7,2 C 9.4,2 10,2.5 10.2,3.2 ' +
-            'C 10.5,2.9 10.9,2.7 11.3,2.7 C 12.1,2.7 12.7,3.3 12.7,4.1 ' +
-            'L 12.7,5.6 L 13.1,5.6 C 13.9,5.6 14.6,6.3 14.6,7.1 ' +
-            'L 14.6,9.9 C 14.6,13.1 12.2,16 8.6,16 L 6.5,16 ' +
-            'C 4.9,16 3.6,15.2 2.8,13.8 L 1.2,10.8 C 0.8,10.1 1.2,9.1 2,8.9 Z',
-          fill: 'CanvasText',
-          stroke: 'Canvas',
-          strokeLinejoin: 'round',
-          strokeWidth: '1.2',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  move: {
-    width: 16,
-    height: 16,
-    hotspot: { x: 8, y: 8 },
-    svg: {
-      viewBox: '0 0 16 16',
-      paths: [
-        {
-          d:
-            'M 8,1 L 5.5,3.5 M 8,1 L 10.5,3.5 M 8,1 L 8,15 ' +
-            'M 8,15 L 5.5,12.5 M 8,15 L 10.5,12.5 ' +
-            'M 1,8 L 3.5,5.5 M 1,8 L 3.5,10.5 M 1,8 L 15,8 ' +
-            'M 15,8 L 12.5,5.5 M 15,8 L 12.5,10.5',
-          fill: 'none',
-          stroke: 'CanvasText',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          strokeWidth: '2',
-        },
-      ],
-    },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
-    },
-  },
-  crosshair: {
     width: 22,
     height: 22,
     hotspot: { x: 11, y: 11 },
     svg: {
       viewBox: '0 0 22 22',
       paths: [
-        {
-          d: 'M 11,1 L 11,7 M 11,15 L 11,21 M 1,11 L 7,11 M 15,11 L 21,11 M 11,9.2 A 1.8,1.8 0 1 0 11,12.8 A 1.8,1.8 0 1 0 11,9.2 Z',
-          fill: 'none',
-          stroke: 'CanvasText',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          strokeWidth: '1.6',
-        },
+        haloStrokePath(NOT_ALLOWED_CURSOR_PATH, CURSOR_LINE_HALO_STROKE_WIDTH),
+        foregroundStrokePath(NOT_ALLOWED_CURSOR_PATH, CURSOR_LINE_STROKE_WIDTH),
       ],
     },
-    style: {
-      border: '0px',
-      color: 'CanvasText',
-      overflow: 'visible',
+    style: CURSOR_BASE_STYLE,
+  },
+  wait: {
+    width: 22,
+    height: 22,
+    hotspot: { x: 11, y: 11 },
+    svg: {
+      viewBox: '0 0 22 22',
+      paths: [
+        haloStrokePath(WAIT_CURSOR_FRAME_PATH, CURSOR_LINE_HALO_STROKE_WIDTH),
+        foregroundStrokePath(WAIT_CURSOR_FRAME_PATH, CURSOR_LINE_STROKE_WIDTH),
+        filledCursorPath(WAIT_CURSOR_SAND_PATH, '1'),
+      ],
     },
+    style: CURSOR_BASE_STYLE,
+  },
+  progress: {
+    width: 28,
+    height: 30,
+    hotspot: { x: 2, y: 2 },
+    svg: {
+      viewBox: '0 0 28 30',
+      paths: [
+        filledCursorPath(DEFAULT_CURSOR_ARROW_PATH),
+        haloStrokePath(PROGRESS_CURSOR_SPINNER_PATH, CURSOR_THIN_LINE_HALO_STROKE_WIDTH),
+        foregroundStrokePath(PROGRESS_CURSOR_SPINNER_PATH, CURSOR_THIN_LINE_STROKE_WIDTH),
+      ],
+    },
+    style: CURSOR_BASE_STYLE,
+  },
+  grab: {
+    width: 20,
+    height: 22,
+    hotspot: { x: 10, y: 3 },
+    svg: {
+      viewBox: '0 0 20 22',
+      paths: [filledCursorPath(GRAB_CURSOR_HAND_PATH)],
+    },
+    style: CURSOR_BASE_STYLE,
+  },
+  grabbing: {
+    width: 20,
+    height: 22,
+    hotspot: { x: 10, y: 4 },
+    svg: {
+      viewBox: '0 0 20 22',
+      paths: [filledCursorPath(GRABBING_CURSOR_HAND_PATH)],
+    },
+    style: CURSOR_BASE_STYLE,
+  },
+  move: {
+    width: 22,
+    height: 22,
+    hotspot: { x: 11, y: 11 },
+    svg: {
+      viewBox: '0 0 22 22',
+      paths: [
+        haloStrokePath(MOVE_CURSOR_PATH, CURSOR_LINE_HALO_STROKE_WIDTH),
+        foregroundStrokePath(MOVE_CURSOR_PATH, CURSOR_LINE_STROKE_WIDTH),
+      ],
+    },
+    style: CURSOR_BASE_STYLE,
+  },
+  crosshair: {
+    width: 24,
+    height: 24,
+    hotspot: { x: 12, y: 12 },
+    svg: {
+      viewBox: '0 0 24 24',
+      paths: [
+        haloStrokePath(CROSSHAIR_CURSOR_PATH, CURSOR_THIN_LINE_HALO_STROKE_WIDTH),
+        foregroundStrokePath(CROSSHAIR_CURSOR_PATH, CURSOR_THIN_LINE_STROKE_WIDTH),
+      ],
+    },
+    style: CURSOR_BASE_STYLE,
   },
 }
 
@@ -716,17 +702,16 @@ function scaleCursorVisualSpec(
 
 function cursorTransform(baseTransform: string, pressed: boolean): string {
   const normalized = baseTransform.trim() || 'none'
-  const pressedScale = 'scale(0.88)'
 
   if (!pressed) {
     return normalized
   }
 
   if (normalized === 'none') {
-    return pressedScale
+    return CURSOR_PRESSED_SCALE
   }
 
-  return `${normalized} ${pressedScale}`
+  return `${normalized} ${CURSOR_PRESSED_SCALE}`
 }
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
