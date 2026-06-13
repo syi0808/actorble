@@ -1,4 +1,19 @@
 ---
+import {
+  Apple,
+  AppWindowMac,
+  ArrowLeft,
+  ArrowRight,
+  BatteryFull,
+  Circle,
+  CircleCheck,
+  CircleUserRound,
+  Folder,
+  Globe,
+  NotebookTabs,
+  RotateCw,
+  Wifi,
+} from '@lucide/astro'
 import ActorbleSymbol from '../components/ActorbleSymbol.astro'
 
 const base = import.meta.env.BASE_URL
@@ -15,350 +30,322 @@ const github = 'https://github.com/syi0808/actorble'
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Actorble is an interface choreography engine for human-like UI scenarios across browser and future OS surfaces."
+      content="Actorble is a scenario-based UI controller for visible, human-like browser interactions."
     />
-    <title>Actorble | Interface choreography engine</title>
+    <title>Actorble | Visible UI scenario control</title>
   </head>
   <body>
     <header class="topbar" aria-label="Primary navigation">
       <a class="brand" href={withBase('')} aria-label="Actorble home">
-        <ActorbleSymbol class="brand-mark" />
-        <span>Actorble</span>
+        <ActorbleSymbol class="brand-wordmark" variant="wordmark" />
       </a>
       <nav class="nav">
-        <a href="#nested-demo">Demo</a>
+        <a href="#demo">Demo</a>
         <a href={browserDocs}>Docs</a>
         <a href={github}>GitHub</a>
       </nav>
     </header>
 
     <main>
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-grid">
-          <div class="hero-copy">
-            <h1 id="hero-title">Choreograph human-like UI scenarios.</h1>
-            <p class="lede">
-              Actorble runs visible interaction scenarios across interface surfaces,
-              starting in the browser and designed for OS-level engines.
-            </p>
-            <div class="hero-actions">
-              <button class="button primary" type="button" data-demo-run>
-                Run nested demo
-              </button>
-              <a class="button secondary" href={browserDocs}>Read browser docs</a>
-            </div>
-          </div>
+      <section
+        class="cinematic-hero"
+        id="demo"
+        data-landing-demo
+        data-scene="ready"
+        data-actorble="closed"
+        data-browser="closed"
+        data-cursor="idle"
+        data-nested="idle"
+        data-request="idle"
+        data-review="idle"
+        aria-labelledby="hero-title"
+      >
+        <p class="sr-only" id="landing-demo-status" aria-live="polite">Demo ready</p>
 
-          <div class="demo-frame" id="nested-demo" data-landing-demo data-step="ready">
-            <div class="demo-bar">
-              <div class="window-dots" aria-hidden="true">
-                <span></span>
-                <span></span>
-                <span></span>
+        <div class="demo-theater" aria-label="Actorble cinematic nested browser demo">
+          <div class="desktop-stage">
+            <div class="mac-menu" aria-label="macOS menu bar">
+              <div class="mac-menu-left">
+                <Apple class="apple-mark" aria-hidden="true" />
+                <strong>Actorble</strong>
+                <span>File</span>
+                <span>Edit</span>
+                <span>View</span>
+                <span>Window</span>
               </div>
-              <strong>Actorble nested demo</strong>
-              <span id="landing-demo-status">Ready to run</span>
+              <div class="mac-menu-right">
+                <Wifi class="menu-status-icon" aria-hidden="true" />
+                <span class="battery-status">
+                  <BatteryFull class="menu-status-icon" aria-hidden="true" />
+                  <span>100%</span>
+                </span>
+                <span>Sat 9:41</span>
+              </div>
             </div>
 
-            <div class="demo-stage">
-              <section class="macos-desktop" data-demo-node="os" aria-label="macOS style demo desktop">
-                <div class="mac-menu">
-                  <div class="mac-menu-left">
-                    <span class="apple-dot" aria-hidden="true"></span>
-                    <span>Actorble</span>
-                    <span>File</span>
-                    <span>Edit</span>
-                    <span>Window</span>
-                  </div>
-                  <div class="mac-menu-right">
-                    <span>Wi-Fi</span>
-                    <span>Sat 9:41</span>
-                  </div>
+            <div class="desktop-wallpaper" aria-hidden="true">
+              <ActorbleSymbol class="wallpaper-mark" variant="motion" />
+            </div>
+
+            <section class="actorble-window" aria-label="Actorble macOS app window">
+              <div class="mac-window-bar">
+                <div class="window-dots" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
-
-                <div class="desktop-ribbon" aria-hidden="true">
-                  <ActorbleSymbol class="desktop-ribbon-symbol" variant="motion" />
+                <strong>Actorble</strong>
+                <span>Local</span>
+              </div>
+              <div class="actorble-app-body">
+                <ActorbleSymbol class="app-symbol" />
+                <div class="app-copy">
+                  <h2>Browser scenario</h2>
+                  <p>Open Chrome and hand control to Browser Actorble.</p>
                 </div>
+                <button
+                  class="run-browser-button"
+                  type="button"
+                  data-testid="landing-run-browser"
+                  disabled
+                >
+                  Run browser scenario
+                </button>
+              </div>
+            </section>
 
-                <section class="actorble-window" data-demo-node="host" aria-label="Actorble app window">
-                  <div class="mac-window-bar">
-                    <div class="window-dots" aria-hidden="true">
-                      <span></span>
-                      <span></span>
-                      <span></span>
+            <section class="chrome-window" aria-label="Chrome browser window">
+              <div class="chrome-tab-strip">
+                <div class="window-dots" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="chrome-tab active">
+                  <span class="chrome-favicon" aria-hidden="true">
+                    <Globe class="chrome-favicon-icon" />
+                  </span>
+                  <span>Actorble Browser</span>
+                </div>
+                <div class="chrome-tab muted">Launch review</div>
+              </div>
+              <div class="chrome-toolbar">
+                <div class="chrome-controls" aria-hidden="true">
+                  <ArrowLeft class="chrome-control" />
+                  <ArrowRight class="chrome-control disabled" />
+                  <RotateCw class="chrome-control" />
+                </div>
+                <div class="chrome-address">actorble.local/browser/nested-run</div>
+                <div class="chrome-profile" aria-hidden="true">
+                  <CircleUserRound class="chrome-profile-icon" />
+                </div>
+              </div>
+
+              <div class="browser-runtime">
+                <aside class="runtime-panel" aria-label="Browser Actorble runner">
+                  <ActorbleSymbol class="runtime-symbol" />
+                  <h2>Browser Actorble</h2>
+                  <p>Controls the page inside Chrome.</p>
+                  <button
+                    class="nested-run-button"
+                    type="button"
+                    data-testid="landing-start-nested"
+                    disabled
+                  >
+                    Run nested scenario
+                  </button>
+                </aside>
+
+                <section class="target-app" aria-label="Nested launch review app">
+                  <div class="target-header">
+                    <div>
+                      <span class="target-eyebrow">Launch review</span>
+                      <h2>Review workspace</h2>
                     </div>
-                    <strong>Actorble</strong>
-                    <span id="landing-host-status">Scenario is waiting</span>
+                    <span class="review-badge" id="landing-review-badge">Waiting</span>
                   </div>
 
-                  <div class="actorble-body">
-                    <div class="actorble-heading">
-                      <h2>Run an interface scenario across surfaces.</h2>
-                      <p>
-                        The host opens Chrome, then the browser scenario starts another
-                        Actorble run inside the page.
-                      </p>
-                    </div>
-
-                    <button
-                      class="host-run"
-                      type="button"
-                      data-testid="landing-host-run-browser"
-                    >
-                      Run browser scenario
-                    </button>
-
-                    <div class="progress-rail" aria-label="Demo progress">
-                      <div class="progress-item" data-progress-step="os">
-                        <span></span>
-                        <p>Open from macOS Dock</p>
-                      </div>
-                      <div class="progress-item" data-progress-step="host">
-                        <span></span>
-                        <p>Actorble host starts</p>
-                      </div>
-                      <div class="progress-item" data-progress-step="browser">
-                        <span></span>
-                        <p>Chrome receives control</p>
-                      </div>
-                      <div class="progress-item" data-progress-step="project">
-                        <span></span>
-                        <p>Browser project is created</p>
-                      </div>
-                      <div class="progress-item" data-progress-step="nested">
-                        <span></span>
-                        <p>Nested browser Actorble runs</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="chrome-window" data-demo-node="browser" aria-label="Chrome style browser window">
-                  <div class="chrome-tab-strip">
-                    <div class="window-dots" aria-hidden="true">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="chrome-tab active">
-                      <span class="chrome-favicon" aria-hidden="true"></span>
-                      <span>Actorble project</span>
-                    </div>
-                    <div class="chrome-tab muted">Scenario console</div>
-                  </div>
-                  <div class="chrome-toolbar">
-                    <div class="chrome-controls" aria-hidden="true">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                    <div class="chrome-address">actorble.local/demo/nested</div>
-                    <div class="chrome-profile" aria-hidden="true">A</div>
-                  </div>
-
-                  <div class="browser-page">
-                    <div class="page-heading">
-                      <h2>Browser project setup</h2>
-                      <p>Actorble drives this page with real browser actions.</p>
-                    </div>
-
-                    <div class="form-grid">
-                      <label class="field">
-                        <span>Project name</span>
-                        <input
-                          id="landing-inner-project-name"
-                          data-testid="landing-inner-project-name"
-                          autocomplete="off"
-                          placeholder="Release review"
-                        />
-                      </label>
+                  <div class="target-grid">
+                    <section class="request-list" aria-label="Requests">
                       <button
-                        class="create-button"
+                        class="request-card active"
                         type="button"
-                        data-testid="landing-inner-create-project"
-                      >
-                        Create project
-                      </button>
-                    </div>
-
-                    <div class="workflow-grid">
-                      <button
-                        class="workflow-card"
-                        type="button"
-                        data-testid="landing-inner-checklist"
-                        data-state="idle"
+                        data-testid="landing-open-request"
                         disabled
                       >
-                        <span>Collect interface state</span>
-                        <em>Waiting for project</em>
+                        <span>Maya Chen</span>
+                        <strong>Prepare release review</strong>
+                        <em>Confirm owner, scope, and readiness.</em>
                       </button>
-                      <label class="field compact">
-                        <span>Operator email</span>
+                      <button class="request-card muted" type="button" disabled>
+                        <span>Ops</span>
+                        <strong>Update rollout notes</strong>
+                        <em>Waiting for the final review.</em>
+                      </button>
+                    </section>
+
+                    <section class="review-form" aria-label="Review form">
+                      <label class="field">
+                        <span>Review title</span>
                         <input
-                          id="landing-operator-email"
-                          data-testid="landing-operator-email"
+                          id="landing-review-title"
+                          data-testid="landing-review-title"
                           autocomplete="off"
-                          placeholder="ops@actorble.dev"
+                          placeholder="Release review"
                           disabled
                         />
                       </label>
-                    </div>
 
-                    <div class="browser-actions">
-                      <button
-                        type="button"
-                        data-testid="landing-invite-operator"
-                        disabled
-                      >
-                        Invite operator
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="landing-inner-run-nested"
-                        disabled
-                      >
-                        Run nested Actorble
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="landing-review-ready"
-                        disabled
-                      >
-                        Review ready
-                      </button>
-                    </div>
+                      <label class="field">
+                        <span>Owner</span>
+                        <input
+                          id="landing-review-owner"
+                          data-testid="landing-review-owner"
+                          autocomplete="off"
+                          placeholder="maya@northstar.design"
+                          disabled
+                        />
+                      </label>
 
-                    <div class="browser-status-grid">
-                      <p
-                        class="inner-status"
-                        id="landing-inner-status"
-                        data-testid="landing-inner-status"
+                      <button
+                        class="check-button"
+                        type="button"
+                        data-testid="landing-confirm-scope"
+                        data-state="idle"
+                        disabled
+                      >
+                        Scope confirmed
+                      </button>
+
+                      <button
+                        class="review-button"
+                        type="button"
+                        data-testid="landing-mark-ready"
+                        disabled
+                      >
+                        Mark review ready
+                      </button>
+
+                      <div
+                        class="review-confirmation"
+                        id="landing-review-confirmation"
                         data-state="idle"
                         aria-live="polite"
                       >
-                        Waiting for browser scenario
-                      </p>
-                      <p
-                        class="nested-status"
-                        id="landing-nested-runtime"
-                        data-testid="landing-nested-runtime"
-                        data-state="idle"
-                        aria-live="polite"
-                      >
-                        Nested Actorble is ready inside Chrome
-                      </p>
-                    </div>
+                        <Circle class="review-state-icon review-state-idle" aria-hidden="true" />
+                        <CircleCheck
+                          class="review-state-icon review-state-ready"
+                          aria-hidden="true"
+                        />
+                        <p>Review waiting</p>
+                      </div>
+                    </section>
                   </div>
                 </section>
+              </div>
+            </section>
 
-                <div class="dock" aria-label="macOS Dock">
-                  <button
-                    class="dock-icon actorble"
-                    type="button"
-                    data-testid="landing-os-launch"
-                    aria-label="Launch Actorble"
-                  >
-                    <ActorbleSymbol class="dock-mark" />
-                  </button>
-                  <span class="dock-icon finder" aria-hidden="true"></span>
-                  <span class="dock-icon chrome" aria-hidden="true"></span>
-                  <span class="dock-icon notes" aria-hidden="true"></span>
-                </div>
-              </section>
+            <div class="dock" aria-label="macOS Dock">
+              <span class="dock-icon finder" aria-hidden="true">
+                <Folder class="dock-lucide finder-icon" />
+              </span>
+              <button
+                class="dock-icon actorble"
+                type="button"
+                data-testid="landing-dock-actorble"
+                aria-label="Open Actorble"
+              >
+                <ActorbleSymbol class="dock-symbol" />
+              </button>
+              <span class="dock-icon browser" aria-hidden="true">
+                <AppWindowMac class="dock-lucide browser-icon" />
+              </span>
+              <span class="dock-icon notes" aria-hidden="true">
+                <NotebookTabs class="dock-lucide notes-icon" />
+              </span>
             </div>
           </div>
+
+          <div class="hero-reveal">
+            <h1 id="hero-title">Choreograph UI scenarios you can watch.</h1>
+            <p>
+              Actorble opens the browser, hands off to Browser Actorble, and runs
+              the next scenario inside the page.
+            </p>
+            <div class="hero-actions">
+              <button class="button primary" type="button" data-demo-run>
+                Watch again
+              </button>
+              <a class="button secondary" href={browserDocs}>Read browser docs</a>
+              <a class="button ghost" href={github}>Open GitHub</a>
+            </div>
+          </div>
+
+          <div class="start-panel">
+            <button class="button primary" type="button" data-demo-run>
+              Watch the demo
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section intro-section" aria-labelledby="intro-title">
+        <div class="section-heading">
+          <h2 id="intro-title">A scenario is more than a command.</h2>
+          <p>
+            Actorble resolves the target, moves through the interface, performs the
+            action, waits for the UI to settle, and keeps the run repeatable.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>Visible by default</h3>
+            <p>Interactions happen on the page, so people can understand the run without extra explanation.</p>
+          </article>
+          <article>
+            <h3>Built for pacing</h3>
+            <p>Clicks, typing, waits, and pauses are part of the scenario instead of scattered timers.</p>
+          </article>
+          <article>
+            <h3>Browser first</h3>
+            <p>The browser package is active now, with the same scenario shape ready for future surfaces.</p>
+          </article>
         </div>
       </section>
 
       <section class="section surfaces" aria-labelledby="surfaces-title">
         <div class="section-heading">
-          <h2 id="surfaces-title">Start in the browser. Keep the model ready for OS engines.</h2>
+          <h2 id="surfaces-title">Use it in the browser today.</h2>
           <p>
-            Actorble treats interaction as a scenario, not a one-off command. The browser
-            package is active now. Native platform engines can keep the same orchestration
-            shape while swapping the platform layer.
+            The current package focuses on target resolution, synthetic input, visual
+            feedback, scenario running, and interface settlement.
           </p>
         </div>
         <div class="surface-grid">
           <article class="surface-card active">
             <h3>Browser</h3>
-            <p>Available today with target resolution, synthetic input, visual feedback, and run records.</p>
+            <p>Available now for visible UI scenarios in web interfaces.</p>
           </article>
           <article class="surface-card">
             <h3>macOS</h3>
-            <p>Planned engine for OS-level surfaces and native application control.</p>
+            <p>Planned native surface using the same scenario contract.</p>
           </article>
           <article class="surface-card">
             <h3>Windows</h3>
-            <p>Planned engine for desktop workflows that need the same scenario contract.</p>
+            <p>Planned desktop engine for application workflows.</p>
           </article>
           <article class="surface-card">
             <h3>Linux</h3>
-            <p>Planned engine for automation surfaces outside the browser sandbox.</p>
+            <p>Planned automation surface outside the browser sandbox.</p>
           </article>
-        </div>
-      </section>
-
-      <section class="section model" aria-labelledby="model-title">
-        <div class="section-heading">
-          <h2 id="model-title">Every action moves through a visible lifecycle.</h2>
-        </div>
-        <div class="model-grid">
-          <article>
-            <h3>Scenario runner</h3>
-            <p>Runs ordered steps with timeout, pacing, pause, resume, and stop controls.</p>
-          </article>
-          <article>
-            <h3>Action orchestrator</h3>
-            <p>Turns click and typeInto into resolve, geometry, preflight, perform, wait, and cleanup.</p>
-          </article>
-          <article>
-            <h3>Target engines</h3>
-            <p>Resolve targets, compute geometry, check interactability, and report useful context.</p>
-          </article>
-          <article>
-            <h3>Observation</h3>
-            <p>Waits for interface settlement and keeps warnings, capability, and fidelity data close.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section diagnostics" aria-labelledby="diagnostics-title">
-        <div class="diagnostics-grid">
-          <div class="section-heading">
-            <h2 id="diagnostics-title">The page shows what the engine is doing.</h2>
-            <p>
-              Visitors should see a real interface sequence before they read an API contract.
-              The landing page now makes the OS surface, host app, browser window, and nested
-              run visible in one flow.
-            </p>
-          </div>
-          <div class="visual-panel" aria-label="Visual scenario summary">
-            <div class="visual-step active">
-              <span></span>
-              <p>macOS opens Actorble</p>
-            </div>
-            <div class="visual-step">
-              <span></span>
-              <p>Actorble opens Chrome</p>
-            </div>
-            <div class="visual-step">
-              <span></span>
-              <p>Chrome runs another Actorble scenario</p>
-            </div>
-            <div class="visual-step">
-              <span></span>
-              <p>The browser page reaches a review-ready state</p>
-            </div>
-          </div>
         </div>
       </section>
 
       <section class="section final-cta" aria-labelledby="cta-title">
-        <h2 id="cta-title">Run a scenario you can watch from start to finish.</h2>
+        <h2 id="cta-title">Run a scenario people can actually follow.</h2>
         <div class="hero-actions">
           <button class="button primary" type="button" data-demo-run>
-            Run nested demo
+            Watch the demo
           </button>
           <a class="button secondary" href={examples}>See examples</a>
           <a class="button ghost" href={github}>Open GitHub</a>
@@ -374,10 +361,15 @@ const github = 'https://github.com/syi0808/actorble'
     testId,
     type Actorble,
     type Scenario,
-    type VisualFeedbackPreset,
   } from '@actorble/browser-source'
 
-  type DemoStep = 'ready' | 'os' | 'host' | 'inner' | 'complete' | 'failed'
+  type DemoScene =
+    | 'ready'
+    | 'actorble-app'
+    | 'browser-open'
+    | 'nested-running'
+    | 'complete'
+    | 'failed'
 
   const demoRoot = document.querySelector<HTMLElement>('[data-landing-demo]')
 
@@ -385,79 +377,52 @@ const github = 'https://github.com/syi0808/actorble'
     const activeDemoRoot = demoRoot
     const runButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-demo-run]'))
     const statusOutput = document.getElementById('landing-demo-status')
-    const hostStatus = document.getElementById('landing-host-status')
-    const innerProjectInput = document.getElementById(
-      'landing-inner-project-name',
-    ) as HTMLInputElement | null
-    const operatorEmailInput = document.getElementById(
-      'landing-operator-email',
-    ) as HTMLInputElement | null
-    const innerStatus = document.getElementById('landing-inner-status') as HTMLElement | null
-    const nestedStatus = document.getElementById('landing-nested-runtime') as HTMLElement | null
-    const osLaunch = document.querySelector<HTMLButtonElement>('[data-testid="landing-os-launch"]')
-    const hostRun = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-host-run-browser"]',
+    const dockActorble = document.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-dock-actorble"]',
     )
-    const createButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-inner-create-project"]',
+    const runBrowserButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-run-browser"]',
     )
-    const checklistButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-inner-checklist"]',
+    const startNestedButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-start-nested"]',
     )
-    const inviteButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-invite-operator"]',
+    const requestButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-open-request"]',
     )
-    const nestedRunButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-inner-run-nested"]',
+    const titleInput = document.getElementById('landing-review-title') as HTMLInputElement | null
+    const ownerInput = document.getElementById('landing-review-owner') as HTMLInputElement | null
+    const checkButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-confirm-scope"]',
     )
     const reviewButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="landing-review-ready"]',
+      '[data-testid="landing-mark-ready"]',
     )
-    const progressItems = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-progress-step]'),
-    )
+    const reviewBadge = document.getElementById('landing-review-badge')
+    const confirmation = document.getElementById('landing-review-confirmation') as HTMLElement | null
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const canAutoPlay = !reduceMotion && window.matchMedia('(min-width: 900px)').matches
 
     let running = false
     let runCount = 0
-    let nestedTimer: number | undefined
 
-    osLaunch?.addEventListener('click', () => {
-      setDemoStep('host', 'Actorble app opened from the Dock')
-      setHostStatus('Actorble is ready to open Chrome')
-      setProgressStep('host')
+    dockActorble?.addEventListener('click', openActorbleApp)
+    runBrowserButton?.addEventListener('click', openBrowserActorble)
+    startNestedButton?.addEventListener('click', startNestedRun)
+    requestButton?.addEventListener('click', openRequest)
+    titleInput?.addEventListener('input', updateReviewAvailability)
+    titleInput?.addEventListener('click', () => {
+      titleInput.focus({ preventScroll: true })
     })
-
-    hostRun?.addEventListener('click', () => {
-      setDemoStep('inner', 'Chrome is ready for the browser scenario')
-      setHostStatus('Chrome is under Actorble control')
-      setProgressStep('browser')
+    ownerInput?.addEventListener('input', updateReviewAvailability)
+    ownerInput?.addEventListener('click', () => {
+      ownerInput.focus({ preventScroll: true })
     })
-
-    createButton?.addEventListener('click', () => {
-      createProject()
-    })
-
-    checklistButton?.addEventListener('click', () => {
-      collectInterfaceState()
-    })
-
-    inviteButton?.addEventListener('click', () => {
-      inviteOperator()
-    })
-
-    nestedRunButton?.addEventListener('click', () => {
-      runNestedActorbleInsideBrowser()
-    })
-
-    reviewButton?.addEventListener('click', () => {
-      markReviewReady()
-    })
+    checkButton?.addEventListener('click', confirmScope)
+    reviewButton?.addEventListener('click', markReviewReady)
 
     for (const button of runButtons) {
       button.addEventListener('click', () => {
-        void runNestedDemo()
+        void runDemo()
       })
     }
 
@@ -465,11 +430,11 @@ const github = 'https://github.com/syi0808/actorble'
 
     if (canAutoPlay) {
       window.setTimeout(() => {
-        void runNestedDemo()
+        void runDemo()
       }, 900)
     }
 
-    async function runNestedDemo() {
+    async function runDemo() {
       if (running) {
         return
       }
@@ -478,219 +443,304 @@ const github = 'https://github.com/syi0808/actorble'
       runCount += 1
       setRunButtonsDisabled(true)
       resetDemo()
-
-      const startedAt = performance.now()
+      window.scrollTo({ top: activeDemoRoot.offsetTop, behavior: 'auto' })
 
       try {
-        setDemoStep('os', 'Moving to the macOS Dock')
-        setProgressStep('os')
-
-        if (isCompactDemo()) {
-          osLaunch?.click()
-        } else {
-          const outer = createDemoActorble('quiet')
-
-          try {
-            await outer.click(testId('landing-os-launch'), createPreviewClickOptions())
-          } finally {
-            outer.destroy()
-          }
-        }
-
-        await wait(760)
-
-        setDemoStep('host', 'Actorble is opening Chrome')
-
-        if (isCompactDemo()) {
-          hostRun?.click()
-        } else {
-          const host = createDemoActorble('quiet')
-
-          try {
-            await host.click(testId('landing-host-run-browser'), createPreviewClickOptions())
-          } finally {
-            host.destroy()
-          }
-        }
-
-        await wait(820)
-
-        setDemoStep('inner', 'Browser scenario is running')
-        const inner = createDemoActorble('debug')
+        await wait(420)
+        const outer = createDemoActorble()
+        setCursorSurface('mac')
 
         try {
-          await inner.run(buildInnerScenario(runCount), {
-            timeout: 32000,
-            pacing: { betweenSteps: 560 },
+          await outer.click(testId('landing-dock-actorble'), createClickOptions(1500))
+          await wait(820)
+          await outer.click(testId('landing-run-browser'), createClickOptions(1580))
+          await wait(920)
+          await outer.click(testId('landing-start-nested'), createClickOptions(1500))
+        } finally {
+          await wait(460)
+          outer.destroy()
+        }
+
+        const inner = createDemoActorble()
+        setCursorSurface('browser')
+
+        try {
+          await inner.run(buildNestedScenario(runCount), {
+            timeout: 48000,
+            pacing: { betweenSteps: 760 },
           })
         } finally {
-          await wait(420)
+          await wait(620)
           inner.destroy()
         }
 
-        const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1)
-        setDemoStep('complete', `Nested demo complete in ${elapsed}s`)
-        setProgressStep('complete')
+        setDemoScene('complete', 'Nested browser scenario complete')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        setDemoStep('failed', `Demo stopped: ${message}`)
+        setDemoScene('failed', `Demo stopped: ${message}`)
       } finally {
+        setCursorSurface('idle')
         setRunButtonsDisabled(false)
         running = false
       }
     }
 
-    function createDemoActorble(preset: VisualFeedbackPreset): Actorble {
+    function createDemoActorble(): Actorble {
       return createActorble({
         mode: 'interactive',
-        debug: true,
         visual: {
-          preset,
-          cursorScale: preset === 'debug' ? 1.18 : 1.08,
-          textVisibility: 'plain',
+          preset: 'quiet',
+          cursorScale: 2.6,
+          cursor: true,
+          targetHighlight: false,
+          clickFeedback: false,
+          focusOverlay: false,
+          typingIndicator: false,
+          keystrokeOverlay: false,
+          textVisibility: 'hidden',
         },
       })
     }
 
-    function createPreviewClickOptions() {
-      return {
-        ...revealNearest(),
-        motion: { kind: 'ease' as const, easing: 'ease-in-out' as const, duration: 720 },
-        force: true,
-        pressDwell: 160,
-        timeout: 3600,
-      }
-    }
-
-    function buildInnerScenario(index: number): Scenario {
-      const projectName = `Release review ${index}`
-      const operatorEmail = `ops+run${index}@actorble.dev`
-      const typeOptions = {
-        ...revealNearest(),
-        delay: 74,
-        focusStrategy: 'programmatic' as const,
-        afterFocusDelay: 130,
-        timeout: 7200,
-      }
-      const clickOptions = {
-        ...revealNearest(),
-        motion: { kind: 'ease' as const, easing: 'ease-in-out' as const, duration: 680 },
-        pressDwell: 150,
-        timeout: 4200,
-      }
+    function buildNestedScenario(index: number): Scenario {
+      const owner = index % 2 === 0 ? 'maya@northstar.design' : 'maya.chen@northstar.design'
 
       return {
-        id: 'landing-nested-demo',
-        name: 'Landing nested demo',
+        id: 'landing-nested-browser-demo',
+        name: 'Landing nested browser demo',
         steps: [
           {
-            action: 'typeInto',
-            target: testId('landing-inner-project-name'),
-            input: projectName,
-            options: typeOptions,
-          },
-          {
-            action: 'delay',
-            duration: 780,
-            reason: 'Let the typed project name settle',
-          },
-          {
             action: 'click',
-            target: testId('landing-inner-create-project'),
-            options: clickOptions,
-          },
-          {
-            action: 'waitFor',
-            input: {
-              kind: 'custom',
-              predicate: () => innerStatus?.dataset.state === 'created',
-            },
-            options: { timeout: 3000 },
-          },
-          {
-            action: 'delay',
-            duration: 720,
-            reason: 'Show the created project state',
-          },
-          {
-            action: 'click',
-            target: testId('landing-inner-checklist'),
-            options: clickOptions,
-          },
-          {
-            action: 'waitFor',
-            input: {
-              kind: 'custom',
-              predicate: () => checklistButton?.dataset.state === 'collected',
-            },
-            options: { timeout: 3000 },
-          },
-          {
-            action: 'delay',
-            duration: 680,
-            reason: 'Keep the checklist result visible',
-          },
-          {
-            action: 'typeInto',
-            target: testId('landing-operator-email'),
-            input: operatorEmail,
-            options: typeOptions,
-          },
-          {
-            action: 'delay',
-            duration: 640,
-            reason: 'Show the operator handoff',
-          },
-          {
-            action: 'click',
-            target: testId('landing-invite-operator'),
-            options: clickOptions,
-          },
-          {
-            action: 'waitFor',
-            input: {
-              kind: 'custom',
-              predicate: () => innerStatus?.dataset.state === 'invited',
-            },
-            options: { timeout: 3000 },
-          },
-          {
-            action: 'delay',
-            duration: 720,
-            reason: 'Prepare the nested run',
-          },
-          {
-            action: 'click',
-            target: testId('landing-inner-run-nested'),
-            options: clickOptions,
-          },
-          {
-            action: 'waitFor',
-            input: {
-              kind: 'custom',
-              predicate: () => nestedStatus?.dataset.state === 'complete',
-            },
-            options: { timeout: 3600 },
+            target: testId('landing-open-request'),
+            options: createClickOptions(1480),
           },
           {
             action: 'delay',
             duration: 760,
-            reason: 'Hold the nested completion state',
+            reason: 'Let the request open',
+          },
+          {
+            action: 'typeInto',
+            target: testId('landing-review-title'),
+            input: 'Release review',
+            options: createTypeOptions(),
+          },
+          {
+            action: 'delay',
+            duration: 680,
+            reason: 'Hold the typed title',
+          },
+          {
+            action: 'typeInto',
+            target: testId('landing-review-owner'),
+            input: owner,
+            options: createTypeOptions(),
+          },
+          {
+            action: 'delay',
+            duration: 720,
+            reason: 'Hold the owner field',
           },
           {
             action: 'click',
-            target: testId('landing-review-ready'),
-            options: clickOptions,
+            target: testId('landing-confirm-scope'),
+            options: createClickOptions(1400),
+          },
+          {
+            action: 'delay',
+            duration: 820,
+            reason: 'Show scope confirmation',
+          },
+          {
+            action: 'click',
+            target: testId('landing-mark-ready'),
+            options: createClickOptions(1460),
           },
           {
             action: 'waitFor',
             input: {
               kind: 'custom',
-              predicate: () => innerStatus?.dataset.state === 'review',
+              predicate: () => activeDemoRoot.dataset.review === 'ready',
             },
-            options: { timeout: 3000 },
+            options: { timeout: 3600 },
           },
         ],
+      }
+    }
+
+    function resetDemo() {
+      setDemoScene('ready', 'Demo ready')
+      activeDemoRoot.dataset.actorble = 'closed'
+      activeDemoRoot.dataset.browser = 'closed'
+      activeDemoRoot.dataset.cursor = 'idle'
+      activeDemoRoot.dataset.nested = 'idle'
+      activeDemoRoot.dataset.request = 'idle'
+      activeDemoRoot.dataset.review = 'idle'
+      document.documentElement.dataset.actorbleCursor = 'idle'
+
+      if (runBrowserButton) {
+        runBrowserButton.disabled = true
+      }
+
+      if (startNestedButton) {
+        startNestedButton.disabled = true
+      }
+
+      if (requestButton) {
+        requestButton.disabled = true
+      }
+
+      if (titleInput) {
+        titleInput.value = ''
+        titleInput.disabled = true
+      }
+
+      if (ownerInput) {
+        ownerInput.value = ''
+        ownerInput.disabled = true
+      }
+
+      if (checkButton) {
+        checkButton.disabled = true
+        checkButton.dataset.state = 'idle'
+      }
+
+      if (reviewButton) {
+        reviewButton.disabled = true
+      }
+
+      if (reviewBadge) {
+        reviewBadge.textContent = 'Waiting'
+      }
+
+      if (confirmation) {
+        confirmation.dataset.state = 'idle'
+        const text = confirmation.querySelector('p')
+        if (text) {
+          text.textContent = 'Review waiting'
+        }
+      }
+    }
+
+    function openActorbleApp() {
+      activeDemoRoot.dataset.actorble = 'open'
+      setDemoScene('actorble-app', 'Actorble app opened')
+
+      if (runBrowserButton) {
+        runBrowserButton.disabled = false
+      }
+    }
+
+    function openBrowserActorble() {
+      activeDemoRoot.dataset.browser = 'open'
+      setDemoScene('browser-open', 'Browser Actorble opened')
+
+      if (startNestedButton) {
+        startNestedButton.disabled = false
+      }
+    }
+
+    function startNestedRun() {
+      activeDemoRoot.dataset.nested = 'running'
+      setDemoScene('nested-running', 'Nested browser scenario running')
+
+      if (requestButton) {
+        requestButton.disabled = false
+      }
+
+      if (reviewBadge) {
+        reviewBadge.textContent = 'Running'
+      }
+    }
+
+    function openRequest() {
+      activeDemoRoot.dataset.request = 'open'
+
+      if (titleInput) {
+        titleInput.disabled = false
+      }
+
+      if (ownerInput) {
+        ownerInput.disabled = false
+      }
+
+      if (checkButton) {
+        checkButton.disabled = false
+      }
+    }
+
+    function confirmScope() {
+      if (checkButton) {
+        checkButton.dataset.state = 'confirmed'
+      }
+
+      updateReviewAvailability()
+    }
+
+    function markReviewReady() {
+      activeDemoRoot.dataset.review = 'ready'
+
+      if (reviewBadge) {
+        reviewBadge.textContent = 'Review ready'
+      }
+
+      if (confirmation) {
+        confirmation.dataset.state = 'ready'
+        const text = confirmation.querySelector('p')
+        if (text) {
+          text.textContent = 'Review ready'
+        }
+      }
+    }
+
+    function updateReviewAvailability() {
+      if (!reviewButton) {
+        return
+      }
+
+      const hasTitle = titleInput instanceof HTMLInputElement && titleInput.value.trim().length > 0
+      const hasOwner = ownerInput instanceof HTMLInputElement && ownerInput.value.trim().length > 0
+      const hasScope = checkButton?.dataset.state === 'confirmed'
+
+      reviewButton.disabled = !(hasTitle && hasOwner && hasScope)
+    }
+
+    function setDemoScene(scene: DemoScene, label: string): void {
+      activeDemoRoot.dataset.scene = scene
+
+      if (statusOutput) {
+        statusOutput.textContent = label
+      }
+    }
+
+    function setCursorSurface(surface: 'idle' | 'mac' | 'browser'): void {
+      activeDemoRoot.dataset.cursor = surface
+      document.documentElement.dataset.actorbleCursor = surface
+    }
+
+    function createClickOptions(duration: number) {
+      return {
+        ...revealNearest(),
+        motion: { kind: 'ease' as const, easing: 'ease-in-out' as const, duration },
+        pressDwell: 240,
+        timeout: 6800,
+      }
+    }
+
+    function createTypeOptions() {
+      return {
+        ...revealNearest(),
+        delay: 112,
+        focusClick: createClickOptions(1420),
+        focusStrategy: 'click' as const,
+        afterFocusDelay: 260,
+        timeout: 9800,
+      }
+    }
+
+    function setRunButtonsDisabled(disabled: boolean): void {
+      for (const button of runButtons) {
+        button.disabled = disabled
       }
     }
 
@@ -698,200 +748,6 @@ const github = 'https://github.com/syi0808/actorble'
       return {
         block: 'nearest' as ScrollLogicalPosition,
         inline: 'nearest' as ScrollLogicalPosition,
-      }
-    }
-
-    function isCompactDemo(): boolean {
-      return window.matchMedia('(max-width: 899px)').matches
-    }
-
-    function resetDemo() {
-      if (nestedTimer !== undefined) {
-        window.clearTimeout(nestedTimer)
-        nestedTimer = undefined
-      }
-
-      setDemoStep('ready', 'Ready to run')
-      setHostStatus('Scenario is waiting')
-      setProgressStep('ready')
-
-      if (innerProjectInput) {
-        innerProjectInput.value = ''
-      }
-
-      if (operatorEmailInput) {
-        operatorEmailInput.value = ''
-        operatorEmailInput.disabled = true
-      }
-
-      if (checklistButton) {
-        checklistButton.disabled = true
-        checklistButton.dataset.state = 'idle'
-        checklistButton.setAttribute('aria-pressed', 'false')
-        const stateText = checklistButton.querySelector('em')
-        if (stateText) {
-          stateText.textContent = 'Waiting for project'
-        }
-      }
-
-      if (inviteButton) {
-        inviteButton.disabled = true
-      }
-
-      if (nestedRunButton) {
-        nestedRunButton.disabled = true
-      }
-
-      if (reviewButton) {
-        reviewButton.disabled = true
-      }
-
-      if (innerStatus) {
-        innerStatus.dataset.state = 'idle'
-        innerStatus.textContent = 'Waiting for browser scenario'
-      }
-
-      if (nestedStatus) {
-        nestedStatus.dataset.state = 'idle'
-        nestedStatus.textContent = 'Nested Actorble is ready inside Chrome'
-      }
-    }
-
-    function createProject() {
-      const projectName =
-        innerProjectInput instanceof HTMLInputElement && innerProjectInput.value.trim().length > 0
-          ? innerProjectInput.value.trim()
-          : 'Release review'
-
-      if (innerStatus) {
-        innerStatus.dataset.state = 'created'
-        innerStatus.textContent = `${projectName} is ready for interface capture`
-      }
-
-      if (checklistButton) {
-        checklistButton.disabled = false
-        checklistButton.dataset.state = 'ready'
-        const stateText = checklistButton.querySelector('em')
-        if (stateText) {
-          stateText.textContent = 'Ready to collect'
-        }
-      }
-
-      if (operatorEmailInput) {
-        operatorEmailInput.disabled = false
-      }
-
-      setProgressStep('project')
-    }
-
-    function collectInterfaceState() {
-      if (checklistButton) {
-        checklistButton.dataset.state = 'collected'
-        checklistButton.setAttribute('aria-pressed', 'true')
-        const stateText = checklistButton.querySelector('em')
-        if (stateText) {
-          stateText.textContent = 'Interface state collected'
-        }
-      }
-
-      if (innerStatus) {
-        innerStatus.dataset.state = 'collected'
-        innerStatus.textContent = 'Interface state collected from the browser page'
-      }
-
-      if (inviteButton) {
-        inviteButton.disabled = false
-      }
-    }
-
-    function inviteOperator() {
-      const email =
-        operatorEmailInput instanceof HTMLInputElement && operatorEmailInput.value.trim().length > 0
-          ? operatorEmailInput.value.trim()
-          : 'ops@actorble.dev'
-
-      if (innerStatus) {
-        innerStatus.dataset.state = 'invited'
-        innerStatus.textContent = `${email} was invited into the run`
-      }
-
-      if (nestedRunButton) {
-        nestedRunButton.disabled = false
-      }
-    }
-
-    function runNestedActorbleInsideBrowser() {
-      if (nestedRunButton) {
-        nestedRunButton.disabled = true
-      }
-
-      if (nestedStatus) {
-        nestedStatus.dataset.state = 'running'
-        nestedStatus.textContent = 'Nested browser Actorble is running inside Chrome'
-      }
-
-      setProgressStep('nested')
-
-      nestedTimer = window.setTimeout(() => {
-        nestedTimer = undefined
-
-        if (nestedStatus) {
-          nestedStatus.dataset.state = 'complete'
-          nestedStatus.textContent = 'Nested browser Actorble finished its pass'
-        }
-
-        if (reviewButton) {
-          reviewButton.disabled = false
-        }
-      }, 940)
-    }
-
-    function markReviewReady() {
-      if (innerStatus) {
-        innerStatus.dataset.state = 'review'
-        innerStatus.textContent = 'Review-ready state reached inside the browser'
-      }
-
-      setProgressStep('complete')
-    }
-
-    function setDemoStep(step: DemoStep, label: string): void {
-      activeDemoRoot.dataset.step = step
-
-      if (statusOutput) {
-        statusOutput.textContent = label
-      }
-    }
-
-    function setHostStatus(label: string): void {
-      if (hostStatus) {
-        hostStatus.textContent = label
-      }
-    }
-
-    function setProgressStep(step: string): void {
-      const order = ['os', 'host', 'browser', 'project', 'nested', 'complete']
-      const activeIndex = order.indexOf(step)
-
-      for (const item of progressItems) {
-        const itemStep = item.dataset.progressStep ?? ''
-        const itemIndex = order.indexOf(itemStep)
-
-        if (activeIndex < 0 || itemIndex < 0) {
-          item.dataset.state = 'idle'
-        } else if (itemIndex < activeIndex) {
-          item.dataset.state = 'done'
-        } else if (itemIndex === activeIndex) {
-          item.dataset.state = 'active'
-        } else {
-          item.dataset.state = 'idle'
-        }
-      }
-    }
-
-    function setRunButtonsDisabled(disabled: boolean): void {
-      for (const button of runButtons) {
-        button.disabled = disabled
       }
     }
 
@@ -938,8 +794,8 @@ const github = 'https://github.com/syi0808/actorble'
     margin: 0;
     min-width: 320px;
     background:
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
       #080b0f;
     background-size: 36px 36px;
     color: var(--white);
@@ -951,9 +807,9 @@ const github = 'https://github.com/syi0808/actorble'
     inset: 0;
     z-index: -1;
     background:
-      linear-gradient(120deg, rgba(51, 230, 194, 0.12), transparent 32%),
-      linear-gradient(260deg, rgba(242, 184, 75, 0.1), transparent 34%),
-      linear-gradient(180deg, #0c1116, #080b0f 58%, #101820);
+      linear-gradient(130deg, rgba(51, 230, 194, 0.13), transparent 42%),
+      linear-gradient(310deg, rgba(90, 168, 255, 0.12), transparent 38%),
+      linear-gradient(180deg, #0c1116 0%, #080b0f 56%, #111820 100%);
   }
 
   a {
@@ -982,33 +838,44 @@ const github = 'https://github.com/syi0808/actorble'
     letter-spacing: 0;
   }
 
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
   .topbar {
     position: fixed;
     inset: 0 0 auto;
-    z-index: 30;
+    z-index: 40;
     display: flex;
     align-items: center;
     justify-content: space-between;
     min-height: 64px;
     padding: 0 clamp(18px, 5vw, 72px);
     border-bottom: 1px solid rgba(215, 224, 231, 0.12);
-    background: rgba(8, 11, 15, 0.78);
+    background: rgba(8, 11, 15, 0.72);
     backdrop-filter: blur(18px);
   }
 
   .brand,
   .nav,
   .hero-actions,
-  .demo-bar,
   .mac-menu,
   .mac-menu-left,
   .mac-menu-right,
+  .window-dots,
   .mac-window-bar,
   .chrome-tab-strip,
+  .chrome-tab,
   .chrome-toolbar,
   .chrome-controls,
-  .browser-actions,
-  .visual-step {
+  .dock,
+  .review-confirmation {
     display: flex;
     align-items: center;
   }
@@ -1018,37 +885,14 @@ const github = 'https://github.com/syi0808/actorble'
     font-weight: 800;
   }
 
-  .brand-mark {
-    width: 32px;
-    height: 32px;
+  .brand-wordmark {
+    width: 112px;
+    height: auto;
     overflow: visible;
   }
 
-  .brand-mark .actorble-mark-rail {
-    stroke: rgba(8, 11, 15, 0.74);
-  }
-
-  .brand-mark .actorble-mark-base {
-    stroke: var(--mint);
-  }
-
-  .brand-mark .actorble-mark-highlight {
-    stroke: #cffff4;
-  }
-
-  .brand-mark .actorble-mark-cross-rail,
-  .brand-mark .actorble-mark-node-shadow {
-    stroke: var(--ink);
-  }
-
-  .brand-mark .actorble-mark-cross,
-  .brand-mark .actorble-mark-node {
-    stroke: var(--amber);
-    fill: var(--amber);
-  }
-
-  .brand-mark .actorble-mark-node-spark {
-    fill: #ffe1a0;
+  .brand-wordmark .actorble-wordmark-letter {
+    fill: var(--white);
   }
 
   .nav {
@@ -1061,41 +905,740 @@ const github = 'https://github.com/syi0808/actorble'
     color: var(--mint);
   }
 
-  .hero {
+  .cinematic-hero {
     position: relative;
+    min-height: 100svh;
     overflow: hidden;
-    padding: 110px clamp(18px, 5vw, 72px) 40px;
   }
 
-  .hero-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 0.72fr) minmax(560px, 1.28fr);
-    gap: clamp(28px, 5vw, 72px);
-    align-items: center;
-    max-width: 1520px;
-    margin: 0 auto;
-  }
-
-  .hero-copy {
+  .demo-theater {
     position: relative;
-    z-index: 2;
-    max-width: 690px;
+    display: grid;
+    min-height: 100svh;
+    place-items: center;
+    padding: 74px 14px 14px;
+    perspective: 1800px;
   }
 
-  h1 {
-    margin: 0;
-    max-width: 720px;
+  .desktop-stage {
+    position: relative;
+    width: min(1560px, calc(100vw - 28px));
+    height: min(900px, calc(100svh - 88px));
+    min-height: 620px;
+    overflow: hidden;
+    border: 1px solid rgba(215, 224, 231, 0.18);
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, #25445e 0%, #1d676c 35%, #172b42 68%, #11151f 100%),
+      repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 18px);
+    box-shadow:
+      0 44px 120px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    transform: translateY(0) scale(1);
+    transform-origin: center 44%;
+    transition:
+      opacity 900ms ease,
+      filter 900ms ease,
+      transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .cinematic-hero[data-scene="complete"] .desktop-stage {
+    opacity: 0.68;
+    filter: brightness(0.72) saturate(0.9);
+    transform: translateY(-10vh) scale(0.78) rotateX(4deg);
+  }
+
+  .mac-menu {
+    position: relative;
+    z-index: 10;
+    justify-content: space-between;
+    gap: 14px;
+    height: 30px;
+    padding: 0 14px;
+    background: rgba(248, 250, 252, 0.74);
+    color: #17202a;
+    font-size: 0.78rem;
+    font-weight: 730;
+    backdrop-filter: blur(18px);
+  }
+
+  .mac-menu-left,
+  .mac-menu-right {
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .mac-menu-right {
+    justify-content: flex-end;
+  }
+
+  .battery-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .menu-status-icon {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    stroke-width: 2.2;
+  }
+
+  .apple-mark {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    fill: #17202a;
+    stroke-width: 1.8;
+  }
+
+  .desktop-wallpaper {
+    position: absolute;
+    inset: 58px 36px 88px;
+    pointer-events: none;
+  }
+
+  .wallpaper-mark {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .wallpaper-mark .actorble-motion-rail,
+  .wallpaper-mark .actorble-motion-cross-rail {
+    opacity: 0.22;
+  }
+
+  .wallpaper-mark .actorble-motion-path {
+    opacity: 0.18;
+    stroke: rgba(51, 230, 194, 0.22);
+  }
+
+  .wallpaper-mark .actorble-motion-cross {
+    opacity: 0.25;
+    stroke: rgba(242, 184, 75, 0.28);
+  }
+
+  .actorble-window,
+  .chrome-window {
+    position: absolute;
+    z-index: 4;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 8px;
+    box-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 480ms ease,
+      transform 620ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 360ms ease;
+  }
+
+  .actorble-window {
+    top: 74px;
+    left: clamp(22px, 4vw, 58px);
+    width: min(430px, 36vw);
+    background: rgba(15, 22, 32, 0.92);
     color: var(--white);
-    font-size: clamp(3.45rem, 5.9vw, 6.3rem);
-    line-height: 0.94;
+    backdrop-filter: blur(20px);
+    transform: translateY(18px) scale(0.98);
   }
 
-  .lede {
-    max-width: 620px;
-    margin: 26px 0 0;
-    color: #c7d2da;
-    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+  .chrome-window {
+    top: clamp(74px, 11vh, 104px);
+    right: clamp(22px, 4vw, 58px);
+    bottom: 86px;
+    width: min(930px, 68vw);
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    background: #f5f7fb;
+    color: #17202a;
+    transform: translateY(24px) scale(0.975);
+  }
+
+  .cinematic-hero[data-actorble="open"] .actorble-window,
+  .cinematic-hero[data-browser="open"] .actorble-window,
+  .cinematic-hero[data-nested="running"] .actorble-window,
+  .cinematic-hero[data-scene="complete"] .actorble-window {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+
+  .cinematic-hero[data-browser="open"] .chrome-window,
+  .cinematic-hero[data-nested="running"] .chrome-window,
+  .cinematic-hero[data-scene="complete"] .chrome-window {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+
+  .cinematic-hero[data-nested="running"] .chrome-window,
+  .cinematic-hero[data-scene="complete"] .chrome-window {
+    box-shadow:
+      0 0 0 1px rgba(51, 230, 194, 0.18),
+      0 36px 98px rgba(0, 0, 0, 0.4);
+  }
+
+  .mac-window-bar {
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .mac-window-bar strong,
+  .mac-window-bar span:last-child {
+    font-size: 0.86rem;
+  }
+
+  .mac-window-bar span:last-child {
+    color: #cbd8e2;
+  }
+
+  .window-dots {
+    gap: 7px;
+  }
+
+  .window-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--coral);
+  }
+
+  .window-dots span:nth-child(2) {
+    background: var(--amber);
+  }
+
+  .window-dots span:nth-child(3) {
+    background: var(--mint);
+  }
+
+  .actorble-app-body {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .app-symbol,
+  .runtime-symbol,
+  .dock-symbol {
+    overflow: visible;
+  }
+
+  .app-symbol {
+    width: 46px;
+    height: 46px;
+  }
+
+  .app-copy h2,
+  .runtime-panel h2,
+  .target-header h2 {
+    margin: 0;
+    color: inherit;
+    line-height: 1.08;
+  }
+
+  .app-copy h2 {
+    font-size: 1.45rem;
+  }
+
+  .app-copy p,
+  .runtime-panel p {
+    margin: 8px 0 0;
+    color: #b8c7d3;
+    font-size: 0.94rem;
+    line-height: 1.48;
+  }
+
+  .run-browser-button,
+  .nested-run-button,
+  .request-card,
+  .check-button,
+  .review-button {
+    border-radius: 8px;
+    font-weight: 850;
+    scroll-margin: 150px 0;
+  }
+
+  .run-browser-button,
+  .nested-run-button,
+  .review-button {
+    min-height: 44px;
+    border: 0;
+    padding: 0 16px;
+  }
+
+  .run-browser-button {
+    justify-self: start;
+    background: var(--amber);
+    color: #241700;
+  }
+
+  .chrome-tab-strip {
+    gap: 9px;
+    min-height: 40px;
+    padding: 0 12px;
+    background: #dfe5ec;
+  }
+
+  .chrome-tab {
+    gap: 8px;
+    min-width: 154px;
+    height: 30px;
+    border-radius: 8px 8px 0 0;
+    padding: 0 12px;
+    background: #f5f7fb;
+    color: #1b2733;
+    font-size: 0.82rem;
+    font-weight: 760;
+  }
+
+  .chrome-tab.muted {
+    background: rgba(255, 255, 255, 0.38);
+    color: #607080;
+  }
+
+  .chrome-favicon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #e8f1ff;
+    color: #2563eb;
+  }
+
+  .chrome-favicon-icon {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.4;
+  }
+
+  .chrome-toolbar {
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 12px;
+    border-bottom: 1px solid rgba(16, 20, 24, 0.1);
+    background: #f3f6fa;
+  }
+
+  .chrome-controls {
+    flex: 0 0 auto;
+    gap: 7px;
+    width: 62px;
+  }
+
+  .chrome-control {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    color: #64748b;
+    opacity: 0.92;
+    stroke-width: 2.25;
+  }
+
+  .chrome-control.disabled {
+    opacity: 0.48;
+  }
+
+  .chrome-address {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    overflow: hidden;
+    border: 1px solid #d2dbe3;
+    border-radius: 999px;
+    padding: 6px 14px;
+    background: #ffffff;
+    color: #536272;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .chrome-profile {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #1f2937;
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+
+  .chrome-profile-icon {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.2;
+  }
+
+  .browser-runtime {
+    display: grid;
+    grid-template-columns: minmax(190px, 0.33fr) minmax(430px, 1fr);
+    min-height: 0;
+    background: #f7f9fc;
+  }
+
+  .runtime-panel {
+    display: grid;
+    align-content: start;
+    gap: 15px;
+    padding: 24px;
+    border-right: 1px solid #dde6ee;
+    background: #111827;
+    color: var(--white);
+  }
+
+  .runtime-symbol {
+    width: 46px;
+    height: 46px;
+  }
+
+  .runtime-panel h2 {
+    font-size: 1.3rem;
+  }
+
+  .nested-run-button {
+    justify-self: start;
+    margin-top: 4px;
+    background: var(--mint);
+    color: #06201c;
+  }
+
+  .target-app {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    background:
+      linear-gradient(rgba(21, 32, 43, 0.035) 1px, transparent 1px),
+      #f8fafc;
+    background-size: 24px 24px;
+  }
+
+  .target-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .target-eyebrow {
+    color: #64748b;
+    font-size: 0.84rem;
+    font-weight: 850;
+  }
+
+  .target-header h2 {
+    margin-top: 3px;
+    color: #17202a;
+    font-size: clamp(1.45rem, 2vw, 2rem);
+  }
+
+  .review-badge {
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding: 7px 12px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 0.84rem;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .cinematic-hero[data-review="ready"] .review-badge {
+    border-color: rgba(8, 127, 112, 0.3);
+    background: rgba(51, 230, 194, 0.14);
+    color: #065f55;
+  }
+
+  .target-grid {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.4fr) minmax(300px, 1fr);
+    gap: 18px;
+    min-height: 0;
+    padding: 22px 24px 24px;
+  }
+
+  .request-list {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .request-card {
+    display: grid;
+    gap: 8px;
+    min-height: 118px;
+    border: 1px solid #d6e0ea;
+    padding: 15px;
+    background: #ffffff;
+    color: #17202a;
+    text-align: left;
+  }
+
+  .request-card.active {
+    border-color: rgba(8, 127, 112, 0.3);
+    box-shadow: 0 14px 30px rgba(16, 24, 40, 0.08);
+  }
+
+  .request-card.muted {
+    opacity: 0.58;
+  }
+
+  .request-card span,
+  .request-card em {
+    color: #657586;
+    font-size: 0.86rem;
+    font-style: normal;
+  }
+
+  .request-card strong {
+    font-size: 1rem;
+  }
+
+  .cinematic-hero[data-request="open"] .request-card.active {
+    border-color: rgba(8, 127, 112, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .review-form {
+    display: grid;
+    align-content: start;
+    gap: 13px;
+    min-width: 0;
+  }
+
+  .field {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .field span {
+    color: #334155;
+    font-size: 0.84rem;
+    font-weight: 850;
+  }
+
+  .field input {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    border: 1px solid #bac8d6;
+    border-radius: 8px;
+    padding: 0 13px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 0.96rem;
+    scroll-margin: 150px 0;
+  }
+
+  .field input:disabled,
+  .request-card:disabled,
+  .check-button:disabled,
+  .review-button:disabled,
+  .nested-run-button:disabled,
+  .run-browser-button:disabled {
+    opacity: 0.58;
+  }
+
+  .field input:focus {
+    outline: 3px solid rgba(51, 230, 194, 0.24);
+    border-color: var(--mint-dark);
+  }
+
+  .check-button,
+  .review-button {
+    min-height: 44px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #17202a;
+  }
+
+  .check-button[data-state="confirmed"] {
+    border-color: rgba(8, 127, 112, 0.36);
+    background: rgba(51, 230, 194, 0.13);
+    color: #065f55;
+  }
+
+  .review-button {
+    justify-self: start;
+    border: 0;
+    padding: 0 16px;
+    background: #101418;
+    color: #ffffff;
+  }
+
+  .review-confirmation {
+    gap: 10px;
+    min-height: 50px;
+    max-width: 360px;
+    border: 1px solid #d6e0ea;
+    border-radius: 8px;
+    padding: 0 14px;
+    background: #ffffff;
+    color: #64748b;
+  }
+
+  .review-state-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    color: #94a3b8;
+    stroke-width: 2.35;
+  }
+
+  .review-state-ready {
+    display: none;
+  }
+
+  .review-confirmation p {
+    margin: 0;
+    font-weight: 850;
+  }
+
+  .review-confirmation[data-state="ready"] {
+    border-color: rgba(8, 127, 112, 0.32);
+    background: rgba(51, 230, 194, 0.12);
+    color: #065f55;
+  }
+
+  .review-confirmation[data-state="ready"] .review-state-idle {
+    display: none;
+  }
+
+  .review-confirmation[data-state="ready"] .review-state-ready {
+    display: block;
+    color: #087f70;
+  }
+
+  .dock {
+    position: absolute;
+    z-index: 8;
+    left: 50%;
+    bottom: 16px;
+    gap: 10px;
+    min-height: 64px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(18px);
+    transform: translateX(-50%);
+  }
+
+  .dock-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 8px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.55);
+    scroll-margin: 0;
+  }
+
+  .dock-symbol {
+    width: 32px;
+    height: 32px;
+  }
+
+  .dock-lucide {
+    width: 27px;
+    height: 27px;
+    stroke-width: 2.15;
+  }
+
+  .dock-symbol .actorble-mark-base,
+  .dock-symbol .actorble-mark-cross {
+    fill: none;
+  }
+
+  .dock-symbol .actorble-mark-base {
+    stroke: var(--mint-dark);
+  }
+
+  .dock-symbol .actorble-mark-rail,
+  .dock-symbol .actorble-mark-cross-rail {
+    stroke: rgba(255, 255, 255, 0.8);
+  }
+
+  .dock-symbol .actorble-mark-cross {
+    stroke: #9a6400;
+  }
+
+  .dock-icon.finder {
+    background: linear-gradient(135deg, #dff6ff, #ffffff 54%, #b8dcff);
+    color: #1679ba;
+  }
+
+  .dock-icon.actorble {
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .dock-icon.browser {
+    background: linear-gradient(135deg, #eef6ff, #ffffff 52%, #dbeafe);
+    color: #2563eb;
+  }
+
+  .dock-icon.notes {
+    background: linear-gradient(180deg, #fde68a 0 32%, #ffffff 33% 100%);
+    color: #8a5b00;
+  }
+
+  .hero-reveal {
+    position: absolute;
+    z-index: 12;
+    left: clamp(18px, 6vw, 96px);
+    right: clamp(18px, 6vw, 96px);
+    bottom: clamp(40px, 9vh, 94px);
+    max-width: 760px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(26px);
+    transition:
+      opacity 760ms ease 260ms,
+      transform 760ms cubic-bezier(0.16, 1, 0.3, 1) 260ms;
+  }
+
+  .cinematic-hero[data-scene="complete"] .hero-reveal {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .hero-reveal h1 {
+    margin: 0;
+    max-width: 760px;
+    color: var(--white);
+    font-size: clamp(3.3rem, 7.2vw, 7.4rem);
+    line-height: 0.92;
+    text-wrap: balance;
+    text-shadow: 0 18px 44px rgba(0, 0, 0, 0.46);
+  }
+
+  .hero-reveal p {
+    max-width: 660px;
+    margin: 24px 0 0;
+    color: #d7e0e7;
+    font-size: clamp(1.04rem, 1.7vw, 1.26rem);
     line-height: 1.58;
+    text-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
   }
 
   .hero-actions {
@@ -1112,7 +1655,7 @@ const github = 'https://github.com/syi0808/actorble'
     border: 1px solid transparent;
     border-radius: 8px;
     padding: 0 18px;
-    font-weight: 800;
+    font-weight: 850;
     transition:
       border-color 160ms ease,
       background-color 160ms ease,
@@ -1136,636 +1679,53 @@ const github = 'https://github.com/syi0808/actorble'
 
   .secondary {
     border-color: rgba(215, 224, 231, 0.24);
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.09);
     color: var(--white);
   }
 
   .ghost {
     border-color: rgba(215, 224, 231, 0.16);
-    color: #c7d2da;
+    color: #d7e0e7;
   }
 
-  .demo-frame {
-    position: relative;
-    z-index: 2;
-    overflow: hidden;
-    border: 1px solid rgba(215, 224, 231, 0.18);
-    border-radius: 8px;
-    background: rgba(12, 17, 22, 0.92);
-    box-shadow: 0 34px 90px rgba(0, 0, 0, 0.38);
-  }
-
-  .demo-bar {
-    justify-content: space-between;
-    gap: 16px;
-    min-height: 46px;
-    padding: 0 16px;
-    border-bottom: 1px solid rgba(215, 224, 231, 0.14);
-    background: rgba(22, 34, 44, 0.94);
-  }
-
-  .demo-bar strong {
-    color: var(--white);
-  }
-
-  .demo-bar span:last-child {
-    color: #c7d2da;
-    font-size: 0.9rem;
-    text-align: right;
-  }
-
-  .window-dots {
-    display: flex;
-    gap: 7px;
-  }
-
-  .window-dots span {
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: var(--coral);
-  }
-
-  .window-dots span:nth-child(2) {
-    background: var(--amber);
-  }
-
-  .window-dots span:nth-child(3) {
-    background: var(--mint);
-  }
-
-  .demo-stage {
-    position: relative;
-    min-height: clamp(630px, 50vw, 760px);
-    overflow: hidden;
-    padding: 16px;
-    background: #0b1117;
-  }
-
-  .macos-desktop {
+  .start-panel {
     position: absolute;
-    inset: 16px;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 8px;
-    background:
-      radial-gradient(circle at 16% 20%, rgba(90, 168, 255, 0.32), transparent 24%),
-      radial-gradient(circle at 86% 12%, rgba(255, 107, 95, 0.26), transparent 24%),
-      linear-gradient(135deg, #26445f 0%, #1e5967 34%, #152231 72%, #11151f 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  }
-
-  .mac-menu {
-    position: relative;
-    z-index: 4;
-    justify-content: space-between;
-    gap: 14px;
-    height: 30px;
-    padding: 0 14px;
-    background: rgba(246, 248, 251, 0.74);
-    color: #17202a;
-    font-size: 0.78rem;
-    font-weight: 700;
-    backdrop-filter: blur(18px);
-  }
-
-  .mac-menu-left,
-  .mac-menu-right {
-    gap: 14px;
-    min-width: 0;
-  }
-
-  .mac-menu-right {
-    justify-content: flex-end;
-  }
-
-  .apple-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 5px;
-    background:
-      linear-gradient(135deg, #17202a 0 48%, transparent 50%),
-      linear-gradient(45deg, transparent 0 48%, #17202a 50%);
-  }
-
-  .desktop-ribbon {
-    position: absolute;
-    inset: 42px 20px 76px;
+    z-index: 14;
+    right: clamp(18px, 6vw, 96px);
+    bottom: clamp(32px, 7vh, 72px);
+    opacity: 0;
     pointer-events: none;
+    transition: opacity 260ms ease;
   }
 
-  .desktop-ribbon-symbol {
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-rail,
-  .desktop-ribbon-symbol .actorble-motion-cross-rail {
-    opacity: 0.26;
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-path {
-    opacity: 0.22;
-    stroke: rgba(51, 230, 194, 0.22);
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-highlight {
-    opacity: 0.24;
-    stroke: rgba(191, 252, 239, 0.24);
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-cross {
-    opacity: 0.3;
-    stroke: rgba(242, 184, 75, 0.3);
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-end {
-    fill: rgba(242, 184, 75, 0.82);
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-end-shadow {
-    opacity: 0.2;
-  }
-
-  .desktop-ribbon-symbol .actorble-motion-end-spark {
-    opacity: 0.48;
-  }
-
-  .actorble-window,
-  .chrome-window {
-    position: absolute;
-    z-index: 5;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 8px;
-    box-shadow: 0 26px 72px rgba(0, 0, 0, 0.34);
-    transition:
-      opacity 220ms ease,
-      transform 220ms ease,
-      border-color 220ms ease,
-      box-shadow 220ms ease;
-  }
-
-  .actorble-window {
-    top: 68px;
-    left: 34px;
-    width: min(390px, 42%);
-    background: rgba(15, 22, 32, 0.92);
-    color: var(--white);
-    backdrop-filter: blur(20px);
+  .cinematic-hero[data-scene="ready"] .start-panel,
+  .cinematic-hero[data-scene="failed"] .start-panel {
     opacity: 1;
-    transform: translateY(8px);
+    pointer-events: auto;
   }
 
-  .chrome-window {
-    right: 34px;
-    bottom: 92px;
-    width: min(620px, 64%);
-    background: #f3f6fa;
-    color: #15202b;
-    opacity: 1;
-    transform: translateY(12px) scale(0.985);
+  .cinematic-hero[data-scene="complete"] .start-panel {
+    display: none;
   }
 
-  .mac-window-bar {
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 38px;
-    padding: 0 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.08);
+  :global([data-actorble-visual-cursor]) {
+    z-index: 1000 !important;
+    filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
+    transition: filter 180ms ease, transform 80ms ease-out !important;
   }
 
-  .mac-window-bar strong,
-  .mac-window-bar span:last-child {
-    font-size: 0.86rem;
+  :global(:root[data-actorble-cursor="mac"] [data-actorble-visual-cursor]) {
+    filter:
+      drop-shadow(0 0 10px rgba(242, 184, 75, 0.58))
+      drop-shadow(0 0 22px rgba(255, 255, 255, 0.22))
+      drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
   }
 
-  .mac-window-bar span:last-child {
-    color: #cbd8e2;
-    text-align: right;
-  }
-
-  .actorble-body {
-    display: grid;
-    gap: 16px;
-    padding: 18px;
-  }
-
-  .actorble-heading h2,
-  .page-heading h2 {
-    margin: 0;
-    font-size: clamp(1.15rem, 1.5vw, 1.35rem);
-    line-height: 1.12;
-  }
-
-  .page-heading h2 {
-    color: #17202a;
-  }
-
-  .actorble-heading p,
-  .page-heading p {
-    margin: 8px 0 0;
-    color: #b8c7d3;
-    font-size: 0.92rem;
-    line-height: 1.48;
-  }
-
-  .host-run,
-  .create-button,
-  .browser-actions button,
-  .workflow-card {
-    min-height: 40px;
-    border: 0;
-    border-radius: 8px;
-    font-weight: 850;
-    scroll-margin: 160px 0;
-  }
-
-  .host-run {
-    justify-self: start;
-    padding: 0 14px;
-    background: var(--amber);
-    color: #221603;
-  }
-
-  .progress-rail {
-    display: grid;
-    gap: 8px;
-  }
-
-  .progress-item {
-    display: grid;
-    grid-template-columns: 11px minmax(0, 1fr);
-    gap: 10px;
-    align-items: center;
-    min-height: 34px;
-    border: 1px solid rgba(215, 224, 231, 0.12);
-    border-radius: 8px;
-    padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.045);
-  }
-
-  .progress-item span {
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: rgba(215, 224, 231, 0.3);
-  }
-
-  .progress-item p {
-    margin: 0;
-    color: #b8c7d3;
-    font-size: 0.82rem;
-    line-height: 1.22;
-  }
-
-  .progress-item[data-state="active"] {
-    border-color: rgba(242, 184, 75, 0.52);
-    background: rgba(242, 184, 75, 0.1);
-  }
-
-  .progress-item[data-state="active"] span {
-    background: var(--amber);
-  }
-
-  .progress-item[data-state="done"] {
-    border-color: rgba(51, 230, 194, 0.34);
-    background: rgba(51, 230, 194, 0.08);
-  }
-
-  .progress-item[data-state="done"] span {
-    background: var(--mint);
-  }
-
-  .chrome-tab-strip {
-    gap: 10px;
-    min-height: 40px;
-    padding: 0 12px;
-    background: #dfe5ec;
-  }
-
-  .chrome-tab {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 150px;
-    height: 30px;
-    border-radius: 8px 8px 0 0;
-    padding: 0 12px;
-    background: #f3f6fa;
-    color: #1b2733;
-    font-size: 0.82rem;
-    font-weight: 750;
-  }
-
-  .chrome-tab.muted {
-    background: rgba(255, 255, 255, 0.38);
-    color: #607080;
-  }
-
-  .chrome-favicon {
-    width: 14px;
-    height: 14px;
-    border-radius: 999px;
-    background:
-      conic-gradient(from 20deg, #34a853, #4285f4, #fbbc05, #ea4335, #34a853);
-  }
-
-  .chrome-toolbar {
-    gap: 10px;
-    min-height: 42px;
-    padding: 0 12px;
-    border-bottom: 1px solid rgba(16, 20, 24, 0.1);
-    background: #f3f6fa;
-  }
-
-  .chrome-controls {
-    gap: 9px;
-  }
-
-  .chrome-controls span {
-    width: 16px;
-    height: 16px;
-    border: 2px solid #6a7784;
-    border-left: 0;
-    border-bottom: 0;
-    transform: rotate(-135deg);
-  }
-
-  .chrome-controls span:nth-child(2) {
-    opacity: 0.45;
-    transform: rotate(45deg);
-  }
-
-  .chrome-controls span:nth-child(3) {
-    width: 15px;
-    height: 15px;
-    border: 2px solid #6a7784;
-    border-left-color: transparent;
-    border-radius: 999px;
-    transform: rotate(22deg);
-  }
-
-  .chrome-address {
-    flex: 1;
-    min-width: 0;
-    height: 30px;
-    overflow: hidden;
-    border: 1px solid #d2dbe3;
-    border-radius: 999px;
-    padding: 6px 14px;
-    background: #ffffff;
-    color: #536272;
-    font-size: 0.82rem;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .chrome-profile {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    background: #1f2937;
-    color: #ffffff;
-    font-size: 0.78rem;
-    font-weight: 850;
-  }
-
-  .browser-page {
-    display: grid;
-    gap: 14px;
-    padding: 18px;
-    background:
-      linear-gradient(rgba(21, 32, 43, 0.04) 1px, transparent 1px),
-      #f7f9fc;
-    background-size: 24px 24px;
-  }
-
-  .page-heading p {
-    color: #52616f;
-  }
-
-  .form-grid,
-  .workflow-grid,
-  .browser-status-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: end;
-  }
-
-  .field {
-    display: grid;
-    gap: 7px;
-    min-width: 0;
-  }
-
-  .field span {
-    color: #33414d;
-    font-size: 0.82rem;
-    font-weight: 850;
-  }
-
-  .field input {
-    width: 100%;
-    min-width: 0;
-    min-height: 42px;
-    border: 1px solid #b8c6d1;
-    border-radius: 8px;
-    padding: 0 12px;
-    background: #ffffff;
-    color: #101418;
-    scroll-margin: 160px 0;
-  }
-
-  .field input:disabled {
-    color: #7b8792;
-    background: #eef2f5;
-  }
-
-  .create-button,
-  .browser-actions button {
-    padding: 0 14px;
-    background: #101418;
-    color: #ffffff;
-  }
-
-  .workflow-card {
-    display: grid;
-    gap: 4px;
-    min-height: 66px;
-    padding: 10px 12px;
-    border: 1px solid rgba(16, 20, 24, 0.1);
-    background: #ffffff;
-    color: #17202a;
-    text-align: left;
-  }
-
-  .workflow-card span {
-    font-weight: 850;
-  }
-
-  .workflow-card em {
-    color: #637383;
-    font-size: 0.82rem;
-    font-style: normal;
-  }
-
-  .workflow-card[data-state="collected"] {
-    border-color: rgba(8, 127, 112, 0.28);
-    background: rgba(51, 230, 194, 0.1);
-  }
-
-  .workflow-card:disabled,
-  .browser-actions button:disabled {
-    opacity: 0.58;
-  }
-
-  .browser-actions {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .browser-status-grid {
-    align-items: stretch;
-  }
-
-  .inner-status,
-  .nested-status {
-    margin: 0;
-    min-height: 56px;
-    border: 1px solid rgba(16, 20, 24, 0.1);
-    border-radius: 8px;
-    padding: 12px;
-    background: #ffffff;
-    color: #52616f;
-    font-size: 0.88rem;
-    line-height: 1.4;
-  }
-
-  .inner-status[data-state="created"],
-  .inner-status[data-state="collected"],
-  .inner-status[data-state="invited"],
-  .inner-status[data-state="review"],
-  .nested-status[data-state="complete"] {
-    border-color: rgba(8, 127, 112, 0.26);
-    color: #075f55;
-  }
-
-  .nested-status[data-state="running"] {
-    border-color: rgba(242, 184, 75, 0.32);
-    color: #805706;
-  }
-
-  .dock {
-    position: absolute;
-    z-index: 8;
-    left: 50%;
-    bottom: 18px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    min-height: 62px;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    border-radius: 8px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.28);
-    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(18px);
-    transform: translateX(-50%);
-  }
-
-  .dock-icon {
-    display: grid;
-    place-items: center;
-    width: 46px;
-    height: 46px;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    border-radius: 8px;
-    padding: 0;
-    background: rgba(255, 255, 255, 0.55);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    scroll-margin: 160px 0;
-  }
-
-  .dock-mark {
-    width: 30px;
-    height: 30px;
-    overflow: visible;
-  }
-
-  .dock-mark .actorble-mark-rail {
-    stroke: rgba(255, 255, 255, 0.62);
-  }
-
-  .dock-mark .actorble-mark-base {
-    stroke: var(--mint-dark);
-  }
-
-  .dock-mark .actorble-mark-highlight {
-    stroke: #bffcef;
-  }
-
-  .dock-mark .actorble-mark-cross-rail,
-  .dock-mark .actorble-mark-node-shadow {
-    stroke: rgba(255, 255, 255, 0.82);
-  }
-
-  .dock-mark .actorble-mark-cross,
-  .dock-mark .actorble-mark-node {
-    stroke: #9a6400;
-    fill: #9a6400;
-  }
-
-  .dock-mark .actorble-mark-node-spark {
-    fill: #ffe1a0;
-  }
-
-  .dock-icon.finder {
-    background: linear-gradient(135deg, #7dd3fc, #ffffff 52%, #60a5fa);
-  }
-
-  .dock-icon.chrome {
-    background:
-      radial-gradient(circle, #4285f4 0 28%, #ffffff 30% 38%, transparent 40%),
-      conic-gradient(#ea4335, #fbbc05, #34a853, #4285f4, #ea4335);
-  }
-
-  .dock-icon.notes {
-    background:
-      linear-gradient(#facc15 0 28%, #fff7c2 29% 38%, #ffffff 39%),
-      repeating-linear-gradient(#ffffff 0 12px, #d1d5db 13px 14px);
-  }
-
-  .demo-frame[data-step="os"] .dock-icon.actorble,
-  .demo-frame[data-step="host"] .actorble-window,
-  .demo-frame[data-step="inner"] .chrome-window,
-  .demo-frame[data-step="complete"] .chrome-window {
-    border-color: rgba(51, 230, 194, 0.7);
-    box-shadow:
-      0 0 0 1px rgba(51, 230, 194, 0.26),
-      0 26px 72px rgba(0, 0, 0, 0.4);
-  }
-
-  .demo-frame[data-step="host"] .actorble-window,
-  .demo-frame[data-step="inner"] .actorble-window,
-  .demo-frame[data-step="complete"] .actorble-window {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .demo-frame[data-step="inner"] .chrome-window,
-  .demo-frame[data-step="complete"] .chrome-window {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  .demo-frame[data-step="complete"] .nested-status {
-    animation: completionPulse 1300ms ease 1;
+  :global(:root[data-actorble-cursor="browser"] [data-actorble-visual-cursor]) {
+    filter:
+      drop-shadow(0 0 10px rgba(51, 230, 194, 0.64))
+      drop-shadow(0 0 24px rgba(90, 168, 255, 0.24))
+      drop-shadow(0 12px 20px rgba(0, 0, 0, 0.34)) !important;
   }
 
   .section {
@@ -1776,44 +1736,42 @@ const github = 'https://github.com/syi0808/actorble'
     max-width: 860px;
   }
 
-  .section-heading p,
-  .diagnostics p {
+  .section-heading p {
     color: #aebbc7;
     font-size: 1rem;
     line-height: 1.65;
   }
 
-  h2 {
+  .section h2 {
     margin: 0;
     color: var(--white);
     font-size: clamp(2rem, 4.6vw, 4.4rem);
     line-height: 1.03;
+    text-wrap: balance;
   }
 
-  .surface-grid,
-  .model-grid {
+  .feature-grid,
+  .surface-grid {
     display: grid;
     gap: 14px;
     margin-top: 34px;
   }
 
-  .surface-grid,
-  .model-grid {
+  .feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .surface-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .surface-card,
-  .model-grid article,
-  .visual-panel {
+  .feature-grid article,
+  .surface-card {
+    min-height: 184px;
     border: 1px solid rgba(215, 224, 231, 0.14);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.055);
-  }
-
-  .surface-card,
-  .model-grid article {
-    min-height: 190px;
     padding: 20px;
+    background: rgba(255, 255, 255, 0.055);
   }
 
   .surface-card.active {
@@ -1833,50 +1791,9 @@ const github = 'https://github.com/syi0808/actorble'
     line-height: 1.56;
   }
 
-  .diagnostics {
-    background: rgba(255, 255, 255, 0.035);
+  .surfaces {
     border-block: 1px solid rgba(215, 224, 231, 0.1);
-  }
-
-  .diagnostics-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.58fr);
-    gap: clamp(28px, 5vw, 72px);
-    align-items: center;
-    max-width: 1280px;
-    margin: 0 auto;
-  }
-
-  .visual-panel {
-    display: grid;
-    gap: 10px;
-    padding: 18px;
-  }
-
-  .visual-step {
-    gap: 12px;
-    min-height: 48px;
-    border: 1px solid rgba(215, 224, 231, 0.12);
-    border-radius: 8px;
-    padding: 0 12px;
-    background: rgba(0, 0, 0, 0.22);
-  }
-
-  .visual-step span {
-    width: 12px;
-    height: 12px;
-    border-radius: 999px;
-    background: rgba(215, 224, 231, 0.32);
-  }
-
-  .visual-step.active span {
-    background: var(--mint);
-  }
-
-  .visual-step p {
-    margin: 0;
-    color: #d7e0e7;
-    font-size: 0.94rem;
+    background: rgba(255, 255, 255, 0.035);
   }
 
   .final-cta {
@@ -1889,79 +1806,120 @@ const github = 'https://github.com/syi0808/actorble'
     justify-content: center;
   }
 
-  @keyframes completionPulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(51, 230, 194, 0.42);
+  @media (max-width: 1180px) {
+    .actorble-window {
+      width: min(380px, 40vw);
     }
 
-    100% {
-      box-shadow: 0 0 0 18px rgba(51, 230, 194, 0);
+    .chrome-window {
+      width: min(790px, 66vw);
     }
-  }
 
-  @media (max-width: 1120px) {
-    .hero-grid,
-    .diagnostics-grid {
+    .browser-runtime {
+      grid-template-columns: 180px minmax(360px, 1fr);
+    }
+
+    .target-grid {
       grid-template-columns: 1fr;
+      overflow: auto;
     }
 
-    .hero-copy {
-      max-width: 860px;
+    .request-card.muted {
+      display: none;
     }
 
-    .demo-frame {
-      width: 100%;
-    }
-
-    .surface-grid,
-    .model-grid {
+    .feature-grid,
+    .surface-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
-  @media (max-width: 860px) {
-    .mac-menu-left span:nth-child(n + 4) {
+  @media (max-width: 900px) {
+    .demo-theater {
+      align-items: start;
+      height: 100svh;
+      min-height: 100svh;
+      overflow: visible;
+      padding: 74px 12px 12px;
+    }
+
+    .desktop-stage {
+      width: calc(100vw - 24px);
+      height: 980px;
+      min-height: 980px;
+    }
+
+    .mac-menu-left span:nth-child(n + 5),
+    .mac-menu-right .menu-status-icon,
+    .mac-menu-right .battery-status {
       display: none;
-    }
-
-    .demo-stage {
-      min-height: 1460px;
-      padding: 14px;
-    }
-
-    .macos-desktop {
-      inset: 14px;
     }
 
     .actorble-window {
       top: 54px;
-      left: 12px;
-      right: 12px;
+      left: 18px;
+      right: 18px;
       width: auto;
     }
 
     .chrome-window {
-      top: 560px;
-      left: 12px;
-      right: 12px;
-      bottom: 96px;
+      top: 298px;
+      left: 18px;
+      right: 18px;
+      bottom: 82px;
       width: auto;
     }
 
-    .dock {
-      max-width: calc(100% - 28px);
-    }
-
-    .form-grid,
-    .workflow-grid,
-    .browser-status-grid {
+    .browser-runtime {
       grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
     }
 
-    .browser-actions button,
-    .create-button {
-      flex: 1 1 100%;
-      min-height: 42px;
+    .runtime-panel {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      border-right: 0;
+      border-bottom: 1px solid #dde6ee;
+    }
+
+    .runtime-panel p {
+      display: none;
+    }
+
+    .runtime-symbol {
+      width: 32px;
+      height: 32px;
+    }
+
+    .nested-run-button {
+      margin: 0;
+    }
+
+    .target-header {
+      padding: 16px;
+    }
+
+    .target-grid {
+      padding: 16px;
+    }
+
+    .cinematic-hero[data-scene="complete"] .desktop-stage {
+      opacity: 0.58;
+      transform: translateY(-8vh) scale(0.82);
+    }
+
+    .hero-reveal {
+      bottom: 32px;
+    }
+
+    .cinematic-hero[data-scene="ready"] .start-panel,
+    .cinematic-hero[data-scene="failed"] .start-panel {
+      position: fixed;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
     }
   }
 
@@ -1971,9 +1929,8 @@ const github = 'https://github.com/syi0808/actorble'
       padding-inline: 16px;
     }
 
-    .brand-mark {
-      width: 28px;
-      height: 28px;
+    .brand-wordmark {
+      width: 104px;
     }
 
     .nav {
@@ -1981,54 +1938,98 @@ const github = 'https://github.com/syi0808/actorble'
       font-size: 0.86rem;
     }
 
-    .hero {
-      padding: 92px 16px 34px;
+    .nav a:first-child {
+      display: none;
     }
 
-    h1 {
-      font-size: clamp(3rem, 15vw, 4.4rem);
+    .desktop-stage {
+      height: 930px;
+      min-height: 930px;
+    }
+
+    .mac-menu {
+      padding-inline: 10px;
+      font-size: 0.72rem;
+    }
+
+    .chrome-window {
+      top: 284px;
+    }
+
+    .chrome-address,
+    .chrome-tab.muted,
+    .chrome-profile {
+      display: none;
+    }
+
+    .browser-runtime {
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .runtime-panel {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .nested-run-button {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .target-header {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .review-button,
+    .check-button,
+    .run-browser-button {
+      width: 100%;
+    }
+
+    .hero-reveal h1 {
+      font-size: clamp(3rem, 15vw, 4.8rem);
     }
 
     .button {
       width: 100%;
     }
 
-    .demo-bar {
-      align-items: flex-start;
-      flex-direction: column;
-      padding-block: 12px;
-    }
-
-    .mac-menu {
-      gap: 8px;
-      padding-inline: 10px;
-      font-size: 0.72rem;
-    }
-
-    .mac-menu-left,
-    .mac-menu-right {
-      gap: 9px;
-    }
-
-    .chrome-tab.muted,
-    .chrome-profile {
-      display: none;
-    }
-
-    .surface-grid,
-    .model-grid,
-    .diagnostics-grid {
+    .feature-grid,
+    .surface-grid {
       grid-template-columns: 1fr;
     }
   }
 
-  @media (max-width: 420px) {
-    .nav a:first-child {
+  @media (max-width: 460px) {
+    .mac-menu-left {
+      gap: 9px;
+    }
+
+    .mac-menu-left span:nth-child(n + 4) {
       display: none;
     }
 
+    .mac-menu-right {
+      display: none;
+    }
+
+    .actorble-window {
+      top: 48px;
+    }
+
+    .chrome-window {
+      top: 280px;
+      left: 12px;
+      right: 12px;
+    }
+
     .chrome-tab {
-      min-width: 128px;
+      min-width: 136px;
+    }
+
+    .target-grid {
+      gap: 12px;
     }
 
     .dock-icon {
@@ -2049,6 +2050,12 @@ const github = 'https://github.com/syi0808/actorble'
       animation-iteration-count: 1 !important;
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
+    }
+
+    .cinematic-hero[data-scene="ready"] .hero-reveal {
+      opacity: 1;
+      pointer-events: auto;
+      transform: none;
     }
   }
 </style>

@@ -14,6 +14,9 @@ importers:
       '@astrojs/starlight':
         specifier: ^0.40.0
         version: 0.40.0(astro@6.4.6(@types/node@24.13.2)(rollup@4.61.1)(yaml@2.9.0))(typescript@6.0.3)
+      '@lucide/astro':
+        specifier: ^1.18.0
+        version: 1.18.0(astro@6.4.6(@types/node@24.13.2)(rollup@4.61.1)(yaml@2.9.0))
       astro:
         specifier: ^6.4.6
         version: 6.4.6(@types/node@24.13.2)(rollup@4.61.1)(yaml@2.9.0)
@@ -466,6 +469,11 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@lucide/astro@1.18.0':
+    resolution: {integrity: sha512-ADqovmJAZ9GRJz0pSWqurlAZ5PjauZSRNO+suFC+MwVdC+fwyBxJ88UDhmBVxKEdE0Eyhw9J6D0P9H0syOCJ4w==}
+    peerDependencies:
+      astro: ^4 || ^5 || ^6
 
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
@@ -2511,6 +2519,10 @@ snapshots:
     optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@lucide/astro@1.18.0(astro@6.4.6(@types/node@24.13.2)(rollup@4.61.1)(yaml@2.9.0))':
+    dependencies:
+      astro: 6.4.6(@types/node@24.13.2)(rollup@4.61.1)(yaml@2.9.0)
 
   '@mdx-js/mdx@3.1.1':
     dependencies:

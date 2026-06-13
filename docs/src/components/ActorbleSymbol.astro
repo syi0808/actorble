@@ -2,7 +2,9 @@
 import {
   ACTORBLE_MARK_VIEW_BOX,
   ACTORBLE_MOTION_VIEW_BOX,
+  ACTORBLE_WORDMARK_VIEW_BOX,
   renderActorbleSymbolContent,
+  renderActorbleWordmarkContent,
 } from '../brand/actorble-symbol.mjs'
 
 const {
@@ -12,13 +14,21 @@ const {
   variant = 'mark',
 } = Astro.props
 
-const symbolVariant = variant === 'motion' ? 'motion' : 'mark'
-const content = renderActorbleSymbolContent({
-  classNames: true,
-  variant: symbolVariant,
-})
+const symbolVariant =
+  variant === 'motion' || variant === 'wordmark' ? variant : 'mark'
+const content =
+  symbolVariant === 'wordmark'
+    ? renderActorbleWordmarkContent({ classNames: true })
+    : renderActorbleSymbolContent({
+        classNames: true,
+        variant: symbolVariant,
+      })
 const viewBox =
-  symbolVariant === 'motion' ? ACTORBLE_MOTION_VIEW_BOX : ACTORBLE_MARK_VIEW_BOX
+  symbolVariant === 'motion'
+    ? ACTORBLE_MOTION_VIEW_BOX
+    : symbolVariant === 'wordmark'
+      ? ACTORBLE_WORDMARK_VIEW_BOX
+      : ACTORBLE_MARK_VIEW_BOX
 ---
 
 <svg

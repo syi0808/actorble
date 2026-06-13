@@ -1,11 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Actorble">
   <rect fill="#101418" height="64" rx="14" width="64"/>
-  <path d="M9.6 42.4C14.7 26.5 26.8 15.5 39.1 21.4C47.1 25.3 47.7 36.2 55.2 33.8C58.2 32.8 59.3 29.8 58 26.4" fill="none" opacity="0.72" stroke="#17222C" stroke-linecap="round" stroke-linejoin="round" stroke-width="12"/>
-  <path d="M9.6 42.4C14.7 26.5 26.8 15.5 39.1 21.4C47.1 25.3 47.7 36.2 55.2 33.8C58.2 32.8 59.3 29.8 58 26.4" fill="none" stroke="#33E6C2" stroke-linecap="round" stroke-linejoin="round" stroke-width="7.6"/>
-  <path d="M13.4 38.2C19.4 24.4 29.6 18.5 38.1 22.6" fill="none" opacity="0.48" stroke="#BFFCEF" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
-  <path d="M39.1 21.4C31.5 17.8 23.6 22.1 20.1 31.4C18.4 35.8 17 40.6 15.1 45.7" fill="none" opacity="0.82" stroke="#101418" stroke-linecap="round" stroke-linejoin="round" stroke-width="7.4"/>
-  <path d="M39.1 21.4C31.5 17.8 23.6 22.1 20.1 31.4C18.4 35.8 17 40.6 15.1 45.7" fill="none" stroke="#F2B84B" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.4"/>
-  <circle cx="58" cy="26.4" fill="#101418" opacity="0.9" r="6.6"/>
-  <circle cx="58" cy="26.4" fill="#F2B84B" r="4.6"/>
-  <circle cx="56.7" cy="24.9" fill="#FFE1A0" opacity="0.72" r="1.3"/>
+  <path d="M15.1 45.7C20.2 28.5 30.9 15.1 39.7 19.9C46.9 23.8 47.7 36.8 50.9 44.2" fill="none" opacity="0.78" stroke="#17222C" stroke-linecap="round" stroke-linejoin="round" stroke-width="12.4"/>
+  <path d="M15.1 45.7C20.2 28.5 30.9 15.1 39.7 19.9C46.9 23.8 47.7 36.8 50.9 44.2" fill="none" stroke="#33E6C2" stroke-linecap="round" stroke-linejoin="round" stroke-width="7.2"/>
+  <path d="M13.8 30.8C23 38.2 34 41.1 43.3 36.4C47.6 34.2 49.2 28.8 51.6 23.8" fill="none" opacity="0.82" stroke="#101418" stroke-linecap="round" stroke-linejoin="round" stroke-width="8.2"/>
+  <path d="M13.8 30.8C23 38.2 34 41.1 43.3 36.4C47.6 34.2 49.2 28.8 51.6 23.8" fill="none" stroke="#F2B84B" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.8"/>
 </svg>
