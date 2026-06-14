@@ -159,6 +159,10 @@ describe('BrowserKeyboardEngine', () => {
     document.body.innerHTML = ''
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('dispatches keyDown, keyUp, and press with modifier state', async () => {
     const input = document.createElement('input')
     document.body.append(input)
@@ -205,6 +209,95 @@ describe('BrowserKeyboardEngine', () => {
       { type: 'keyup', key: 'Control', ctrlKey: false, shiftKey: false },
     ])
     expect(store.snapshot().focusVisible).toBe(true)
+  })
+
+  it('cleans keys pressed by press when cancelled during hold delay', async () => {
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    const controlledTimeline = createBlockingTimeline()
+    const controller = new AbortController()
+    const events = []
+
+    for (const eventName of ['keydown', 'keyup']) {
+      input.addEventListener(eventName, (event) => {
+        events.push({
+          type: event.type,
+          key: event.key,
+          shiftKey: event.shiftKey,
+        })
+      })
+    }
+
+    const engine = new BrowserKeyboardEngine({
+      dom: new BrowserDomAdapter(document),
+      events: new BrowserEventDispatcher(),
+      store: new BrowserInteractionStateStore(),
+      timeline: controlledTimeline.timeline,
+    })
+
+    const result = engine.press('Shift+K', { delay: 10, signal: controller.signal })
+
+    await vi.waitFor(() => {
+      expect(controlledTimeline.pendingDelayCount).toBe(1)
+    })
+    expect(engine.getState()).toEqual({
+      pressedKeys: ['Shift', 'K'],
+      modifiers: ['Shift'],
+    })
+
+    controller.abort('user stopped')
+
+    await expect(result).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'keyboard.press', reason: 'user stopped' },
+    })
+    expect(engine.getState()).toEqual({
+      pressedKeys: [],
+      modifiers: [],
+    })
+    expect(events).toEqual([
+      { type: 'keydown', key: 'Shift', shiftKey: true },
+      { type: 'keydown', key: 'K', shiftKey: true },
+      { type: 'keyup', key: 'K', shiftKey: true },
+      { type: 'keyup', key: 'Shift', shiftKey: false },
+    ])
+  })
+
+  it('cleans keys pressed by press when hold delay times out', async () => {
+    vi.useFakeTimers()
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    const controlledTimeline = createBlockingTimeline()
+    const engine = new BrowserKeyboardEngine({
+      dom: new BrowserDomAdapter(document),
+      events: new BrowserEventDispatcher(),
+      store: new BrowserInteractionStateStore(),
+      timeline: controlledTimeline.timeline,
+    })
+
+    const result = engine.press('Shift+K', { delay: 10, timeout: 25 })
+    const caught = result.catch((error) => error)
+
+    for (let index = 0; index < 5; index += 1) {
+      await Promise.resolve()
+    }
+    expect(controlledTimeline.pendingDelayCount).toBe(1)
+    expect(engine.getState()).toEqual({
+      pressedKeys: ['Shift', 'K'],
+      modifiers: ['Shift'],
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expect(caught).resolves.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: { operation: 'keyboard.press', timeout: 25 },
+    })
+    expect(engine.getState()).toEqual({
+      pressedKeys: [],
+      modifiers: [],
+    })
   })
 
   it('uses the factory with injectable dependencies', async () => {

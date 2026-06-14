@@ -263,6 +263,40 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can press keys on the current focus', async () => {
+    const input = document.createElement('input')
+    input.id = 'shortcut'
+    document.body.append(input)
+    input.focus()
+    const seen = []
+
+    for (const eventName of ['keydown', 'keyup']) {
+      input.addEventListener(eventName, (event) => {
+        seen.push({
+          type: event.type,
+          key: event.key,
+          shiftKey: event.shiftKey,
+        })
+      })
+    }
+
+    const actorble = createActorble()
+
+    await expect(actorble.press('Shift+K', { delay: 0 })).resolves.toBeUndefined()
+
+    expect(seen).toEqual([
+      { type: 'keydown', key: 'Shift', shiftKey: true },
+      { type: 'keydown', key: 'K', shiftKey: true },
+      { type: 'keyup', key: 'K', shiftKey: true },
+      { type: 'keyup', key: 'Shift', shiftKey: false },
+    ])
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.press', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('creates a default module graph that can fill a target value', async () => {
     const input = document.createElement('input')
     input.id = 'message'
@@ -312,15 +346,6 @@ describe('Actorble facade', () => {
         boundary: 'action-orchestrator',
         action: 'doubleClick',
         capability: 'multi-click-gesture',
-        limit: expect.any(String),
-      },
-    })
-    await expect(actorble.press('Enter')).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'press',
-        capability: 'keyboard-action',
         limit: expect.any(String),
       },
     })

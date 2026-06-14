@@ -1,9 +1,22 @@
-import { actorbleError } from '../../shared/index.js'
+import {
+  ActorbleError,
+  actorbleError,
+  cancellationError,
+  timeoutError,
+} from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
 import { BrowserEventDispatcher } from '../../platform/platform-adapter/event-dispatcher/index.js'
 import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
-import type { DomPort, EventDispatchPort, PressOptions } from '../../shared/index.js'
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
+import type {
+  CancellationSignalLike,
+  DomPort,
+  DurationMs,
+  EventDispatchPort,
+  PressOptions,
+} from '../../shared/index.js'
 import type { InteractionStateStore } from '../../state/interaction-state-store/index.js'
+import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
 
 export type KeyboardModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
 
@@ -16,6 +29,7 @@ export type KeyboardEngineOptions = Readonly<{
   dom?: DomPort
   events?: EventDispatchPort
   store?: InteractionStateStore
+  timeline?: TimelineEngine
 }>
 
 export interface KeyboardEngine {
@@ -29,12 +43,14 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
   readonly #dom: DomPort
   readonly #events: EventDispatchPort
   readonly #store: InteractionStateStore
+  readonly #timeline: TimelineEngine
   readonly #pressedKeys: string[] = []
 
   constructor(options: KeyboardEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
     this.#events = options.events ?? new BrowserEventDispatcher()
     this.#store = options.store ?? new BrowserInteractionStateStore()
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
   }
 
   getState(): KeyboardState {
@@ -46,12 +62,23 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
 
   async keyDown(key: string, _options: PressOptions = {}): Promise<KeyboardState> {
     const normalizedKey = normalizeKey(key)
+    const target = this.#activeKeyboardTargetOrThrow(normalizedKey)
+    const pressed = !this.#pressedKeys.includes(normalizedKey)
 
-    if (!this.#pressedKeys.includes(normalizedKey)) {
+    if (pressed) {
       this.#pressedKeys.push(normalizedKey)
     }
 
-    this.#dispatch('keydown', normalizedKey)
+    try {
+      this.#dispatch('keydown', normalizedKey, target)
+    } catch (error) {
+      if (pressed) {
+        this.#removePressedKey(normalizedKey)
+      }
+
+      throw error
+    }
+
     this.#syncKeyboardModality()
 
     return this.getState()
@@ -59,11 +86,8 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
 
   async keyUp(key: string, _options: PressOptions = {}): Promise<KeyboardState> {
     const normalizedKey = normalizeKey(key)
-    const index = this.#pressedKeys.indexOf(normalizedKey)
 
-    if (index >= 0) {
-      this.#pressedKeys.splice(index, 1)
-    }
+    this.#removePressedKey(normalizedKey)
 
     this.#dispatch('keyup', normalizedKey)
 
@@ -71,29 +95,81 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
   }
 
   async press(keys: string, options: PressOptions = {}): Promise<KeyboardState> {
+    return withKeyboardOperationTimeout('keyboard.press', options, async (signal) => {
+      await this.#pressSequence(keys, options, signal)
+
+      return this.getState()
+    })
+  }
+
+  async #pressSequence(
+    keys: string,
+    options: PressOptions,
+    signal: CancellationSignalLike | undefined,
+  ): Promise<void> {
     const sequence = parseKeySequence(keys)
     const key = sequence[sequence.length - 1]
     const modifiers = sequence.slice(0, -1).filter(isKeyboardModifier) as KeyboardModifier[]
-    const pressedByPress: KeyboardModifier[] = []
+    const pressedByPress: string[] = []
 
-    for (const modifier of modifiers) {
-      if (!this.#pressedKeys.includes(modifier)) {
-        pressedByPress.push(modifier)
-        await this.keyDown(modifier, options)
+    try {
+      for (const modifier of modifiers) {
+        assertKeyboardNotCancelled('keyboard.press', signal)
+
+        if (!this.#pressedKeys.includes(modifier)) {
+          pressedByPress.push(modifier)
+        }
+
+        await this.keyDown(modifier, signal === undefined ? options : { ...options, signal })
+      }
+
+      assertKeyboardNotCancelled('keyboard.press', signal)
+
+      if (!this.#pressedKeys.includes(key)) {
+        pressedByPress.push(key)
+      }
+
+      await this.keyDown(key, signal === undefined ? options : { ...options, signal })
+      await delayKeyHold(this.#timeline, options.delay, signal)
+      assertKeyboardNotCancelled('keyboard.press', signal)
+    } finally {
+      await this.#releasePressedByPress(pressedByPress)
+    }
+  }
+
+  async #releasePressedByPress(pressedByPress: readonly string[]): Promise<void> {
+    let cleanupError: unknown
+
+    for (const key of [...pressedByPress].reverse()) {
+      if (this.#pressedKeys.includes(key)) {
+        try {
+          await this.keyUp(key)
+        } catch (error) {
+          cleanupError ??= error
+        }
       }
     }
 
-    await this.keyDown(key, options)
-    await this.keyUp(key, options)
-
-    for (const modifier of [...pressedByPress].reverse()) {
-      await this.keyUp(modifier, options)
+    if (cleanupError !== undefined) {
+      throw cleanupError
     }
-
-    return this.getState()
   }
 
-  #dispatch(type: 'keydown' | 'keyup', key: string): void {
+  #dispatch(
+    type: 'keydown' | 'keyup',
+    key: string,
+    target = this.#activeKeyboardTargetOrThrow(key),
+  ): void {
+    this.#events.dispatchKeyboardEvent({
+      type,
+      target,
+      key,
+      code: codeForKey(key),
+      modifiers: this.getState().modifiers,
+    })
+  }
+
+  #activeKeyboardTargetOrThrow(key: string): Element {
     const target = this.#dom.getActiveElement()
 
     if (!target) {
@@ -102,13 +178,15 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
       })
     }
 
-    this.#events.dispatchKeyboardEvent({
-      type,
-      target,
-      key,
-      code: codeForKey(key),
-      modifiers: this.getState().modifiers,
-    })
+    return target
+  }
+
+  #removePressedKey(key: string): void {
+    const index = this.#pressedKeys.indexOf(key)
+
+    if (index >= 0) {
+      this.#pressedKeys.splice(index, 1)
+    }
   }
 
   #syncKeyboardModality(): void {
@@ -134,6 +212,138 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
 
 export function createKeyboardEngine(options: KeyboardEngineOptions = {}): KeyboardEngine {
   return new BrowserKeyboardEngine(options)
+}
+
+type KeyboardOperationName = 'keyboard.press'
+
+async function delayKeyHold(
+  timeline: TimelineEngine,
+  delay: DurationMs | undefined,
+  signal: CancellationSignalLike | undefined,
+): Promise<void> {
+  if (delay === undefined || !Number.isFinite(delay) || delay <= 0) {
+    return
+  }
+
+  await timeline.delay(delay, signal === undefined ? {} : { signal })
+}
+
+async function withKeyboardOperationTimeout<TValue>(
+  operation: KeyboardOperationName,
+  options: PressOptions,
+  run: (signal: CancellationSignalLike | undefined) => Promise<TValue>,
+): Promise<TValue> {
+  if (options.timeout === undefined) {
+    if (options.signal?.aborted) {
+      throw cancellationError(operation, options.signal.reason)
+    }
+
+    try {
+      return await run(options.signal)
+    } catch (error) {
+      throw normalizeKeyboardOperationError(error, operation, options.timeout)
+    }
+  }
+
+  const timeout = normalizeDuration(options.timeout)
+  const timeoutFailure = timeoutError(operation, timeout, {
+    details: keyboardOperationDetails(),
+  })
+  const controller = new AbortController()
+  let timerId: ReturnType<typeof setTimeout> | null = null
+
+  if (options.signal?.aborted) {
+    throw cancellationError(operation, options.signal.reason)
+  }
+
+  const abortFromExternalSignal = () => {
+    controller.abort(options.signal?.reason)
+  }
+
+  options.signal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+
+  timerId = setTimeout(() => {
+    controller.abort(timeoutFailure)
+  }, timeout)
+
+  try {
+    return await run(controller.signal)
+  } catch (error) {
+    throw normalizeKeyboardOperationError(
+      error,
+      operation,
+      options.timeout,
+      controller.signal.reason,
+    )
+  } finally {
+    if (timerId !== null) {
+      clearTimeout(timerId)
+    }
+
+    options.signal?.removeEventListener('abort', abortFromExternalSignal)
+  }
+}
+
+function normalizeDuration(duration: DurationMs): DurationMs {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0
+  }
+
+  return duration
+}
+
+function assertKeyboardNotCancelled(
+  operation: KeyboardOperationName,
+  signal: CancellationSignalLike | undefined,
+): void {
+  if (signal?.aborted) {
+    throw cancellationError(operation, signal.reason)
+  }
+}
+
+function normalizeKeyboardOperationError(
+  error: unknown,
+  operation: KeyboardOperationName,
+  timeout: DurationMs | undefined,
+  abortReason?: unknown,
+): ActorbleError {
+  if (abortReason instanceof ActorbleError && abortReason.code === 'ACTION_TIMEOUT') {
+    return abortReason
+  }
+
+  if (error instanceof ActorbleError) {
+    if (error.code === 'ACTION_CANCELLED' && error.details?.operation !== operation) {
+      const reason = abortReason ?? error.details?.reason
+
+      if (reason instanceof ActorbleError && reason.code === 'ACTION_TIMEOUT') {
+        return reason
+      }
+
+      return cancellationError(operation, reason)
+    }
+
+    if (
+      error.code === 'ACTION_TIMEOUT' &&
+      error.details?.operation !== operation &&
+      timeout !== undefined
+    ) {
+      return timeoutError(operation, normalizeDuration(timeout), {
+        cause: error,
+        details: keyboardOperationDetails(),
+      })
+    }
+
+    return error
+  }
+
+  return actorbleError('PLATFORM_UNSUPPORTED', `${operation} failed.`, {
+    cause: error,
+    details: keyboardOperationDetails(),
+  })
+}
+
+function keyboardOperationDetails(): Readonly<Record<string, unknown>> {
+  return { boundary: 'keyboard-engine' }
 }
 
 function parseKeySequence(keys: string): readonly string[] {

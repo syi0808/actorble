@@ -4,6 +4,7 @@ import { BrowserGeometryEngine } from '../../targeting/geometry-engine/index.js'
 import { BrowserGestureEngine } from '../../input/gesture-engine/index.js'
 import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
 import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
+import { BrowserKeyboardEngine } from '../../input/keyboard-engine/index.js'
 import { BrowserPointerEngine } from '../../input/pointer-engine/index.js'
 import { BrowserPointerSignalBus } from '../../input/pointer-signals/index.js'
 import {
@@ -61,6 +62,7 @@ import type {
 } from '../../shared/index.js'
 import type { GeometryEngine, GeometrySnapshot } from '../../targeting/geometry-engine/index.js'
 import type { GestureEngine } from '../../input/gesture-engine/index.js'
+import type { KeyboardEngine, KeyboardState } from '../../input/keyboard-engine/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../../targeting/interactability-engine/index.js'
 import type {
   InteractionStateDiff,
@@ -119,6 +121,7 @@ export type ActionOrchestratorOptions = Readonly<{
   geometry?: GeometryEngine
   gesture?: GestureEngine
   interactability?: InteractabilityEngine
+  keyboard?: KeyboardEngine
   resolver?: TargetResolver
   signals?: PointerSignalBus
   state?: StateApplyPort
@@ -173,7 +176,6 @@ type PointerSignalContext = {
 type UnsupportedPublicAction =
   | 'clickCurrent'
   | 'doubleClick'
-  | 'press'
   | 'scrollTo'
   | 'drag'
 
@@ -196,10 +198,6 @@ const unsupportedPublicActionLimits = {
     capability: 'multi-click-gesture',
     limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
   },
-  press: {
-    capability: 'keyboard-action',
-    limit: 'press requires public keyboard action orchestration that is not implemented yet.',
-  },
   scrollTo: {
     capability: 'public-scroll-action',
     limit: 'scrollTo requires public scroll target and position orchestration that is not implemented yet.',
@@ -217,6 +215,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #geometry: GeometryEngine
   readonly #gesture: GestureEngine
   readonly #interactability: InteractabilityEngine
+  readonly #keyboard: KeyboardEngine
   readonly #resolver: TargetResolver
   readonly #state: StateApplyPort
   readonly #store: InteractionStateStore
@@ -272,6 +271,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       })
     this.#interactability =
       options.interactability ?? new BrowserInteractabilityEngine({ dom, geometry })
+    this.#keyboard =
+      options.keyboard ?? new BrowserKeyboardEngine({ dom, events, store, timeline })
     this.#resolver = options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
     this.#state = state
     this.#store = store
@@ -720,8 +721,39 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async press(): Promise<void> {
-    throw unsupportedPublicAction('press')
+  async press(keys: string, options: PressOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('press', undefined, {
+      ...options,
+      keys,
+    })
+    let phase: ActionPhase = 'perform'
+    const initialKeyboardState = this.#keyboard.getState()
+
+    try {
+      const state = await this.#keyboard.press(keys, pressOptions(options))
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+      this.#clearVisualFeedback()
+
+      span.end({
+        action: 'press',
+        completed: true,
+        output: {
+          keys,
+          pressedKeys: state.pressedKeys,
+          modifiers: state.modifiers,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      await this.#cleanupFailedPress(span, initialKeyboardState)
+      throw this.#finishActionFailure(span, error, {
+        action: 'press',
+        phase: failurePhase,
+      })
+    }
   }
 
   async scrollTo(): Promise<void> {
@@ -1122,6 +1154,30 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action typing cleanup failed.', {
         action,
+        error: describeUnknownError(error),
+      })
+    }
+
+    this.#clearVisualFeedback()
+  }
+
+  async #cleanupFailedPress(
+    span: TraceSpanHandle,
+    initialKeyboardState: KeyboardState,
+  ): Promise<void> {
+    try {
+      const initiallyPressed = new Set(initialKeyboardState.pressedKeys)
+      const pressedDuringAction = this.#keyboard
+        .getState()
+        .pressedKeys.filter((key) => !initiallyPressed.has(key))
+
+      for (const key of [...pressedDuringAction].reverse()) {
+        await this.#keyboard.keyUp(key)
+      }
+    } catch (error) {
+      span.event('action:cleanup-failed', { error: describeUnknownError(error) })
+      this.#trace.warn('Action keyboard cleanup failed.', {
+        action: 'press',
         error: describeUnknownError(error),
       })
     }
@@ -1732,6 +1788,13 @@ function fillOptions(options: FillOptions): FillOptions {
   return {
     ...operationOptions(options),
     ...(options.clear === undefined ? {} : { clear: options.clear }),
+  }
+}
+
+function pressOptions(options: PressOptions): PressOptions {
+  return {
+    ...operationOptions(options),
+    ...(options.delay === undefined ? {} : { delay: options.delay }),
   }
 }
 

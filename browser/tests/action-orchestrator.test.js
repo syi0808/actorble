@@ -351,6 +351,15 @@ function createHarness(options = {}) {
       return { strategy: 'fill', text: 'filled' }
     }),
   }
+  const keyboard = options.keyboard ?? {
+    getState: vi.fn(() => ({ pressedKeys: [], modifiers: [] })),
+    keyDown: vi.fn(async () => ({ pressedKeys: [], modifiers: [] })),
+    keyUp: vi.fn(async () => ({ pressedKeys: [], modifiers: [] })),
+    press: vi.fn(async () => {
+      calls.push('keyboard.press')
+      return options.keyboardResult ?? { pressedKeys: [], modifiers: [] }
+    }),
+  }
   const wait = options.wait ?? {
     waitFor: vi.fn(),
     settle: vi.fn(async () => {
@@ -456,6 +465,7 @@ function createHarness(options = {}) {
     interactability,
     ...(gesture === undefined ? {} : { gesture }),
     focus,
+    keyboard,
     text,
     wait,
     trace,
@@ -480,6 +490,7 @@ function createHarness(options = {}) {
     gesture,
     geometry,
     interactability,
+    keyboard,
     orchestrator,
     resolver,
     state,
@@ -2310,6 +2321,130 @@ describe('BrowserActionOrchestrator', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('presses through the keyboard engine without resolving a target', async () => {
+    const controller = new AbortController()
+    const {
+      calls,
+      focus,
+      gesture,
+      interactability,
+      keyboard,
+      orchestrator,
+      resolver,
+      trace,
+      wait,
+    } = createHarness()
+
+    await expect(
+      orchestrator.press('Shift+K', {
+        timeout: 100,
+        signal: controller.signal,
+        delay: 7,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['keyboard.press', 'wait.settle'])
+    expect(keyboard.press).toHaveBeenCalledWith('Shift+K', {
+      timeout: 100,
+      signal: controller.signal,
+      delay: 7,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {
+      timeout: 100,
+      signal: controller.signal,
+    })
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(interactability.canType).not.toHaveBeenCalled()
+    expect(focus.focus).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.press',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'press',
+          completed: true,
+          output: {
+            keys: 'Shift+K',
+            pressedKeys: [],
+            modifiers: [],
+          },
+        }),
+      }),
+    )
+  })
+
+  it('reports focused-target keyboard failures with the perform phase', async () => {
+    const keyboard = {
+      getState: vi.fn(() => ({ pressedKeys: [], modifiers: [] })),
+      keyDown: vi.fn(),
+      keyUp: vi.fn(),
+      press: vi.fn(async () => {
+        throw actorbleError(
+          'INTERACTABILITY_FAILED',
+          'Keyboard Engine requires an active target.',
+          {
+            details: { boundary: 'keyboard-engine', key: 'Enter' },
+          },
+        )
+      }),
+    }
+    const { orchestrator, trace } = createHarness({ keyboard })
+
+    await expect(orchestrator.press('Enter')).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: { boundary: 'keyboard-engine', key: 'Enter' },
+    })
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.press',
+        status: 'error',
+        attributes: expect.objectContaining({
+          action: 'press',
+          phase: 'perform',
+        }),
+      }),
+    )
+  })
+
+  it('releases keys left pressed when public press is cancelled', async () => {
+    const pressedKeys = []
+    const keyboard = {
+      getState: vi.fn(() => ({
+        pressedKeys: [...pressedKeys],
+        modifiers: pressedKeys.filter((key) => key === 'Shift'),
+      })),
+      keyDown: vi.fn(),
+      keyUp: vi.fn(async (key) => {
+        pressedKeys.splice(pressedKeys.indexOf(key), 1)
+        return {
+          pressedKeys: [...pressedKeys],
+          modifiers: pressedKeys.filter((pressedKey) => pressedKey === 'Shift'),
+        }
+      }),
+      press: vi.fn(async () => {
+        pressedKeys.push('Shift', 'K')
+        throw cancellationError('keyboard.press', 'scenario stopped')
+      }),
+    }
+    const { orchestrator, trace } = createHarness({ keyboard })
+
+    await expect(orchestrator.press('Shift+K')).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+
+    expect(pressedKeys).toEqual([])
+    expect(keyboard.keyUp.mock.calls.map(([key]) => key)).toEqual(['K', 'Shift'])
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.press',
+        status: 'cancelled',
+      }),
+    )
   })
 
   it('applies the default public typeInto cadence when delay is omitted', async () => {
