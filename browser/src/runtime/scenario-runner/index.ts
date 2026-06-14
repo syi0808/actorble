@@ -13,6 +13,7 @@ import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidat
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
 import type {
   ClickOptions,
+  FocusOptions,
   RunOptions,
   Scenario,
   ScenarioDelayStep,
@@ -244,6 +245,9 @@ export class BrowserScenarioRunner implements ScenarioRunner {
       case 'click':
         assertTarget(step.target, step.action, stepIndex)
         return this.#orchestrator.click(step.target, withSignal(step.options, signal))
+      case 'focus':
+        assertTarget(step.target, step.action, stepIndex)
+        return this.#orchestrator.focus(step.target, withSignal(step.options, signal))
       case 'typeInto':
         assertTarget(step.target, step.action, stepIndex)
         assertStringInput(step.input, step.action, stepIndex)
@@ -515,7 +519,7 @@ function assertWaitCondition(
   )
 }
 
-function withSignal<TOptions extends ClickOptions | TypeOptions | WaitOptions>(
+function withSignal<TOptions extends ClickOptions | FocusOptions | TypeOptions | WaitOptions>(
   options: Omit<TOptions, 'signal'> | undefined,
   signal: AbortSignal,
 ): TOptions {

@@ -631,6 +631,13 @@ export type ScenarioClickStep = Readonly<{
   options?: ScenarioStepOptions<ClickOptions>
 }>
 
+export type ScenarioFocusStep = Readonly<{
+  id?: string
+  action: 'focus'
+  target: TargetLike
+  options?: ScenarioStepOptions<FocusOptions>
+}>
+
 export type ScenarioTypeIntoStep = Readonly<{
   id?: string
   action: 'typeInto'
@@ -655,6 +662,7 @@ export type ScenarioDelayStep = Readonly<{
 
 export type ScenarioStep =
   | ScenarioClickStep
+  | ScenarioFocusStep
   | ScenarioTypeIntoStep
   | ScenarioWaitForStep
   | ScenarioDelayStep

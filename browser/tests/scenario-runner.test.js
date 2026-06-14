@@ -73,6 +73,9 @@ describe('BrowserScenarioRunner', () => {
       click: vi.fn(async (target, options) => {
         calls.push(['click', target, options])
       }),
+      focus: vi.fn(async (target, options) => {
+        calls.push(['focus', target, options])
+      }),
       typeInto: vi.fn(async (target, text, options) => {
         calls.push(['typeInto', target, text, options])
       }),
@@ -84,6 +87,7 @@ describe('BrowserScenarioRunner', () => {
     const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
     const runner = new BrowserScenarioRunner({ orchestrator, trace })
     const clickTarget = css('#save')
+    const focusTarget = css('#name')
     const inputTarget = css('#name')
     const condition = { kind: 'custom', predicate: () => true }
 
@@ -92,6 +96,7 @@ describe('BrowserScenarioRunner', () => {
         id: 'create-project',
         steps: [
           { action: 'click', target: clickTarget, options: { timeout: 10 } },
+          { action: 'focus', target: focusTarget, options: { timeout: 15, focusVisible: true } },
           { action: 'typeInto', target: inputTarget, input: 'actorble' },
           { action: 'waitFor', input: condition, options: { timeout: 20 } },
         ],
@@ -100,6 +105,15 @@ describe('BrowserScenarioRunner', () => {
 
     expect(calls).toEqual([
       ['click', clickTarget, expect.objectContaining({ timeout: 10, signal: expect.any(AbortSignal) })],
+      [
+        'focus',
+        focusTarget,
+        expect.objectContaining({
+          timeout: 15,
+          focusVisible: true,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
       ['typeInto', inputTarget, 'actorble', expect.objectContaining({ signal: expect.any(AbortSignal) })],
       ['waitFor', condition, expect.objectContaining({ timeout: 20, signal: expect.any(AbortSignal) })],
     ])
@@ -114,7 +128,7 @@ describe('BrowserScenarioRunner', () => {
         status: 'ok',
         attributes: expect.objectContaining({
           scenarioId: 'create-project',
-          steps: 3,
+          steps: 4,
           completed: true,
         }),
       }),
@@ -735,6 +749,42 @@ describe('BrowserScenarioRunner', () => {
     expect(layoutInvalidation.stop).toHaveBeenCalledOnce()
   })
 
+  it('stops an in-flight focus step through the scenario abort signal', async () => {
+    let focusSignal
+    const orchestrator = createOrchestrator({
+      focus: vi.fn((_target, options) => {
+        focusSignal = options.signal
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              reject(actorbleError('ACTION_CANCELLED', 'focus cancelled', {
+                details: { operation: 'focus', reason: options.signal.reason },
+              }))
+            },
+            { once: true },
+          )
+        })
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({ steps: [{ action: 'focus', target: css('#name') }] })
+    run.catch(() => {})
+
+    await vi.waitFor(() => expect(focusSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(focusSignal.aborted).toBe(true)
+    expect(orchestrator.focus).toHaveBeenCalledWith(
+      css('#name'),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+  })
+
   it('times out the scenario and aborts the current action signal even when the action does not settle', async () => {
     vi.useFakeTimers()
     let actionSignal
@@ -785,6 +835,23 @@ describe('BrowserScenarioRunner', () => {
     ).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: { action: 'resolve', stepIndex: 0 },
+    })
+    expect(runner.getSnapshot()).toMatchObject({
+      status: 'failed',
+      currentStepIndex: null,
+    })
+  })
+
+  it('rejects focus steps without a target', async () => {
+    const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+    await expect(
+      runner.run({
+        steps: [{ action: 'focus' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: { action: 'focus', stepIndex: 0, field: 'target' },
     })
     expect(runner.getSnapshot()).toMatchObject({
       status: 'failed',
