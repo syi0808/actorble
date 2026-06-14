@@ -1102,6 +1102,238 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
+  it('clickCurrent clicks the current hover target and point without resolving a target', async () => {
+    const { calls, events, gesture, orchestrator, resolver, target, trace, wait } = createHarness()
+
+    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined()
+
+    calls.length = 0
+    events.dispatchPointerEvent.mockClear()
+    events.dispatchMouseEvent.mockClear()
+    gesture.click.mockClear()
+    resolver.resolve.mockClear()
+    resolver.validate.mockClear()
+
+    await expect(orchestrator.clickCurrent({ duration: 0, pressDwell: 0 })).resolves.toBeUndefined()
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(calls).toEqual([
+      'geometry.snapshot',
+      'interactability.canClick',
+      'gesture.click',
+      'event.pointermove',
+      'state.active:true',
+      'event.pointerdown',
+      'state.active:false',
+      'event.pointerup',
+      'event.click',
+      'wait.settle',
+    ])
+    expect(gesture.click).toHaveBeenCalledWith(
+      target,
+      { x: 20, y: 30 },
+      {
+        duration: 0,
+        pressDwell: 0,
+        refreshPointBeforeDown: expect.any(Function),
+      },
+    )
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
+      type: 'click',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.clickCurrent',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'clickCurrent',
+          completed: true,
+          targetId: 'target-1',
+          output: expect.objectContaining({
+            point: { x: 20, y: 30 },
+            activationDispatched: true,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('clickCurrent reports an actionable error when no current pointer target exists', async () => {
+    const { events, gesture, orchestrator, trace } = createHarness()
+
+    await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+      details: expect.objectContaining({
+        action: 'clickCurrent',
+        capability: 'current-pointer-target',
+        hasCurrentPoint: false,
+        hoveredCount: 0,
+      }),
+    })
+
+    expect(gesture.click).not.toHaveBeenCalled()
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.clickCurrent',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'resolve' }),
+      }),
+    )
+  })
+
+  it('clickCurrent falls back to hit-testing the last pointer point when hover is empty', async () => {
+    const { calls, dom, events, gesture, orchestrator, resolver, store, target } = createHarness({
+      trackHitTests: true,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined()
+    store.reset()
+    calls.length = 0
+    events.dispatchPointerEvent.mockClear()
+    events.dispatchMouseEvent.mockClear()
+    gesture.click.mockClear()
+    resolver.resolve.mockClear()
+    resolver.validate.mockClear()
+    dom.elementFromPoint.mockClear()
+
+    await expect(
+      orchestrator.clickCurrent({ duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(dom.elementFromPoint).toHaveBeenCalledWith(
+      { x: 20, y: 30 },
+      { ignoreActorbleInternal: true },
+    )
+    expect(gesture.click).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^pointer-hit-/),
+        element: target.element,
+      }),
+      { x: 20, y: 30 },
+      {
+        duration: 0,
+        pressDwell: 0,
+        refreshPointBeforeDown: expect.any(Function),
+      },
+    )
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'click',
+        target: target.element,
+        point: { x: 20, y: 30 },
+      }),
+    )
+  })
+
+  it('clickCurrent fails stale current targets without re-resolving them', async () => {
+    const staleTarget = {
+      ...targetHandle('stale-current'),
+      locator: css('#stale-current'),
+      validity: 'stale',
+    }
+    const { events, gesture, orchestrator, resolver, trace } = createHarness({
+      target: staleTarget,
+    })
+
+    await expect(
+      orchestrator.moveTo(css('#stale-current'), { duration: 0 }),
+    ).resolves.toBeUndefined()
+
+    resolver.resolve.mockClear()
+    resolver.validate.mockClear()
+    gesture.click.mockClear()
+    events.dispatchPointerEvent.mockClear()
+    events.dispatchMouseEvent.mockClear()
+
+    await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
+      code: 'TARGET_STALE',
+      details: expect.objectContaining({
+        action: 'clickCurrent',
+        targetId: 'stale-current',
+        validity: 'stale',
+      }),
+    })
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled()
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.clickCurrent',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'validate' }),
+      }),
+    )
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'current-target:validate',
+          data: expect.objectContaining({
+            action: 'clickCurrent',
+            targetId: 'stale-current',
+            validity: 'stale',
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('clickCurrent fails preflight without dispatching gesture events', async () => {
+    const blockedTarget = targetHandle('blocked-current')
+    const { events, gesture, orchestrator, trace } = createHarness({
+      target: blockedTarget,
+      clickReport: clickReportFor(blockedTarget, {
+        enabled: false,
+        canClick: false,
+        canFocus: false,
+        canType: false,
+        blockingReasons: ['disabled'],
+        unforceableReasons: ['disabled'],
+      }),
+    })
+
+    await expect(
+      orchestrator.moveTo(css('#blocked-current'), { duration: 0 }),
+    ).resolves.toBeUndefined()
+
+    gesture.click.mockClear()
+    events.dispatchPointerEvent.mockClear()
+    events.dispatchMouseEvent.mockClear()
+
+    await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'clickCurrent',
+        blockingReasons: ['disabled'],
+        targetId: 'blocked-current',
+      }),
+    })
+
+    expect(gesture.click).not.toHaveBeenCalled()
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.clickCurrent',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'preflight' }),
+      }),
+    )
+  })
+
   it('focus resolves, reveals, checks focusability, focuses, and waits for settlement', async () => {
     const { calls, focus, orchestrator, target, trace, wait } = createHarness()
     const controller = new AbortController()

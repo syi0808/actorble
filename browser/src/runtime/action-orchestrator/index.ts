@@ -55,6 +55,7 @@ import type {
   TargetDebugInfo,
   TargetHandle,
   TargetLike,
+  TargetValidity,
   TypeOptions,
   VisualFeedbackOptions,
   WaitCondition,
@@ -170,13 +171,18 @@ type PointerHitSnapshot = {
   hoverChain: readonly TargetHandle[]
 }
 
+type CurrentPointerContext = {
+  target: TargetHandle
+  point: Point
+  source: 'hovered-target' | 'hit-test'
+}
+
 type PointerSignalContext = {
   target: TargetHandle
   commandId: number
 }
 
 type UnsupportedPublicAction =
-  | 'clickCurrent'
   | 'scrollTo'
   | 'drag'
 
@@ -191,10 +197,6 @@ const emptyPointerHit: PointerHitSnapshot = {
   hoverChain: [],
 }
 const unsupportedPublicActionLimits = {
-  clickCurrent: {
-    capability: 'current-pointer-target',
-    limit: 'clickCurrent requires a current pointer target policy that is not implemented yet.',
-  },
   scrollTo: {
     capability: 'public-scroll-action',
     limit: 'scrollTo requires public scroll target and position orchestration that is not implemented yet.',
@@ -228,6 +230,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   #clickDispatchState: ClickDispatchState | null = null
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
   #cursorVisualState: CursorVisualState | null = null
+  #currentPointerPoint: Point | null = null
   #nextPointerCommandId = 1
   #nextPointerHitTargetId = 1
   readonly #pointerHitTargets = new WeakMap<Element, TargetHandle>()
@@ -461,8 +464,91 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async clickCurrent(): Promise<void> {
-    throw unsupportedPublicAction('clickCurrent')
+  async clickCurrent(options: ClickCurrentOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('clickCurrent', undefined, options)
+    let phase: ActionPhase = 'resolve'
+    let handle: TargetHandle | undefined
+    let point: Point | undefined
+    let performStarted = false
+
+    this.#clickDispatchState = createClickDispatchState(options)
+
+    try {
+      const current = this.#currentPointerContextOrThrow(span)
+      const currentPoint = current.point
+
+      point = currentPoint
+      phase = 'validate'
+      handle = this.#validateCurrentPointerTarget(current.target, span)
+
+      phase = 'geometry'
+      const snapshot = await this.#geometry.snapshot(handle)
+      this.#showTargetHighlight(handle, snapshot)
+
+      phase = 'preflight'
+      const report = await this.#interactability.canClick(handle, snapshot, options)
+      assertCanClick('clickCurrent', handle, report)
+
+      phase = 'perform'
+      performStarted = true
+      const clickTarget = handle
+      const commandId = this.#createPointerCommandId()
+      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
+        this.#gesture.click(clickTarget, currentPoint, {
+          ...publicPointerMovementOptions(options),
+          refreshPointBeforeDown: async () => {
+            this.#validateCurrentPointerTarget(clickTarget, span)
+            const freshSnapshot = await this.#geometry.snapshot(clickTarget)
+            const freshReport = await this.#interactability.canClick(
+              clickTarget,
+              freshSnapshot,
+              options,
+            )
+
+            assertCanClick('clickCurrent', clickTarget, freshReport)
+            return currentPoint
+          },
+        }),
+      )
+      const dispatchState = this.#clickDispatchState
+      const activationDispatchCount = dispatchState?.activationCount ?? 0
+      const activationDispatched = activationDispatchCount > 0
+      const outputPoint = dispatchState?.lastActivationPoint ?? point
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'clickCurrent',
+        completed: true,
+        targetId: handle.id,
+        output: {
+          point: outputPoint,
+          currentSource: current.source,
+          gestureCompleted: result.completed,
+          activationDispatched,
+          activationDispatchCount,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'clickCurrent')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
+      throw this.#finishActionFailure(span, error, {
+        action: 'clickCurrent',
+        phase: failurePhase,
+        targetId: handle?.id,
+      })
+    } finally {
+      this.#clickDispatchState = null
+      this.#clearPointerContext()
+    }
   }
 
   async doubleClick(target: TargetLike, options: ClickOptions = {}): Promise<void> {
@@ -896,6 +982,114 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return this.#resolver.validate(resolved)
   }
 
+  #currentPointerContextOrThrow(span: TraceSpanHandle): CurrentPointerContext {
+    const state = this.#store.snapshot()
+    const point = this.#currentPointerPoint ? clonePoint(this.#currentPointerPoint) : null
+    const hoveredTarget = state.hovered[0] ?? null
+
+    if (point && hoveredTarget) {
+      span.event('current-target:resolved', {
+        action: 'clickCurrent',
+        source: 'hovered-target',
+        point,
+        targetId: hoveredTarget.id,
+        hoveredCount: state.hovered.length,
+      })
+
+      return {
+        target: hoveredTarget,
+        point,
+        source: 'hovered-target',
+      }
+    }
+
+    if (point) {
+      const hit = this.#resolvePointerHit(point, null)
+
+      if (hit.target) {
+        span.event('current-target:resolved', {
+          action: 'clickCurrent',
+          source: 'hit-test',
+          point,
+          targetId: hit.target.id,
+          hoveredCount: state.hovered.length,
+        })
+
+        return {
+          target: hit.target,
+          point,
+          source: 'hit-test',
+        }
+      }
+    }
+
+    throw actorbleError(
+      'TARGET_NOT_FOUND',
+      'clickCurrent requires a current pointer target or point.',
+      {
+        details: {
+          action: 'clickCurrent',
+          capability: 'current-pointer-target',
+          hasCurrentPoint: point !== null,
+          hoveredCount: state.hovered.length,
+          ...(point === null ? {} : { point }),
+        },
+      },
+    )
+  }
+
+  #validateCurrentPointerTarget(
+    target: TargetHandle,
+    span: TraceSpanHandle,
+  ): TargetHandle {
+    const validity = this.#currentPointerTargetValidity(target)
+
+    span.event('current-target:validate', {
+      action: 'clickCurrent',
+      targetId: target.id,
+      validity,
+      locatorKind: target.locator?.kind,
+    })
+
+    if (validity === 'live') {
+      return target
+    }
+
+    throw actorbleError(
+      validity === 'stale' ? 'TARGET_STALE' : 'TARGET_DETACHED',
+      `Current pointer target ${target.id} is ${validity}.`,
+      {
+        details: {
+          action: 'clickCurrent',
+          targetId: target.id,
+          validity,
+          locatorKind: target.locator?.kind,
+        },
+      },
+    )
+  }
+
+  #currentPointerTargetValidity(target: TargetHandle): TargetValidity {
+    if (target.validity === 'detached') {
+      return 'detached'
+    }
+
+    if (target.validity === 'stale') {
+      return 'stale'
+    }
+
+    if (
+      !this.#dom.isConnected(target.element) ||
+      !this.#dom.contains(this.#dom.getRoot(), target.element)
+    ) {
+      return target.locator !== undefined && target.locator.kind !== 'element'
+        ? 'stale'
+        : 'detached'
+    }
+
+    return 'live'
+  }
+
   #createPointerCommandId(): number {
     const commandId = this.#nextPointerCommandId
 
@@ -947,6 +1141,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   #applyPointerSignal(signal: PointerSignal): void {
+    if (signal.type !== 'pointer:cancelled') {
+      this.#currentPointerPoint = clonePoint(signal.point)
+    }
+
     const context = this.#signalContext
     const target = context?.target ?? null
     const pointerHit =
@@ -1767,7 +1965,7 @@ function clickablePointOrThrow(
 }
 
 function assertCanClick(
-  action: Extract<ActionName, 'click' | 'typeInto' | 'doubleClick'>,
+  action: Extract<ActionName, 'click' | 'clickCurrent' | 'typeInto' | 'doubleClick'>,
   target: TargetHandle,
   report: InteractabilityReport,
 ): void {
@@ -1822,6 +2020,10 @@ function assertCanFocus(target: TargetHandle, report: InteractabilityReport): vo
 
 function samePoint(first: Point, second: Point): boolean {
   return first.x === second.x && first.y === second.y
+}
+
+function clonePoint(point: Point): Point {
+  return { x: point.x, y: point.y }
 }
 
 function normalizeActionError(

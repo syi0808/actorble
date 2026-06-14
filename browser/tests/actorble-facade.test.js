@@ -260,6 +260,24 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can click the current pointer target', async () => {
+    const { seen } = createClickableButton('current')
+    const actorble = createActorble()
+
+    await expect(actorble.moveTo(css('#current'), { duration: 0 })).resolves.toBeUndefined()
+    await expect(
+      actorble.clickCurrent({ duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.moveTo', status: 'ok' }),
+        expect.objectContaining({ name: 'action.clickCurrent', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('creates a default module graph that can focus through the facade', async () => {
     const input = document.createElement('input')
     input.id = 'name'
@@ -372,19 +390,10 @@ describe('Actorble facade', () => {
     )
   })
 
-  it('reports unsupported default public action paths with explicit platform limits', async () => {
+  it('reports remaining unsupported default public action paths with explicit platform limits', async () => {
     const actorble = createActorble()
     const locator = css('#missing')
 
-    await expect(actorble.clickCurrent({ button: 'primary' })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'clickCurrent',
-        capability: 'current-pointer-target',
-        limit: expect.any(String),
-      },
-    })
     await expect(actorble.scrollTo(locator)).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: {
