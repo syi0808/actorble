@@ -67,39 +67,15 @@ export class BrowserGestureEngine implements GestureEngine {
     point: Point,
     options: GestureClickOptions = {},
   ): Promise<GestureResult> {
-    if (options.clickCount !== undefined && options.clickCount > 1) {
-      throw unsupportedGesture('click', {
-        extensionPoint: 'multi-click',
-        clickCount: options.clickCount,
-      })
-    }
-
-    const button = options.button ?? 'primary'
-
-    await this.#pointer.moveTo(point, pointerMovementOptions(options))
-    const refreshedPoint = await options.refreshPointBeforeDown?.(point)
-
-    if (refreshedPoint && !samePoint(point, refreshedPoint)) {
-      await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
-    }
-
-    await this.#pointer.down(button)
-    const pressDwell = normalizePressDwell(options.pressDwell)
-
-    if (pressDwell > 0) {
-      await this.#timeline.delay(pressDwell, cancellationOptions(options))
-    }
-
-    await this.#pointer.up(button)
-
-    return { completed: true }
+    return this.#clickSequence(point, options, normalizeClickCount(options.clickCount))
   }
 
-  async doubleClick(): Promise<GestureResult> {
-    throw unsupportedGesture('doubleClick', {
-      extensionPoint: 'multi-click',
-      capability: 'pointer-gesture',
-    })
+  async doubleClick(
+    _target: TargetHandle,
+    point: Point,
+    options: GestureClickOptions = {},
+  ): Promise<GestureResult> {
+    return this.#clickSequence(point, options, 2)
   }
 
   async hover(point: Point, options: MoveOptions = {}): Promise<GestureResult> {
@@ -119,6 +95,37 @@ export class BrowserGestureEngine implements GestureEngine {
     await this.#pointer.cancel()
 
     return { completed: false }
+  }
+
+  async #clickSequence(
+    point: Point,
+    options: GestureClickOptions,
+    clickCount: number,
+  ): Promise<GestureResult> {
+    const button = options.button ?? 'primary'
+    const pressDwell = normalizePressDwell(options.pressDwell)
+    let currentPoint = point
+
+    await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
+
+    for (let clickIndex = 0; clickIndex < clickCount; clickIndex += 1) {
+      const refreshedPoint = await options.refreshPointBeforeDown?.(currentPoint)
+
+      if (refreshedPoint && !samePoint(currentPoint, refreshedPoint)) {
+        await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
+        currentPoint = refreshedPoint
+      }
+
+      await this.#pointer.down(button)
+
+      if (pressDwell > 0) {
+        await this.#timeline.delay(pressDwell, cancellationOptions(options))
+      }
+
+      await this.#pointer.up(button)
+    }
+
+    return { completed: true }
   }
 }
 
@@ -163,6 +170,28 @@ function freshPointMovementOptions(options: ClickOptions): MoveOptions {
 
 function cancellationOptions(options: ClickOptions): CancellationOptions {
   return options.signal === undefined ? {} : { signal: options.signal }
+}
+
+function normalizeClickCount(clickCount: number | undefined): number {
+  if (clickCount === undefined) {
+    return 1
+  }
+
+  if (Number.isInteger(clickCount) && clickCount >= 1) {
+    return clickCount
+  }
+
+  throw actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    'Gesture Engine clickCount must be a positive integer.',
+    {
+      details: {
+        gesture: 'click',
+        clickCount,
+        limit: 'Only positive integer click counts are supported.',
+      },
+    },
+  )
 }
 
 function normalizePressDwell(pressDwell: number | undefined): number {

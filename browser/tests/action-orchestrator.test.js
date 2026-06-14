@@ -303,7 +303,40 @@ function createHarness(options = {}) {
       signals.emit({ type: 'pointer:moved', point, previousPoint: null })
       return { completed: true }
     }),
-    doubleClick: vi.fn(),
+    doubleClick: vi.fn(async () => {
+      calls.push('gesture.doubleClick')
+      signals.emit({
+        type: 'pointer:moved',
+        point: currentGeometry.clickablePoint.point,
+        previousPoint: null,
+      })
+      signals.emit({
+        type: 'pointer:down',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
+
+      if (options.doubleClickFailure) {
+        throw options.doubleClickFailure
+      }
+
+      signals.emit({
+        type: 'pointer:up',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
+      signals.emit({
+        type: 'pointer:down',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
+      signals.emit({
+        type: 'pointer:up',
+        point: currentGeometry.clickablePoint.point,
+        button: 'primary',
+      })
+      return { completed: true }
+    }),
     drag: vi.fn(),
     cancel: vi.fn(async () => {
       calls.push('gesture.cancel')
@@ -693,6 +726,91 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
+  it('doubleClick resolves, preflights, dispatches two click activations, and waits', async () => {
+    const { calls, events, orchestrator, target, trace, wait } = createHarness()
+
+    await expect(orchestrator.doubleClick(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'interactability.canClick',
+      'gesture.doubleClick',
+      'state.hover:true',
+      'event.pointermove',
+      'state.active:true',
+      'event.pointerdown',
+      'state.active:false',
+      'event.pointerup',
+      'event.click',
+      'state.active:true',
+      'event.pointerdown',
+      'state.active:false',
+      'event.pointerup',
+      'event.click',
+      'wait.settle',
+    ])
+    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(1, {
+      type: 'click',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
+    })
+    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(2, {
+      type: 'click',
+      target: target.element,
+      point: { x: 20, y: 30 },
+      button: 'primary',
+      buttons: [],
+      detail: 2,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(trace.getTrace().spans[0]).toEqual(
+      expect.objectContaining({
+        name: 'action.doubleClick',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'doubleClick',
+          completed: true,
+          targetId: 'target-1',
+          output: expect.objectContaining({
+            activationDispatchCount: 2,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('click with clickCount dispatches a public multi-click sequence', async () => {
+    const { calls, events, orchestrator } = createHarness({ useRealGesture: true })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { clickCount: 2, duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(calls.filter((call) => call.startsWith('event.'))).toEqual([
+      'event.pointermove',
+      'event.pointerdown',
+      'event.pointerup',
+      'event.click',
+      'event.pointerdown',
+      'event.pointerup',
+      'event.click',
+    ])
+    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ type: 'click', detail: 1 }),
+    )
+    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ type: 'click', detail: 2 }),
+    )
+  })
+
   it('skips activation but still settles when pointer down or up is canceled by the page', async () => {
     const { events, orchestrator, trace, wait } = createHarness({
       pointerDispatchResult: { pointerdown: false },
@@ -710,6 +828,27 @@ describe('BrowserActionOrchestrator', () => {
             activationDispatched: false,
           }),
         }),
+      }),
+    )
+  })
+
+  it('cancels pointer state and cleans up active effects when doubleClick fails after pointer down', async () => {
+    const { events, gesture, orchestrator, state, trace } = createHarness({
+      doubleClickFailure: cancellationError('doubleClick', 'scenario stopped'),
+    })
+
+    await expect(orchestrator.doubleClick(css('#target-1'))).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+
+    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(trace.getTrace().spans[0]).toEqual(
+      expect.objectContaining({
+        name: 'action.doubleClick',
+        status: 'cancelled',
       }),
     )
   })

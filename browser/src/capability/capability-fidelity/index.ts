@@ -129,7 +129,7 @@ const browserFidelityReport: FidelityReport = {
     'Visual feedback is optional and does not make synthetic events browser-trusted.',
     'Cross-origin frames and closed shadow roots cannot be inspected from in-page JavaScript.',
     'Drag and drop is not implemented in the initial browser vertical slice.',
-    'Unsupported public action APIs currently report PLATFORM_UNSUPPORTED: clickCurrent, doubleClick, press, scrollTo, and drag.',
+    'Unsupported public action APIs currently report PLATFORM_UNSUPPORTED: clickCurrent, scrollTo, and drag.',
     'Debug event subscription APIs on/off are not implemented yet; use getTrace() for diagnostics snapshots.',
   ],
 }

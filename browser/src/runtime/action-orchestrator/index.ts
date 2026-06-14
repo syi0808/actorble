@@ -154,6 +154,8 @@ type ClickDispatchState = {
   upAllowed: boolean
   downSeen: boolean
   upSeen: boolean
+  activationCount: number
+  lastActivationPoint: Point | null
 }
 
 type CursorVisualState = {
@@ -175,7 +177,6 @@ type PointerSignalContext = {
 
 type UnsupportedPublicAction =
   | 'clickCurrent'
-  | 'doubleClick'
   | 'scrollTo'
   | 'drag'
 
@@ -193,10 +194,6 @@ const unsupportedPublicActionLimits = {
   clickCurrent: {
     capability: 'current-pointer-target',
     limit: 'clickCurrent requires a current pointer target policy that is not implemented yet.',
-  },
-  doubleClick: {
-    capability: 'multi-click-gesture',
-    limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
   },
   scrollTo: {
     capability: 'public-scroll-action',
@@ -401,7 +398,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
       phase = 'preflight'
       const report = await this.#interactability.canClick(handle, snapshot, options)
-      assertCanClick(handle, report)
+      assertCanClick('click', handle, report)
       this.#warnForceBypass(handle, report)
 
       phase = 'perform'
@@ -424,8 +421,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           },
         }),
       )
-      const activationDispatched = this.#dispatchActivationClick(clickTarget, dispatchPoint)
-      this.#showClickFeedback(dispatchPoint)
+      const dispatchState = this.#clickDispatchState
+      const activationDispatchCount = dispatchState?.activationCount ?? 0
+      const activationDispatched = activationDispatchCount > 0
+      const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
 
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -435,9 +434,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         completed: true,
         targetId: handle.id,
         output: {
-          point: dispatchPoint,
+          point: outputPoint,
           gestureCompleted: result.completed,
           activationDispatched,
+          activationDispatchCount,
         },
       })
     } catch (error) {
@@ -465,8 +465,84 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     throw unsupportedPublicAction('clickCurrent')
   }
 
-  async doubleClick(): Promise<void> {
-    throw unsupportedPublicAction('doubleClick')
+  async doubleClick(target: TargetLike, options: ClickOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('doubleClick', target, options)
+    let phase: ActionPhase = 'resolve'
+    let handle: TargetHandle | undefined
+    let performStarted = false
+
+    this.#clickDispatchState = createClickDispatchState(options)
+
+    try {
+      handle = await this.#resolveTarget(target, options)
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(handle, options)
+      phase = 'geometry'
+      const snapshot = await this.#geometry.snapshot(handle)
+      const point = clickablePointOrThrow('doubleClick', handle, snapshot)
+      this.#showTargetHighlight(handle, snapshot)
+
+      phase = 'preflight'
+      const report = await this.#interactability.canClick(handle, snapshot, options)
+      assertCanClick('doubleClick', handle, report)
+      this.#warnForceBypass(handle, report)
+
+      phase = 'perform'
+      performStarted = true
+      const clickTarget = handle
+      let dispatchPoint = point
+      const commandId = this.#createPointerCommandId()
+      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
+        this.#gesture.doubleClick(clickTarget, point, {
+          ...publicPointerMovementOptions(options),
+          refreshPointBeforeDown: async () => {
+            dispatchPoint = await this.#refreshClickPointBeforeDown(
+              'doubleClick',
+              clickTarget,
+              point,
+              options,
+              span,
+            )
+            return dispatchPoint
+          },
+        }),
+      )
+      const dispatchState = this.#clickDispatchState
+      const activationDispatchCount = dispatchState?.activationCount ?? 0
+      const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'doubleClick',
+        completed: true,
+        targetId: handle.id,
+        output: {
+          point: outputPoint,
+          gestureCompleted: result.completed,
+          activationDispatchCount,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'doubleClick')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
+      throw this.#finishActionFailure(span, error, {
+        action: 'doubleClick',
+        phase: failurePhase,
+        targetId: handle?.id,
+      })
+    } finally {
+      this.#clickDispatchState = null
+      this.#clearPointerContext()
+    }
   }
 
   async focus(target: TargetLike, options: FocusOptions = {}): Promise<void> {
@@ -608,9 +684,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
         clickFocusNeedsCleanup = false
 
-        const activationDispatched = this.#dispatchActivationClick(typeTarget, dispatchPoint)
-
-        this.#showClickFeedback(dispatchPoint)
+        const activationDispatched = (this.#clickDispatchState?.activationCount ?? 0) > 0
 
         const focused = await this.#focus.getFocused()
         const focusedTarget = this.#assertClickFocusAcquired(typeTarget, focused.active)
@@ -847,7 +921,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   async #refreshClickPointBeforeDown(
-    action: Extract<ActionName, 'click' | 'typeInto'>,
+    action: Extract<ActionName, 'click' | 'typeInto' | 'doubleClick'>,
     target: TargetHandle,
     initialPoint: Point,
     options: ClickOptions,
@@ -866,7 +940,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     })
 
     const report = await this.#interactability.canClick(target, snapshot, options)
-    assertCanClick(target, report)
+    assertCanClick(action, target, report)
     this.#warnForceBypass(target, report)
 
     return freshPoint
@@ -930,7 +1004,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         if (this.#clickDispatchState) {
           this.#clickDispatchState.button = signal.button
           this.#clickDispatchState.downSeen = true
-          this.#clickDispatchState.downAllowed &&= allowed
+          this.#clickDispatchState.upSeen = false
+          this.#clickDispatchState.downAllowed = allowed
+          this.#clickDispatchState.upAllowed = true
         }
 
         break
@@ -956,6 +1032,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           this.#clickDispatchState.button = signal.button
           this.#clickDispatchState.upSeen = true
           this.#clickDispatchState.upAllowed &&= allowed
+          this.#dispatchActivationClick(target, signal.point)
+          this.#showClickFeedback(signal.point)
         }
 
         break
@@ -1075,13 +1153,17 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   #dispatchActivationClick(target: TargetHandle, point: Point): boolean {
     const dispatchState = this.#clickDispatchState
 
+    if (!dispatchState) {
+      return false
+    }
+
     if (
-      !dispatchState ||
       !dispatchState.downSeen ||
       !dispatchState.upSeen ||
       !dispatchState.downAllowed ||
       !dispatchState.upAllowed
     ) {
+      resetPendingClickDispatch(dispatchState)
       return false
     }
 
@@ -1091,8 +1173,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       point,
       button: dispatchState.button,
       buttons: [],
-      detail: 1,
+      detail: dispatchState.activationCount + 1,
     })
+    dispatchState.activationCount += 1
+    dispatchState.lastActivationPoint = { x: point.x, y: point.y }
+    resetPendingClickDispatch(dispatchState)
 
     return true
   }
@@ -1520,7 +1605,16 @@ function createClickDispatchState(options: ClickOptions): ClickDispatchState {
     upAllowed: true,
     downSeen: false,
     upSeen: false,
+    activationCount: 0,
+    lastActivationPoint: null,
   }
+}
+
+function resetPendingClickDispatch(dispatchState: ClickDispatchState): void {
+  dispatchState.downAllowed = true
+  dispatchState.upAllowed = true
+  dispatchState.downSeen = false
+  dispatchState.upSeen = false
 }
 
 function publicPointerMovementOptions<TOptions extends MoveOptions | ClickOptions>(
@@ -1651,7 +1745,7 @@ function cursorTagNameFor(debug: TargetDebugInfo): string | undefined {
 }
 
 function clickablePointOrThrow(
-  action: 'moveTo' | 'click' | 'typeInto',
+  action: 'moveTo' | 'click' | 'typeInto' | 'doubleClick',
   target: TargetHandle,
   geometry: GeometrySnapshot,
 ): Point {
@@ -1672,14 +1766,18 @@ function clickablePointOrThrow(
   )
 }
 
-function assertCanClick(target: TargetHandle, report: InteractabilityReport): void {
+function assertCanClick(
+  action: Extract<ActionName, 'click' | 'typeInto' | 'doubleClick'>,
+  target: TargetHandle,
+  report: InteractabilityReport,
+): void {
   if (report.canClick) {
     return
   }
 
   throw actorbleError('INTERACTABILITY_FAILED', 'Target is not clickable.', {
     details: {
-      action: 'click',
+      action,
       targetId: target.id,
       blockingReasons: report.blockingReasons,
       forceBypassedReasons: report.forceBypassedReasons,

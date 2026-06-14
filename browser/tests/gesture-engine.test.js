@@ -159,6 +159,80 @@ describe('BrowserGestureEngine', () => {
     ])
   })
 
+  it('click supports a multi-click sequence without moving between clicks', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    await expect(
+      engine.click(createTarget(), { x: 5, y: 9 }, { clickCount: 2, pressDwell: 0 }),
+    ).resolves.toEqual({
+      completed: true,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 5, y: 9 }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+      ['down', 'primary'],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('doubleClick composes two pointer down/up sequences after one move', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    await expect(
+      engine.doubleClick(createTarget(), { x: 6, y: 10 }, { pressDwell: 0 }),
+    ).resolves.toEqual({
+      completed: true,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 6, y: 10 }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+      ['down', 'primary'],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('refreshes the pointer point before each click in a multi-click sequence', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    await expect(
+      engine.click(createTarget(), { x: 10, y: 20 }, {
+        clickCount: 2,
+        pressDwell: 0,
+        refreshPointBeforeDown: vi
+          .fn()
+          .mockImplementationOnce(async (point) => {
+            calls.push(['refreshPointBeforeDown', point])
+            return { x: 11, y: 21 }
+          })
+          .mockImplementationOnce(async (point) => {
+            calls.push(['refreshPointBeforeDown', point])
+            return { x: 12, y: 22 }
+          }),
+      }),
+    ).resolves.toEqual({
+      completed: true,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 10, y: 20 }],
+      ['refreshPointBeforeDown', { x: 10, y: 20 }],
+      ['moveTo', { x: 11, y: 21 }, { duration: 0 }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+      ['refreshPointBeforeDown', { x: 11, y: 21 }],
+      ['moveTo', { x: 12, y: 22 }, { duration: 0 }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+    ])
+  })
+
   it('routes explicit click movement options into pointer movement before pressing', async () => {
     const { calls, pointer, timeline } = createFakePointer()
     const engine = new BrowserGestureEngine({ pointer, timeline })
@@ -233,18 +307,9 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([['cancel']])
   })
 
-  it('keeps multi-click, double-click, and drag as explicit capability extension points', async () => {
+  it('keeps drag as an explicit capability extension point', async () => {
     const engine = createGestureEngine({ pointer: createFakePointer().pointer })
-    const target = createTarget()
 
-    await expect(engine.click(target, { x: 1, y: 1 }, { clickCount: 2 })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: { gesture: 'click', extensionPoint: 'multi-click' },
-    })
-    await expect(engine.doubleClick(target, { x: 1, y: 1 })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: { gesture: 'doubleClick' },
-    })
     await expect(engine.drag({ x: 1, y: 1 }, { x: 10, y: 10 })).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: { gesture: 'drag', capability: 'pointer-gesture' },

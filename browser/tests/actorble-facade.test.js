@@ -215,6 +215,51 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can double-click through the facade', async () => {
+    const button = document.createElement('button')
+    button.id = 'open'
+    button.textContent = 'Open'
+    button.scrollIntoView = vi.fn()
+    button.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 20,
+      top: 20,
+      left: 10,
+      right: 50,
+      bottom: 40,
+      toJSON: () => {},
+    }))
+    document.body.append(button)
+    document.elementFromPoint = vi.fn(() => button)
+    const seen = []
+
+    for (const eventName of ['pointerdown', 'pointerup', 'click']) {
+      button.addEventListener(eventName, (event) => {
+        seen.push({ type: event.type, detail: event.detail })
+      })
+    }
+
+    const actorble = createActorble()
+
+    await expect(actorble.doubleClick(css('#open'), { pressDwell: 0 })).resolves.toBeUndefined()
+
+    expect(seen).toEqual([
+      { type: 'pointerdown', detail: 0 },
+      { type: 'pointerup', detail: 0 },
+      { type: 'click', detail: 1 },
+      { type: 'pointerdown', detail: 0 },
+      { type: 'pointerup', detail: 0 },
+      { type: 'click', detail: 2 },
+    ])
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.doubleClick', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('creates a default module graph that can focus through the facade', async () => {
     const input = document.createElement('input')
     input.id = 'name'
@@ -337,15 +382,6 @@ describe('Actorble facade', () => {
         boundary: 'action-orchestrator',
         action: 'clickCurrent',
         capability: 'current-pointer-target',
-        limit: expect.any(String),
-      },
-    })
-    await expect(actorble.doubleClick(locator)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'doubleClick',
-        capability: 'multi-click-gesture',
         limit: expect.any(String),
       },
     })
