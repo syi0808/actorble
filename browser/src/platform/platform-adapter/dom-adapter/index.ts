@@ -131,6 +131,14 @@ export class BrowserDomAdapter implements DomAdapter {
     return element.textContent ?? ''
   }
 
+  getRootTextContent(root: Document | ShadowRoot = this.getRoot()): string {
+    if (isDocument(root)) {
+      return root.body?.textContent ?? root.documentElement?.textContent ?? ''
+    }
+
+    return root.textContent ?? ''
+  }
+
   contains(root: Node, node: Node): boolean {
     if (root.contains(node)) {
       return true

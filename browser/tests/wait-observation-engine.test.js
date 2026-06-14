@@ -219,6 +219,179 @@ describe('BrowserWaitObservationEngine', () => {
     expect(condition.predicate).not.toHaveBeenCalled()
   })
 
+  it('resolves text waits immediately when root text already matches', async () => {
+    document.body.innerHTML = '<main>Project   created</main>'
+    const condition = { kind: 'text', value: 'Project created' }
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(condition)).resolves.toEqual({
+      condition,
+      satisfied: true,
+      strategy: 'settled',
+    })
+    expect(timeline.settle).not.toHaveBeenCalled()
+  })
+
+  it('retries text waits until root text appears', async () => {
+    document.body.innerHTML = '<main>Loading</main>'
+    const condition = { kind: 'text', value: 'Project created' }
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        document.body.innerHTML = '<main>Project created</main>'
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(condition)).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(timeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('matches text waits with stateful regular expressions from the beginning each attempt', async () => {
+    document.body.innerHTML = '<main>Project created</main>'
+    const value = /Project created/g
+    value.lastIndex = 100
+    const condition = { kind: 'text', value }
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(condition)).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(timeline.settle).not.toHaveBeenCalled()
+  })
+
+  it('records timeout diagnostics for text waits with the last root observation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    document.body.innerHTML = '<main>Loading</main>'
+    const condition = { kind: 'text', value: 'Project created' }
+    const timeline = createTimeline({
+      settle: vi.fn(() => new Promise(() => {})),
+    })
+    const trace = new BrowserDiagnosticsTrace({
+      clock: traceClock(),
+      idPrefix: 'trace',
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline, trace })
+    const promise = engine.waitFor(condition, { timeout: 25 })
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'wait.for',
+        timeout: 25,
+        conditionKind: 'text',
+        attempts: 1,
+        condition: {
+          kind: 'text',
+          value: 'Project created',
+        },
+        lastObservation: expect.objectContaining({
+          scope: 'root',
+          root: 'document',
+          matched: false,
+          textLength: 'Loading'.length,
+        }),
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    expect(trace.getTrace().events).toEqual([
+      expect.objectContaining({ name: 'wait:start' }),
+      expect.objectContaining({
+        name: 'wait:retry',
+        data: expect.objectContaining({
+          attempts: 1,
+          observation: expect.objectContaining({ scope: 'root', matched: false }),
+        }),
+      }),
+      expect.objectContaining({
+        name: 'wait:timeout',
+        data: expect.objectContaining({
+          conditionKind: 'text',
+          attempts: 1,
+          lastObservation: expect.objectContaining({ scope: 'root', matched: false }),
+        }),
+      }),
+    ])
+  })
+
+  it('cancels in-progress text waits with attempt diagnostics', async () => {
+    document.body.innerHTML = '<main>Loading</main>'
+    const controller = new AbortController()
+    let settleSignal
+    const timeline = createTimeline({
+      settle: vi.fn(
+        (_strategy, options) =>
+          new Promise((_, reject) => {
+            settleSignal = options.signal
+            options.signal?.addEventListener(
+              'abort',
+              () => {
+                reject(
+                  actorbleError('ACTION_CANCELLED', 'wait settle was cancelled.', {
+                    details: { operation: 'wait.settle', reason: options.signal.reason },
+                  }),
+                )
+              },
+              { once: true },
+            )
+          }),
+      ),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+    const promise = engine.waitFor(
+      { kind: 'text', value: 'Project created' },
+      { signal: controller.signal },
+    )
+
+    await vi.waitFor(() => expect(settleSignal).toBeDefined())
+    controller.abort('scenario stopped')
+
+    await expect(promise).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: {
+        operation: 'wait.for',
+        reason: 'scenario stopped',
+        conditionKind: 'text',
+        attempts: 1,
+        lastObservation: expect.objectContaining({
+          scope: 'root',
+          matched: false,
+        }),
+      },
+    })
+    expect(timeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('reports target-scoped text waits as an explicit extension point', async () => {
+    const condition = { kind: 'text', value: 'Saved', target: css('#status') }
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline() })
+
+    await expect(engine.waitFor(condition)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        conditionKind: 'text',
+        capability: 'target-scoped-text-wait',
+        supportedScope: 'root',
+        extensionPoint: 'wait-observation-engine.target-text',
+        condition: expect.objectContaining({
+          kind: 'text',
+          scope: 'target',
+          target: expect.objectContaining({ kind: 'css', selector: '#status' }),
+        }),
+      },
+    })
+  })
+
   it('resolves and validates visible targets before inspecting visual visibility', async () => {
     document.body.innerHTML = '<button id="save">Save</button>'
     const save = document.querySelector('#save')

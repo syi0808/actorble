@@ -78,9 +78,21 @@ type TargetWaitObservation = Readonly<{
   blockingReasons?: readonly string[]
 }>
 
+type TextWaitObservation = Readonly<{
+  state: 'matched' | 'unmatched'
+  scope: 'root'
+  root: 'document' | 'shadow-root'
+  matched: boolean
+  matcher: string
+  textLength: number
+  textSample: string
+}>
+
+type WaitObservation = TargetWaitObservation | TextWaitObservation
+
 type WaitAttemptDiagnostics = {
   attempts: number
-  lastObservation?: TargetWaitObservation
+  lastObservation?: WaitObservation
 }
 
 type WaitErrorDetailsProvider = ActorbleErrorDetails | (() => ActorbleErrorDetails)
@@ -224,19 +236,24 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
     assertNotCancelled('wait.for', signal)
+    const conditionKind = (condition as Readonly<{ kind: string }>).kind
 
     if (condition.kind === 'visible' || condition.kind === 'hidden') {
       return await this.#waitForTargetCondition(condition, signal, diagnostics)
     }
 
-    if (condition.kind !== 'custom') {
+    if (condition.kind === 'text') {
+      return await this.#waitForTextCondition(condition, signal, diagnostics)
+    }
+
+    if (conditionKind !== 'custom') {
       throw actorbleError(
         'PLATFORM_UNSUPPORTED',
-        `Wait condition "${condition.kind}" is not supported by the wait observation engine yet.`,
+        `Wait condition "${conditionKind}" is not supported by the wait observation engine yet.`,
         {
           details: {
-            conditionKind: condition.kind,
-            condition: summarizeCondition(condition),
+            conditionKind,
+            condition: { kind: conditionKind },
           },
         },
       )
@@ -264,6 +281,41 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       this.#trace?.appendEvent?.('wait:retry', {
         attempts,
         condition: summarizeCondition(condition),
+      })
+      await this.#timeline.settle('settled', toCancellationOptions(signal))
+    }
+  }
+
+  async #waitForTextCondition(
+    condition: Extract<WaitCondition, { kind: 'text' }>,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+  ): Promise<WaitResult> {
+    if (textConditionTarget(condition) !== undefined) {
+      throw unsupportedTargetScopedTextWait(condition)
+    }
+
+    for (;;) {
+      assertNotCancelled('wait.for', signal)
+      diagnostics.attempts += 1
+
+      const observation = this.#observeRootText(condition.value)
+      diagnostics.lastObservation = observation
+
+      assertNotCancelled('wait.for', signal)
+
+      if (observation.matched) {
+        return {
+          condition,
+          satisfied: true,
+          strategy: 'settled',
+        }
+      }
+
+      this.#trace?.appendEvent?.('wait:retry', {
+        attempts: diagnostics.attempts,
+        condition: summarizeCondition(condition),
+        observation,
       })
       await this.#timeline.settle('settled', toCancellationOptions(signal))
     }
@@ -315,6 +367,21 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       }
 
       throw error
+    }
+  }
+
+  #observeRootText(value: string | RegExp): TextWaitObservation {
+    const text = normalizeWhitespace(this.#dom.getRootTextContent())
+    const matched = textMatches(text, value)
+
+    return {
+      state: matched ? 'matched' : 'unmatched',
+      scope: 'root',
+      root: rootKind(this.#dom.getRoot()),
+      matched,
+      matcher: formatTextMatcher(value),
+      textLength: text.length,
+      textSample: sampleText(text),
     }
   }
 
@@ -455,8 +522,15 @@ function normalizeWaitError(
   details: ActorbleErrorDetails,
 ): ActorbleError {
   if (error instanceof ActorbleError) {
-    if (error.code === 'ACTION_CANCELLED' && error.details?.operation !== operation) {
-      return cancellationError(operation, error.details?.reason)
+    if (error.code === 'ACTION_CANCELLED') {
+      return actorbleError('ACTION_CANCELLED', `${operation} was cancelled.`, {
+        cause: error,
+        details: {
+          ...details,
+          operation,
+          reason: error.details?.reason,
+        },
+      })
     }
 
     if (
@@ -479,6 +553,24 @@ function normalizeWaitError(
   })
 }
 
+function unsupportedTargetScopedTextWait(
+  condition: Extract<WaitCondition, { kind: 'text' }>,
+): ActorbleError {
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    'Target-scoped text waits are not supported by the browser wait observation engine yet.',
+    {
+      details: {
+        conditionKind: 'text',
+        condition: summarizeCondition(condition),
+        capability: 'target-scoped-text-wait',
+        supportedScope: 'root',
+        extensionPoint: 'wait-observation-engine.target-text',
+      },
+    },
+  )
+}
+
 function isTargetConditionSatisfied(
   kind: 'visible' | 'hidden',
   observation: TargetWaitObservation,
@@ -488,6 +580,29 @@ function isTargetConditionSatisfied(
   }
 
   return observation.state !== 'visible'
+}
+
+function textMatches(actualValue: string, expectedValue: string | RegExp): boolean {
+  if (expectedValue instanceof RegExp) {
+    expectedValue.lastIndex = 0
+    return expectedValue.test(actualValue)
+  }
+
+  return actualValue.includes(normalizeWhitespace(expectedValue))
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function sampleText(value: string): string {
+  const sample = value.slice(0, 120)
+
+  return value.length > sample.length ? `${sample}...` : sample
+}
+
+function formatTextMatcher(value: string | RegExp): string {
+  return value instanceof RegExp ? value.toString() : value
 }
 
 function observationFromReport(report: InteractabilityReport): TargetWaitObservation {
@@ -574,12 +689,25 @@ function summarizeCondition(condition: WaitCondition): Readonly<Record<string, u
         kind: condition.kind,
         target: summarizeTarget(condition.target),
       }
-    case 'text':
+    case 'text': {
+      const target = textConditionTarget(condition)
+
       return {
         kind: condition.kind,
-        value: condition.value instanceof RegExp ? condition.value.toString() : condition.value,
+        value: formatTextMatcher(condition.value),
+        scope: target === undefined ? 'root' : 'target',
+        ...(target === undefined ? {} : { target: summarizeTarget(target) }),
       }
+    }
   }
+}
+
+function textConditionTarget(
+  condition: Extract<WaitCondition, { kind: 'text' }>,
+): TargetLike | undefined {
+  const candidate = condition as unknown as Readonly<Record<string, unknown>>
+
+  return 'target' in candidate ? (candidate.target as TargetLike | undefined) : undefined
 }
 
 function summarizeTarget(target: TargetLike): unknown {

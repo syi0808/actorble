@@ -61,6 +61,7 @@ describe('BrowserDomAdapter', () => {
       height: 40,
     })
     expect(adapter.getComputedStyle(button).display).toBe('inline-block')
+    expect(adapter.getTextContent(button)).toBe('Save')
     expect(adapter.contains(root, button)).toBe(true)
     expect(adapter.isConnected(button)).toBe(true)
 
@@ -88,6 +89,20 @@ describe('BrowserDomAdapter', () => {
         'aria-label': 'Save changes',
       },
     })
+  })
+
+  it('reads text content from the configured document or shadow root', () => {
+    document.body.innerHTML = '<main>Saved <span>Project</span></main>'
+    const documentAdapter = new BrowserDomAdapter(document)
+
+    expect(documentAdapter.getRootTextContent()).toBe('Saved Project')
+
+    const host = document.createElement('section')
+    const shadowRoot = host.attachShadow({ mode: 'open' })
+    shadowRoot.innerHTML = '<p>Shadow <strong>Complete</strong></p>'
+    const shadowAdapter = new BrowserDomAdapter(shadowRoot)
+
+    expect(shadowAdapter.getRootTextContent()).toBe('Shadow Complete')
   })
 
   it('hit-tests points and skips actorble internal elements when requested', () => {

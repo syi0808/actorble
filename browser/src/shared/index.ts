@@ -522,6 +522,7 @@ export interface DomReadPort {
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
   getAttribute(element: Element, name: string): string | null
   getTextContent(element: Element): string
+  getRootTextContent(root?: Document | ShadowRoot): string
   contains(root: Node, node: Node): boolean
   isConnected(element: Element): boolean
   getActiveElement(root?: Document | ShadowRoot): Element | null
