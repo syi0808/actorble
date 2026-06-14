@@ -338,7 +338,10 @@ function createHarness(options = {}) {
     tab: vi.fn(),
   }
   const text = {
-    type: vi.fn(),
+    type: vi.fn(async () => {
+      calls.push('text.type')
+      return { strategy: 'type', text: 'hello' }
+    }),
     typeInto: vi.fn(async () => {
       calls.push('text.typeInto')
       return { strategy: 'typeInto', text: 'hello' }
@@ -574,6 +577,25 @@ function createRealTextHarness(options = {}) {
     applyStateEffects: vi.fn(),
     cleanup: vi.fn(),
   }
+  const visual =
+    options.visual ??
+    (options.enableVisual
+      ? {
+          showCursor: vi.fn(),
+          highlightTarget: vi.fn(),
+          showClick: vi.fn(),
+          showFocus: vi.fn(),
+          showTyping: vi.fn((request) => {
+            calls.push(`visual.typing:${request.active}`)
+          }),
+          showKeystroke: vi.fn(),
+          clearFeedback: vi.fn(() => {
+            calls.push('visual.clearFeedback')
+          }),
+          hide: vi.fn(),
+          destroy: vi.fn(),
+        }
+      : undefined)
   const orchestrator = new BrowserActionOrchestrator({
     resolver,
     surface,
@@ -585,6 +607,8 @@ function createRealTextHarness(options = {}) {
     store,
     state,
     dom: new BrowserDomAdapter(document),
+    visual,
+    visualFeedback: options.visualFeedback,
   })
 
   return {
@@ -595,6 +619,7 @@ function createRealTextHarness(options = {}) {
     target,
     timeline,
     trace,
+    visual,
     wait,
   }
 }
@@ -1973,6 +1998,177 @@ describe('BrowserActionOrchestrator', () => {
       cursor: 'text',
       pressed: false,
     })
+  })
+
+  it('types through the current focus path without resolving a target', async () => {
+    const controller = new AbortController()
+    const { calls, focus, gesture, interactability, orchestrator, resolver, text, wait } =
+      createHarness()
+
+    await expect(
+      orchestrator.type('abc', {
+        timeout: 100,
+        signal: controller.signal,
+        delay: 0,
+        focusStrategy: 'click',
+        focusClick: { duration: 10, pressDwell: 5 },
+        afterFocusDelay: 12,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual(['text.type', 'wait.settle'])
+    expect(text.type).toHaveBeenCalledWith('abc', {
+      timeout: 100,
+      signal: controller.signal,
+      delay: 0,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {
+      timeout: 100,
+      signal: controller.signal,
+    })
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(interactability.canType).not.toHaveBeenCalled()
+    expect(focus.focus).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled()
+  })
+
+  it('applies the default public type cadence when delay is omitted', async () => {
+    const { orchestrator, text } = createHarness()
+
+    await expect(orchestrator.type('abc')).resolves.toBeUndefined()
+
+    expect(text.type).toHaveBeenCalledWith('abc', {
+      delay: 60,
+    })
+  })
+
+  it('preserves explicit zero delay as public type cadence opt-out', async () => {
+    const { orchestrator, text } = createHarness()
+
+    await expect(orchestrator.type('abc', { delay: 0 })).resolves.toBeUndefined()
+
+    expect(text.type).toHaveBeenCalledWith('abc', {
+      delay: 0,
+    })
+  })
+
+  it('types into the currently focused editable target through the public action path', async () => {
+    const { input, orchestrator, timeline, trace } = createRealTextHarness()
+    input.value = 'A'
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+
+    await expect(orchestrator.type('BC', { delay: 0 })).resolves.toBeUndefined()
+
+    expect(input.value).toBe('ABC')
+    expect(timeline.delay).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.type',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'type',
+          completed: true,
+          output: { textLength: 2 },
+        }),
+      }),
+    )
+  })
+
+  it('reports an actionable error when type has no focused editable target', async () => {
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.focus()
+    const { orchestrator, trace } = createRealTextHarness()
+
+    await expect(orchestrator.type('A', { delay: 0 })).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        boundary: 'text-input-engine',
+      }),
+    })
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.type',
+        status: 'error',
+        attributes: expect.objectContaining({
+          action: 'type',
+          phase: 'perform',
+        }),
+      }),
+    )
+  })
+
+  it('clears typing state and visual feedback when public type is cancelled during cadence', async () => {
+    const controlledTimeline = createBlockingTimeline()
+    const controller = new AbortController()
+    const { calls, input, orchestrator, store, visual } = createRealTextHarness({
+      timeline: controlledTimeline.timeline,
+      enableVisual: true,
+      visualFeedback: { typingIndicator: true },
+    })
+    input.focus()
+
+    const result = orchestrator.type('ab', {
+      signal: controller.signal,
+    })
+
+    await vi.waitFor(() => {
+      expect(controlledTimeline.pendingDelayCount).toBe(1)
+    })
+    expect(input.value).toBe('a')
+    expect(store.snapshot().typing).toMatchObject({ element: input })
+
+    controller.abort('user stopped')
+
+    await expect(result).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+    expect(store.snapshot().typing).toBeNull()
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        'visual.typing:true',
+        'visual.typing:false',
+        'visual.clearFeedback',
+      ]),
+    )
+    expect(visual.showTyping).toHaveBeenLastCalledWith({
+      target: expect.objectContaining({ element: input }),
+      active: false,
+    })
+  })
+
+  it('clears typing state when public type times out during cadence', async () => {
+    vi.useFakeTimers()
+    const controlledTimeline = createBlockingTimeline()
+    const { input, orchestrator, store } = createRealTextHarness({
+      timeline: controlledTimeline.timeline,
+    })
+    input.focus()
+
+    try {
+      const result = orchestrator.type('ab', {
+        timeout: 25,
+      })
+
+      await vi.waitFor(() => {
+        expect(controlledTimeline.pendingDelayCount).toBe(1)
+      })
+      expect(input.value).toBe('a')
+      expect(store.snapshot().typing).toMatchObject({ element: input })
+
+      const expectation = expect(result).rejects.toMatchObject({
+        code: 'ACTION_TIMEOUT',
+        details: { operation: 'text.type', timeout: 25 },
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await expectation
+      expect(store.snapshot().typing).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('applies the default public typeInto cadence when delay is omitted', async () => {

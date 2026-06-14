@@ -173,7 +173,6 @@ type PointerSignalContext = {
 type UnsupportedPublicAction =
   | 'clickCurrent'
   | 'doubleClick'
-  | 'type'
   | 'fill'
   | 'press'
   | 'scrollTo'
@@ -197,10 +196,6 @@ const unsupportedPublicActionLimits = {
   doubleClick: {
     capability: 'multi-click-gesture',
     limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
-  },
-  type: {
-    capability: 'current-focus-text-input',
-    limit: 'type requires current focused editable target handling that is not implemented yet.',
   },
   fill: {
     capability: 'target-value-replacement',
@@ -529,8 +524,36 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async type(): Promise<void> {
-    throw unsupportedPublicAction('type')
+  async type(text: string, options: TypeOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('type', undefined, {
+      ...options,
+      textLength: Array.from(text).length,
+    })
+    let phase: ActionPhase = 'perform'
+
+    try {
+      await this.#text.type(text, typeOptions(options))
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+      this.#clearVisualFeedback()
+
+      span.end({
+        action: 'type',
+        completed: true,
+        output: {
+          textLength: Array.from(text).length,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      this.#cleanupFailedType(span)
+      throw this.#finishActionFailure(span, error, {
+        action: 'type',
+        phase: failurePhase,
+      })
+    }
   }
 
   async typeInto(
@@ -1037,6 +1060,20 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action state cleanup failed.', {
         action: 'focus',
+        error: describeUnknownError(error),
+      })
+    }
+
+    this.#clearVisualFeedback()
+  }
+
+  #cleanupFailedType(span: TraceSpanHandle): void {
+    try {
+      this.#store.setTyping(null)
+    } catch (error) {
+      span.event('action:cleanup-failed', { error: describeUnknownError(error) })
+      this.#trace.warn('Action typing cleanup failed.', {
+        action: 'type',
         error: describeUnknownError(error),
       })
     }

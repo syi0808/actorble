@@ -244,6 +244,25 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can type into the current focus', async () => {
+    const input = document.createElement('input')
+    input.id = 'message'
+    input.value = 'A'
+    document.body.append(input)
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+    const actorble = createActorble()
+
+    await expect(actorble.type('BC', { delay: 0 })).resolves.toBeUndefined()
+
+    expect(input.value).toBe('ABC')
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.type', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('reports unsupported default public action paths with explicit platform limits', async () => {
     const actorble = createActorble()
     const locator = css('#missing')
@@ -263,15 +282,6 @@ describe('Actorble facade', () => {
         boundary: 'action-orchestrator',
         action: 'doubleClick',
         capability: 'multi-click-gesture',
-        limit: expect.any(String),
-      },
-    })
-    await expect(actorble.type('hello')).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'type',
-        capability: 'current-focus-text-input',
         limit: expect.any(String),
       },
     })
