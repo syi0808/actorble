@@ -346,7 +346,10 @@ function createHarness(options = {}) {
       calls.push('text.typeInto')
       return { strategy: 'typeInto', text: 'hello' }
     }),
-    fill: vi.fn(),
+    fill: vi.fn(async () => {
+      calls.push('text.fill')
+      return { strategy: 'fill', text: 'filled' }
+    }),
   }
   const wait = options.wait ?? {
     waitFor: vi.fn(),
@@ -1998,6 +2001,144 @@ describe('BrowserActionOrchestrator', () => {
       cursor: 'text',
       pressed: false,
     })
+  })
+
+  it('fill resolves and checks type interactability before replacing target text', async () => {
+    const controller = new AbortController()
+    const { calls, orchestrator, target, text, wait } = createHarness()
+
+    await expect(
+      orchestrator.fill(css('#target-1'), 'filled', {
+        timeout: 100,
+        signal: controller.signal,
+        clear: false,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'interactability.canType',
+      'text.fill',
+      'wait.settle',
+    ])
+    expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
+      timeout: 100,
+      signal: controller.signal,
+      clear: false,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {
+      timeout: 100,
+      signal: controller.signal,
+    })
+  })
+
+  it('does not apply typing cadence options to public fill', async () => {
+    const { orchestrator, target, text } = createHarness()
+
+    await expect(
+      orchestrator.fill(css('#target-1'), 'filled', {
+        delay: 25,
+        timeout: 100,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
+      timeout: 100,
+    })
+  })
+
+  it('fills a target through the public action path without typing cadence', async () => {
+    const { input, orchestrator, timeline, trace } = createRealTextHarness()
+    input.value = 'old value'
+
+    await expect(orchestrator.fill(css('#target-1'), 'new value')).resolves.toBeUndefined()
+
+    expect(input.value).toBe('new value')
+    expect(timeline.delay).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.fill',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'fill',
+          completed: true,
+          targetId: 'target-1',
+          output: { textLength: 9 },
+        }),
+      }),
+    )
+  })
+
+  it('clears typing state and visual feedback when public fill is cancelled', async () => {
+    const { calls, orchestrator, store, target, text, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: { typingIndicator: true },
+    })
+    text.fill.mockImplementationOnce(async () => {
+      calls.push('text.fill')
+      store.setTyping(target)
+      throw cancellationError('text.fill', 'user stopped')
+    })
+
+    await expect(orchestrator.fill(css('#target-1'), 'filled')).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'user stopped' },
+    })
+
+    expect(store.snapshot().typing).toBeNull()
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        'visual.typing:true',
+        'text.fill',
+        'visual.typing:false',
+        'visual.clearFeedback',
+      ]),
+    )
+    expect(visual.showTyping).toHaveBeenLastCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: false,
+    })
+  })
+
+  it('reports fill preflight failures with fill action context', async () => {
+    const { orchestrator, text, trace } = createHarness({
+      typeReport: {
+        target: inputTargetHandle(),
+        visible: true,
+        enabled: false,
+        receivesPointerEvents: true,
+        canClick: true,
+        canFocus: true,
+        canType: false,
+        blockingReasons: ['disabled'],
+        forceBypassedReasons: [],
+        unforceableReasons: ['disabled'],
+      },
+    })
+
+    await expect(orchestrator.fill(css('#target-1'), 'filled')).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'fill',
+        blockingReasons: ['disabled'],
+        unforceableReasons: ['disabled'],
+      }),
+    })
+
+    expect(text.fill).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.fill',
+        status: 'error',
+        attributes: expect.objectContaining({
+          action: 'fill',
+          phase: 'preflight',
+        }),
+      }),
+    )
   })
 
   it('types through the current focus path without resolving a target', async () => {

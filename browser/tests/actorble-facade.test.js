@@ -263,6 +263,36 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can fill a target value', async () => {
+    const input = document.createElement('input')
+    input.id = 'message'
+    input.value = 'old value'
+    input.scrollIntoView = vi.fn()
+    input.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 24,
+      top: 20,
+      left: 10,
+      right: 130,
+      bottom: 44,
+      toJSON: () => {},
+    }))
+    document.body.append(input)
+    document.elementFromPoint = vi.fn(() => input)
+    const actorble = createActorble()
+
+    await expect(actorble.fill(css('#message'), 'new value')).resolves.toBeUndefined()
+
+    expect(input.value).toBe('new value')
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.fill', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('reports unsupported default public action paths with explicit platform limits', async () => {
     const actorble = createActorble()
     const locator = css('#missing')
@@ -282,15 +312,6 @@ describe('Actorble facade', () => {
         boundary: 'action-orchestrator',
         action: 'doubleClick',
         capability: 'multi-click-gesture',
-        limit: expect.any(String),
-      },
-    })
-    await expect(actorble.fill(locator, 'value')).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'fill',
-        capability: 'target-value-replacement',
         limit: expect.any(String),
       },
     })

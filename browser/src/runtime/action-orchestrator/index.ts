@@ -173,7 +173,6 @@ type PointerSignalContext = {
 type UnsupportedPublicAction =
   | 'clickCurrent'
   | 'doubleClick'
-  | 'fill'
   | 'press'
   | 'scrollTo'
   | 'drag'
@@ -196,10 +195,6 @@ const unsupportedPublicActionLimits = {
   doubleClick: {
     capability: 'multi-click-gesture',
     limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
-  },
-  fill: {
-    capability: 'target-value-replacement',
-    limit: 'fill requires target value replacement orchestration that is not implemented yet.',
   },
   press: {
     capability: 'keyboard-action',
@@ -578,7 +573,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       this.#showTargetHighlight(handle, snapshot)
       phase = 'preflight'
       const report = await this.#interactability.canType(handle)
-      assertCanType(handle, report)
+      assertCanType('typeInto', handle, report)
 
       phase = 'perform'
       const typeTarget = handle
@@ -671,8 +666,58 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async fill(): Promise<void> {
-    throw unsupportedPublicAction('fill')
+  async fill(
+    target: TargetLike,
+    text: string,
+    options: FillOptions = {},
+  ): Promise<void> {
+    const span = this.#startActionSpan('fill', target, {
+      ...options,
+      textLength: Array.from(text).length,
+    })
+    let phase: ActionPhase = 'resolve'
+    let handle: TargetHandle | undefined
+
+    try {
+      handle = await this.#resolveTarget(target, options)
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(handle, options)
+      phase = 'geometry'
+      const snapshot = await this.#geometry.snapshot(handle)
+      this.#showTargetHighlight(handle, snapshot)
+      phase = 'preflight'
+      const report = await this.#interactability.canType(handle)
+      assertCanType('fill', handle, report)
+
+      phase = 'perform'
+      this.#showTypingFeedback(handle, true)
+      try {
+        await this.#text.fill(handle, text, fillOptions(options))
+      } finally {
+        this.#showTypingFeedback(handle, false)
+      }
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'fill',
+        completed: true,
+        targetId: handle.id,
+        output: {
+          textLength: Array.from(text).length,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      this.#cleanupFailedType(span, 'fill')
+      throw this.#finishActionFailure(span, error, {
+        action: 'fill',
+        phase: failurePhase,
+        targetId: handle?.id,
+      })
+    }
   }
 
   async press(): Promise<void> {
@@ -1067,13 +1112,16 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#clearVisualFeedback()
   }
 
-  #cleanupFailedType(span: TraceSpanHandle): void {
+  #cleanupFailedType(
+    span: TraceSpanHandle,
+    action: Extract<ActionName, 'type' | 'fill'> = 'type',
+  ): void {
     try {
       this.#store.setTyping(null)
     } catch (error) {
       span.event('action:cleanup-failed', { error: describeUnknownError(error) })
       this.#trace.warn('Action typing cleanup failed.', {
-        action: 'type',
+        action,
         error: describeUnknownError(error),
       })
     }
@@ -1584,14 +1632,18 @@ function assertCanClick(target: TargetHandle, report: InteractabilityReport): vo
   })
 }
 
-function assertCanType(target: TargetHandle, report: InteractabilityReport): void {
+function assertCanType(
+  action: Extract<ActionName, 'typeInto' | 'fill'>,
+  target: TargetHandle,
+  report: InteractabilityReport,
+): void {
   if (report.canType === true) {
     return
   }
 
   throw actorbleError('INTERACTABILITY_FAILED', 'Target is not typeable.', {
     details: {
-      action: 'typeInto',
+      action,
       targetId: target.id,
       blockingReasons: report.blockingReasons,
       unforceableReasons: report.unforceableReasons,
@@ -1674,6 +1726,13 @@ function typeOptions(
   }
 
   return focusStrategy === undefined ? normalized : { ...normalized, focusStrategy }
+}
+
+function fillOptions(options: FillOptions): FillOptions {
+  return {
+    ...operationOptions(options),
+    ...(options.clear === undefined ? {} : { clear: options.clear }),
+  }
 }
 
 function typeFocusStrategy(options: TypeOptions): NonNullable<TypeOptions['focusStrategy']> {
