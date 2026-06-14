@@ -390,19 +390,38 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can scroll to a resolved target', async () => {
+    const panel = document.createElement('div')
+    panel.id = 'panel'
+    panel.scrollTo = vi.fn()
+    document.body.append(panel)
+    const actorble = createActorble()
+
+    await expect(actorble.scrollTo(css('#panel'), { behavior: 'instant' })).resolves.toBeUndefined()
+
+    expect(panel.scrollTo).toHaveBeenCalledWith({ left: 0, top: 0, behavior: 'instant' })
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.scrollTo', status: 'ok' }),
+      ]),
+    )
+    expect(actorble.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'surface:scrolled',
+          data: expect.objectContaining({
+            action: 'scrollTo',
+            inputKind: 'target',
+          }),
+        }),
+      ]),
+    )
+  })
+
   it('reports remaining unsupported default public action paths with explicit platform limits', async () => {
     const actorble = createActorble()
     const locator = css('#missing')
 
-    await expect(actorble.scrollTo(locator)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'scrollTo',
-        capability: 'public-scroll-action',
-        limit: expect.any(String),
-      },
-    })
     await expect(actorble.drag(locator, locator)).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: {

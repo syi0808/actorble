@@ -189,6 +189,10 @@ function createHarness(options = {}) {
     inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
     validate: vi.fn(async () => {
       calls.push('resolver.validate')
+      if (options.validateFailure) {
+        throw options.validateFailure
+      }
+
       return target
     }),
   }
@@ -204,7 +208,9 @@ function createHarness(options = {}) {
     ensureVisible: vi.fn(async () => {
       calls.push('surface.ensureVisible')
     }),
-    scrollTo: vi.fn(),
+    scrollTo: vi.fn(async () => {
+      calls.push('surface.scrollTo')
+    }),
     mapPoint: vi.fn((point) => point),
   }
   const geometryEngine = {
@@ -528,6 +534,7 @@ function createHarness(options = {}) {
     resolver,
     state,
     store,
+    surface,
     target,
     text,
     trace,
@@ -1100,6 +1107,117 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointermove',
       'wait.settle',
     ])
+  })
+
+  it('scrollTo resolves, validates, scrolls the target, invalidates geometry, and waits', async () => {
+    const { calls, orchestrator, surface, target, trace, wait } = createHarness()
+    const controller = new AbortController()
+    const options = {
+      timeout: 100,
+      behavior: 'instant',
+      signal: controller.signal,
+    }
+
+    await expect(orchestrator.scrollTo(css('#target-1'), options)).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.scrollTo',
+      'wait.settle',
+    ])
+    expect(surface.scrollTo).toHaveBeenCalledWith(target, options)
+    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
+    expect(wait.settle).toHaveBeenCalledWith('settled', {
+      timeout: 100,
+      signal: controller.signal,
+    })
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'surface:scrolled',
+          data: expect.objectContaining({
+            action: 'scrollTo',
+            targetId: 'target-1',
+            inputKind: 'target',
+          }),
+        }),
+      ]),
+    )
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.scrollTo',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'scrollTo',
+          completed: true,
+          targetId: 'target-1',
+          output: expect.objectContaining({
+            inputKind: 'target',
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('scrollTo passes positions to the surface engine and leaves coordinate policy there', async () => {
+    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
+    const position = { x: 10, y: 20, coordinateSpace: 'viewport' }
+
+    await expect(orchestrator.scrollTo(position, { behavior: 'smooth' })).resolves.toBeUndefined()
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(calls).toEqual(['surface.scrollTo', 'wait.settle'])
+    expect(surface.scrollTo).toHaveBeenCalledWith(position, { behavior: 'smooth' })
+    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'surface:scrolled',
+          data: expect.objectContaining({
+            action: 'scrollTo',
+            inputKind: 'position',
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('scrollTo fails stale target validation with target context before scrolling', async () => {
+    const staleTarget = {
+      ...targetHandle('stale-scroll'),
+      locator: css('#stale-scroll'),
+      validity: 'stale',
+    }
+    const { orchestrator, surface, trace } = createHarness({
+      target: staleTarget,
+      validateFailure: actorbleError('TARGET_STALE', 'Target stale-scroll is stale.', {
+        details: {
+          targetId: 'stale-scroll',
+          locator: { kind: 'css', selector: '#stale-scroll' },
+        },
+      }),
+    })
+
+    await expect(orchestrator.scrollTo(css('#stale-scroll'))).rejects.toMatchObject({
+      code: 'TARGET_STALE',
+      details: expect.objectContaining({
+        targetId: 'stale-scroll',
+      }),
+    })
+
+    expect(surface.scrollTo).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.scrollTo',
+        status: 'error',
+        attributes: expect.objectContaining({
+          phase: 'validate',
+          targetId: 'stale-scroll',
+        }),
+      }),
+    )
   })
 
   it('clickCurrent clicks the current hover target and point without resolving a target', async () => {

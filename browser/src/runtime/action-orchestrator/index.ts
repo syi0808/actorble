@@ -182,9 +182,7 @@ type PointerSignalContext = {
   commandId: number
 }
 
-type UnsupportedPublicAction =
-  | 'scrollTo'
-  | 'drag'
+type UnsupportedPublicAction = 'drag'
 
 const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   kind: 'ease',
@@ -197,10 +195,6 @@ const emptyPointerHit: PointerHitSnapshot = {
   hoverChain: [],
 }
 const unsupportedPublicActionLimits = {
-  scrollTo: {
-    capability: 'public-scroll-action',
-    limit: 'scrollTo requires public scroll target and position orchestration that is not implemented yet.',
-  },
   drag: {
     capability: 'drag-and-drop',
     limit: 'drag requires synthetic pointer drag orchestration that is not implemented yet.',
@@ -916,8 +910,56 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async scrollTo(): Promise<void> {
-    throw unsupportedPublicAction('scrollTo')
+  async scrollTo(
+    targetOrPosition: TargetLike | ScrollPosition,
+    options: ScrollOptions = {},
+  ): Promise<void> {
+    const positionInput = isScrollPosition(targetOrPosition)
+    const span = this.#startActionSpan(
+      'scrollTo',
+      positionInput ? undefined : targetOrPosition,
+      positionInput ? { ...options, position: targetOrPosition } : options,
+    )
+    let phase: ActionPhase = positionInput ? 'perform' : 'resolve'
+    let handle: TargetHandle | undefined
+
+    try {
+      if (positionInput) {
+        await this.#surface.scrollTo(targetOrPosition, options)
+        this.#recordScrollDiagnostics(span, 'position', undefined, targetOrPosition, options)
+      } else {
+        const resolved = isTargetHandle(targetOrPosition)
+          ? targetOrPosition
+          : await this.#resolver.resolve(toLocator(targetOrPosition), operationOptions(options))
+
+        handle = resolved
+        phase = 'validate'
+        handle = await this.#resolver.validate(resolved)
+
+        phase = 'perform'
+        await this.#surface.scrollTo(handle, options)
+        this.#recordScrollDiagnostics(span, 'target', handle, undefined, options)
+      }
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'scrollTo',
+        completed: true,
+        ...(handle === undefined ? {} : { targetId: handle.id }),
+        output: {
+          inputKind: positionInput ? 'position' : 'target',
+          ...(positionInput ? { position: targetOrPosition } : {}),
+        },
+      })
+    } catch (error) {
+      throw this.#finishActionFailure(span, error, {
+        action: 'scrollTo',
+        phase,
+        targetId: handle?.id,
+      })
+    }
   }
 
   async drag(): Promise<void> {
@@ -1788,6 +1830,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   #clearPointerContext(): void {
     this.#signalContext = null
   }
+
+  #recordScrollDiagnostics(
+    span: TraceSpanHandle,
+    inputKind: 'target' | 'position',
+    target: TargetHandle | undefined,
+    position: ScrollPosition | undefined,
+    options: ScrollOptions,
+  ): void {
+    this.#wait.invalidateGeometry('scroll')
+    span.event('surface:scrolled', {
+      action: 'scrollTo',
+      inputKind,
+      ...(target === undefined ? {} : { targetId: target.id }),
+      ...(position === undefined ? {} : { position }),
+      ...(options.behavior === undefined ? {} : { behavior: options.behavior }),
+    })
+  }
 }
 
 export function createActionOrchestrator(
@@ -2140,6 +2199,17 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
 
 function isLocator(target: TargetLike): target is Locator {
   return typeof target === 'object' && target !== null && 'kind' in target
+}
+
+function isScrollPosition(
+  targetOrPosition: TargetLike | ScrollPosition,
+): targetOrPosition is ScrollPosition {
+  return (
+    typeof targetOrPosition === 'object' &&
+    targetOrPosition !== null &&
+    'x' in targetOrPosition &&
+    'y' in targetOrPosition
+  )
 }
 
 function isFocusOrTypingStateEffect(effect: StateEffect): boolean {
