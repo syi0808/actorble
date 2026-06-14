@@ -38,6 +38,8 @@ export type SurfaceEngineOptions = Readonly<{
   dom?: DomPort
 }>
 
+const supportedScrollPositionCoordinateSpaces = ['viewport', 'document'] as const
+
 export class BrowserSurfaceEngine implements SurfaceEngine {
   readonly #dom: DomPort
 
@@ -87,15 +89,39 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point {
-    if (from === to || (isViewportLike(from) && isViewportLike(to))) {
+    if (from === to) {
       return point
+    }
+
+    if (from === 'viewport' && to === 'document') {
+      const scrollOffset = this.#getViewportScrollOffset()
+
+      return {
+        x: point.x + scrollOffset.x,
+        y: point.y + scrollOffset.y,
+      }
+    }
+
+    if (from === 'document' && to === 'viewport') {
+      const scrollOffset = this.#getViewportScrollOffset()
+
+      return {
+        x: point.x - scrollOffset.x,
+        y: point.y - scrollOffset.y,
+      }
     }
 
     throw actorbleError(
       'PLATFORM_UNSUPPORTED',
       `Coordinate conversion from ${from} to ${to} is not supported by the surface engine yet.`,
       {
-        details: { from, to, point },
+        details: {
+          boundary: 'surface-engine',
+          from,
+          to,
+          point,
+          supportedConversions: ['viewport:document', 'document:viewport'],
+        },
       },
     )
   }
@@ -103,12 +129,18 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   #scrollViewportTo(position: ScrollPosition, options: ScrollOptions): void {
     const coordinateSpace = position.coordinateSpace ?? 'viewport'
 
-    if (!isViewportLike(coordinateSpace)) {
+    if (!isSupportedScrollPositionCoordinateSpace(coordinateSpace)) {
       throw actorbleError(
         'PLATFORM_UNSUPPORTED',
         `Scroll position coordinate space ${coordinateSpace} is not supported by the surface engine yet.`,
         {
-          details: { coordinateSpace },
+          details: {
+            boundary: 'surface-engine',
+            action: 'scrollTo',
+            coordinateSpace,
+            supportedCoordinateSpaces: supportedScrollPositionCoordinateSpaces,
+            position,
+          },
         },
       )
     }
@@ -118,6 +150,17 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       { x: position.x, y: position.y },
       options,
     )
+  }
+
+  #getViewportScrollOffset(): Point {
+    const metrics = this.#dom.getScrollMetrics(
+      this.#dom.getViewportScrollTarget(this.#dom.getRoot()),
+    )
+
+    return {
+      x: metrics.scrollLeft,
+      y: metrics.scrollTop,
+    }
   }
 
   #isScrollable(element: Element): boolean {
@@ -163,8 +206,10 @@ function normalizeAxisOverflow(axisOverflow: string, shorthandOverflow: string):
   return axisOverflow || shorthandOverflow
 }
 
-function isViewportLike(space: CoordinateSpace): boolean {
-  return space === 'viewport' || space === 'surface'
+function isSupportedScrollPositionCoordinateSpace(space: CoordinateSpace): boolean {
+  return supportedScrollPositionCoordinateSpaces.includes(
+    space as (typeof supportedScrollPositionCoordinateSpaces)[number],
+  )
 }
 
 function isScrollPosition(targetOrPosition: TargetLike | ScrollPosition): targetOrPosition is ScrollPosition {

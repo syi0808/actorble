@@ -171,7 +171,7 @@ describe('BrowserSurfaceEngine', () => {
     expect(engine.getScrollableAncestors(targetHandle('target-1', save))).toEqual([inner, outer])
   })
 
-  it('reveals targets and scrolls through the DOM adapter only', async () => {
+  it('reveals targets and scrolls supported positions through the DOM adapter only', async () => {
     document.body.innerHTML = '<button id="save">Save</button>'
     const save = document.querySelector('#save')
     const dom = createDomPort()
@@ -182,22 +182,57 @@ describe('BrowserSurfaceEngine', () => {
     await engine.scrollTo(handle, { behavior: 'instant' })
     await engine.scrollTo(element(save), { behavior: 'smooth' })
     await engine.scrollTo({ x: 10, y: 20 })
+    await engine.scrollTo({ x: 30, y: 40, coordinateSpace: 'document' })
 
     expect(dom.scrollIntoView).toHaveBeenCalledWith(save, { block: 'center', inline: 'nearest' })
     expect(dom.scrollTo).toHaveBeenNthCalledWith(1, save, { x: 0, y: 0 }, { behavior: 'instant' })
     expect(dom.scrollTo).toHaveBeenNthCalledWith(2, save, { x: 0, y: 0 }, { behavior: 'smooth' })
     expect(dom.scrollTo).toHaveBeenNthCalledWith(3, window, { x: 10, y: 20 }, {})
+    expect(dom.scrollTo).toHaveBeenNthCalledWith(4, window, { x: 30, y: 40 }, {})
+    expect(dom.getViewportScrollTarget).toHaveBeenCalledWith(document)
   })
 
-  it('rejects unresolved locators and unsupported coordinate conversions', async () => {
+  it('rejects unresolved locators and unsupported scroll position coordinate spaces', async () => {
     const engine = createSurfaceEngine({ dom: createDomPort() })
 
     await expect(engine.scrollTo(css('#save'))).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
     })
-    expect(() => engine.mapPoint({ x: 1, y: 2 }, 'document', 'viewport')).toThrowError(
-      expect.objectContaining({ code: 'PLATFORM_UNSUPPORTED' }),
+    await expect(engine.scrollTo({ x: 1, y: 2, coordinateSpace: 'surface' })).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: expect.objectContaining({
+        action: 'scrollTo',
+        coordinateSpace: 'surface',
+        supportedCoordinateSpaces: ['viewport', 'document'],
+      }),
+    })
+  })
+
+  it('maps viewport and document points with the viewport scroll offset only', () => {
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: 100,
+        scrollTop: 50,
+        scrollWidth: 1000,
+        scrollHeight: 800,
+        clientWidth: 500,
+        clientHeight: 300,
+      })),
+    })
+    const engine = createSurfaceEngine({ dom })
+
+    expect(engine.mapPoint({ x: 1, y: 2 }, 'viewport', 'viewport')).toEqual({ x: 1, y: 2 })
+    expect(engine.mapPoint({ x: 1, y: 2 }, 'viewport', 'document')).toEqual({ x: 101, y: 52 })
+    expect(engine.mapPoint({ x: 101, y: 52 }, 'document', 'viewport')).toEqual({ x: 1, y: 2 })
+    expect(() => engine.mapPoint({ x: 1, y: 2 }, 'viewport', 'surface')).toThrowError(
+      expect.objectContaining({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: expect.objectContaining({
+          from: 'viewport',
+          to: 'surface',
+          point: { x: 1, y: 2 },
+        }),
+      }),
     )
-    expect(engine.mapPoint({ x: 1, y: 2 }, 'viewport', 'surface')).toEqual({ x: 1, y: 2 })
   })
 })

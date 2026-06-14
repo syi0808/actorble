@@ -1184,6 +1184,49 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('scrollTo reports unsupported position coordinate spaces from the perform phase', async () => {
+    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
+    const position = { x: 10, y: 20, coordinateSpace: 'screen' }
+    const failure = actorbleError(
+      'PLATFORM_UNSUPPORTED',
+      'Scroll position coordinate space screen is not supported by the surface engine yet.',
+      {
+        details: {
+          action: 'scrollTo',
+          coordinateSpace: 'screen',
+          supportedCoordinateSpaces: ['viewport', 'document'],
+        },
+      },
+    )
+    surface.scrollTo.mockImplementationOnce(async () => {
+      calls.push('surface.scrollTo')
+      throw failure
+    })
+
+    await expect(orchestrator.scrollTo(position)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: expect.objectContaining({
+        action: 'scrollTo',
+        coordinateSpace: 'screen',
+        supportedCoordinateSpaces: ['viewport', 'document'],
+      }),
+    })
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(calls).toEqual(['surface.scrollTo'])
+    expect(wait.invalidateGeometry).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.scrollTo',
+        status: 'error',
+        attributes: expect.objectContaining({
+          phase: 'perform',
+        }),
+      }),
+    )
+  })
+
   it('scrollTo fails stale target validation with target context before scrolling', async () => {
     const staleTarget = {
       ...targetHandle('stale-scroll'),
