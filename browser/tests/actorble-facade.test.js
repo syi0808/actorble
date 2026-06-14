@@ -215,6 +215,35 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can focus through the facade', async () => {
+    const input = document.createElement('input')
+    input.id = 'name'
+    input.scrollIntoView = vi.fn()
+    input.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 24,
+      top: 20,
+      left: 10,
+      right: 130,
+      bottom: 44,
+      toJSON: () => {},
+    }))
+    document.body.append(input)
+    document.elementFromPoint = vi.fn(() => input)
+    const actorble = createActorble()
+
+    await expect(actorble.focus(css('#name'), { focusVisible: true })).resolves.toBeUndefined()
+
+    expect(document.activeElement).toBe(input)
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.focus', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('reports unsupported default public action paths with explicit platform limits', async () => {
     const actorble = createActorble()
     const locator = css('#missing')
@@ -234,15 +263,6 @@ describe('Actorble facade', () => {
         boundary: 'action-orchestrator',
         action: 'doubleClick',
         capability: 'multi-click-gesture',
-        limit: expect.any(String),
-      },
-    })
-    await expect(actorble.focus(locator)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'focus',
-        capability: 'focus-action',
         limit: expect.any(String),
       },
     })

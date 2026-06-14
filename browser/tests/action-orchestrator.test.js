@@ -178,6 +178,7 @@ function createHarness(options = {}) {
   const clickReports = [...(options.clickReports ?? [])]
   const signals = new BrowserPointerSignalBus()
   const trace = options.trace ?? createTrace()
+  const store = new BrowserInteractionStateStore()
   const resolver = {
     resolve: vi.fn(async () => {
       calls.push('resolver.resolve')
@@ -237,7 +238,23 @@ function createHarness(options = {}) {
         }
       )
     }),
-    canFocus: vi.fn(async () => ({ target, canFocus: true, blockingReasons: [] })),
+    canFocus: vi.fn(async () => {
+      calls.push('interactability.canFocus')
+      return (
+        options.focusReport ?? {
+          target,
+          visible: true,
+          enabled: true,
+          receivesPointerEvents: true,
+          canClick: true,
+          canFocus: true,
+          canType: true,
+          blockingReasons: [],
+          forceBypassedReasons: [],
+          unforceableReasons: [],
+        }
+      )
+    }),
     canType: vi.fn(async () => {
       calls.push('interactability.canType')
       return (
@@ -300,7 +317,16 @@ function createHarness(options = {}) {
   }
   const gesture = options.gesture ?? (options.useRealGesture ? undefined : fakeGesture)
   const focus = options.focus ?? {
-    focus: vi.fn(),
+    focus: vi.fn(async (focusTarget, focusOptions = {}) => {
+      calls.push('focus.focus')
+      store.setFocused(focusTarget, focusOptions.focusVisible === true)
+
+      return {
+        active: focusTarget,
+        previous: null,
+        focusVisible: focusOptions.focusVisible === true,
+      }
+    }),
     blur: vi.fn(),
     getFocused: vi.fn(async () => (
       options.focusedSnapshot ?? {
@@ -319,7 +345,7 @@ function createHarness(options = {}) {
     }),
     fill: vi.fn(),
   }
-  const wait = {
+  const wait = options.wait ?? {
     waitFor: vi.fn(),
     settle: vi.fn(async () => {
       calls.push('wait.settle')
@@ -417,7 +443,6 @@ function createHarness(options = {}) {
           destroy: vi.fn(),
         }
       : undefined)
-  const store = new BrowserInteractionStateStore()
   const orchestrator = new BrowserActionOrchestrator({
     resolver,
     surface,
@@ -897,6 +922,136 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointermove',
       'wait.settle',
     ])
+  })
+
+  it('focus resolves, reveals, checks focusability, focuses, and waits for settlement', async () => {
+    const { calls, focus, orchestrator, target, trace, wait } = createHarness()
+    const controller = new AbortController()
+
+    await expect(
+      orchestrator.focus(css('#target-1'), {
+        timeout: 100,
+        focusVisible: true,
+        signal: controller.signal,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'interactability.canFocus',
+      'focus.focus',
+      'state.focus:true,focus-visible:true',
+      'wait.settle',
+    ])
+    expect(focus.focus).toHaveBeenCalledWith(target, {
+      timeout: 100,
+      focusVisible: true,
+      signal: controller.signal,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {
+      timeout: 100,
+      signal: controller.signal,
+    })
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.focus',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'focus',
+          completed: true,
+          targetId: 'target-1',
+          output: expect.objectContaining({
+            focusedTargetId: 'target-1',
+            focusVisible: true,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('fails focus preflight without requesting focus when the target is not focusable', async () => {
+    const { focus, orchestrator, trace } = createHarness({
+      focusReport: {
+        target: targetHandle('blocked-focus'),
+        visible: true,
+        enabled: true,
+        receivesPointerEvents: true,
+        canClick: true,
+        canFocus: false,
+        canType: false,
+        blockingReasons: ['not-focusable'],
+        forceBypassedReasons: [],
+        unforceableReasons: ['not-focusable'],
+      },
+    })
+
+    await expect(orchestrator.focus(css('#target-1'))).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'focus',
+        blockingReasons: ['not-focusable'],
+      }),
+    })
+
+    expect(focus.focus).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.focus',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'preflight' }),
+      }),
+    )
+  })
+
+  it('cleans transient focus visual feedback after successful focus settlement', async () => {
+    const { orchestrator, store, target, visual, wait } = createHarness({
+      enableVisual: true,
+      visualFeedback: { focusOverlay: true },
+    })
+
+    await expect(
+      orchestrator.focus(css('#target-1'), { focusVisible: true }),
+    ).resolves.toBeUndefined()
+
+    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(store.snapshot().focused).toMatchObject({ id: target.id })
+    expect(visual.showFocus).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: true,
+    })
+    expect(visual.clearFeedback).toHaveBeenCalledOnce()
+  })
+
+  it('cleans focus visual state when focus wait is cancelled after platform focus', async () => {
+    const wait = {
+      waitFor: vi.fn(),
+      settle: vi.fn(async () => {
+        throw cancellationError('wait.settle', 'scenario stopped')
+      }),
+      invalidateGeometry: vi.fn(),
+    }
+    const { orchestrator, state, store, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: { focusOverlay: true },
+      wait,
+    })
+
+    await expect(
+      orchestrator.focus(css('#target-1'), { focusVisible: true }),
+    ).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+
+    expect(store.snapshot().focused).toBeNull()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(visual.showFocus).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: 'target-1' }),
+      active: false,
+    })
+    expect(visual.clearFeedback).toHaveBeenCalledOnce()
   })
 
   it('applies hover effects to hit-tested elements during timed pointer movement', async () => {

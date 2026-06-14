@@ -173,7 +173,6 @@ type PointerSignalContext = {
 type UnsupportedPublicAction =
   | 'clickCurrent'
   | 'doubleClick'
-  | 'focus'
   | 'type'
   | 'fill'
   | 'press'
@@ -198,10 +197,6 @@ const unsupportedPublicActionLimits = {
   doubleClick: {
     capability: 'multi-click-gesture',
     limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
-  },
-  focus: {
-    capability: 'focus-action',
-    limit: 'focus requires the public focus action lifecycle that is not implemented yet.',
   },
   type: {
     capability: 'current-focus-text-input',
@@ -483,8 +478,55 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     throw unsupportedPublicAction('doubleClick')
   }
 
-  async focus(): Promise<void> {
-    throw unsupportedPublicAction('focus')
+  async focus(target: TargetLike, options: FocusOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('focus', target, options)
+    let phase: ActionPhase = 'resolve'
+    let handle: TargetHandle | undefined
+    let focusStarted = false
+
+    try {
+      handle = await this.#resolveTarget(target, options)
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(handle, options)
+
+      phase = 'preflight'
+      const report = await this.#interactability.canFocus(handle, options)
+      assertCanFocus(handle, report)
+
+      phase = 'perform'
+      focusStarted = true
+      const snapshot = await this.#focus.focus(handle, options)
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+      this.#clearVisualFeedback()
+
+      span.end({
+        action: 'focus',
+        completed: true,
+        targetId: handle.id,
+        output: {
+          focusedTargetId: snapshot.active?.id ?? null,
+          previousTargetId: snapshot.previous?.id ?? null,
+          focusVisible: snapshot.focusVisible,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      if (focusStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedFocus(span)
+      } else {
+        this.#clearVisualFeedback()
+      }
+
+      throw this.#finishActionFailure(span, error, {
+        action: 'focus',
+        phase: failurePhase,
+        targetId: handle?.id,
+      })
+    }
   }
 
   async type(): Promise<void> {
@@ -983,6 +1025,22 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#cursorPressedButtons.clear()
     this.#restorePressedCursorVisual()
     this.#clearPointerVisualMode()
+    this.#clearVisualFeedback()
+  }
+
+  async #cleanupFailedFocus(span: TraceSpanHandle): Promise<void> {
+    try {
+      const diff = this.#store.reset()
+      this.#state.applyStateEffects(diff.effects)
+      this.#state.cleanup()
+    } catch (error) {
+      span.event('action:cleanup-failed', { error: describeUnknownError(error) })
+      this.#trace.warn('Action state cleanup failed.', {
+        action: 'focus',
+        error: describeUnknownError(error),
+      })
+    }
+
     this.#clearVisualFeedback()
   }
 
@@ -1497,6 +1555,21 @@ function assertCanType(target: TargetHandle, report: InteractabilityReport): voi
   throw actorbleError('INTERACTABILITY_FAILED', 'Target is not typeable.', {
     details: {
       action: 'typeInto',
+      targetId: target.id,
+      blockingReasons: report.blockingReasons,
+      unforceableReasons: report.unforceableReasons,
+    },
+  })
+}
+
+function assertCanFocus(target: TargetHandle, report: InteractabilityReport): void {
+  if (report.canFocus) {
+    return
+  }
+
+  throw actorbleError('INTERACTABILITY_FAILED', 'Target is not focusable.', {
+    details: {
+      action: 'focus',
       targetId: target.id,
       blockingReasons: report.blockingReasons,
       unforceableReasons: report.unforceableReasons,
