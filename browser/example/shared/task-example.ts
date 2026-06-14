@@ -2,6 +2,7 @@ import { createActorble, type TypeOptions } from '../../src/index.js'
 import {
   byId,
   renderRows,
+  renderTrace,
   renderUtilityPanel,
   runWithStatus,
   setStatus,
@@ -150,6 +151,10 @@ export function mountTaskExample(options: TaskExampleOptions): void {
                 <ol id="event-log" class="event-log" aria-live="polite"></ol>
               </div>
               <div class="result-block">
+                <h3>Trace</h3>
+                <div id="trace-output" class="trace-output" aria-live="polite"></div>
+              </div>
+              <div class="result-block">
                 <h3>Runtime fidelity</h3>
                 <div id="fidelity-output" class="capability-list"></div>
               </div>
@@ -167,6 +172,7 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   const runTypeFirstButton = byId<HTMLButtonElement>('run-type-first')
   const runClickPrimaryButton = byId<HTMLButtonElement>('run-click-primary')
   const eventLog = byId<HTMLOListElement>('event-log')
+  const traceOutput = byId<HTMLDivElement>('trace-output')
   const fidelityOutput = byId<HTMLDivElement>('fidelity-output')
   const visualModeInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[name="visual-mode"]'),
@@ -233,6 +239,7 @@ export function mountTaskExample(options: TaskExampleOptions): void {
       visualMode = input.value as VisualMode
       actorble.destroy()
       actorble = createDemoActorble(visualMode)
+      renderTrace(actorble.getTrace(), traceOutput)
       renderFidelity()
       setStatus(runStatus, visualModeStatus(visualMode))
     })
@@ -245,10 +252,12 @@ export function mountTaskExample(options: TaskExampleOptions): void {
     byId<HTMLDivElement>('scenario-stage').innerHTML = options.stageHtml
     domEvents.splice(0)
     renderEvents()
+    renderTrace(actorble.getTrace(), traceOutput)
     options.bindStage(context)
   }
 
   function afterActionRun(): void {
+    renderTrace(actorble.getTrace(), traceOutput)
     renderFidelity()
     utilityPanel.expand()
   }

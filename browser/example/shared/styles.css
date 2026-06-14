@@ -703,6 +703,40 @@ dd {
   font-size: 0.84rem;
 }
 
+.trace-output {
+  display: grid;
+  gap: 8px;
+  min-height: 88px;
+}
+
+.trace-row {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid #edf1f6;
+  padding-bottom: 8px;
+}
+
+.trace-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #263242;
+  font-size: 0.84rem;
+}
+
+.trace-title span {
+  color: #677589;
+  white-space: nowrap;
+}
+
+.trace-row pre {
+  max-height: 120px;
+  margin: 0;
+  overflow: auto;
+  color: #263242;
+  font-size: 0.78rem;
+}
+
 .utility-panel {
   display: grid;
   justify-items: end;

@@ -23,6 +23,7 @@ const extraOverlaySelectors = [
 ]
 
 let browser
+let page
 
 try {
   await server.listen()
@@ -33,7 +34,7 @@ try {
   }
 
   browser = await chromium.launch()
-  const page = await browser.newPage({ viewport: { width: 1280, height: 760 } })
+  page = await browser.newPage({ viewport: { width: 1280, height: 760 } })
   page.setDefaultTimeout(10_000)
 
   await page.goto(baseUrl)
@@ -47,6 +48,7 @@ try {
   await runCurrentScenario(page, 'GitHub scenario complete')
   await expectState(page, '#github-outcome', 'issue-open')
   await expectEventLogIncludes(page, ['repoInput.focus', 'issueRow.click', 'issuesTab.click'])
+  await expectTraceIncludes(page, ['action.click', 'action.waitFor'])
   await closeUtilityPanel(page, 'task-utility-panel')
   await expectOverlayHitTesting(page, '[data-testid="github-issue-example"]', 'github issue row')
   await expectQuietOverlay(page)
@@ -82,6 +84,8 @@ try {
   await expectInputValue(page, '#search-query', 'browser automation event dispatch')
   await expectEventLogIncludes(page, ['searchInput.focus'])
   await expectNoOverlayRoot(page)
+} catch (error) {
+  throw await withPageDiagnostics(error, page)
 } finally {
   await browser?.close()
   await server.close()
@@ -237,6 +241,19 @@ async function expectEventLogIncludes(page, expectedEvents) {
   }
 }
 
+async function expectTraceIncludes(page, expectedSpans) {
+  const spans = await page
+    .locator('#trace-output .trace-row strong')
+    .evaluateAll((items) => items.map((item) => item.textContent ?? ''))
+
+  for (const expected of expectedSpans) {
+    assert(
+      spans.includes(expected),
+      `Expected trace output to include ${expected}; got ${spans.join(', ')}`,
+    )
+  }
+}
+
 async function expectOverlayHitTesting(page, targetSelector, label) {
   const overlay = page.locator('[data-actorble-overlay-root]')
   await expectCount(overlay, 1, `${label} overlay root`)
@@ -306,4 +323,102 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message)
   }
+}
+
+async function withPageDiagnostics(error, page) {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (!page) {
+    return error instanceof Error ? error : new Error(message)
+  }
+
+  const diagnostics = await collectPageDiagnostics(page)
+
+  return new Error(`${message}\n\n${formatDiagnostics(diagnostics)}`, {
+    cause: error instanceof Error ? error : undefined,
+  })
+}
+
+async function collectPageDiagnostics(page) {
+  try {
+    return await page.evaluate(() => {
+      const text = (selector) => {
+        const element = document.querySelector(selector)
+
+        return element?.textContent?.trim() || '(missing)'
+      }
+      const list = (selector) =>
+        Array.from(document.querySelectorAll(selector))
+          .map((element) => element.textContent?.trim() ?? '')
+          .filter(Boolean)
+      const traceRows = () =>
+        Array.from(document.querySelectorAll('#trace-output .trace-row'))
+          .map((row) => {
+            const name = row.querySelector('strong')?.textContent?.trim() || '(missing)'
+            const summary = row.querySelector('.trace-title span')?.textContent?.trim() || ''
+
+            return `${name}${summary ? ` ${summary}` : ''}`
+          })
+          .filter(Boolean)
+      const rows = (containerSelector) =>
+        Array.from(document.querySelectorAll(`${containerSelector} dt`))
+          .map((term) => {
+            const name = term.textContent?.trim() || '(empty)'
+            const value = term.nextElementSibling?.textContent?.trim() || '(empty)'
+
+            return `${name}: ${value}`
+          })
+
+      return {
+        url: location.href,
+        title: document.title || '(missing)',
+        heading: text('h1'),
+        runStatus: text('#run-status'),
+        events: list('#event-log li'),
+        traces: traceRows(),
+        fidelity: rows('#fidelity-output'),
+      }
+    })
+  } catch (diagnosticsError) {
+    return {
+      url: page.url(),
+      title: '(unavailable)',
+      heading: '(unavailable)',
+      runStatus: '(unavailable)',
+      events: [],
+      traces: [],
+      fidelity: [],
+      diagnosticsError:
+        diagnosticsError instanceof Error ? diagnosticsError.message : String(diagnosticsError),
+    }
+  }
+}
+
+function formatDiagnostics(diagnostics) {
+  return [
+    'Smoke diagnostics:',
+    `URL: ${diagnostics.url}`,
+    `title: ${diagnostics.title}`,
+    `heading: ${diagnostics.heading}`,
+    `#run-status: ${diagnostics.runStatus}`,
+    formatList('event log', diagnostics.events),
+    formatList('trace', diagnostics.traces),
+    formatList('fidelity', diagnostics.fidelity),
+    diagnostics.diagnosticsError
+      ? `diagnostics collection error: ${diagnostics.diagnosticsError}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function formatList(label, values) {
+  if (values.length === 0) {
+    return `${label}: (none)`
+  }
+
+  return `${label}:\n${values
+    .slice(0, 20)
+    .map((value) => `  - ${value}`)
+    .join('\n')}`
 }
