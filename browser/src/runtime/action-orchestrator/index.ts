@@ -25,7 +25,6 @@ import {
   ActorbleError,
   actorbleError,
   element as elementLocator,
-  notImplemented,
   resolveVisualFeedbackOptions,
 } from '../../shared/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
@@ -171,6 +170,16 @@ type PointerSignalContext = {
   commandId: number
 }
 
+type UnsupportedPublicAction =
+  | 'clickCurrent'
+  | 'doubleClick'
+  | 'focus'
+  | 'type'
+  | 'fill'
+  | 'press'
+  | 'scrollTo'
+  | 'drag'
+
 const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   kind: 'ease',
   easing: 'ease-in-out',
@@ -181,6 +190,40 @@ const emptyPointerHit: PointerHitSnapshot = {
   target: null,
   hoverChain: [],
 }
+const unsupportedPublicActionLimits = {
+  clickCurrent: {
+    capability: 'current-pointer-target',
+    limit: 'clickCurrent requires a current pointer target policy that is not implemented yet.',
+  },
+  doubleClick: {
+    capability: 'multi-click-gesture',
+    limit: 'doubleClick requires a multi-click gesture sequence that is not implemented yet.',
+  },
+  focus: {
+    capability: 'focus-action',
+    limit: 'focus requires the public focus action lifecycle that is not implemented yet.',
+  },
+  type: {
+    capability: 'current-focus-text-input',
+    limit: 'type requires current focused editable target handling that is not implemented yet.',
+  },
+  fill: {
+    capability: 'target-value-replacement',
+    limit: 'fill requires target value replacement orchestration that is not implemented yet.',
+  },
+  press: {
+    capability: 'keyboard-action',
+    limit: 'press requires public keyboard action orchestration that is not implemented yet.',
+  },
+  scrollTo: {
+    capability: 'public-scroll-action',
+    limit: 'scrollTo requires public scroll target and position orchestration that is not implemented yet.',
+  },
+  drag: {
+    capability: 'drag-and-drop',
+    limit: 'drag requires synthetic pointer drag orchestration that is not implemented yet.',
+  },
+} satisfies Record<UnsupportedPublicAction, Readonly<{ capability: string; limit: string }>>
 
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
@@ -432,20 +475,20 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  clickCurrent(): Promise<void> {
-    return notImplemented('Action Orchestrator clickCurrent')
+  async clickCurrent(): Promise<void> {
+    throw unsupportedPublicAction('clickCurrent')
   }
 
-  doubleClick(): Promise<void> {
-    return notImplemented('Action Orchestrator doubleClick')
+  async doubleClick(): Promise<void> {
+    throw unsupportedPublicAction('doubleClick')
   }
 
-  focus(): Promise<void> {
-    return notImplemented('Action Orchestrator focus')
+  async focus(): Promise<void> {
+    throw unsupportedPublicAction('focus')
   }
 
-  type(): Promise<void> {
-    return notImplemented('Action Orchestrator type')
+  async type(): Promise<void> {
+    throw unsupportedPublicAction('type')
   }
 
   async typeInto(
@@ -563,20 +606,20 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  fill(): Promise<void> {
-    return notImplemented('Action Orchestrator fill')
+  async fill(): Promise<void> {
+    throw unsupportedPublicAction('fill')
   }
 
-  press(): Promise<void> {
-    return notImplemented('Action Orchestrator press')
+  async press(): Promise<void> {
+    throw unsupportedPublicAction('press')
   }
 
-  scrollTo(): Promise<void> {
-    return notImplemented('Action Orchestrator scrollTo')
+  async scrollTo(): Promise<void> {
+    throw unsupportedPublicAction('scrollTo')
   }
 
-  drag(): Promise<void> {
-    return notImplemented('Action Orchestrator drag')
+  async drag(): Promise<void> {
+    throw unsupportedPublicAction('drag')
   }
 
   async waitFor(
@@ -611,8 +654,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  geometry(): Promise<GeometrySnapshot> {
-    return notImplemented('Action Orchestrator geometry')
+  geometry(target: TargetLike): Promise<GeometrySnapshot> {
+    return this.#geometry.snapshot(target)
   }
 
   #startActionSpan(
@@ -1481,6 +1524,23 @@ function normalizeActionError(
     cause: error,
     details: context,
   })
+}
+
+function unsupportedPublicAction(action: UnsupportedPublicAction): ActorbleError {
+  const unsupported = unsupportedPublicActionLimits[action]
+
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Action ${action} is not supported by the browser action orchestrator yet.`,
+    {
+      details: {
+        boundary: 'action-orchestrator',
+        action,
+        capability: unsupported.capability,
+        limit: unsupported.limit,
+      },
+    },
+  )
 }
 
 function operationOptions(options: OperationOptions): WaitOptions {

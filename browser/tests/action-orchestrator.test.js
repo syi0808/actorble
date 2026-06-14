@@ -575,6 +575,14 @@ function createRealTextHarness(options = {}) {
 }
 
 describe('BrowserActionOrchestrator', () => {
+  it('delegates geometry snapshots to the injected geometry engine', async () => {
+    const { calls, geometry, orchestrator, target } = createHarness()
+
+    await expect(orchestrator.geometry(target)).resolves.toBe(geometry)
+
+    expect(calls).toEqual(['geometry.snapshot'])
+  })
+
   it('click resolves and validates the target before dispatching pointer and activation events', async () => {
     const { calls, events, orchestrator, target, trace, wait } = createHarness()
 

@@ -215,6 +215,112 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('reports unsupported default public action paths with explicit platform limits', async () => {
+    const actorble = createActorble()
+    const locator = css('#missing')
+
+    await expect(actorble.clickCurrent({ button: 'primary' })).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'clickCurrent',
+        capability: 'current-pointer-target',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.doubleClick(locator)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'doubleClick',
+        capability: 'multi-click-gesture',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.focus(locator)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'focus',
+        capability: 'focus-action',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.type('hello')).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'type',
+        capability: 'current-focus-text-input',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.fill(locator, 'value')).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'fill',
+        capability: 'target-value-replacement',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.press('Enter')).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'press',
+        capability: 'keyboard-action',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.scrollTo(locator)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'scrollTo',
+        capability: 'public-scroll-action',
+        limit: expect.any(String),
+      },
+    })
+    await expect(actorble.drag(locator, locator)).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'action-orchestrator',
+        action: 'drag',
+        capability: 'drag-and-drop',
+        limit: expect.any(String),
+      },
+    })
+  })
+
+  it('reports unsupported debug event subscriptions with the trace fallback', () => {
+    const actorble = createActorble()
+    const listener = vi.fn()
+
+    expect(() => actorble.on('action:failure', listener)).toThrowError(
+      expect.objectContaining({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: {
+          boundary: 'actorble-facade',
+          action: 'on',
+          capability: 'debug-event-subscription',
+          limit: 'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
+        },
+      }),
+    )
+    expect(() => actorble.off('action:failure', listener)).toThrowError(
+      expect.objectContaining({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: {
+          boundary: 'actorble-facade',
+          action: 'off',
+          capability: 'debug-event-subscription',
+          limit: 'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
+        },
+      }),
+    )
+  })
+
   it('uses quiet cursor-only feedback for visual true without changing click behavior', async () => {
     const button = document.createElement('button')
     button.id = 'create'

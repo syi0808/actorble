@@ -8,7 +8,7 @@ import { BrowserScenarioRunner } from '../../runtime/scenario-runner/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
-import { notImplemented } from '../../shared/index.js'
+import { actorbleError } from '../../shared/index.js'
 import type { ActionOrchestrator } from '../../runtime/action-orchestrator/index.js'
 import type {
   CapabilityFidelityReporter,
@@ -226,11 +226,11 @@ export class Actorble {
   }
 
   on(_event: DebugEventName, _listener: ActorbleListener): void {
-    return notImplemented('Actorble Facade on')
+    throw unsupportedDebugEventSubscription('on')
   }
 
   off(_event: DebugEventName, _listener: ActorbleListener): void {
-    return notImplemented('Actorble Facade off')
+    throw unsupportedDebugEventSubscription('off')
   }
 }
 
@@ -349,6 +349,22 @@ function describeUnknownError(error: unknown): string {
   }
 
   return String(error)
+}
+
+function unsupportedDebugEventSubscription(action: 'on' | 'off'): Error {
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    'Debug event subscriptions are not implemented yet.',
+    {
+      details: {
+        boundary: 'actorble-facade',
+        action,
+        capability: 'debug-event-subscription',
+        limit:
+          'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
+      },
+    },
+  )
 }
 
 function isVisualLayer(visual: ActorbleFacadeOptions['visual']): visual is VisualLayer {
