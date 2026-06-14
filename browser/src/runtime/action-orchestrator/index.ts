@@ -1147,10 +1147,24 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return
     }
 
+    const focusEffects = effects.filter((effect) => effect.kind === 'focus')
+
     for (const effect of effects) {
       switch (effect.kind) {
+        case 'focus':
         case 'focus-visible':
           if (!this.#visualFeedback.focusOverlay) {
+            break
+          }
+
+          if (
+            effect.kind === 'focus-visible' &&
+            focusEffects.some(
+              (focusEffect) =>
+                focusEffect.active === effect.active &&
+                focusEffect.target?.id === effect.target?.id,
+            )
+          ) {
             break
           }
 

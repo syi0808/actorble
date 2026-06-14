@@ -21,6 +21,7 @@ const extraOverlaySelectors = [
   '[data-actorble-visual-typing]',
   '[data-actorble-visual-keystroke]',
 ]
+const searchVisualModes = ['quiet', 'debug', 'off']
 
 let browser
 let page
@@ -67,23 +68,9 @@ try {
   await expectChecked(page, '[data-testid="request-copy"]', true)
   await expectEventLogIncludes(page, ['submitRequest.click', 'copyCheckbox.click'])
 
-  await page.goto(new URL('web-search/', baseUrl).toString())
-  await expectPageTitle(page, 'Web search')
-  await openUtilityPanel(page, 'task-utility-panel')
-  await setVisualMode(page, 'debug')
-  await runCurrentScenario(page, 'Search scenario complete')
-  await expectState(page, '#search-preview', 'open')
-  await closeUtilityPanel(page, 'task-utility-panel')
-  await expectOverlayHitTesting(page, '[data-testid="search-result-docs"]', 'search result')
-  await expectDebugOverlay(page)
-  await openUtilityPanel(page, 'task-utility-panel')
-  await setVisualMode(page, 'off')
-  await expectFidelityRuntime(page, 'disabled')
-  await runTypeFirst(page)
-  await expectStatus(page, 'First field typed')
-  await expectInputValue(page, '#search-query', 'browser automation event dispatch')
-  await expectEventLogIncludes(page, ['searchInput.focus'])
-  await expectNoOverlayRoot(page)
+  for (const mode of searchVisualModes) {
+    await runSearchVisualModeSmoke(page, baseUrl, mode)
+  }
 } catch (error) {
   throw await withPageDiagnostics(error, page)
 } finally {
@@ -107,6 +94,13 @@ async function runCurrentScenario(page, expectedStatus) {
   await expectStatus(page, expectedStatus)
 }
 
+async function runCurrentScenarioWithObservation(page, expectedStatus, observation) {
+  const observed = observation()
+
+  await page.locator('#run-current').click()
+  await Promise.all([expectStatus(page, expectedStatus), observed])
+}
+
 async function runTypeFirst(page) {
   await page.locator('#run-type-first').click()
 }
@@ -114,6 +108,27 @@ async function runTypeFirst(page) {
 async function setVisualMode(page, mode) {
   await page.locator(`[data-testid="visual-mode-${mode}"]`).check()
   await expectChecked(page, `[data-testid="visual-mode-${mode}"]`, true)
+}
+
+async function runSearchVisualModeSmoke(page, baseUrl, mode) {
+  await page.goto(new URL('web-search/', baseUrl).toString())
+  await expectPageTitle(page, 'Web search')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await setVisualMode(page, mode)
+  await expectFidelityRuntime(page, mode === 'off' ? 'disabled' : 'enabled')
+
+  if (mode === 'debug') {
+    await runCurrentScenarioWithObservation(
+      page,
+      'Search scenario complete',
+      () => expectDebugTypingFeedbackDuringRun(page),
+    )
+  } else {
+    await runCurrentScenario(page, 'Search scenario complete')
+  }
+
+  await expectSearchScenarioComplete(page)
+  await expectVisualModeOverlay(page, mode)
 }
 
 async function openUtilityPanel(page, panelId) {
@@ -252,6 +267,56 @@ async function expectTraceIncludes(page, expectedSpans) {
       `Expected trace output to include ${expected}; got ${spans.join(', ')}`,
     )
   }
+}
+
+async function expectSearchScenarioComplete(page) {
+  await expectState(page, '#search-preview', 'open')
+  await expectInputValue(page, '#search-query', 'browser automation event dispatch')
+  await expectEventLogIncludes(page, [
+    'searchInput.focus',
+    'searchButton.click',
+    'searchResult.click',
+  ])
+  await expectTraceIncludes(page, ['action.typeInto', 'action.click', 'action.waitFor'])
+}
+
+async function expectVisualModeOverlay(page, mode) {
+  await closeUtilityPanel(page, 'task-utility-panel')
+
+  switch (mode) {
+    case 'quiet':
+      await expectOverlayHitTesting(
+        page,
+        '[data-testid="search-result-docs"]',
+        'quiet search result',
+      )
+      await expectQuietOverlay(page)
+      break
+    case 'debug':
+      await expectOverlayHitTesting(
+        page,
+        '[data-testid="search-result-docs"]',
+        'debug search result',
+      )
+      await expectDebugOverlay(page)
+      break
+    case 'off':
+      await expectNoOverlayRoot(page)
+      break
+    default:
+      throw new Error(`Unsupported visual smoke mode: ${mode}`)
+  }
+}
+
+async function expectDebugTypingFeedbackDuringRun(page) {
+  await page.waitForFunction(() => {
+    const overlay = document.querySelector('[data-actorble-overlay-root]')
+
+    return Boolean(
+      overlay?.querySelector('[data-actorble-visual-focus]') &&
+        overlay?.querySelector('[data-actorble-visual-typing]'),
+    )
+  })
 }
 
 async function expectOverlayHitTesting(page, targetSelector, label) {

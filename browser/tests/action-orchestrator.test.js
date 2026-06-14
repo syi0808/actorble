@@ -1250,6 +1250,20 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showTyping).not.toHaveBeenCalled()
   })
 
+  it('shows focus overlay for ordinary focus effects when focus feedback is enabled', () => {
+    const { store, target, visual } = createHarness({
+      enableVisual: true,
+      visualFeedback: { focusOverlay: true },
+    })
+
+    store.setFocused(target, false)
+
+    expect(visual.showFocus).toHaveBeenCalledWith({
+      target: expect.objectContaining({ id: target.id }),
+      active: true,
+    })
+  })
+
   it('routes computed cursor after hover state effects on pointer move', async () => {
     const target = targetHandle()
     const cursorStyles = new Map([[target.element, 'pointer']])

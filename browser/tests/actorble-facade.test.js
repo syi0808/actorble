@@ -300,7 +300,7 @@ describe('Actorble facade', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('passes text visibility into opt-in keystroke feedback without forcing focus feedback', async () => {
+  it('passes text visibility into opt-in keystroke feedback with focus feedback', async () => {
     createTypeableInput('secret')
     const actorble = createActorble({
       visual: { focusOverlay: true, keystrokeOverlay: true, textVisibility: 'masked' },
@@ -310,7 +310,7 @@ describe('Actorble facade', () => {
 
     const overlay = document.body.querySelector('[data-actorble-overlay-root]')
     expect(overlay).not.toBeNull()
-    expect(overlay.querySelector('[data-actorble-visual-focus]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-focus]')).not.toBeNull()
     expect(overlay.querySelector('[data-actorble-visual-keystroke]').textContent).toBe('*')
 
     actorble.destroy()
