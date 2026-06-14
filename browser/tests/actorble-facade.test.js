@@ -30,17 +30,17 @@ function createDependencies() {
     validate: vi.fn(async () => target),
   }
   const orchestrator = {
-    moveTo: vi.fn(),
+    moveTo: vi.fn(async () => {}),
     click: vi.fn(async () => {}),
-    clickCurrent: vi.fn(),
-    doubleClick: vi.fn(),
-    focus: vi.fn(),
-    type: vi.fn(),
+    clickCurrent: vi.fn(async () => {}),
+    doubleClick: vi.fn(async () => {}),
+    focus: vi.fn(async () => {}),
+    type: vi.fn(async () => {}),
     typeInto: vi.fn(async () => {}),
-    fill: vi.fn(),
-    press: vi.fn(),
-    scrollTo: vi.fn(),
-    drag: vi.fn(),
+    fill: vi.fn(async () => {}),
+    press: vi.fn(async () => {}),
+    scrollTo: vi.fn(async () => {}),
+    drag: vi.fn(async () => {}),
     waitFor: vi.fn(async () => ({ condition, satisfied: true, strategy: 'settled' })),
     geometry: vi.fn(),
   }
@@ -122,25 +122,57 @@ describe('Actorble facade', () => {
     document.body.innerHTML = ''
   })
 
-  it('delegates initial public entrypoints to injected modules', async () => {
+  it('delegates public entrypoints to injected modules', async () => {
     const { condition, orchestrator, resolver, runner, target, trace } = createDependencies()
     const actorble = new Actorble({ orchestrator, resolver, runner, trace })
     const locator = css('#target-1')
+    const otherLocator = css('#target-2')
+    const scrollPosition = { x: 10, y: 20 }
     const scenario = { steps: [{ action: 'click', target: locator }] }
+    const moveOptions = { timeout: 5, duration: 6 }
+    const clickOptions = { timeout: 10, force: true }
+    const clickCurrentOptions = { timeout: 11, button: 'primary' }
+    const doubleClickOptions = { timeout: 12, clickCount: 2 }
+    const focusOptions = { timeout: 13, focusVisible: true }
+    const typeOptions = { timeout: 14, delay: 1, focusStrategy: 'none' }
+    const typeIntoOptions = { timeout: 15, delay: 2 }
+    const fillOptions = { timeout: 16, clear: true }
+    const pressOptions = { timeout: 17, delay: 3 }
+    const scrollOptions = { timeout: 18, behavior: 'instant' }
+    const dragOptions = { timeout: 19, force: true }
+    const waitOptions = { timeout: 20 }
 
     await expect(actorble.resolve(locator, { strict: true })).resolves.toBe(target)
-    await expect(actorble.click(locator, { timeout: 10 })).resolves.toBeUndefined()
-    await expect(actorble.typeInto(locator, 'hello')).resolves.toBeUndefined()
-    await expect(actorble.waitFor(condition, { timeout: 20 })).resolves.toBeUndefined()
+    await expect(actorble.moveTo(locator, moveOptions)).resolves.toBeUndefined()
+    await expect(actorble.click(locator, clickOptions)).resolves.toBeUndefined()
+    await expect(actorble.clickCurrent(clickCurrentOptions)).resolves.toBeUndefined()
+    await expect(actorble.doubleClick(locator, doubleClickOptions)).resolves.toBeUndefined()
+    await expect(actorble.focus(locator, focusOptions)).resolves.toBeUndefined()
+    await expect(actorble.type('hello', typeOptions)).resolves.toBeUndefined()
+    await expect(actorble.typeInto(locator, 'hello', typeIntoOptions)).resolves.toBeUndefined()
+    await expect(actorble.fill(locator, 'filled', fillOptions)).resolves.toBeUndefined()
+    await expect(actorble.press('Shift+K', pressOptions)).resolves.toBeUndefined()
+    await expect(actorble.scrollTo(scrollPosition, scrollOptions)).resolves.toBeUndefined()
+    await expect(actorble.drag(locator, otherLocator, dragOptions)).resolves.toBeUndefined()
+    await expect(actorble.waitFor(condition, waitOptions)).resolves.toBeUndefined()
     await expect(actorble.run(scenario, { timeout: 30 })).resolves.toBeUndefined()
     actorble.pause()
     actorble.resume()
     actorble.stop()
 
     expect(resolver.resolve).toHaveBeenCalledWith(locator, { strict: true })
-    expect(orchestrator.click).toHaveBeenCalledWith(locator, { timeout: 10 })
-    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', undefined)
-    expect(orchestrator.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 })
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, moveOptions)
+    expect(orchestrator.click).toHaveBeenCalledWith(locator, clickOptions)
+    expect(orchestrator.clickCurrent).toHaveBeenCalledWith(clickCurrentOptions)
+    expect(orchestrator.doubleClick).toHaveBeenCalledWith(locator, doubleClickOptions)
+    expect(orchestrator.focus).toHaveBeenCalledWith(locator, focusOptions)
+    expect(orchestrator.type).toHaveBeenCalledWith('hello', typeOptions)
+    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', typeIntoOptions)
+    expect(orchestrator.fill).toHaveBeenCalledWith(locator, 'filled', fillOptions)
+    expect(orchestrator.press).toHaveBeenCalledWith('Shift+K', pressOptions)
+    expect(orchestrator.scrollTo).toHaveBeenCalledWith(scrollPosition, scrollOptions)
+    expect(orchestrator.drag).toHaveBeenCalledWith(locator, otherLocator, dragOptions)
+    expect(orchestrator.waitFor).toHaveBeenCalledWith(condition, waitOptions)
     expect(runner.run).toHaveBeenCalledWith(scenario, { timeout: 30 })
     expect(runner.pause).toHaveBeenCalledOnce()
     expect(runner.resume).toHaveBeenCalledOnce()

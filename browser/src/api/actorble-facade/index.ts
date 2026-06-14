@@ -140,43 +140,43 @@ export class Actorble {
     return this.#orchestrator.click(target, options)
   }
 
-  clickCurrent(_options?: ClickCurrentOptions): Promise<void> {
-    return notImplemented('Actorble Facade clickCurrent')
+  clickCurrent(options?: ClickCurrentOptions): Promise<void> {
+    return this.#orchestrator.clickCurrent(options)
   }
 
-  doubleClick(_target: TargetLike, _options?: ClickOptions): Promise<void> {
-    return notImplemented('Actorble Facade doubleClick')
+  doubleClick(target: TargetLike, options?: ClickOptions): Promise<void> {
+    return this.#orchestrator.doubleClick(target, options)
   }
 
-  focus(_target: TargetLike, _options?: FocusOptions): Promise<void> {
-    return notImplemented('Actorble Facade focus')
+  focus(target: TargetLike, options?: FocusOptions): Promise<void> {
+    return this.#orchestrator.focus(target, options)
   }
 
-  type(_text: string, _options?: TypeOptions): Promise<void> {
-    return notImplemented('Actorble Facade type')
+  type(text: string, options?: TypeOptions): Promise<void> {
+    return this.#orchestrator.type(text, options)
   }
 
   typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void> {
     return this.#orchestrator.typeInto(target, text, options)
   }
 
-  fill(_target: TargetLike, _text: string, _options?: FillOptions): Promise<void> {
-    return notImplemented('Actorble Facade fill')
+  fill(target: TargetLike, text: string, options?: FillOptions): Promise<void> {
+    return this.#orchestrator.fill(target, text, options)
   }
 
-  press(_keys: string, _options?: PressOptions): Promise<void> {
-    return notImplemented('Actorble Facade press')
+  press(keys: string, options?: PressOptions): Promise<void> {
+    return this.#orchestrator.press(keys, options)
   }
 
   scrollTo(
-    _targetOrPosition: TargetLike | ScrollPosition,
-    _options?: ScrollOptions,
+    targetOrPosition: TargetLike | ScrollPosition,
+    options?: ScrollOptions,
   ): Promise<void> {
-    return notImplemented('Actorble Facade scrollTo')
+    return this.#orchestrator.scrollTo(targetOrPosition, options)
   }
 
-  drag(_from: TargetLike, _to: TargetLike, _options?: DragOptions): Promise<void> {
-    return notImplemented('Actorble Facade drag')
+  drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void> {
+    return this.#orchestrator.drag(from, to, options)
   }
 
   async waitFor(condition: WaitCondition, options?: WaitOptions): Promise<void> {
