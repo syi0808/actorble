@@ -324,6 +324,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       options.wait ??
       new BrowserWaitObservationEngine({
         dom,
+        resolver: this.#resolver,
+        geometry,
+        interactability: this.#interactability,
         layoutInvalidation: options.layoutInvalidation,
         timeline,
         trace,

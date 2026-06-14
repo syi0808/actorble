@@ -2,9 +2,13 @@ import {
   ActorbleError,
   actorbleError,
   cancellationError,
+  element as elementLocator,
   timeoutError,
 } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
+import { BrowserGeometryEngine } from '../../targeting/geometry-engine/index.js'
+import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
+import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import type {
   LayoutInvalidationEvent,
@@ -14,10 +18,15 @@ import type {
   ActorbleErrorDetails,
   DomPort,
   DurationMs,
+  Locator,
+  TargetHandle,
   TargetLike,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
+import type { GeometryEngine } from '../../targeting/geometry-engine/index.js'
+import type { InteractabilityEngine, InteractabilityReport } from '../../targeting/interactability-engine/index.js'
+import type { TargetResolver } from '../../targeting/target-resolver/index.js'
 import type { TimelineEngine, WaitStrategy } from '../timeline-engine/index.js'
 
 export type WaitResult = Readonly<{
@@ -49,14 +58,38 @@ export type WaitTraceRecorder = Readonly<{
 
 export type WaitObservationEngineOptions = Readonly<{
   dom?: DomPort
+  resolver?: TargetResolver
+  geometry?: GeometryEngine
+  interactability?: InteractabilityEngine
   layoutInvalidation?: LayoutInvalidationTracker
   timeline?: TimelineEngine
   trace?: WaitTraceRecorder
   onGeometryInvalidated?: GeometryInvalidationHook
 }>
 
+type TargetWaitObservation = Readonly<{
+  state: 'visible' | 'hidden' | 'not-found' | 'detached' | 'stale'
+  target?: unknown
+  targetId?: string
+  errorCode?: ActorbleError['code']
+  errorDetails?: ActorbleErrorDetails
+  visible?: boolean
+  visibilityRatio?: number
+  blockingReasons?: readonly string[]
+}>
+
+type WaitAttemptDiagnostics = {
+  attempts: number
+  lastObservation?: TargetWaitObservation
+}
+
+type WaitErrorDetailsProvider = ActorbleErrorDetails | (() => ActorbleErrorDetails)
+
 export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #dom: DomPort
+  readonly #resolver: TargetResolver
+  readonly #geometry: GeometryEngine
+  readonly #interactability: InteractabilityEngine
   readonly #timeline: TimelineEngine
   readonly #trace?: WaitTraceRecorder
   readonly #onGeometryInvalidated?: GeometryInvalidationHook
@@ -65,6 +98,13 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   constructor(options: WaitObservationEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
+    this.#resolver =
+      options.resolver ?? new BrowserTargetResolver({ dom: this.#dom, clock: this.#timeline })
+    this.#geometry =
+      options.geometry ?? new BrowserGeometryEngine({ dom: this.#dom, clock: this.#timeline })
+    this.#interactability =
+      options.interactability ??
+      new BrowserInteractabilityEngine({ dom: this.#dom, geometry: this.#geometry })
     this.#trace = options.trace
     this.#onGeometryInvalidated = options.onGeometryInvalidated
     this.#layoutInvalidationSubscription = options.layoutInvalidation?.subscribe((event) => {
@@ -84,29 +124,36 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       timeout: options.timeout,
     })
 
+    const diagnostics: WaitAttemptDiagnostics = { attempts: 0 }
+    const details = () => conditionErrorDetails(condition, diagnostics)
+
     try {
       const result = await this.#withTimeout(
         operation,
         options,
-        { conditionKind: condition.kind },
-        (signal) => this.#waitForCondition(condition, signal),
+        details,
+        (signal) => this.#waitForCondition(condition, signal, diagnostics),
       )
 
       span?.event('wait:success', {
         condition: summarizeCondition(condition),
         strategy: result.strategy,
+        attempts: diagnostics.attempts,
+        lastObservation: diagnostics.lastObservation,
       })
       span?.end({
         conditionKind: condition.kind,
         satisfied: result.satisfied,
         strategy: result.strategy,
+        attempts: diagnostics.attempts,
+        ...(diagnostics.lastObservation === undefined
+          ? {}
+          : { lastObservation: diagnostics.lastObservation }),
       })
 
       return result
     } catch (error) {
-      const normalized = normalizeWaitError(error, operation, options.timeout, {
-        conditionKind: condition.kind,
-      })
+      const normalized = normalizeWaitError(error, operation, options.timeout, details())
 
       if (normalized.code === 'ACTION_TIMEOUT') {
         span?.event('wait:timeout', normalized.details)
@@ -174,8 +221,13 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   async #waitForCondition(
     condition: WaitCondition,
     signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
     assertNotCancelled('wait.for', signal)
+
+    if (condition.kind === 'visible' || condition.kind === 'hidden') {
+      return await this.#waitForTargetCondition(condition, signal, diagnostics)
+    }
 
     if (condition.kind !== 'custom') {
       throw actorbleError(
@@ -195,6 +247,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     for (;;) {
       assertNotCancelled('wait.for', signal)
       attempts += 1
+      diagnostics.attempts = attempts
 
       const satisfied = await condition.predicate()
 
@@ -216,10 +269,67 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
   }
 
+  async #waitForTargetCondition(
+    condition: Extract<WaitCondition, { kind: 'visible' | 'hidden' }>,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+  ): Promise<WaitResult> {
+    for (;;) {
+      assertNotCancelled('wait.for', signal)
+      diagnostics.attempts += 1
+
+      const observation = await this.#observeTarget(condition.target)
+      diagnostics.lastObservation = observation
+
+      assertNotCancelled('wait.for', signal)
+
+      if (isTargetConditionSatisfied(condition.kind, observation)) {
+        return {
+          condition,
+          satisfied: true,
+          strategy: 'settled',
+        }
+      }
+
+      this.#trace?.appendEvent?.('wait:retry', {
+        attempts: diagnostics.attempts,
+        condition: summarizeCondition(condition),
+        observation,
+      })
+      await this.#timeline.settle('settled', toCancellationOptions(signal))
+    }
+  }
+
+  async #observeTarget(target: TargetLike): Promise<TargetWaitObservation> {
+    try {
+      const handle = await this.#resolveTarget(target)
+      const snapshot = await this.#geometry.snapshot(handle)
+      const report = await this.#interactability.inspect(handle, snapshot)
+
+      return observationFromReport(report)
+    } catch (error) {
+      const observation = observationFromTargetError(error, target)
+
+      if (observation !== null) {
+        return observation
+      }
+
+      throw error
+    }
+  }
+
+  async #resolveTarget(target: TargetLike): Promise<TargetHandle> {
+    const handle = isTargetHandle(target)
+      ? target
+      : await this.#resolver.resolve(toLocator(target), {})
+
+    return await this.#resolver.validate(handle)
+  }
+
   #withTimeout<TValue>(
     operation: string,
     options: WaitOptions,
-    details: ActorbleErrorDetails,
+    details: WaitErrorDetailsProvider,
     run: (signal: WaitOptions['signal']) => Promise<TValue>,
   ): Promise<TValue> {
     if (options.timeout === undefined) {
@@ -234,7 +344,6 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
 
     const controller = new AbortController()
-    const timeoutFailure = timeoutError(operation, timeout, { details })
 
     return new Promise((resolve, reject) => {
       let timerId: ReturnType<typeof setTimeout> | null = null
@@ -275,13 +384,14 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       }
 
       timerId = setTimeout(() => {
+        const timeoutFailure = timeoutError(operation, timeout, { details: readDetails(details) })
         controller.abort(timeoutFailure)
         fail(timeoutFailure)
       }, timeout)
 
       signal?.addEventListener('abort', onAbort, { once: true })
       run(controller.signal).then(complete, (error) => {
-        fail(normalizeWaitError(error, operation, options.timeout, details))
+        fail(normalizeWaitError(error, operation, options.timeout, readDetails(details)))
       })
     })
   }
@@ -309,6 +419,24 @@ function assertNotCancelled(operation: string, signal: WaitOptions['signal']): v
 
 function toCancellationOptions(signal: WaitOptions['signal']): Pick<WaitOptions, 'signal'> {
   return signal === undefined ? {} : { signal }
+}
+
+function readDetails(details: WaitErrorDetailsProvider): ActorbleErrorDetails {
+  return typeof details === 'function' ? details() : details
+}
+
+function conditionErrorDetails(
+  condition: WaitCondition,
+  diagnostics: WaitAttemptDiagnostics,
+): ActorbleErrorDetails {
+  return {
+    conditionKind: condition.kind,
+    condition: summarizeCondition(condition),
+    attempts: diagnostics.attempts,
+    ...(diagnostics.lastObservation === undefined
+      ? {}
+      : { lastObservation: diagnostics.lastObservation }),
+  }
 }
 
 function finishSpanWithError(span: WaitTraceSpan | undefined, error: ActorbleError): void {
@@ -351,6 +479,91 @@ function normalizeWaitError(
   })
 }
 
+function isTargetConditionSatisfied(
+  kind: 'visible' | 'hidden',
+  observation: TargetWaitObservation,
+): boolean {
+  if (kind === 'visible') {
+    return observation.state === 'visible'
+  }
+
+  return observation.state !== 'visible'
+}
+
+function observationFromReport(report: InteractabilityReport): TargetWaitObservation {
+  return {
+    state: report.visible ? 'visible' : 'hidden',
+    target: summarizeTarget(report.target),
+    targetId: report.target.id,
+    visible: report.visible,
+    visibilityRatio: report.visibilityRatio,
+    blockingReasons: report.blockingReasons,
+  }
+}
+
+function observationFromTargetError(
+  error: unknown,
+  target: TargetLike,
+): TargetWaitObservation | null {
+  if (!(error instanceof ActorbleError)) {
+    return null
+  }
+
+  switch (error.code) {
+    case 'TARGET_NOT_FOUND':
+      return observationFromError('not-found', error, target)
+    case 'TARGET_DETACHED':
+      return observationFromError('detached', error, target)
+    case 'TARGET_STALE':
+      return observationFromError('stale', error, target)
+    default:
+      return null
+  }
+}
+
+function observationFromError(
+  state: TargetWaitObservation['state'],
+  error: ActorbleError,
+  target: TargetLike,
+): TargetWaitObservation {
+  return {
+    state,
+    target: summarizeTarget(target),
+    ...targetIdFromError(error, target),
+    errorCode: error.code,
+    ...(error.details === undefined ? {} : { errorDetails: error.details }),
+  }
+}
+
+function targetIdFromError(
+  error: ActorbleError,
+  target: TargetLike,
+): Readonly<{ targetId?: string }> {
+  if (typeof error.details?.targetId === 'string') {
+    return { targetId: error.details.targetId }
+  }
+
+  if (isTargetHandle(target)) {
+    return { targetId: target.id }
+  }
+
+  return {}
+}
+
+function toLocator(target: TargetLike): Locator {
+  if (isLocator(target)) {
+    return target
+  }
+
+  if (isElementTarget(target)) {
+    return elementLocator(target)
+  }
+
+  throw actorbleError('PLATFORM_UNSUPPORTED', 'Target handle must be validated, not resolved.', {
+    details: { target: summarizeTarget(target) },
+  })
+}
+
 function summarizeCondition(condition: WaitCondition): Readonly<Record<string, unknown>> {
   switch (condition.kind) {
     case 'custom':
@@ -389,6 +602,25 @@ function summarizeTarget(target: TargetLike): unknown {
   }
 
   return { kind: typeof target }
+}
+
+function isTargetHandle(target: TargetLike): target is TargetHandle {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    'id' in target &&
+    'element' in target &&
+    'resolvedAt' in target &&
+    'debug' in target
+  )
+}
+
+function isLocator(target: TargetLike): target is Locator {
+  return typeof target === 'object' && target !== null && 'kind' in target
+}
+
+function isElementTarget(target: TargetLike): target is Element {
+  return typeof Element !== 'undefined' && target instanceof Element
 }
 
 function rootKind(root: Document | ShadowRoot): 'document' | 'shadow-root' {

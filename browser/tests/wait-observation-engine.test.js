@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
-import { css } from '../src/shared/index.js'
+import { actorbleError, css } from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
   createWaitObservationEngine,
@@ -26,7 +26,92 @@ function traceClock() {
   }
 }
 
+function targetHandle(element, overrides = {}) {
+  return {
+    id: 'target-1',
+    element,
+    root: document,
+    resolvedAt: 0,
+    validity: 'live',
+    debug: {
+      selector: element.id ? `#${element.id}` : undefined,
+      description: element.tagName.toLowerCase(),
+    },
+    ...overrides,
+  }
+}
+
+function geometryFor(target) {
+  return {
+    target,
+    rect: { x: 10, y: 20, width: 100, height: 40 },
+    visibleRect: { x: 10, y: 20, width: 100, height: 40 },
+    center: { x: 60, y: 40 },
+    clickablePoint: {
+      ok: true,
+      point: { x: 60, y: 40 },
+      strategy: 'center',
+    },
+    coordinateSpace: 'viewport',
+    computedAt: 1000,
+  }
+}
+
+function interactabilityReportFor(target, overrides = {}) {
+  return {
+    target,
+    visible: true,
+    visibilityRatio: 1,
+    enabled: true,
+    editable: false,
+    focusable: false,
+    receivesPointerEvents: true,
+    canClick: true,
+    canFocus: false,
+    canType: false,
+    blockingReasons: [],
+    forceBypassedReasons: [],
+    unforceableReasons: [],
+    ...overrides,
+  }
+}
+
+function createObservationPorts(target, options = {}) {
+  const geometry = geometryFor(target)
+  const reports = [...(options.reports ?? [interactabilityReportFor(target)])]
+
+  return {
+    resolver: {
+      resolve: vi.fn(async () => target),
+      resolveAll: vi.fn(async () => [target]),
+      exists: vi.fn(async () => true),
+      inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
+      validate: vi.fn(async () => target),
+      ...options.resolver,
+    },
+    geometry: {
+      snapshot: vi.fn(async () => geometry),
+      getBoundingRect: vi.fn(() => geometry.rect),
+      getVisibleRect: vi.fn(() => geometry.visibleRect),
+      getCenter: vi.fn(() => geometry.center),
+      getClickablePoint: vi.fn(() => geometry.clickablePoint),
+      ...options.geometry,
+    },
+    interactability: {
+      inspect: vi.fn(async () => reports.shift() ?? reports.at(-1) ?? interactabilityReportFor(target)),
+      canClick: vi.fn(),
+      canFocus: vi.fn(),
+      canType: vi.fn(),
+      ...options.interactability,
+    },
+  }
+}
+
 describe('BrowserWaitObservationEngine', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -134,15 +219,220 @@ describe('BrowserWaitObservationEngine', () => {
     expect(condition.predicate).not.toHaveBeenCalled()
   })
 
-  it('reports unsupported declarative wait conditions explicitly', async () => {
-    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline() })
+  it('resolves and validates visible targets before inspecting visual visibility', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const timeline = createTimeline()
+    const ports = createObservationPorts(target)
+    const engine = new BrowserWaitObservationEngine({ timeline, ...ports })
+    const condition = { kind: 'visible', target: css('#save') }
 
-    await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        conditionKind: 'visible',
+    await expect(engine.waitFor(condition)).resolves.toEqual({
+      condition,
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(ports.resolver.resolve).toHaveBeenCalledWith(css('#save'), {})
+    expect(ports.resolver.validate).toHaveBeenCalledWith(target)
+    expect(ports.geometry.snapshot).toHaveBeenCalledWith(target)
+    expect(ports.interactability.inspect).toHaveBeenCalledWith(target, geometryFor(target))
+    expect(timeline.settle).not.toHaveBeenCalled()
+  })
+
+  it('retries visible waits across not-found and hidden observations until visible', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    let resolveAttempts = 0
+    const hiddenReport = interactabilityReportFor(target, {
+      visible: false,
+      visibilityRatio: 0,
+      blockingReasons: ['not-visible'],
+    })
+    const visibleReport = interactabilityReportFor(target)
+    const ports = createObservationPorts(target, {
+      reports: [hiddenReport, visibleReport],
+      resolver: {
+        resolve: vi.fn(async () => {
+          resolveAttempts += 1
+
+          if (resolveAttempts === 1) {
+            throw actorbleError('TARGET_NOT_FOUND', 'No target matched css("#save").')
+          }
+
+          return target
+        }),
       },
     })
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({ timeline, ...ports })
+
+    await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(ports.resolver.resolve).toHaveBeenCalledTimes(3)
+    expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
+    expect(ports.interactability.inspect).toHaveBeenCalledTimes(2)
+    expect(timeline.settle).toHaveBeenCalledTimes(2)
+  })
+
+  it('records timeout diagnostics for visible waits with the last observed target state', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const ports = createObservationPorts(target, {
+      reports: [
+        interactabilityReportFor(target, {
+          visible: false,
+          visibilityRatio: 0,
+          blockingReasons: ['not-visible'],
+        }),
+      ],
+    })
+    const timeline = createTimeline({
+      settle: vi.fn(() => new Promise(() => {})),
+    })
+    const trace = new BrowserDiagnosticsTrace({
+      clock: traceClock(),
+      idPrefix: 'trace',
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline, trace, ...ports })
+    const promise = engine.waitFor({ kind: 'visible', target: css('#save') }, { timeout: 25 })
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'wait.for',
+        timeout: 25,
+        conditionKind: 'visible',
+        attempts: 1,
+        lastObservation: expect.objectContaining({
+          state: 'hidden',
+          targetId: 'target-1',
+          visible: false,
+        }),
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    expect(trace.getTrace().events).toEqual([
+      expect.objectContaining({ name: 'wait:start' }),
+      expect.objectContaining({
+        name: 'wait:retry',
+        data: expect.objectContaining({
+          attempts: 1,
+          observation: expect.objectContaining({ state: 'hidden' }),
+        }),
+      }),
+      expect.objectContaining({
+        name: 'wait:timeout',
+        data: expect.objectContaining({
+          lastObservation: expect.objectContaining({ state: 'hidden' }),
+        }),
+      }),
+    ])
+  })
+
+  it('cancels visible waits before resolving when the signal is aborted', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const ports = createObservationPorts(target)
+    const controller = new AbortController()
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    controller.abort('scenario stopped')
+
+    await expect(
+      engine.waitFor({ kind: 'visible', target: css('#save') }, { signal: controller.signal }),
+    ).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: {
+        operation: 'wait.for',
+        reason: 'scenario stopped',
+      },
+    })
+    expect(ports.resolver.resolve).not.toHaveBeenCalled()
+  })
+
+  it('resolves hidden waits when a locator is not found without geometry reads', async () => {
+    document.body.innerHTML = '<main></main>'
+    const placeholder = targetHandle(document.body)
+    const ports = createObservationPorts(placeholder, {
+      resolver: {
+        resolve: vi.fn(async () => {
+          throw actorbleError('TARGET_NOT_FOUND', 'No target matched css("#toast").')
+        }),
+      },
+    })
+    const condition = { kind: 'hidden', target: css('#toast') }
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    await expect(engine.waitFor(condition)).resolves.toEqual({
+      condition,
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(ports.geometry.snapshot).not.toHaveBeenCalled()
+    expect(ports.interactability.inspect).not.toHaveBeenCalled()
+  })
+
+  it('resolves hidden waits when a handle is detached without geometry reads', async () => {
+    document.body.innerHTML = '<button id="toast">Toast</button>'
+    const toast = document.querySelector('#toast')
+    const target = targetHandle(toast)
+    const ports = createObservationPorts(target, {
+      resolver: {
+        validate: vi.fn(async () => {
+          throw actorbleError('TARGET_DETACHED', 'Target target-1 is detached.')
+        }),
+      },
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    await expect(engine.waitFor({ kind: 'hidden', target })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(ports.resolver.resolve).not.toHaveBeenCalled()
+    expect(ports.geometry.snapshot).not.toHaveBeenCalled()
+    expect(ports.interactability.inspect).not.toHaveBeenCalled()
+  })
+
+  it('retries hidden waits while the target is visible and completes when it becomes hidden', async () => {
+    document.body.innerHTML = '<button id="toast">Toast</button>'
+    const toast = document.querySelector('#toast')
+    const target = targetHandle(toast)
+    const ports = createObservationPorts(target, {
+      reports: [
+        interactabilityReportFor(target),
+        interactabilityReportFor(target, {
+          visible: false,
+          visibilityRatio: 0,
+          blockingReasons: ['not-visible'],
+        }),
+      ],
+    })
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({ timeline, ...ports })
+
+    await expect(engine.waitFor({ kind: 'hidden', target: css('#toast') })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
+    expect(ports.interactability.inspect).toHaveBeenCalledTimes(2)
+    expect(timeline.settle).toHaveBeenCalledOnce()
   })
 
   it('connects geometry invalidation reasons to the injected hook and diagnostics', () => {

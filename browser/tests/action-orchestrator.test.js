@@ -3162,7 +3162,7 @@ describe('BrowserActionOrchestrator', () => {
     await expect(orchestrator.waitFor(condition, { timeout: 10 })).resolves.toBe(result)
 
     expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 10 })
-    expect(trace.getTrace().spans.at(-1)).toEqual(
+    expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
       expect.objectContaining({
         name: 'action.waitFor',
         status: 'ok',
@@ -3171,6 +3171,48 @@ describe('BrowserActionOrchestrator', () => {
           completed: true,
           output: {
             conditionKind: 'custom',
+            satisfied: true,
+            strategy: 'settled',
+          },
+        }),
+      }),
+    )
+  })
+
+  it('default waitFor path supports visible conditions through target observation engines', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const dom = new BrowserDomAdapter(document)
+    vi.spyOn(dom, 'getBoundingClientRect').mockImplementation((element) =>
+      element === save
+        ? { x: 10, y: 20, width: 100, height: 40 }
+        : { x: 0, y: 0, width: 0, height: 0 },
+    )
+    vi.spyOn(dom, 'elementFromPoint').mockReturnValue(save)
+    const trace = createTrace()
+    const condition = { kind: 'visible', target: css('#save') }
+    const orchestrator = new BrowserActionOrchestrator({
+      dom,
+      timeline: createFrameTimeline(),
+      trace,
+      visualFeedback: { enabled: false },
+    })
+
+    await expect(orchestrator.waitFor(condition)).resolves.toEqual({
+      condition,
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
+      expect.objectContaining({
+        name: 'action.waitFor',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'waitFor',
+          completed: true,
+          output: {
+            conditionKind: 'visible',
             satisfied: true,
             strategy: 'settled',
           },
