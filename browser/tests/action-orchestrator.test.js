@@ -2226,7 +2226,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showClick).toHaveBeenCalledTimes(1)
   })
 
-  it('stores target-anchor cursor visual mode with command ids for pointer-producing commands', async () => {
+  it('keeps pointer-producing command visuals as free points during dispatch and anchors after success', async () => {
     const pointerVisual = createPointerVisualTrackerDouble()
     const { orchestrator, target } = createHarness({ pointerVisual })
 
@@ -2235,11 +2235,33 @@ describe('BrowserActionOrchestrator', () => {
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
     ).resolves.toBeUndefined()
 
-    const targetAnchorModes = pointerVisual.setMode.mock.calls
-      .map(([mode]) => mode)
-      .filter((mode) => mode.kind === 'targetAnchor')
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
+    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
+    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor')
 
-    expect(targetAnchorModes).toHaveLength(4)
+    expect(freePointModes).toEqual([
+      {
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
+        pressed: false,
+      },
+      {
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
+        pressed: false,
+      },
+      {
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
+        pressed: true,
+      },
+      {
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
+        pressed: false,
+      },
+    ])
+    expect(targetAnchorModes).toHaveLength(2)
     expect(targetAnchorModes[0]).toMatchObject({
       kind: 'targetAnchor',
       target,
@@ -2254,21 +2276,46 @@ describe('BrowserActionOrchestrator', () => {
       pressed: false,
       lastPoint: { x: 20, y: 30 },
     })
-    expect(targetAnchorModes[2]).toMatchObject({
-      kind: 'targetAnchor',
-      commandId: 2,
-      pressed: true,
-      lastPoint: { x: 20, y: 30 },
-    })
-    expect(targetAnchorModes[3]).toMatchObject({
-      kind: 'targetAnchor',
-      commandId: 2,
-      pressed: false,
-      lastPoint: { x: 20, y: 30 },
-    })
   })
 
-  it('clears target-anchor cursor follow state when pointer perform is cancelled', async () => {
+  it('keeps timed pointer movement modes on free point coordinates until success', async () => {
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const timeline = createFrameTimeline()
+    const { orchestrator } = createHarness({
+      pointerVisual,
+      timeline,
+      useRealGesture: true,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
+    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
+    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor')
+
+    expect(freePointModes).toEqual([
+      {
+        kind: 'freePoint',
+        point: { x: 10, y: 15 },
+        pressed: false,
+      },
+      {
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
+        pressed: false,
+      },
+    ])
+    expect(targetAnchorModes).toEqual([
+      expect.objectContaining({
+        kind: 'targetAnchor',
+        commandId: 1,
+        pressed: false,
+        lastPoint: { x: 20, y: 30 },
+      }),
+    ])
+  })
+
+  it('clears free-point cursor follow state when pointer perform is cancelled', async () => {
     const pointerVisual = createPointerVisualTrackerDouble()
     const { orchestrator } = createHarness({
       pointerVisual,
@@ -2281,10 +2328,13 @@ describe('BrowserActionOrchestrator', () => {
 
     expect(pointerVisual.setMode).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'targetAnchor',
-        commandId: 1,
+        kind: 'freePoint',
+        point: { x: 20, y: 30 },
         pressed: true,
       }),
+    )
+    expect(pointerVisual.setMode.mock.calls.map(([mode]) => mode.kind)).not.toContain(
+      'targetAnchor',
     )
     expect(pointerVisual.clear).toHaveBeenCalled()
   })

@@ -1307,7 +1307,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#signalContext = context
 
     try {
-      return await operation()
+      const result = await operation()
+
+      this.#anchorPointerCursor(context)
+
+      return result
     } finally {
       this.#signalContext = previousContext
     }
@@ -1397,7 +1401,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           signal.point,
           eventTarget,
           pressed,
-          context.commandId,
           pointerHit.target ?? eventTarget,
         )
         this.#events.dispatchPointerEvent({
@@ -1414,7 +1417,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           signal.point,
           eventTarget,
           this.#hasPressedCursorButtons(),
-          context.commandId,
           pointerHit.target ?? eventTarget,
         )
         this.#startDragState(context)
@@ -1442,7 +1444,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           signal.point,
           eventTarget,
           this.#hasPressedCursorButtons(),
-          context.commandId,
           pointerHit.target ?? eventTarget,
         )
         const allowed = this.#events.dispatchPointerEvent({
@@ -1891,7 +1892,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     point: Point,
     target: TargetHandle,
     pressed = this.#hasPressedCursorButtons(),
-    commandId?: number,
     cursorTarget: TargetHandle = target,
   ): void {
     if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
@@ -1900,22 +1900,27 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     const visualPoint = this.#renderPointerCursor(point, cursorTarget, pressed)
 
-    if (commandId === undefined) {
-      this.#setPointerVisualMode({
-        kind: 'freePoint',
-        point: visualPoint,
-        pressed,
-      })
+    this.#setPointerVisualMode({
+      kind: 'freePoint',
+      point: visualPoint,
+      pressed,
+    })
+  }
+
+  #anchorPointerCursor(context: PointerSignalContext): void {
+    const state = this.#cursorVisualState
+
+    if (!state || !this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
       return
     }
 
     this.#setPointerVisualMode({
       kind: 'targetAnchor',
-      target,
+      target: state.target,
       anchor: { kind: 'clickablePoint' },
-      commandId,
-      pressed,
-      lastPoint: visualPoint,
+      commandId: context.commandId,
+      pressed: state.pressed,
+      lastPoint: state.point,
     })
   }
 
