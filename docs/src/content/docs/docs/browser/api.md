@@ -317,6 +317,63 @@ getTrace(): Trace
 
 Returns trace spans, events, snapshots, and warnings recorded by the facade modules.
 
+### actorble.on
+
+```ts
+on(event: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+```
+
+Subscribes to future diagnostics trace events by exact event name. Existing events in `getTrace().events` are not replayed.
+
+```ts
+actorble.on('action:failure', (event) => {
+  console.log(event.name, event.at, event.spanId, event.data)
+})
+```
+
+`TraceEvent` has a stable top-level shape:
+
+```ts
+type TraceEvent = {
+  name: DebugEventName
+  at: TimestampMs
+  spanId?: string
+  data?: unknown
+}
+```
+
+Supported event names currently emitted by the browser runtime are:
+
+- `action:cleanup-failed`
+- `action:failure`
+- `current-target:resolved`
+- `current-target:validate`
+- `geometry:invalidate`
+- `layout:invalidate`
+- `pointer:fresh-geometry`
+- `pointer:synthetic-drag`
+- `pseudo:mirror:apply`
+- `pseudo:mirror:clear`
+- `pseudo:mirror:stylesheet-scan`
+- `pseudo:mirror:warning`
+- `scenario:pause`
+- `scenario:resume`
+- `surface:scrolled`
+- `wait:retry`
+- `wait:start`
+- `wait:success`
+- `wait:timeout`
+
+Event-specific `data` objects may gain additive fields, but existing fields for these events are kept stable.
+
+### actorble.off
+
+```ts
+off(event: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+```
+
+Removes a previously registered exact-name listener. Calling `off()` for an unknown listener is a no-op. `destroy()` removes facade-registered listeners so they are not called after teardown.
+
 ### actorble.destroy
 
 ```ts
@@ -324,25 +381,6 @@ destroy(): void
 ```
 
 Stops scenario execution, disposes layout invalidation tracking, clears visual feedback, and destroys the visual layer.
-
-### Planned facade methods
-
-These methods exist on the class shape but currently return `NOT_IMPLEMENTED`.
-
-```ts
-clickCurrent(options?: ClickCurrentOptions): Promise<void>
-doubleClick(target: TargetLike, options?: ClickOptions): Promise<void>
-focus(target: TargetLike, options?: FocusOptions): Promise<void>
-type(text: string, options?: TypeOptions): Promise<void>
-fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
-press(keys: string, options?: PressOptions): Promise<void>
-scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
-drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
-on(event: DebugEventName, listener: ActorbleListener): void
-off(event: DebugEventName, listener: ActorbleListener): void
-```
-
-Do not treat these as ready facade APIs until the implementation delegates to the orchestrator.
 
 ## Locator helpers
 

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { actorbleError } from '../src/shared/index.js'
 import { BrowserDiagnosticsTrace, createDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 
@@ -112,6 +112,79 @@ describe('diagnostics trace', () => {
     ])
     expect(snapshot.events).toHaveLength(2)
     expect(trace.getTrace().events).toHaveLength(3)
+  })
+
+  it('notifies exact-name event subscribers for future trace events until removed', () => {
+    const trace = createDiagnosticsTrace({
+      clock: deterministicClock(3000),
+      idPrefix: 'trace',
+    })
+    const scenarioListener = vi.fn()
+    const pointerListener = vi.fn()
+
+    trace.on('scenario:start', scenarioListener)
+    trace.on('pointer:down', pointerListener)
+
+    trace.appendEvent('scenario:start', { scenarioId: 's1' })
+    const span = trace.startSpan('pointer.click')
+    span.event('pointer:down', { button: 'primary' })
+
+    trace.off('scenario:start', scenarioListener)
+    trace.appendEvent('scenario:start', { scenarioId: 's2' })
+
+    expect(scenarioListener).toHaveBeenCalledOnce()
+    expect(scenarioListener).toHaveBeenCalledWith({
+      name: 'scenario:start',
+      at: 3000,
+      data: { scenarioId: 's1' },
+    })
+    expect(pointerListener).toHaveBeenCalledOnce()
+    expect(pointerListener).toHaveBeenCalledWith({
+      name: 'pointer:down',
+      at: 3002,
+      spanId: 'trace-1',
+      data: { button: 'primary' },
+    })
+  })
+
+  it('delivers shallow event copies and isolates listener errors', () => {
+    const trace = createDiagnosticsTrace({
+      clock: deterministicClock(4000),
+    })
+    const mutatingListener = vi.fn((event) => {
+      event.name = 'mutated'
+      event.spanId = 'mutated-span'
+    })
+    const failingListener = vi.fn(() => {
+      throw new Error('listener failed')
+    })
+    const laterListener = vi.fn()
+
+    trace.on('scenario:start', mutatingListener)
+    trace.on('scenario:start', failingListener)
+    trace.on('scenario:start', laterListener)
+
+    trace.appendEvent('scenario:start', { scenarioId: 's1' })
+
+    expect(trace.getTrace().events).toEqual([
+      { name: 'scenario:start', at: 4000, data: { scenarioId: 's1' } },
+    ])
+    expect(failingListener).toHaveBeenCalledOnce()
+    expect(laterListener).toHaveBeenCalledWith({
+      name: 'scenario:start',
+      at: 4000,
+      data: { scenarioId: 's1' },
+    })
+    expect(trace.getTrace().warnings).toEqual([
+      {
+        message: 'Trace event listener failed.',
+        at: 4001,
+        details: {
+          eventName: 'scenario:start',
+          error: 'listener failed',
+        },
+      },
+    ])
   })
 
   it('keeps the diagnostics trace boundary limited to shared primitives', async () => {

@@ -1,4 +1,5 @@
 import type {
+  ActorbleListener,
   ActorbleError,
   ActorbleErrorDetails,
   Clock,
@@ -64,7 +65,12 @@ export interface TraceReader {
   getTrace(): Trace
 }
 
-export interface TraceCollector extends SpanRecorder, TraceReader {}
+export interface TraceEventSubscriber {
+  on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+  off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+}
+
+export interface TraceCollector extends SpanRecorder, TraceReader, TraceEventSubscriber {}
 
 export type DiagnosticsTraceOptions = Readonly<{
   clock?: Clock
@@ -103,6 +109,10 @@ function cloneSpan(span: MutableTraceSpan): TraceSpan {
   return { ...span }
 }
 
+function cloneEvent(event: TraceEvent): TraceEvent {
+  return { ...event }
+}
+
 export class BrowserDiagnosticsTrace implements TraceCollector {
   readonly #clock: Clock
   readonly #idPrefix: string
@@ -112,6 +122,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
   readonly #snapshots: TraceSnapshot[] = []
   readonly #warnings: TraceWarning[] = []
   readonly #openSpanIds: string[] = []
+  readonly #eventListeners = new Map<DebugEventName, Set<ActorbleListener<TraceEvent>>>()
 
   constructor(options: DiagnosticsTraceOptions = {}) {
     this.#clock = options.clock ?? defaultClock
@@ -156,6 +167,27 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
     this.#appendEvent(name, data)
   }
 
+  on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
+    const listeners = this.#eventListeners.get(name) ?? new Set<ActorbleListener<TraceEvent>>()
+
+    listeners.add(listener)
+    this.#eventListeners.set(name, listeners)
+  }
+
+  off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
+    const listeners = this.#eventListeners.get(name)
+
+    if (listeners === undefined) {
+      return
+    }
+
+    listeners.delete(listener)
+
+    if (listeners.size === 0) {
+      this.#eventListeners.delete(name)
+    }
+  }
+
   attachSnapshot(name: string, data: unknown): void {
     this.#snapshots.push({
       name,
@@ -175,19 +207,41 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
   getTrace(): Trace {
     return {
       spans: this.#spans.map(cloneSpan),
-      events: this.#events.map((event) => ({ ...event })),
+      events: this.#events.map(cloneEvent),
       snapshots: this.#snapshots.map((snapshot) => ({ ...snapshot })),
       warnings: this.#warnings.map((warning) => ({ ...warning })),
     }
   }
 
   #appendEvent(name: DebugEventName, data?: unknown, spanId?: string): void {
-    this.#events.push({
+    const event: TraceEvent = {
       name,
       at: this.#clock.now(),
       ...(spanId === undefined ? {} : { spanId }),
       ...(data === undefined ? {} : { data }),
-    })
+    }
+
+    this.#events.push(event)
+    this.#emitEvent(event)
+  }
+
+  #emitEvent(event: TraceEvent): void {
+    const listeners = this.#eventListeners.get(event.name)
+
+    if (listeners === undefined) {
+      return
+    }
+
+    for (const listener of [...listeners]) {
+      try {
+        listener(cloneEvent(event))
+      } catch (error) {
+        this.warn('Trace event listener failed.', {
+          eventName: event.name,
+          error: describeUnknownError(error),
+        })
+      }
+    }
   }
 
   #finishSpan(
@@ -219,4 +273,12 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
 
 export function createDiagnosticsTrace(options: DiagnosticsTraceOptions = {}): TraceCollector {
   return new BrowserDiagnosticsTrace(options)
+}
+
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return String(error)
 }

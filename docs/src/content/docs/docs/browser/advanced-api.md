@@ -361,7 +361,7 @@ function createVisualLayer(options?: VisualLayerOptions): VisualLayer
 ## Diagnostics trace
 
 ```ts
-interface TraceCollector extends SpanRecorder, TraceReader {}
+interface TraceCollector extends SpanRecorder, TraceReader, TraceEventSubscriber {}
 
 interface SpanRecorder {
   startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle
@@ -373,6 +373,18 @@ interface SpanRecorder {
 interface TraceReader {
   getTrace(): Trace
 }
+
+interface TraceEventSubscriber {
+  on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+  off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+}
+
+type TraceEvent = {
+  name: DebugEventName
+  at: TimestampMs
+  spanId?: string
+  data?: unknown
+}
 ```
 
 Exports:
@@ -381,6 +393,8 @@ Exports:
 class BrowserDiagnosticsTrace implements TraceCollector
 function createDiagnosticsTrace(options?: DiagnosticsTraceOptions): TraceCollector
 ```
+
+Trace event subscriptions are exact-name subscriptions for future events only. They do not replay `getTrace().events`; callers should use `off()` or facade `destroy()` cleanup to release listeners.
 
 ## CapabilityFidelityReporter
 

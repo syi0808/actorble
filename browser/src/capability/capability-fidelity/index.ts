@@ -130,6 +130,6 @@ const browserFidelityReport: FidelityReport = {
     'Cross-origin frames and closed shadow roots cannot be inspected from in-page JavaScript.',
     'Synthetic pointer drag is supported through pointer move/down/move/up DOM events.',
     'HTML5 DataTransfer drag/drop, native trusted drag/drop, editor selection drag, and custom drag adapters are not implemented yet.',
-    'Debug event subscription APIs on/off are not implemented yet; use getTrace() for diagnostics snapshots.',
+    'Debug event subscriptions are exact-name trace event subscriptions; span lifecycle snapshots are available through getTrace().',
   ],
 }

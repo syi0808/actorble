@@ -477,32 +477,71 @@ describe('Actorble facade', () => {
     )
   })
 
-  it('reports unsupported debug event subscriptions with the trace fallback', () => {
+  it('subscribes external listeners to runtime trace events until removed', async () => {
+    const button = document.createElement('button')
+    button.id = 'blocked-subscription'
+    button.disabled = true
+    button.scrollIntoView = vi.fn()
+    button.getBoundingClientRect = vi.fn(() => ({
+      x: 15,
+      y: 25,
+      width: 50,
+      height: 20,
+      top: 25,
+      left: 15,
+      right: 65,
+      bottom: 45,
+      toJSON: () => {},
+    }))
+    document.body.append(button)
+    document.elementFromPoint = vi.fn(() => button)
     const actorble = createActorble()
     const listener = vi.fn()
 
-    expect(() => actorble.on('action:failure', listener)).toThrowError(
+    actorble.on('action:failure', listener)
+
+    await expect(actorble.click(css('#blocked-subscription'))).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+    })
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
-        code: 'PLATFORM_UNSUPPORTED',
-        details: {
-          boundary: 'actorble-facade',
-          action: 'on',
-          capability: 'debug-event-subscription',
-          limit: 'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
-        },
+        name: 'action:failure',
+        spanId: expect.any(String),
+        data: expect.objectContaining({
+          action: 'click',
+          phase: 'preflight',
+          code: 'INTERACTABILITY_FAILED',
+        }),
       }),
     )
-    expect(() => actorble.off('action:failure', listener)).toThrowError(
-      expect.objectContaining({
-        code: 'PLATFORM_UNSUPPORTED',
-        details: {
-          boundary: 'actorble-facade',
-          action: 'off',
-          capability: 'debug-event-subscription',
-          limit: 'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
-        },
-      }),
-    )
+
+    actorble.off('action:failure', listener)
+
+    await expect(actorble.click(css('#blocked-subscription'))).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+    })
+
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('detaches facade listener registrations during destroy', () => {
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'facade' })
+    const actorble = createActorble({ trace })
+    const listener = vi.fn()
+
+    actorble.on('scenario:pause', listener)
+    trace.appendEvent('scenario:pause', { currentStepIndex: 0 })
+    actorble.destroy()
+    trace.appendEvent('scenario:pause', { currentStepIndex: 1 })
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener).toHaveBeenCalledWith({
+      name: 'scenario:pause',
+      at: expect.any(Number),
+      data: { currentStepIndex: 0 },
+    })
   })
 
   it('uses quiet cursor-only feedback for visual true without changing click behavior', async () => {

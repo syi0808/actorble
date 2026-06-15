@@ -8,7 +8,6 @@ import { BrowserScenarioRunner } from '../../runtime/scenario-runner/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
-import { actorbleError } from '../../shared/index.js'
 import type { ActionOrchestrator } from '../../runtime/action-orchestrator/index.js'
 import type {
   CapabilityFidelityReporter,
@@ -16,7 +15,7 @@ import type {
   FidelityReport,
   VisualOverlayFidelity,
 } from '../../capability/capability-fidelity/index.js'
-import type { Trace, TraceCollector } from '../../diagnostics/diagnostics-trace/index.js'
+import type { Trace, TraceCollector, TraceEvent } from '../../diagnostics/diagnostics-trace/index.js'
 import type { GeometryEngine, GeometrySnapshot } from '../../targeting/geometry-engine/index.js'
 import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
 import type { DomPort } from '../../shared/index.js'
@@ -70,6 +69,8 @@ export class Actorble {
   readonly #trace: TraceCollector
   readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #visual?: VisualLayer
+  readonly #traceListeners = new Map<DebugEventName, Set<ActorbleListener<TraceEvent>>>()
+  #destroyed = false
 
   constructor(readonly options: ActorbleFacadeOptions = {}) {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
@@ -200,6 +201,12 @@ export class Actorble {
   }
 
   destroy(): void {
+    if (this.#destroyed) {
+      return
+    }
+
+    this.#destroyed = true
+    this.#detachTraceListeners()
     this.#runner.stop()
     this.#layoutInvalidation.dispose()
 
@@ -225,12 +232,45 @@ export class Actorble {
     return this.#trace.getTrace()
   }
 
-  on(_event: DebugEventName, _listener: ActorbleListener): void {
-    throw unsupportedDebugEventSubscription('on')
+  on(event: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
+    if (this.#destroyed) {
+      return
+    }
+
+    this.#trace.on(event, listener)
+    const listeners = this.#traceListeners.get(event) ?? new Set<ActorbleListener<TraceEvent>>()
+
+    listeners.add(listener)
+    this.#traceListeners.set(event, listeners)
   }
 
-  off(_event: DebugEventName, _listener: ActorbleListener): void {
-    throw unsupportedDebugEventSubscription('off')
+  off(event: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
+    if (this.#destroyed) {
+      return
+    }
+
+    this.#trace.off(event, listener)
+    const listeners = this.#traceListeners.get(event)
+
+    if (listeners === undefined) {
+      return
+    }
+
+    listeners.delete(listener)
+
+    if (listeners.size === 0) {
+      this.#traceListeners.delete(event)
+    }
+  }
+
+  #detachTraceListeners(): void {
+    for (const [event, listeners] of this.#traceListeners) {
+      for (const listener of listeners) {
+        this.#trace.off(event, listener)
+      }
+    }
+
+    this.#traceListeners.clear()
   }
 }
 
@@ -349,22 +389,6 @@ function describeUnknownError(error: unknown): string {
   }
 
   return String(error)
-}
-
-function unsupportedDebugEventSubscription(action: 'on' | 'off'): Error {
-  return actorbleError(
-    'PLATFORM_UNSUPPORTED',
-    'Debug event subscriptions are not implemented yet.',
-    {
-      details: {
-        boundary: 'actorble-facade',
-        action,
-        capability: 'debug-event-subscription',
-        limit:
-          'Debug event subscriptions are not implemented yet; use getTrace() for diagnostics snapshots.',
-      },
-    },
-  )
 }
 
 function isVisualLayer(visual: ActorbleFacadeOptions['visual']): visual is VisualLayer {
