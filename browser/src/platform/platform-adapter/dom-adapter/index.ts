@@ -227,7 +227,11 @@ export class BrowserDomAdapter implements DomAdapter {
       reason: LayoutInvalidationReason,
       options?: AddEventListenerOptions,
     ) => {
-      const handler = () => {
+      const handler = (event: Event) => {
+        if (isInternalLayoutInvalidationTarget(event.target)) {
+          return
+        }
+
         listener(reason)
       }
 
@@ -255,7 +259,11 @@ export class BrowserDomAdapter implements DomAdapter {
     const MutationObserverCtor = (ownerWindow as MutationObserverOwner).MutationObserver
 
     if (typeof MutationObserverCtor === 'function') {
-      const observer = new MutationObserverCtor(() => {
+      const observer = new MutationObserverCtor((records) => {
+        if (records.every(isInternalMutationRecord)) {
+          return
+        }
+
         listener('mutation')
       })
       observer.observe(root, {
@@ -302,6 +310,38 @@ const internalSelectors = [
   '[data-stuntman-internal]',
   '[data-stuntman-overlay-root]',
 ].join(',')
+
+function isInternalLayoutInvalidationTarget(target: EventTarget | null): boolean {
+  return isElementNode(target) && isInternalElement(target)
+}
+
+function isInternalMutationRecord(record: MutationRecord): boolean {
+  if (isInternalMutationTarget(record.target)) {
+    return true
+  }
+
+  if (record.type !== 'childList') {
+    return false
+  }
+
+  const changedNodes = [...record.addedNodes, ...record.removedNodes]
+
+  return changedNodes.length > 0 && changedNodes.every(isInternalMutationTarget)
+}
+
+function isInternalMutationTarget(target: Node): boolean {
+  return isElementNode(target) ? isInternalElement(target) : hasInternalParent(target)
+}
+
+function isInternalElement(element: Element): boolean {
+  return element.closest(internalSelectors) !== null
+}
+
+function hasInternalParent(node: Node): boolean {
+  const parent = node.parentNode
+
+  return isElementNode(parent) && isInternalElement(parent)
+}
 
 function getGlobalDocument(): Document {
   if (globalThis.document) {
@@ -371,8 +411,13 @@ function parentOrShadowHost(node: Node): Node | null {
   return isShadowRootNode(root) ? root.host : null
 }
 
-function isElementNode(node: ParentNode): node is Element {
-  return node.nodeType === 1
+function isElementNode(node: unknown): node is Element {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    (node as Node).nodeType === 1 &&
+    typeof (node as Element).closest === 'function'
+  )
 }
 
 function isShadowRootNode(node: Node): node is ShadowRoot {

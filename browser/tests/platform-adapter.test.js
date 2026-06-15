@@ -17,6 +17,11 @@ function targetHandle(id, element) {
   }
 }
 
+async function flushDomObservers() {
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('BrowserDomAdapter', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -144,6 +149,43 @@ describe('BrowserDomAdapter', () => {
     scrollbox.dispatchEvent(new Event('scroll', { bubbles: true }))
 
     expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores actorble internal visual invalidations while preserving app invalidations', async () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="target"></div>
+      </main>
+    `
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+    const subscription = adapter.observeLayoutInvalidations(listener)
+    const overlay = document.createElement('div')
+    const cursor = document.createElement('div')
+    const target = document.querySelector('#target')
+
+    overlay.setAttribute('data-actorble-overlay-root', '')
+    overlay.setAttribute('data-actorble-internal', '')
+    cursor.setAttribute('data-actorble-internal', '')
+
+    document.body.append(overlay)
+    overlay.append(cursor)
+    cursor.setAttribute('data-actorble-visual-cursor', '')
+    cursor.style.left = '10px'
+    cursor.dispatchEvent(new Event('transitionrun', { bubbles: true }))
+    await flushDomObservers()
+
+    expect(listener).not.toHaveBeenCalled()
+
+    target.setAttribute('data-state', 'ready')
+    await flushDomObservers()
+    expect(listener).toHaveBeenCalledWith('mutation')
+
+    listener.mockClear()
+    target.dispatchEvent(new Event('transitionrun', { bubbles: true }))
+    expect(listener).toHaveBeenCalledWith('animation-frame')
+
+    subscription.dispose()
   })
 })
 
