@@ -277,6 +277,8 @@ export function mountTaskExample(options: TaskExampleOptions): void {
       'mouseup',
       'click',
       'focus',
+      'keydown',
+      'keyup',
       'beforeinput',
       'input',
       'change',

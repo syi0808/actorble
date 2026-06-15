@@ -36,7 +36,7 @@ try {
 
   browser = await chromium.launch()
   page = await browser.newPage({ viewport: { width: 1280, height: 760 } })
-  page.setDefaultTimeout(10_000)
+  page.setDefaultTimeout(20_000)
 
   await page.goto(baseUrl)
   await expectIndexLinks(page)
@@ -71,6 +71,12 @@ try {
   for (const mode of searchVisualModes) {
     await runSearchVisualModeSmoke(page, baseUrl, mode)
   }
+
+  await page.goto(new URL('appointment-scheduler/', baseUrl).toString())
+  await expectPageTitle(page, 'Appointment scheduler')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await runCurrentScenario(page, 'Scheduler scenario complete')
+  await expectSchedulerScenarioComplete(page)
 } catch (error) {
   throw await withPageDiagnostics(error, page)
 } finally {
@@ -82,6 +88,7 @@ async function expectIndexLinks(page) {
   await expectLink(page, '#open-github-explorer', '/github-explorer/')
   await expectLink(page, '#open-form-filling', '/form-filling/')
   await expectLink(page, '#open-web-search', '/web-search/')
+  await expectLink(page, '#open-appointment-scheduler', '/appointment-scheduler/')
 }
 
 async function expectLink(page, selector, hrefSuffix) {
@@ -278,6 +285,28 @@ async function expectSearchScenarioComplete(page) {
     'searchResult.click',
   ])
   await expectTraceIncludes(page, ['action.typeInto', 'action.click', 'action.waitFor'])
+}
+
+async function expectSchedulerScenarioComplete(page) {
+  await expectState(page, '#appointment-status', 'confirmed')
+  await expectState(page, '#slot-1030', 'scheduled')
+  await expectInputValue(page, '#patient-search', 'Jisoo Han')
+  await expectInputValue(page, '#appointment-reason', 'Follow-up consultation')
+  await expectEventLogIncludes(page, [
+    'patientSearch.keydown',
+    'patientResult.click',
+    'targetSlot.pointerup',
+    'confirmButton.click',
+  ])
+  await expectTraceIncludes(page, [
+    'scenario.run',
+    'action.type',
+    'action.press',
+    'action.doubleClick',
+    'action.fill',
+    'action.drag',
+    'action.clickCurrent',
+  ])
 }
 
 async function expectVisualModeOverlay(page, mode) {

@@ -123,7 +123,7 @@ export function setBusy(button: HTMLButtonElement, busy: boolean): void {
 }
 
 export function renderTrace(trace: Trace, target: HTMLElement): void {
-  const spans = trace.spans.slice(-20).reverse()
+  const spans = trace.spans.slice().reverse()
 
   target.innerHTML =
     spans.length === 0

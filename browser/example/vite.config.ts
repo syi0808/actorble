@@ -15,6 +15,9 @@ export default defineConfig({
         formFilling: fileURLToPath(
           new URL('form-filling/index.html', import.meta.url),
         ),
+        appointmentScheduler: fileURLToPath(
+          new URL('appointment-scheduler/index.html', import.meta.url),
+        ),
         webSearch: fileURLToPath(
           new URL('web-search/index.html', import.meta.url),
         ),
