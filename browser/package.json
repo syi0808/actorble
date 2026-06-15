@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "bench": "vitest bench --run --config vitest.bench.config.mjs",
     "build": "tsc -p tsconfig.json",
     "example:build": "vite build --config example/vite.config.ts",
     "example:dev": "vite --config example/vite.config.ts --host 127.0.0.1",
