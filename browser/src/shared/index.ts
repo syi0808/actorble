@@ -668,6 +668,24 @@ export type ScenarioPressStep = Readonly<{
   options?: ScenarioStepOptions<PressOptions>
 }>
 
+export type ScenarioScrollToTargetStep = Readonly<{
+  id?: string
+  action: 'scrollTo'
+  target: TargetLike
+  input?: never
+  options?: ScenarioStepOptions<ScrollOptions>
+}>
+
+export type ScenarioScrollToPositionStep = Readonly<{
+  id?: string
+  action: 'scrollTo'
+  input: ScrollPosition
+  target?: never
+  options?: ScenarioStepOptions<ScrollOptions>
+}>
+
+export type ScenarioScrollToStep = ScenarioScrollToTargetStep | ScenarioScrollToPositionStep
+
 export type ScenarioWaitForStep = Readonly<{
   id?: string
   action: 'waitFor'
@@ -689,6 +707,7 @@ export type ScenarioStep =
   | ScenarioTypeIntoStep
   | ScenarioFillStep
   | ScenarioPressStep
+  | ScenarioScrollToStep
   | ScenarioWaitForStep
   | ScenarioDelayStep
 

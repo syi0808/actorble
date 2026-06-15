@@ -19,7 +19,10 @@ import type {
   RunOptions,
   Scenario,
   ScenarioDelayStep,
+  ScenarioScrollToStep,
   ScenarioStep,
+  ScrollOptions,
+  ScrollPosition,
   TargetLike,
   TypeOptions,
   WaitCondition,
@@ -272,6 +275,8 @@ export class BrowserScenarioRunner implements ScenarioRunner {
       case 'press':
         assertStringInput(step.input, step.action, stepIndex)
         return this.#orchestrator.press(step.input, withSignal(step.options, signal))
+      case 'scrollTo':
+        return this.#executeScrollToStep(step, stepIndex, signal)
       case 'waitFor':
         assertWaitCondition(step.input, step.action, stepIndex)
         return this.#orchestrator
@@ -281,6 +286,20 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         return this.#executeDelayStep(step, stepIndex, signal)
       default:
         throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex)
+    }
+  }
+
+  async #executeScrollToStep(
+    step: ScenarioScrollToStep,
+    stepIndex: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const targetOrPosition = scrollToTargetOrPosition(step, stepIndex)
+
+    try {
+      await this.#orchestrator.scrollTo(targetOrPosition, withSignal(step.options, signal))
+    } catch (error) {
+      throw enrichStepError(error, step.action, stepIndex)
     }
   }
 
@@ -536,7 +555,14 @@ function assertWaitCondition(
 }
 
 function withSignal<
-  TOptions extends ClickOptions | FillOptions | FocusOptions | PressOptions | TypeOptions | WaitOptions,
+  TOptions extends
+    | ClickOptions
+    | FillOptions
+    | FocusOptions
+    | PressOptions
+    | ScrollOptions
+    | TypeOptions
+    | WaitOptions,
 >(
   options: Omit<TOptions, 'signal'> | undefined,
   signal: AbortSignal,
@@ -551,8 +577,78 @@ function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: 
   return typeof step === 'object' && step !== null && 'action' in step
 }
 
+function scrollToTargetOrPosition(
+  step: ScenarioScrollToStep,
+  stepIndex: number,
+): TargetLike | ScrollPosition {
+  const runtimeStep = step as Readonly<{ target?: unknown; input?: unknown }>
+  const hasTarget = runtimeStep.target !== undefined
+  const hasInput = runtimeStep.input !== undefined
+
+  if (hasTarget === hasInput) {
+    throw scrollToStepInputError(step.action, stepIndex, 'targetOrPosition')
+  }
+
+  if (hasTarget) {
+    return runtimeStep.target as TargetLike
+  }
+
+  assertScrollPosition(runtimeStep.input, step.action, stepIndex)
+  return runtimeStep.input
+}
+
+function assertScrollPosition(
+  input: unknown,
+  action: string,
+  stepIndex: number,
+): asserts input is ScrollPosition {
+  if (typeof input !== 'object' || input === null) {
+    throw scrollToStepInputError(action, stepIndex, 'input')
+  }
+
+  if (!isFiniteNumber((input as Readonly<{ x?: unknown }>).x)) {
+    throw scrollToStepInputError(action, stepIndex, 'input.x')
+  }
+
+  if (!isFiniteNumber((input as Readonly<{ y?: unknown }>).y)) {
+    throw scrollToStepInputError(action, stepIndex, 'input.y')
+  }
+}
+
+function scrollToStepInputError(
+  action: string,
+  stepIndex: number,
+  field: string,
+): ActorbleError {
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Scenario step "${action}" requires exactly one target or finite scroll position input.`,
+    {
+      details: { action, stepIndex, field },
+    },
+  )
+}
+
+function enrichStepError(error: unknown, action: string, stepIndex: number): ActorbleError {
+  if (error instanceof ActorbleError) {
+    return actorbleError(error.code, error.message, {
+      cause: error,
+      details: { action, ...error.details, stepIndex },
+    })
+  }
+
+  return actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" failed.`, {
+    cause: error,
+    details: { action, stepIndex },
+  })
+}
+
 function isPositiveFiniteDuration(duration: unknown): duration is number {
   return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function delayStepTraceAttributes(

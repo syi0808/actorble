@@ -194,6 +194,81 @@ describe('BrowserScenarioRunner', () => {
     ])
   })
 
+  it('runs target and position scrollTo scenario steps through the action orchestrator', async () => {
+    const calls = []
+    const target = css('#panel')
+    const position = { x: 10, y: 20, coordinateSpace: 'document' }
+    const orchestrator = createOrchestrator({
+      scrollTo: vi.fn(async (targetOrPosition, options) => {
+        calls.push(['scrollTo', targetOrPosition, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run({
+        steps: [
+          { action: 'scrollTo', target, options: { timeout: 10, behavior: 'instant' } },
+          { action: 'scrollTo', input: position, options: { timeout: 20, behavior: 'smooth' } },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'scrollTo',
+        target,
+        expect.objectContaining({
+          timeout: 10,
+          behavior: 'instant',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'scrollTo',
+        position,
+        expect.objectContaining({
+          timeout: 20,
+          behavior: 'smooth',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ])
+  })
+
+  it('adds scenario step context to unsupported scrollTo coordinate failures', async () => {
+    const position = { x: 10, y: 20, coordinateSpace: 'screen' }
+    const orchestrator = createOrchestrator({
+      scrollTo: vi.fn(async () => {
+        throw actorbleError(
+          'PLATFORM_UNSUPPORTED',
+          'Scroll position coordinate space screen is not supported.',
+          {
+            details: {
+              action: 'scrollTo',
+              coordinateSpace: 'screen',
+              supportedCoordinateSpaces: ['viewport', 'document'],
+            },
+          },
+        )
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run({
+        steps: [{ action: 'scrollTo', input: position }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        action: 'scrollTo',
+        stepIndex: 0,
+        coordinateSpace: 'screen',
+      },
+    })
+  })
+
   it('starts layout invalidation only while a scenario run is active', async () => {
     const calls = []
     const layoutInvalidation = createLayoutInvalidationTracker({
@@ -844,6 +919,103 @@ describe('BrowserScenarioRunner', () => {
     )
   })
 
+  it('stops an in-flight scrollTo step through the scenario abort signal', async () => {
+    let scrollSignal
+    const target = css('#panel')
+    const orchestrator = createOrchestrator({
+      scrollTo: vi.fn((_targetOrPosition, options) => {
+        scrollSignal = options.signal
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              reject(actorbleError('ACTION_CANCELLED', 'scroll cancelled', {
+                details: { operation: 'scrollTo', reason: options.signal.reason },
+              }))
+            },
+            { once: true },
+          )
+        })
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({ steps: [{ action: 'scrollTo', target }] })
+    run.catch(() => {})
+
+    await vi.waitFor(() => expect(scrollSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(scrollSignal.aborted).toBe(true)
+    expect(orchestrator.scrollTo).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+  })
+
+  it('cancels an in-flight scrollTo step when the external run signal aborts', async () => {
+    const controller = new AbortController()
+    let scrollSignal
+    const position = { x: 10, y: 20 }
+    const orchestrator = createOrchestrator({
+      scrollTo: vi.fn((_targetOrPosition, options) => {
+        scrollSignal = options.signal
+        return new Promise(() => {})
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run(
+      { steps: [{ action: 'scrollTo', input: position }] },
+      { signal: controller.signal },
+    )
+    run.catch(() => {})
+
+    await vi.waitFor(() => expect(scrollSignal).toBeDefined())
+    controller.abort('external stop')
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'external stop' },
+    })
+    expect(scrollSignal.aborted).toBe(true)
+  })
+
+  it('times out an in-flight scrollTo step through the scenario abort signal', async () => {
+    vi.useFakeTimers()
+
+    let scrollSignal
+    const orchestrator = createOrchestrator({
+      scrollTo: vi.fn((_targetOrPosition, options) => {
+        scrollSignal = options.signal
+        return new Promise(() => {})
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run(
+      { id: 'scrollTo-timeout', steps: [{ action: 'scrollTo', input: { x: 10, y: 20 } }] },
+      { timeout: 25 },
+    )
+    run.catch(() => {})
+
+    await Promise.resolve()
+    expect(scrollSignal).toBeDefined()
+    const expectation = expect(run).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'scenario.run',
+        timeout: 25,
+        scenarioId: 'scrollTo-timeout',
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+    expect(scrollSignal.aborted).toBe(true)
+  })
+
   it('stops in-flight type, fill, and press steps through the scenario abort signal', async () => {
     const cases = [
       {
@@ -1154,6 +1326,42 @@ describe('BrowserScenarioRunner', () => {
       {
         step: { action: 'press', input: ['Enter'] },
         details: { action: 'press', stepIndex: 0, field: 'input' },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+      await expect(
+        runner.run({ steps: [testCase.step] }),
+      ).rejects.toMatchObject({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: testCase.details,
+      })
+      expect(runner.getSnapshot()).toMatchObject({
+        status: 'failed',
+        currentStepIndex: null,
+      })
+    }
+  })
+
+  it('rejects malformed scrollTo steps with action and step details', async () => {
+    const cases = [
+      {
+        step: { action: 'scrollTo' },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'targetOrPosition' },
+      },
+      {
+        step: { action: 'scrollTo', target: css('#panel'), input: { x: 1, y: 2 } },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'targetOrPosition' },
+      },
+      {
+        step: { action: 'scrollTo', input: { x: '1', y: 2 } },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'input.x' },
+      },
+      {
+        step: { action: 'scrollTo', input: { x: 1, y: Number.POSITIVE_INFINITY } },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'input.y' },
       },
     ]
 
