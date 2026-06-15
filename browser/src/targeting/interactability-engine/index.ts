@@ -391,7 +391,7 @@ function isFocusable(tagName: string | undefined, attributes: AttributeMap): boo
   const tabIndex = tabIndexFor(attributes)
 
   if (tabIndex !== undefined) {
-    return tabIndex >= 0
+    return true
   }
 
   if (hasAttribute(attributes, 'contenteditable')) {

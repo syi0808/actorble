@@ -307,6 +307,36 @@ describe('Actorble facade', () => {
     )
   })
 
+  it('creates a default module graph that can programmatically focus negative tabindex targets', async () => {
+    const panel = document.createElement('div')
+    panel.id = 'panel'
+    panel.setAttribute('tabindex', '-1')
+    panel.scrollIntoView = vi.fn()
+    panel.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 24,
+      top: 20,
+      left: 10,
+      right: 130,
+      bottom: 44,
+      toJSON: () => {},
+    }))
+    document.body.append(panel)
+    document.elementFromPoint = vi.fn(() => panel)
+    const actorble = createActorble()
+
+    await expect(actorble.focus(css('#panel'), { focusVisible: true })).resolves.toBeUndefined()
+
+    expect(document.activeElement).toBe(panel)
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.focus', status: 'ok' }),
+      ]),
+    )
+  })
+
   it('creates a default module graph that can type into the current focus', async () => {
     const input = document.createElement('input')
     input.id = 'message'

@@ -138,6 +138,32 @@ describe('BrowserFocusEngine', () => {
     expect(store.snapshot().focused?.element).toBe(second)
   })
 
+  it('skips negative tabindex controls during sequential tab but allows direct focus', async () => {
+    const first = document.createElement('input')
+    const skipped = document.createElement('button')
+    const next = document.createElement('input')
+    skipped.setAttribute('tabindex', '-1')
+    document.body.append(first, skipped, next)
+    const store = new BrowserInteractionStateStore()
+    const engine = new BrowserFocusEngine({
+      dom: new BrowserDomAdapter(document),
+      store,
+    })
+
+    await expect(engine.focus(handle('skipped', skipped))).resolves.toMatchObject({
+      active: expect.objectContaining({ element: skipped }),
+    })
+    expect(document.activeElement).toBe(skipped)
+
+    await engine.focus(handle('first', first))
+    await expect(engine.tab()).resolves.toMatchObject({
+      active: expect.objectContaining({ element: next }),
+      focusVisible: true,
+    })
+    expect(document.activeElement).toBe(next)
+    expect(store.snapshot().focused?.element).toBe(next)
+  })
+
   it('keeps unsupported locator focus explicit until orchestration resolves targets', async () => {
     const engine = createFocusEngine({
       dom: new BrowserDomAdapter(document),

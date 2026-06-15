@@ -168,11 +168,11 @@ export class BrowserFocusEngine implements FocusEngine {
           'input:not([disabled])',
           'select:not([disabled])',
           'textarea:not([disabled])',
-          '[tabindex]:not([tabindex="-1"])',
+          '[tabindex]',
           '[contenteditable="true"]',
         ].join(','),
       )
-      .filter((element) => this.#dom.isConnected(element))
+      .filter((element) => this.#dom.isConnected(element) && !hasNegativeTabIndex(element))
   }
 }
 
@@ -205,4 +205,15 @@ function sameTarget(left: TargetHandle | null, right: TargetHandle | null): bool
   }
 
   return left.element === right.element
+}
+
+function hasNegativeTabIndex(element: Element): boolean {
+  const value = element.getAttribute('tabindex')
+
+  if (value === null) {
+    return false
+  }
+
+  const tabIndex = Number.parseInt(value, 10)
+  return !Number.isNaN(tabIndex) && tabIndex < 0
 }

@@ -951,7 +951,7 @@ api/actorble-facade
 
 ### T43. Programmatic focus for negative tabindex
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `tabindex="-1"` 요소는 Tab 순서에는 없지만 native `.focus()` 대상이다. Interactability의 `canFocus`는 programmatic focus 가능성과 sequential tab 가능성을 섞지 않도록 수정한다.
 

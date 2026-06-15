@@ -180,6 +180,26 @@ describe('BrowserInteractabilityEngine', () => {
     })
   })
 
+  it('treats negative tabindex targets as programmatically focusable', async () => {
+    document.body.innerHTML = '<div id="panel" tabindex="-1">Details</div>'
+    const panel = document.querySelector('#panel')
+    const handle = targetHandle('target-1', panel)
+    const geometry = geometryFor(handle)
+    const engine = new BrowserInteractabilityEngine({
+      dom: createDomPort({ elementFromPoint: vi.fn(() => panel) }),
+      geometry: createGeometry(geometry),
+    })
+
+    await expect(engine.canFocus(handle)).resolves.toMatchObject({
+      enabled: true,
+      editable: false,
+      focusable: true,
+      canFocus: true,
+      blockingReasons: [],
+      unforceableReasons: [],
+    })
+  })
+
   it('classifies pointer-events none as force-bypassable for click only', async () => {
     document.body.innerHTML = '<button id="save" style="pointer-events: none">Save</button>'
     const button = document.querySelector('#save')
