@@ -223,7 +223,30 @@ describe('BrowserTargetResolver', () => {
       resolver.resolve(role('button', { name: 'Create Project' }), { strict: true }),
     ).rejects.toMatchObject({
       code: 'TARGET_AMBIGUOUS',
-      details: { count: 2, ambiguity: 'top-score-tie' },
+      details: { count: 2, ambiguity: 'strict-multiple-candidates' },
+    })
+  })
+
+  it('treats any multiple strict role candidates as ambiguous even when scores differ', async () => {
+    document.body.innerHTML = `
+      <button id="exact" aria-label="Create">Create</button>
+      <button id="partial" aria-label="Create Project">Create project</button>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(role('button', { name: 'Create' }))).resolves.toMatchObject({
+      element: document.querySelector('#exact'),
+    })
+
+    await expect(
+      resolver.resolve(role('button', { name: 'Create' }), { strict: true }),
+    ).rejects.toMatchObject({
+      code: 'TARGET_AMBIGUOUS',
+      details: {
+        locator: { kind: 'role', role: 'button', name: 'Create' },
+        count: 2,
+        ambiguity: 'strict-multiple-candidates',
+      },
     })
   })
 
@@ -329,7 +352,7 @@ describe('BrowserTargetResolver', () => {
         data: expect.objectContaining({
           locator: { kind: 'role', role: 'button', name: 'Save' },
           rankingPolicy: 'score-desc-dom-order',
-          ambiguity: 'top-score-tie',
+          ambiguity: 'strict-multiple-candidates',
           candidates: [
             expect.objectContaining({ index: 0, score: 100, reasons: ['role', 'name:exact'] }),
             expect.objectContaining({ index: 1, score: 100, reasons: ['role', 'name:exact'] }),

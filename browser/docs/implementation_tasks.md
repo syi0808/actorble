@@ -906,7 +906,7 @@ api/actorble-facade
 
 ### T41. Strict resolver ambiguity contract
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `strict: true` target resolution이 문서 계약처럼 후보 2개 이상을 모두 ambiguous로 처리하도록 맞춘다. 현재 구현은 최고 점수 동률만 ambiguous로 보므로 exact 후보와 lower-ranked 후보가 함께 있을 때 strict 계약을 우회한다.
 

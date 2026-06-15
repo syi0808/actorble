@@ -71,15 +71,14 @@ export class BrowserTargetResolver implements TargetResolver {
         throw this.#emptyResolveError(locator)
       }
 
-      if (ambiguity === 'top-score-tie') {
-        const tiedCount = countTopScoreCandidates(candidates)
+      if (ambiguity === 'strict-multiple-candidates') {
         throw actorbleError(
           'TARGET_AMBIGUOUS',
-          `Locator ${describeLocator(locator)} resolved ${tiedCount} equally ranked targets.`,
+          `Locator ${describeLocator(locator)} resolved ${candidates.length} targets in strict mode.`,
           {
             details: {
               locator: summarizeLocator(locator),
-              count: tiedCount,
+              count: candidates.length,
               ambiguity,
             },
           },
@@ -541,7 +540,7 @@ export function createTargetResolver(options: TargetResolverOptions = {}): Targe
   return new BrowserTargetResolver(options)
 }
 
-type ResolutionAmbiguity = 'no-candidates' | 'single-best' | 'top-score-tie'
+type ResolutionAmbiguity = 'no-candidates' | 'single-best' | 'strict-multiple-candidates'
 
 type TextMatch = Readonly<{
   kind: 'exact' | 'regex' | 'partial'
@@ -565,17 +564,7 @@ function resolutionAmbiguity(
     return 'no-candidates'
   }
 
-  return strict && countTopScoreCandidates(candidates) > 1 ? 'top-score-tie' : 'single-best'
-}
-
-function countTopScoreCandidates(candidates: readonly TargetCandidate[]): number {
-  const topScore = candidates[0]?.score
-
-  if (topScore === undefined) {
-    return 0
-  }
-
-  return candidates.filter((candidate) => candidate.score === topScore).length
+  return strict && candidates.length > 1 ? 'strict-multiple-candidates' : 'single-best'
 }
 
 function sortCandidates(candidates: readonly TargetCandidate[]): readonly TargetCandidate[] {
