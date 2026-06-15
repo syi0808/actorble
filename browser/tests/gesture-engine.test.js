@@ -331,13 +331,37 @@ describe('BrowserGestureEngine', () => {
     await engine.drag(
       { x: 2, y: 3 },
       { x: 20, y: 30 },
-      { timeout: 1200, signal: controller.signal, force: true },
+      {
+        timeout: 1200,
+        signal: controller.signal,
+        duration: 420,
+        motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+        force: true,
+      },
     )
 
     expect(calls).toEqual([
-      ['moveTo', { x: 2, y: 3 }, { timeout: 1200, signal: controller.signal }],
+      [
+        'moveTo',
+        { x: 2, y: 3 },
+        {
+          timeout: 1200,
+          signal: controller.signal,
+          duration: 420,
+          motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+        },
+      ],
       ['down', 'primary'],
-      ['moveTo', { x: 20, y: 30 }, { timeout: 1200, signal: controller.signal }],
+      [
+        'moveTo',
+        { x: 20, y: 30 },
+        {
+          timeout: 1200,
+          signal: controller.signal,
+          duration: 420,
+          motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+        },
+      ],
       ['up', 'primary'],
     ])
   })

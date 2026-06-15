@@ -755,7 +755,7 @@ describe('BrowserActionOrchestrator', () => {
   })
 
   it('doubleClick resolves, preflights, dispatches two click activations, and waits', async () => {
-    const { calls, events, orchestrator, target, trace, wait } = createHarness()
+    const { calls, events, gesture, orchestrator, target, trace, wait } = createHarness()
 
     await expect(orchestrator.doubleClick(css('#target-1'))).resolves.toBeUndefined()
 
@@ -811,6 +811,42 @@ describe('BrowserActionOrchestrator', () => {
         }),
       }),
     )
+    expect(gesture.doubleClick).toHaveBeenCalledWith(
+      target,
+      { x: 20, y: 30 },
+      expect.objectContaining({
+        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+      }),
+    )
+  })
+
+  it('doubleClick forwards explicit public pointer timing options without force', async () => {
+    const motion = { kind: 'ease', easing: 'ease-in-out', duration: 420 }
+    const { gesture, orchestrator } = createHarness()
+
+    await expect(
+      orchestrator.doubleClick(css('#target-1'), {
+        button: 'primary',
+        duration: 420,
+        motion,
+        pressDwell: 160,
+        timeout: 3000,
+        force: true,
+      }),
+    ).resolves.toBeUndefined()
+
+    const gestureOptions = gesture.doubleClick.mock.calls[0][2]
+
+    expect(gestureOptions).toEqual(
+      expect.objectContaining({
+        button: 'primary',
+        duration: 420,
+        motion,
+        pressDwell: 160,
+        timeout: 3000,
+      }),
+    )
+    expect(gestureOptions).not.toHaveProperty('force')
   })
 
   it('click with clickCount dispatches a public multi-click sequence', async () => {
@@ -1323,7 +1359,11 @@ describe('BrowserActionOrchestrator', () => {
       'interactability.canClick',
       'gesture.drag',
     ])
-    expect(gesture.drag).toHaveBeenCalledWith({ x: 12, y: 22 }, { x: 112, y: 122 }, {})
+    expect(gesture.drag).toHaveBeenCalledWith(
+      { x: 12, y: 22 },
+      { x: 112, y: 122 },
+      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 } },
+    )
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
       target: source.element,
@@ -1341,7 +1381,7 @@ describe('BrowserActionOrchestrator', () => {
       type: 'pointermove',
       target: destination.element,
       point: { x: 112, y: 122 },
-      buttons: [],
+      buttons: ['primary'],
     })
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
       type: 'pointerup',
@@ -1386,6 +1426,103 @@ describe('BrowserActionOrchestrator', () => {
         }),
       }),
     )
+  })
+
+  it('drag forwards public pointer movement timing options to the gesture engine', async () => {
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const motion = { kind: 'ease', easing: 'ease-in-out', duration: 520 }
+    const { gesture, orchestrator } = createHarness({
+      target: source,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+        geometryFor(source, { x: 12, y: 22 }),
+        geometryFor(destination, { x: 112, y: 122 }),
+      ],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination),
+        clickReportFor(source),
+        clickReportFor(destination),
+      ],
+      hitTestResults: [source.element, source.element, destination.element, destination.element],
+    })
+
+    await expect(
+      orchestrator.drag(css('#drag-source'), css('#drop-target'), {
+        duration: 520,
+        motion,
+        timeout: 3500,
+        force: true,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(gesture.drag).toHaveBeenCalledWith(
+      { x: 12, y: 22 },
+      { x: 112, y: 122 },
+      {
+        duration: 520,
+        motion,
+        timeout: 3500,
+      },
+    )
+  })
+
+  it('keeps drag pointer moves pressed for visual cursor and pointer event buttons', async () => {
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const { events, orchestrator, visual } = createHarness({
+      target: source,
+      enableVisual: true,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+        geometryFor(source, { x: 12, y: 22 }),
+        geometryFor(destination, { x: 112, y: 122 }),
+      ],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination),
+        clickReportFor(source),
+        clickReportFor(destination),
+      ],
+      hitTestResults: [source.element, source.element, destination.element, destination.element],
+    })
+
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
+
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        type: 'pointermove',
+        target: destination.element,
+        point: { x: 112, y: 122 },
+        buttons: ['primary'],
+      }),
+    )
+    expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
+      point: { x: 12, y: 22 },
+      cursor: 'default',
+      pressed: false,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+      point: { x: 12, y: 22 },
+      cursor: 'default',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
+      point: { x: 112, y: 122 },
+      cursor: 'default',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenNthCalledWith(4, {
+      point: { x: 112, y: 122 },
+      cursor: 'default',
+      pressed: false,
+    })
   })
 
   it('drag fails endpoint preflight without dispatching gesture events', async () => {

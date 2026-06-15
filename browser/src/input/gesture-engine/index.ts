@@ -163,6 +163,8 @@ function dragMovementOptions(options: DragOptions): MoveOptions | undefined {
   const movement: MoveOptions = {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.duration === undefined ? {} : { duration: options.duration }),
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
   }
 
   return Object.keys(movement).length === 0 ? undefined : movement

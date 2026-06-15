@@ -356,7 +356,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'perform'
       const commandId = this.#createPointerCommandId()
       await this.#withSignalTarget(handle, commandId, () =>
-        this.#gesture.hover(point, publicPointerMovementOptions(options)),
+        this.#gesture.hover(point, publicMoveOptions(options)),
       )
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -407,7 +407,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withSignalTarget(clickTarget, commandId, () =>
         this.#gesture.click(clickTarget, point, {
-          ...publicPointerMovementOptions(options),
+          ...publicClickGestureOptions(options),
           refreshPointBeforeDown: async () => {
             dispatchPoint = await this.#refreshClickPointBeforeDown(
               'click',
@@ -491,7 +491,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withSignalTarget(clickTarget, commandId, () =>
         this.#gesture.click(clickTarget, currentPoint, {
-          ...publicPointerMovementOptions(options),
+          ...publicClickGestureOptions(options),
           refreshPointBeforeDown: async () => {
             this.#validateCurrentPointerTarget(clickTarget, span)
             const freshSnapshot = await this.#geometry.snapshot(clickTarget)
@@ -576,7 +576,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withSignalTarget(clickTarget, commandId, () =>
         this.#gesture.doubleClick(clickTarget, point, {
-          ...publicPointerMovementOptions(options),
+          ...publicClickGestureOptions(options),
           refreshPointBeforeDown: async () => {
             dispatchPoint = await this.#refreshClickPointBeforeDown(
               'doubleClick',
@@ -750,7 +750,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         const commandId = this.#createPointerCommandId()
         const result = await this.#withSignalTarget(typeTarget, commandId, () =>
           this.#gesture.click(typeTarget, point, {
-            ...publicPointerMovementOptions(clickOptions),
+            ...publicClickGestureOptions(clickOptions),
             refreshPointBeforeDown: async () => {
               dispatchPoint = await this.#refreshClickPointBeforeDown(
                 'typeInto',
@@ -1055,7 +1055,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           this.#gesture.drag(
             freshSource.point,
             freshDestination.point,
-            operationOptions(options),
+            publicMoveOptions(options),
           ),
       )
 
@@ -1390,12 +1390,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
 
     switch (signal.type) {
-      case 'pointer:moved':
+      case 'pointer:moved': {
+        const pressed = this.#hasPressedCursorButtons()
         this.#moveDragState(context, pointerHit.target ?? eventTarget)
         this.#showPointerCursor(
           signal.point,
           eventTarget,
-          false,
+          pressed,
           context.commandId,
           pointerHit.target ?? eventTarget,
         )
@@ -1403,9 +1404,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           type: 'pointermove',
           target: eventTarget.element,
           point: signal.point,
-          buttons: [],
+          buttons: this.#pressedPointerButtons(),
         })
         break
+      }
       case 'pointer:down': {
         this.#cursorPressedButtons.add(signal.button)
         this.#showPointerCursor(
@@ -1956,6 +1958,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return this.#cursorPressedButtons.size > 0
   }
 
+  #pressedPointerButtons(): readonly PointerButtonName[] {
+    return [...this.#cursorPressedButtons]
+  }
+
   #resolveCursor(target: TargetHandle): string | undefined {
     try {
       return resolveCursorForTarget(this.#dom, target.element)
@@ -2145,16 +2151,24 @@ function resetPendingClickDispatch(dispatchState: ClickDispatchState): void {
   dispatchState.upSeen = false
 }
 
-function publicPointerMovementOptions<TOptions extends MoveOptions | ClickOptions>(
-  options: TOptions,
-): TOptions {
-  if (options.duration !== undefined || options.motion !== undefined) {
-    return options
+function publicMoveOptions(options: MoveOptions | DragOptions): MoveOptions {
+  const movement = {
+    ...operationOptions(options),
+    ...(options.duration === undefined ? {} : { duration: options.duration }),
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
   }
 
+  return options.duration !== undefined || options.motion !== undefined
+    ? movement
+    : { ...movement, motion: DEFAULT_PUBLIC_POINTER_MOTION }
+}
+
+function publicClickGestureOptions(options: ClickOptions): ClickOptions {
   return {
-    ...options,
-    motion: DEFAULT_PUBLIC_POINTER_MOTION,
+    ...publicMoveOptions(options),
+    ...(options.button === undefined ? {} : { button: options.button }),
+    ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
+    ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
   }
 }
 

@@ -484,6 +484,7 @@ export type ScrollOptions = OperationOptions &
   }>
 
 export type DragOptions = OperationOptions &
+  PointerMovementOptions &
   Readonly<{
     force?: boolean
   }>
