@@ -638,12 +638,34 @@ export type ScenarioFocusStep = Readonly<{
   options?: ScenarioStepOptions<FocusOptions>
 }>
 
+export type ScenarioTypeStep = Readonly<{
+  id?: string
+  action: 'type'
+  input: string
+  options?: ScenarioStepOptions<TypeOptions>
+}>
+
 export type ScenarioTypeIntoStep = Readonly<{
   id?: string
   action: 'typeInto'
   target: TargetLike
   input: string
   options?: ScenarioStepOptions<TypeOptions>
+}>
+
+export type ScenarioFillStep = Readonly<{
+  id?: string
+  action: 'fill'
+  target: TargetLike
+  input: string
+  options?: ScenarioStepOptions<FillOptions>
+}>
+
+export type ScenarioPressStep = Readonly<{
+  id?: string
+  action: 'press'
+  input: string
+  options?: ScenarioStepOptions<PressOptions>
 }>
 
 export type ScenarioWaitForStep = Readonly<{
@@ -663,7 +685,10 @@ export type ScenarioDelayStep = Readonly<{
 export type ScenarioStep =
   | ScenarioClickStep
   | ScenarioFocusStep
+  | ScenarioTypeStep
   | ScenarioTypeIntoStep
+  | ScenarioFillStep
+  | ScenarioPressStep
   | ScenarioWaitForStep
   | ScenarioDelayStep
 

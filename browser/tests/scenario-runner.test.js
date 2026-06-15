@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserScenarioRunner } from '../src/runtime/scenario-runner/index.js'
 import { actorbleError, css } from '../src/shared/index.js'
 
@@ -132,6 +133,64 @@ describe('BrowserScenarioRunner', () => {
           completed: true,
         }),
       }),
+    ])
+  })
+
+  it('runs type, fill, and press scenario steps in order through the action orchestrator', async () => {
+    const calls = []
+    const fillTarget = css('#name')
+    const orchestrator = createOrchestrator({
+      type: vi.fn(async (input, options) => {
+        calls.push(['type', input, options])
+      }),
+      fill: vi.fn(async (target, input, options) => {
+        calls.push(['fill', target, input, options])
+      }),
+      press: vi.fn(async (input, options) => {
+        calls.push(['press', input, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run({
+        steps: [
+          { action: 'type', input: 'alpha', options: { timeout: 10, delay: 1 } },
+          { action: 'fill', target: fillTarget, input: 'bravo', options: { timeout: 20, clear: false } },
+          { action: 'press', input: 'Shift+K', options: { timeout: 30, delay: 2 } },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'type',
+        'alpha',
+        expect.objectContaining({
+          timeout: 10,
+          delay: 1,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'fill',
+        fillTarget,
+        'bravo',
+        expect.objectContaining({
+          timeout: 20,
+          clear: false,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'press',
+        'Shift+K',
+        expect.objectContaining({
+          timeout: 30,
+          delay: 2,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
     ])
   })
 
@@ -785,6 +844,225 @@ describe('BrowserScenarioRunner', () => {
     )
   })
 
+  it('stops in-flight type, fill, and press steps through the scenario abort signal', async () => {
+    const cases = [
+      {
+        action: 'type',
+        step: { action: 'type', input: 'alpha' },
+        override(signalRef) {
+          return {
+            type: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise((_resolve, reject) => {
+                options.signal.addEventListener(
+                  'abort',
+                  () => {
+                    reject(actorbleError('ACTION_CANCELLED', 'type cancelled', {
+                      details: { operation: 'type', reason: options.signal.reason },
+                    }))
+                  },
+                  { once: true },
+                )
+              })
+            }),
+          }
+        },
+      },
+      {
+        action: 'fill',
+        step: { action: 'fill', target: css('#name'), input: 'bravo' },
+        override(signalRef) {
+          return {
+            fill: vi.fn((_target, _input, options) => {
+              signalRef.current = options.signal
+              return new Promise((_resolve, reject) => {
+                options.signal.addEventListener(
+                  'abort',
+                  () => {
+                    reject(actorbleError('ACTION_CANCELLED', 'fill cancelled', {
+                      details: { operation: 'fill', reason: options.signal.reason },
+                    }))
+                  },
+                  { once: true },
+                )
+              })
+            }),
+          }
+        },
+      },
+      {
+        action: 'press',
+        step: { action: 'press', input: 'Enter' },
+        override(signalRef) {
+          return {
+            press: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise((_resolve, reject) => {
+                options.signal.addEventListener(
+                  'abort',
+                  () => {
+                    reject(actorbleError('ACTION_CANCELLED', 'press cancelled', {
+                      details: { operation: 'press', reason: options.signal.reason },
+                    }))
+                  },
+                  { once: true },
+                )
+              })
+            }),
+          }
+        },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const signalRef = { current: undefined }
+      const orchestrator = createOrchestrator(testCase.override(signalRef))
+      const runner = new BrowserScenarioRunner({ orchestrator })
+      const run = runner.run({ steps: [testCase.step] })
+      run.catch(() => {})
+
+      await vi.waitFor(() => expect(signalRef.current).toBeDefined())
+      runner.stop()
+
+      await expect(run).rejects.toMatchObject({
+        code: 'ACTION_CANCELLED',
+        details: { operation: 'scenario.run', reason: 'scenario stopped' },
+      })
+      expect(signalRef.current.aborted).toBe(true)
+      expect(orchestrator[testCase.action]).toHaveBeenCalledOnce()
+    }
+  })
+
+  it('cancels in-flight type, fill, and press steps when the external run signal aborts', async () => {
+    const cases = [
+      {
+        action: 'type',
+        step: { action: 'type', input: 'alpha' },
+        override(signalRef) {
+          return {
+            type: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'fill',
+        step: { action: 'fill', target: css('#name'), input: 'bravo' },
+        override(signalRef) {
+          return {
+            fill: vi.fn((_target, _input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'press',
+        step: { action: 'press', input: 'Enter' },
+        override(signalRef) {
+          return {
+            press: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const signalRef = { current: undefined }
+      const controller = new AbortController()
+      const orchestrator = createOrchestrator(testCase.override(signalRef))
+      const runner = new BrowserScenarioRunner({ orchestrator })
+      const run = runner.run({ steps: [testCase.step] }, { signal: controller.signal })
+      run.catch(() => {})
+
+      await vi.waitFor(() => expect(signalRef.current).toBeDefined())
+      controller.abort('external stop')
+
+      await expect(run).rejects.toMatchObject({
+        code: 'ACTION_CANCELLED',
+        details: { operation: 'scenario.run', reason: 'external stop' },
+      })
+      expect(signalRef.current.aborted).toBe(true)
+      expect(orchestrator[testCase.action]).toHaveBeenCalledOnce()
+    }
+  })
+
+  it('times out in-flight type, fill, and press steps through the scenario abort signal', async () => {
+    vi.useFakeTimers()
+
+    const cases = [
+      {
+        action: 'type',
+        step: { action: 'type', input: 'alpha' },
+        override(signalRef) {
+          return {
+            type: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'fill',
+        step: { action: 'fill', target: css('#name'), input: 'bravo' },
+        override(signalRef) {
+          return {
+            fill: vi.fn((_target, _input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'press',
+        step: { action: 'press', input: 'Enter' },
+        override(signalRef) {
+          return {
+            press: vi.fn((_input, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const signalRef = { current: undefined }
+      const orchestrator = createOrchestrator(testCase.override(signalRef))
+      const runner = new BrowserScenarioRunner({ orchestrator })
+      const run = runner.run(
+        { id: `${testCase.action}-timeout`, steps: [testCase.step] },
+        { timeout: 25 },
+      )
+      run.catch(() => {})
+
+      await Promise.resolve()
+      expect(signalRef.current).toBeDefined()
+      const expectation = expect(run).rejects.toMatchObject({
+        code: 'ACTION_TIMEOUT',
+        details: {
+          operation: 'scenario.run',
+          timeout: 25,
+          scenarioId: `${testCase.action}-timeout`,
+        },
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await expectation
+      expect(signalRef.current.aborted).toBe(true)
+      expect(orchestrator[testCase.action]).toHaveBeenCalledOnce()
+    }
+  })
+
   it('times out the scenario and aborts the current action signal even when the action does not settle', async () => {
     vi.useFakeTimers()
     let actionSignal
@@ -857,5 +1135,177 @@ describe('BrowserScenarioRunner', () => {
       status: 'failed',
       currentStepIndex: null,
     })
+  })
+
+  it('rejects type, fill, and press steps with missing required input or target', async () => {
+    const cases = [
+      {
+        step: { action: 'type' },
+        details: { action: 'type', stepIndex: 0, field: 'input' },
+      },
+      {
+        step: { action: 'fill', input: 'bravo' },
+        details: { action: 'fill', stepIndex: 0, field: 'target' },
+      },
+      {
+        step: { action: 'fill', target: css('#name'), input: 42 },
+        details: { action: 'fill', stepIndex: 0, field: 'input' },
+      },
+      {
+        step: { action: 'press', input: ['Enter'] },
+        details: { action: 'press', stepIndex: 0, field: 'input' },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+      await expect(
+        runner.run({ steps: [testCase.step] }),
+      ).rejects.toMatchObject({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: testCase.details,
+      })
+      expect(runner.getSnapshot()).toMatchObject({
+        status: 'failed',
+        currentStepIndex: null,
+      })
+    }
+  })
+
+  it('records action spans with input summaries for real scenario text and keyboard steps', async () => {
+    document.body.innerHTML = ''
+
+    const input = document.createElement('input')
+    input.id = 'scenario-name'
+    input.scrollIntoView = vi.fn()
+    input.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 160,
+      height: 24,
+      top: 20,
+      left: 10,
+      right: 170,
+      bottom: 44,
+      toJSON: () => {},
+    }))
+    document.body.append(input)
+    document.elementFromPoint = vi.fn(() => input)
+    input.focus()
+
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const runner = new BrowserScenarioRunner({ trace })
+
+    await expect(
+      runner.run({
+        steps: [
+          { action: 'type', input: 'A', options: { delay: 0 } },
+          { action: 'fill', target: css('#scenario-name'), input: 'Actorble' },
+          { action: 'press', input: 'Enter', options: { delay: 0 } },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    const spans = trace.getTrace().spans
+
+    expect(input.value).toBe('Actorble')
+    expect(spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'action.type',
+          status: 'ok',
+          attributes: expect.objectContaining({
+            action: 'type',
+            input: expect.objectContaining({
+              options: expect.objectContaining({
+                delay: 0,
+                textLength: 1,
+              }),
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          name: 'action.fill',
+          status: 'ok',
+          attributes: expect.objectContaining({
+            action: 'fill',
+            input: expect.objectContaining({
+              target: expect.objectContaining({
+                kind: 'locator',
+                locatorKind: 'css',
+              }),
+              options: expect.objectContaining({
+                textLength: 8,
+              }),
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          name: 'action.press',
+          status: 'ok',
+          attributes: expect.objectContaining({
+            action: 'press',
+            input: expect.objectContaining({
+              options: expect.objectContaining({
+                delay: 0,
+                keys: 'Enter',
+              }),
+            }),
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('records the action failure phase when a scenario press step fails', async () => {
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const keyboard = {
+      getState: vi.fn(() => ({ pressedKeys: [], modifiers: [] })),
+      keyDown: vi.fn(),
+      keyUp: vi.fn(async () => ({ pressedKeys: [], modifiers: [] })),
+      press: vi.fn(async () => {
+        throw new Error('keyboard failed')
+      }),
+    }
+    const orchestrator = new BrowserActionOrchestrator({ keyboard, trace })
+    const runner = new BrowserScenarioRunner({ orchestrator, trace })
+
+    await expect(
+      runner.run({
+        steps: [{ action: 'press', input: 'Enter' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        action: 'press',
+        phase: 'perform',
+      },
+    })
+
+    expect(trace.getTrace().spans).toContainEqual(
+      expect.objectContaining({
+        name: 'action.press',
+        status: 'error',
+        attributes: expect.objectContaining({
+          action: 'press',
+          phase: 'perform',
+          input: expect.objectContaining({
+            options: expect.objectContaining({
+              keys: 'Enter',
+            }),
+          }),
+        }),
+      }),
+    )
+    expect(trace.getTrace().events).toContainEqual(
+      expect.objectContaining({
+        name: 'action:failure',
+        data: expect.objectContaining({
+          action: 'press',
+          phase: 'perform',
+        }),
+      }),
+    )
   })
 })
