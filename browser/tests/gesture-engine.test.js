@@ -307,12 +307,104 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([['cancel']])
   })
 
-  it('keeps drag as an explicit capability extension point', async () => {
-    const engine = createGestureEngine({ pointer: createFakePointer().pointer })
+  it('drag composes move, down, move, and up pointer operations in order', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
 
-    await expect(engine.drag({ x: 1, y: 1 }, { x: 10, y: 10 })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: { gesture: 'drag', capability: 'pointer-gesture' },
+    await expect(engine.drag({ x: 1, y: 1 }, { x: 10, y: 10 })).resolves.toEqual({
+      completed: true,
     })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 1, y: 1 }],
+      ['down', 'primary'],
+      ['moveTo', { x: 10, y: 10 }],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('routes drag cancellation options into pointer movement without force', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+    const controller = new AbortController()
+
+    await engine.drag(
+      { x: 2, y: 3 },
+      { x: 20, y: 30 },
+      { timeout: 1200, signal: controller.signal, force: true },
+    )
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 2, y: 3 }, { timeout: 1200, signal: controller.signal }],
+      ['down', 'primary'],
+      ['moveTo', { x: 20, y: 30 }, { timeout: 1200, signal: controller.signal }],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('drag emits the expected synthetic pointer signal sequence', async () => {
+    const signals = new BrowserPointerSignalBus()
+    const timeline = createTimeline()
+    const events = []
+
+    signals.subscribe((signal) => events.push(signal))
+
+    const engine = createGestureEngine({
+      pointer: new BrowserPointerEngine({ signals, timeline }),
+    })
+
+    await engine.drag({ x: 4, y: 8 }, { x: 40, y: 80 })
+
+    expect(events).toEqual([
+      {
+        type: 'pointer:moved',
+        point: { x: 4, y: 8 },
+        previousPoint: { x: 0, y: 0 },
+      },
+      {
+        type: 'pointer:down',
+        point: { x: 4, y: 8 },
+        button: 'primary',
+      },
+      {
+        type: 'pointer:moved',
+        point: { x: 40, y: 80 },
+        previousPoint: { x: 4, y: 8 },
+      },
+      {
+        type: 'pointer:up',
+        point: { x: 40, y: 80 },
+        button: 'primary',
+      },
+    ])
+  })
+
+  it('drag cancels pressed pointer state when movement fails after down', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+    const failure = new Error('drag move failed')
+
+    pointer.moveTo
+      .mockImplementationOnce(async (point, options) => {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['moveTo', point, options] : ['moveTo', point])
+        return pointer.getState()
+      })
+      .mockImplementationOnce(async (point, options) => {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['moveTo', point, options] : ['moveTo', point])
+        throw failure
+      })
+
+    await expect(engine.drag({ x: 1, y: 1 }, { x: 10, y: 10 })).rejects.toBe(failure)
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 1, y: 1 }],
+      ['down', 'primary'],
+      ['moveTo', { x: 10, y: 10 }],
+      ['cancel'],
+    ])
   })
 })

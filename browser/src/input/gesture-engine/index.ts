@@ -84,11 +84,26 @@ export class BrowserGestureEngine implements GestureEngine {
     return { completed: true }
   }
 
-  async drag(): Promise<GestureResult> {
-    throw unsupportedGesture('drag', {
-      extensionPoint: 'drag',
-      capability: 'pointer-gesture',
-    })
+  async drag(from: Point, to: Point, options: DragOptions = {}): Promise<GestureResult> {
+    let pressed = false
+
+    await this.#pointer.moveTo(from, dragMovementOptions(options))
+
+    try {
+      await this.#pointer.down('primary')
+      pressed = true
+      await this.#pointer.moveTo(to, dragMovementOptions(options))
+      await this.#pointer.up('primary')
+      pressed = false
+
+      return { completed: true }
+    } catch (error) {
+      if (pressed) {
+        await this.#pointer.cancel()
+      }
+
+      throw error
+    }
   }
 
   async cancel(): Promise<GestureResult> {
@@ -133,28 +148,21 @@ export function createGestureEngine(options: GestureEngineOptions = {}): Gesture
   return new BrowserGestureEngine(options)
 }
 
-function unsupportedGesture(
-  gesture: 'click' | 'doubleClick' | 'drag',
-  details: Readonly<Record<string, unknown>>,
-): Error {
-  return actorbleError(
-    'PLATFORM_UNSUPPORTED',
-    `Gesture Engine ${gesture} requires a capability extension.`,
-    {
-      details: {
-        gesture,
-        ...details,
-      },
-    },
-  )
-}
-
 function pointerMovementOptions(options: ClickOptions): MoveOptions | undefined {
   const movement: MoveOptions = {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.duration === undefined ? {} : { duration: options.duration }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
+  }
+
+  return Object.keys(movement).length === 0 ? undefined : movement
+}
+
+function dragMovementOptions(options: DragOptions): MoveOptions | undefined {
+  const movement: MoveOptions = {
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
   }
 
   return Object.keys(movement).length === 0 ? undefined : movement
