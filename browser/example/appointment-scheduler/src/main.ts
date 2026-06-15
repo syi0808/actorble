@@ -226,8 +226,12 @@ function schedulerScenario(): Scenario {
     id: 'appointment-scheduler-booking',
     name: 'Appointment scheduler booking',
     steps: [
-      { action: 'focus', target: testId('patient-search'), options: { timeout: 2500 } },
-      { action: 'type', input: defaultPatient, options: { delay: humanTypingDelay, timeout: 7000 } },
+      {
+        action: 'typeInto',
+        target: testId('patient-search'),
+        input: defaultPatient,
+        options: clickFocusTyping(humanTypingDelay, 7000),
+      },
       { action: 'press', input: 'Enter', options: { delay: humanPressDelay, timeout: 2500 } },
       { action: 'delay', duration: 320, reason: 'let search result appear' },
       {

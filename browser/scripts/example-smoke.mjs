@@ -293,6 +293,7 @@ async function expectSchedulerScenarioComplete(page) {
   await expectInputValue(page, '#patient-search', 'Jisoo Han')
   await expectInputValue(page, '#appointment-reason', 'Follow-up consultation')
   await expectEventLogIncludes(page, [
+    'patientSearch.click',
     'patientSearch.keydown',
     'patientResult.click',
     'targetSlot.pointerup',
@@ -300,7 +301,7 @@ async function expectSchedulerScenarioComplete(page) {
   ])
   await expectTraceIncludes(page, [
     'scenario.run',
-    'action.type',
+    'action.typeInto',
     'action.press',
     'action.doubleClick',
     'action.fill',
