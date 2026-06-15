@@ -904,6 +904,97 @@ api/actorble-facade
 - Playwright 또는 equivalent browser smoke가 delay step, click-to-focus typeInto, scroll/resize cursor follow를 최소 한 flow로 검증한다.
 - smoke 실패 시 trace 또는 DOM diagnostics로 어느 step에서 drift가 발생했는지 확인할 수 있어야 한다.
 
+### T41. Strict resolver ambiguity contract
+
+- Status: [ ] Not started
+
+브리핑: `strict: true` target resolution이 문서 계약처럼 후보 2개 이상을 모두 ambiguous로 처리하도록 맞춘다. 현재 구현은 최고 점수 동률만 ambiguous로 보므로 exact 후보와 lower-ranked 후보가 함께 있을 때 strict 계약을 우회한다.
+
+의존성: 완료된 T4, T17, `target-resolver`, `diagnostics-trace`, `shared` error helpers.
+
+완료 기준:
+
+- `resolve(locator, { strict: true })`는 후보가 2개 이상이면 score 차이와 무관하게 `TARGET_AMBIGUOUS`를 반환한다.
+- `strict: false`는 기존 ranking 기반 best candidate 선택을 유지한다.
+- ambiguous error details는 locator summary, 후보 수, ambiguity reason을 포함한다.
+- trace candidate snapshot은 기존처럼 후보 ranking을 남긴다.
+
+테스트 기대:
+
+- `tests/target-resolver.test.js`에 exact/partial 또는 role/text ranking 차이가 있는 2개 후보 strict 회귀 테스트를 먼저 추가한다.
+- 기존 css strict ambiguity 테스트와 non-strict best candidate 테스트가 계속 통과한다.
+- `pnpm test -- tests/target-resolver.test.js`
+- `pnpm typecheck`
+
+### T42. Native label accessible names for role locators
+
+- Status: [ ] Not started
+
+브리핑: `role(kind, { name })`이 browser native label association을 accessible name 후보로 사용할 수 있게 한다. 새 accessibility dependency를 추가하지 않고, 현재 label locator가 이미 가진 `<label for>`와 nested label 탐색을 재사용한다.
+
+의존성: 완료된 T17, `platform-adapter/dom-adapter`, `target-resolver`.
+
+완료 기준:
+
+- `<label for="email">Email</label><input id="email">`에서 `role('textbox', { name: 'Email' })`가 input을 찾는다.
+- `<label>Name <input /></label>` nested label도 같은 role name path에서 동작한다.
+- `aria-label`과 `aria-labelledby`는 native label보다 우선한다.
+- hidden label/control은 기존 visibility policy를 깨지 않는다.
+- cross-root 또는 closed shadow root 한계는 기존 browser fidelity warning 정책에 남긴다.
+
+테스트 기대:
+
+- `tests/target-resolver.test.js`에 native label 기반 role name 회귀 테스트를 먼저 추가한다.
+- 기존 `label()` locator 테스트와 role aria-name 테스트가 계속 통과한다.
+- `pnpm test -- tests/target-resolver.test.js tests/platform-adapter.test.js`
+- `pnpm typecheck`
+
+### T43. Programmatic focus for negative tabindex
+
+- Status: [ ] Not started
+
+브리핑: `tabindex="-1"` 요소는 Tab 순서에는 없지만 native `.focus()` 대상이다. Interactability의 `canFocus`는 programmatic focus 가능성과 sequential tab 가능성을 섞지 않도록 수정한다.
+
+의존성: 완료된 T7, T12, `interactability-engine`, `focus-engine`, `action-orchestrator`.
+
+완료 기준:
+
+- `[tabindex="-1"]` target은 visible/enabled 상태에서 `canFocus: true`로 판정된다.
+- sequential tab 후보 정책은 `focusEngine.tab()` 경계에 남고, `canFocus`와 섞이지 않는다.
+- disabled, inert, hidden, pointer-independent focus blockers는 기존처럼 focus를 막는다.
+- focus action은 negative tabindex target을 programmatic focus로 처리하고 wait/cleanup lifecycle을 유지한다.
+
+테스트 기대:
+
+- `tests/interactability-engine.test.js`에 negative tabindex focusability 회귀 테스트를 먼저 추가한다.
+- 필요하면 `tests/focus-keyboard-text-input.test.js` 또는 `tests/action-orchestrator.test.js`에 public focus path 테스트를 추가한다.
+- `pnpm test -- tests/interactability-engine.test.js tests/focus-keyboard-text-input.test.js tests/action-orchestrator.test.js`
+- `pnpm typecheck`
+
+### T44. Unified action timeout envelope for pointer perform
+
+- Status: [ ] Not started
+
+브리핑: pointer action의 public `timeout`이 resolve/reveal/preflight/wait뿐 아니라 gesture perform 전체에도 적용되도록 정리한다. 현재 pointer movement와 click dwell은 timeout option을 부분적으로 전달하지만 전체 deadline을 직접 강제하지 않아 action timeout 계약과 drift가 생길 수 있다.
+
+의존성: 완료된 T9, T10, T13, T15, T19, T27, T39, `timeline-engine`, `pointer-engine`, `gesture-engine`, `action-orchestrator`.
+
+완료 기준:
+
+- `moveTo`, `click`, `doubleClick`, `clickCurrent`, click-focus `typeInto`, `drag`의 perform phase는 하나의 action-level deadline 또는 abort signal을 공유한다.
+- timeout 발생 시 `ACTION_TIMEOUT` error operation은 public action 또는 documented lower-level operation과 일관되게 report된다.
+- pointer down 이후 timeout/cancellation은 pressed button, active/hover state, cursor visual, drag state cleanup을 보장한다.
+- timeout 없는 경로와 external `AbortSignal` 경로는 기존 동작을 유지한다.
+- 기존 `TimelineEngine` primitive를 우선 사용하고 새 timeout helper는 중복을 줄일 때만 추가한다.
+
+테스트 기대:
+
+- `tests/action-orchestrator.test.js`에 perform 중 stuck movement 또는 dwell timeout 회귀 테스트를 먼저 추가한다.
+- `tests/gesture-engine.test.js` 또는 `tests/pointer-engine.test.js`에 lower-level signal cleanup 테스트를 필요한 최소 범위로 추가한다.
+- 기존 text/keyboard/scenario timeout 테스트가 영향을 받지 않는지 확인한다.
+- `pnpm test -- tests/action-orchestrator.test.js tests/gesture-engine.test.js tests/pointer-engine.test.js`
+- `pnpm typecheck`
+
 ## 첫 vertical slice
 
 첫 번째 실제 동작 가능한 slice는 다음 흐름으로 제한한다.
