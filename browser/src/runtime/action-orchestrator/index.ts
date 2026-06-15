@@ -180,9 +180,14 @@ type CurrentPointerContext = {
 type PointerSignalContext = {
   target: TargetHandle
   commandId: number
+  drag?: DragSignalContext
 }
 
-type UnsupportedPublicAction = 'drag'
+type DragSignalContext = {
+  source: TargetHandle
+  destination: TargetHandle
+  active: boolean
+}
 
 const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
   kind: 'ease',
@@ -194,12 +199,6 @@ const emptyPointerHit: PointerHitSnapshot = {
   target: null,
   hoverChain: [],
 }
-const unsupportedPublicActionLimits = {
-  drag: {
-    capability: 'drag-and-drop',
-    limit: 'drag requires synthetic pointer drag orchestration that is not implemented yet.',
-  },
-} satisfies Record<UnsupportedPublicAction, Readonly<{ capability: string; limit: string }>>
 
 export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #dom: DomPort
@@ -399,7 +398,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'preflight'
       const report = await this.#interactability.canClick(handle, snapshot, options)
       assertCanClick('click', handle, report)
-      this.#warnForceBypass(handle, report)
+      this.#warnForceBypass('click', handle, report)
 
       phase = 'perform'
       performStarted = true
@@ -568,7 +567,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       phase = 'preflight'
       const report = await this.#interactability.canClick(handle, snapshot, options)
       assertCanClick('doubleClick', handle, report)
-      this.#warnForceBypass(handle, report)
+      this.#warnForceBypass('doubleClick', handle, report)
 
       phase = 'perform'
       performStarted = true
@@ -965,8 +964,136 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async drag(): Promise<void> {
-    throw unsupportedPublicAction('drag')
+  async drag(from: TargetLike, to: TargetLike, options: DragOptions = {}): Promise<void> {
+    const span = this.#startActionSpan('drag', from, {
+      ...options,
+      to: summarizeTarget(to),
+    })
+    let phase: ActionPhase = 'resolve'
+    let source: TargetHandle | undefined
+    let destination: TargetHandle | undefined
+    let performStarted = false
+
+    try {
+      source = await this.#resolveTarget(from, options)
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(source, options)
+      phase = 'geometry'
+      const sourceSnapshot = await this.#geometry.snapshot(source)
+      const sourcePoint = clickablePointOrThrow('drag', source, sourceSnapshot)
+      this.#showTargetHighlight(source, sourceSnapshot)
+
+      phase = 'resolve'
+      destination = await this.#resolveTarget(to, options)
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(destination, options)
+      phase = 'geometry'
+      const destinationSnapshot = await this.#geometry.snapshot(destination)
+      const destinationPoint = clickablePointOrThrow('drag', destination, destinationSnapshot)
+      this.#showTargetHighlight(destination, destinationSnapshot)
+
+      phase = 'preflight'
+      const sourceReport = await this.#interactability.canClick(source, sourceSnapshot, options)
+      assertCanClick('drag', source, sourceReport)
+      this.#warnForceBypass('drag', source, sourceReport)
+      const destinationReport = await this.#interactability.canClick(
+        destination,
+        destinationSnapshot,
+        options,
+      )
+      assertCanClick('drag', destination, destinationReport)
+      this.#warnForceBypass('drag', destination, destinationReport)
+
+      const freshSource = await this.#refreshDragEndpointBeforeDispatch(
+        'source',
+        source,
+        sourcePoint,
+        options,
+        span,
+      )
+      const freshDestination = await this.#refreshDragEndpointBeforeDispatch(
+        'destination',
+        destination,
+        destinationPoint,
+        options,
+        span,
+      )
+      const freshSourceReport = await this.#interactability.canClick(
+        source,
+        freshSource.snapshot,
+        options,
+      )
+      assertCanClick('drag', source, freshSourceReport)
+      this.#warnForceBypass('drag', source, freshSourceReport)
+      const freshDestinationReport = await this.#interactability.canClick(
+        destination,
+        freshDestination.snapshot,
+        options,
+      )
+      assertCanClick('drag', destination, freshDestinationReport)
+      this.#warnForceBypass('drag', destination, freshDestinationReport)
+
+      phase = 'perform'
+      performStarted = true
+      const commandId = this.#createPointerCommandId()
+
+      span.event('pointer:synthetic-drag', {
+        action: 'drag',
+        capability: 'pointer-gesture',
+        nativeDnD: false,
+        sourceTargetId: source.id,
+        destinationTargetId: destination.id,
+        sourcePoint: freshSource.point,
+        destinationPoint: freshDestination.point,
+      })
+
+      const result = await this.#withDragSignalTarget(
+        source,
+        destination,
+        commandId,
+        () =>
+          this.#gesture.drag(
+            freshSource.point,
+            freshDestination.point,
+            operationOptions(options),
+          ),
+      )
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'drag',
+        completed: true,
+        targetId: source.id,
+        output: {
+          sourceTargetId: source.id,
+          destinationTargetId: destination.id,
+          sourcePoint: freshSource.point,
+          destinationPoint: freshDestination.point,
+          capability: 'pointer-gesture',
+          nativeDnD: false,
+          gestureCompleted: result.completed,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'drag')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
+      throw this.#finishActionFailure(span, error, {
+        action: 'drag',
+        phase: failurePhase,
+        targetId: source?.id,
+      })
+    } finally {
+      this.#clearPointerContext()
+    }
   }
 
   async waitFor(
@@ -1148,9 +1275,36 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     commandId: number,
     operation: () => Promise<TValue>,
   ): Promise<TValue> {
+    return this.#withSignalContext({ target, commandId }, operation)
+  }
+
+  async #withDragSignalTarget<TValue>(
+    source: TargetHandle,
+    destination: TargetHandle,
+    commandId: number,
+    operation: () => Promise<TValue>,
+  ): Promise<TValue> {
+    return this.#withSignalContext(
+      {
+        target: source,
+        commandId,
+        drag: {
+          source,
+          destination,
+          active: false,
+        },
+      },
+      operation,
+    )
+  }
+
+  async #withSignalContext<TValue>(
+    context: PointerSignalContext,
+    operation: () => Promise<TValue>,
+  ): Promise<TValue> {
     const previousContext = this.#signalContext
 
-    this.#signalContext = { target, commandId }
+    this.#signalContext = context
 
     try {
       return await operation()
@@ -1180,9 +1334,32 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     const report = await this.#interactability.canClick(target, snapshot, options)
     assertCanClick(action, target, report)
-    this.#warnForceBypass(target, report)
+    this.#warnForceBypass(action, target, report)
 
     return freshPoint
+  }
+
+  async #refreshDragEndpointBeforeDispatch(
+    endpoint: 'source' | 'destination',
+    target: TargetHandle,
+    initialPoint: Point,
+    options: DragOptions,
+    span: TraceSpanHandle,
+  ): Promise<Readonly<{ point: Point; snapshot: GeometrySnapshot }>> {
+    const snapshot = await this.#geometry.snapshot(target)
+    const freshPoint = clickablePointOrThrow('drag', target, snapshot)
+
+    span.event('pointer:fresh-geometry', {
+      action: 'drag',
+      endpoint,
+      targetId: target.id,
+      initialPoint,
+      freshPoint,
+      changed: !samePoint(initialPoint, freshPoint),
+      computedAt: snapshot.computedAt,
+    })
+
+    return { point: freshPoint, snapshot }
   }
 
   #applyPointerSignal(signal: PointerSignal): void {
@@ -1191,12 +1368,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
 
     const context = this.#signalContext
-    const target = context?.target ?? null
+    const preferredTarget = this.#preferredPointerHitTarget(signal, context)
     const pointerHit =
       signal.type === 'pointer:cancelled'
         ? emptyPointerHit
-        : this.#resolvePointerHit(signal.point, target)
-    const diff = this.#dispatchPointerInteractionState(signal, target, pointerHit)
+        : this.#resolvePointerHit(signal.point, preferredTarget)
+    const eventTarget = this.#eventTargetForPointerSignal(signal, context, pointerHit)
+    const diff = this.#dispatchPointerInteractionState(signal, eventTarget, pointerHit)
 
     this.#state.applyStateEffects(diff.effects)
 
@@ -1207,22 +1385,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return
     }
 
-    if (!context || !target) {
+    if (!context || !eventTarget) {
       return
     }
 
     switch (signal.type) {
       case 'pointer:moved':
+        this.#moveDragState(context, pointerHit.target ?? eventTarget)
         this.#showPointerCursor(
           signal.point,
-          target,
+          eventTarget,
           false,
           context.commandId,
-          pointerHit.target ?? target,
+          pointerHit.target ?? eventTarget,
         )
         this.#events.dispatchPointerEvent({
           type: 'pointermove',
-          target: target.element,
+          target: eventTarget.element,
           point: signal.point,
           buttons: [],
         })
@@ -1231,14 +1410,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#cursorPressedButtons.add(signal.button)
         this.#showPointerCursor(
           signal.point,
-          target,
+          eventTarget,
           this.#hasPressedCursorButtons(),
           context.commandId,
-          pointerHit.target ?? target,
+          pointerHit.target ?? eventTarget,
         )
+        this.#startDragState(context)
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
-          target: target.element,
+          target: eventTarget.element,
           point: signal.point,
           button: signal.button,
           buttons: [signal.button],
@@ -1258,14 +1438,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#cursorPressedButtons.delete(signal.button)
         this.#showPointerCursor(
           signal.point,
-          target,
+          eventTarget,
           this.#hasPressedCursorButtons(),
           context.commandId,
-          pointerHit.target ?? target,
+          pointerHit.target ?? eventTarget,
         )
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerup',
-          target: target.element,
+          target: eventTarget.element,
           point: signal.point,
           button: signal.button,
           buttons: [],
@@ -1275,13 +1455,91 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           this.#clickDispatchState.button = signal.button
           this.#clickDispatchState.upSeen = true
           this.#clickDispatchState.upAllowed &&= allowed
-          this.#dispatchActivationClick(target, signal.point)
+          this.#dispatchActivationClick(eventTarget, signal.point)
           this.#showClickFeedback(signal.point)
         }
 
+        this.#endDragState(context)
         break
       }
     }
+  }
+
+  #preferredPointerHitTarget(
+    signal: PointerSignal,
+    context: PointerSignalContext | null,
+  ): TargetHandle | null {
+    if (!context || signal.type === 'pointer:cancelled') {
+      return null
+    }
+
+    if (!context.drag) {
+      return context.target
+    }
+
+    return context.drag.active ? context.drag.destination : context.drag.source
+  }
+
+  #eventTargetForPointerSignal(
+    signal: PointerSignal,
+    context: PointerSignalContext | null,
+    pointerHit: PointerHitSnapshot,
+  ): TargetHandle | null {
+    if (!context || signal.type === 'pointer:cancelled') {
+      return null
+    }
+
+    if (!context.drag) {
+      return context.target
+    }
+
+    if (signal.type === 'pointer:down') {
+      return context.drag.source
+    }
+
+    if (signal.type === 'pointer:moved' && !context.drag.active) {
+      return context.drag.source
+    }
+
+    return pointerHit.target ?? context.drag.destination
+  }
+
+  #startDragState(context: PointerSignalContext): void {
+    if (!context.drag || context.drag.active) {
+      return
+    }
+
+    context.drag.active = true
+    const diff = this.#store.dispatch({
+      type: 'dragging:started',
+      source: context.drag.source,
+    })
+
+    this.#state.applyStateEffects(diff.effects)
+  }
+
+  #moveDragState(context: PointerSignalContext, target: TargetHandle | null): void {
+    if (!context.drag?.active) {
+      return
+    }
+
+    const diff = this.#store.dispatch({
+      type: 'dragging:moved',
+      target,
+    })
+
+    this.#state.applyStateEffects(diff.effects)
+  }
+
+  #endDragState(context: PointerSignalContext): void {
+    if (!context.drag?.active) {
+      return
+    }
+
+    context.drag.active = false
+    const diff = this.#store.dispatch({ type: 'dragging:ended' })
+
+    this.#state.applyStateEffects(diff.effects)
   }
 
   #dispatchPointerInteractionState(
@@ -1539,12 +1797,22 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return normalized
   }
 
-  #warnForceBypass(target: TargetHandle, report: InteractabilityReport): void {
+  #warnForceBypass(
+    action: Extract<ActionName, 'click' | 'typeInto' | 'doubleClick' | 'drag'>,
+    target: TargetHandle,
+    report: InteractabilityReport,
+  ): void {
     if (report.forceBypassedReasons.length === 0) {
       return
     }
 
-    this.#trace.warn('Click force bypassed interactability blockers.', {
+    const message =
+      action === 'drag'
+        ? 'Pointer action force bypassed interactability blockers.'
+        : 'Click force bypassed interactability blockers.'
+
+    this.#trace.warn(message, {
+      action,
       targetId: target.id,
       reasons: report.forceBypassedReasons,
     })
@@ -2005,7 +2273,7 @@ function cursorTagNameFor(debug: TargetDebugInfo): string | undefined {
 }
 
 function clickablePointOrThrow(
-  action: 'moveTo' | 'click' | 'typeInto' | 'doubleClick',
+  action: 'moveTo' | 'click' | 'typeInto' | 'doubleClick' | 'drag',
   target: TargetHandle,
   geometry: GeometrySnapshot,
 ): Point {
@@ -2027,7 +2295,7 @@ function clickablePointOrThrow(
 }
 
 function assertCanClick(
-  action: Extract<ActionName, 'click' | 'clickCurrent' | 'typeInto' | 'doubleClick'>,
+  action: Extract<ActionName, 'click' | 'clickCurrent' | 'typeInto' | 'doubleClick' | 'drag'>,
   target: TargetHandle,
   report: InteractabilityReport,
 ): void {
@@ -2104,23 +2372,6 @@ function normalizeActionError(
     cause: error,
     details: context,
   })
-}
-
-function unsupportedPublicAction(action: UnsupportedPublicAction): ActorbleError {
-  const unsupported = unsupportedPublicActionLimits[action]
-
-  return actorbleError(
-    'PLATFORM_UNSUPPORTED',
-    `Action ${action} is not supported by the browser action orchestrator yet.`,
-    {
-      details: {
-        boundary: 'action-orchestrator',
-        action,
-        capability: unsupported.capability,
-        limit: unsupported.limit,
-      },
-    },
-  )
 }
 
 function operationOptions(options: OperationOptions): WaitOptions {

@@ -171,6 +171,7 @@ function createPointerVisualTrackerDouble() {
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
+  const resolveTargets = [...(options.resolveTargets ?? [])]
   const hitTestResults = [...(options.hitTestResults ?? [])]
   const geometrySnapshots = [...(options.geometrySnapshots ?? [])]
   const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target)
@@ -182,18 +183,18 @@ function createHarness(options = {}) {
   const resolver = {
     resolve: vi.fn(async () => {
       calls.push('resolver.resolve')
-      return target
+      return resolveTargets.shift() ?? target
     }),
     resolveAll: vi.fn(async () => [target]),
     exists: vi.fn(async () => true),
     inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
-    validate: vi.fn(async () => {
+    validate: vi.fn(async (candidate = target) => {
       calls.push('resolver.validate')
       if (options.validateFailure) {
         throw options.validateFailure
       }
 
-      return target
+      return candidate
     }),
   }
   const surface = {
@@ -343,7 +344,27 @@ function createHarness(options = {}) {
       })
       return { completed: true }
     }),
-    drag: vi.fn(),
+    drag: vi.fn(async (from, to) => {
+      calls.push('gesture.drag')
+      signals.emit({ type: 'pointer:moved', point: from, previousPoint: null })
+      signals.emit({
+        type: 'pointer:down',
+        point: from,
+        button: 'primary',
+      })
+
+      if (options.dragFailure) {
+        throw options.dragFailure
+      }
+
+      signals.emit({ type: 'pointer:moved', point: to, previousPoint: from })
+      signals.emit({
+        type: 'pointer:up',
+        point: to,
+        button: 'primary',
+      })
+      return { completed: true }
+    }),
     cancel: vi.fn(async () => {
       calls.push('gesture.cancel')
       if (options.cancelFailure) {
@@ -1259,6 +1280,203 @@ describe('BrowserActionOrchestrator', () => {
           phase: 'validate',
           targetId: 'stale-scroll',
         }),
+      }),
+    )
+  })
+
+  it('drag resolves both endpoints, refreshes geometry before dispatch, preflights, settles, and traces synthetic pointer drag', async () => {
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const sourceInitial = geometryFor(source, { x: 10, y: 20 })
+    const destinationInitial = geometryFor(destination, { x: 100, y: 110 })
+    const sourceFresh = geometryFor(source, { x: 12, y: 22 })
+    const destinationFresh = geometryFor(destination, { x: 112, y: 122 })
+    const { calls, events, gesture, orchestrator, trace, wait } = createHarness({
+      target: source,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [sourceInitial, destinationInitial, sourceFresh, destinationFresh],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination),
+        clickReportFor(source),
+        clickReportFor(destination),
+      ],
+      hitTestResults: [source.element, source.element, destination.element, destination.element],
+    })
+
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
+
+    expect(calls.slice(0, 15)).toEqual([
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'resolver.resolve',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'geometry.snapshot',
+      'interactability.canClick',
+      'interactability.canClick',
+      'geometry.snapshot',
+      'geometry.snapshot',
+      'interactability.canClick',
+      'interactability.canClick',
+      'gesture.drag',
+    ])
+    expect(gesture.drag).toHaveBeenCalledWith({ x: 12, y: 22 }, { x: 112, y: 122 }, {})
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
+      type: 'pointermove',
+      target: source.element,
+      point: { x: 12, y: 22 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
+      type: 'pointerdown',
+      target: source.element,
+      point: { x: 12, y: 22 },
+      button: 'primary',
+      buttons: ['primary'],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
+      type: 'pointermove',
+      target: destination.element,
+      point: { x: 112, y: 122 },
+      buttons: [],
+    })
+    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
+      type: 'pointerup',
+      target: destination.element,
+      point: { x: 112, y: 122 },
+      button: 'primary',
+      buttons: [],
+    })
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pointer:synthetic-drag',
+          data: expect.objectContaining({
+            action: 'drag',
+            capability: 'pointer-gesture',
+            nativeDnD: false,
+            sourceTargetId: 'drag-source',
+            destinationTargetId: 'drop-target',
+            sourcePoint: { x: 12, y: 22 },
+            destinationPoint: { x: 112, y: 122 },
+          }),
+        }),
+      ]),
+    )
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.drag',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'drag',
+          completed: true,
+          targetId: 'drag-source',
+          output: expect.objectContaining({
+            sourceTargetId: 'drag-source',
+            destinationTargetId: 'drop-target',
+            capability: 'pointer-gesture',
+            nativeDnD: false,
+            gestureCompleted: true,
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('drag fails endpoint preflight without dispatching gesture events', async () => {
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const { events, gesture, orchestrator, trace } = createHarness({
+      target: source,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+      ],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination, {
+          enabled: false,
+          canClick: false,
+          canFocus: false,
+          canType: false,
+          blockingReasons: ['disabled'],
+          unforceableReasons: ['disabled'],
+        }),
+      ],
+    })
+
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject({
+      code: 'INTERACTABILITY_FAILED',
+      details: expect.objectContaining({
+        action: 'drag',
+        targetId: 'drop-target',
+        blockingReasons: ['disabled'],
+      }),
+    })
+
+    expect(gesture.drag).not.toHaveBeenCalled()
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.drag',
+        status: 'error',
+        attributes: expect.objectContaining({ phase: 'preflight' }),
+      }),
+    )
+  })
+
+  it('drag cancellation after pointer down cleans up pressed and dragging state', async () => {
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const { gesture, orchestrator, state, trace, visual } = createHarness({
+      target: source,
+      enableVisual: true,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+      ],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination),
+        clickReportFor(source),
+        clickReportFor(destination),
+      ],
+      hitTestResults: [source.element, source.element],
+      dragFailure: cancellationError('drag', 'scenario stopped'),
+      cursorStyle: () => 'grab',
+    })
+
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+
+    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 10, y: 20 },
+      cursor: 'grab',
+      pressed: true,
+    })
+    expect(visual.showCursor).toHaveBeenLastCalledWith({
+      point: { x: 10, y: 20 },
+      cursor: 'grab',
+      pressed: false,
+    })
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.drag',
+        status: 'cancelled',
       }),
     )
   })

@@ -418,19 +418,63 @@ describe('Actorble facade', () => {
     )
   })
 
-  it('reports remaining unsupported default public action paths with explicit platform limits', async () => {
+  it('creates a default module graph that can drag through the facade', async () => {
+    const source = document.createElement('button')
+    source.id = 'drag-source'
+    source.textContent = 'Drag'
+    source.scrollIntoView = vi.fn()
+    source.getBoundingClientRect = vi.fn(() => ({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 20,
+      top: 20,
+      left: 10,
+      right: 50,
+      bottom: 40,
+      toJSON: () => {},
+    }))
+    const destination = document.createElement('button')
+    destination.id = 'drop-target'
+    destination.textContent = 'Drop'
+    destination.scrollIntoView = vi.fn()
+    destination.getBoundingClientRect = vi.fn(() => ({
+      x: 110,
+      y: 20,
+      width: 40,
+      height: 20,
+      top: 20,
+      left: 110,
+      right: 150,
+      bottom: 40,
+      toJSON: () => {},
+    }))
+    document.body.append(source, destination)
+    document.elementFromPoint = vi.fn((x) => (x < 80 ? source : destination))
+    const seen = []
+    source.addEventListener('pointerdown', () => seen.push('source:pointerdown'))
+    destination.addEventListener('pointerup', () => seen.push('destination:pointerup'))
     const actorble = createActorble()
-    const locator = css('#missing')
 
-    await expect(actorble.drag(locator, locator)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'action-orchestrator',
-        action: 'drag',
-        capability: 'drag-and-drop',
-        limit: expect.any(String),
-      },
-    })
+    await expect(actorble.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
+
+    expect(seen).toEqual(['source:pointerdown', 'destination:pointerup'])
+    expect(actorble.getTrace().spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'action.drag', status: 'ok' }),
+      ]),
+    )
+    expect(actorble.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pointer:synthetic-drag',
+          data: expect.objectContaining({
+            capability: 'pointer-gesture',
+            nativeDnD: false,
+          }),
+        }),
+      ]),
+    )
   })
 
   it('reports unsupported debug event subscriptions with the trace fallback', () => {
