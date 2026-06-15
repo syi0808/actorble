@@ -973,7 +973,7 @@ api/actorble-facade
 
 ### T44. Unified action timeout envelope for pointer perform
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: pointer action의 public `timeout`이 resolve/reveal/preflight/wait뿐 아니라 gesture perform 전체에도 적용되도록 정리한다. 현재 pointer movement와 click dwell은 timeout option을 부분적으로 전달하지만 전체 deadline을 직접 강제하지 않아 action timeout 계약과 drift가 생길 수 있다.
 

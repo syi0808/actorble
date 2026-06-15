@@ -154,6 +154,16 @@ async function flushMicrotasks(count = 10) {
   }
 }
 
+function expectCancellationSignal(signal) {
+  expect(signal).toEqual(
+    expect.objectContaining({
+      aborted: false,
+      addEventListener: expect.any(Function),
+      removeEventListener: expect.any(Function),
+    }),
+  )
+}
+
 function cursorFromStyle(style) {
   return { cursor: style }
 }
@@ -1462,11 +1472,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.drag).toHaveBeenCalledWith(
       { x: 12, y: 22 },
       { x: 112, y: 122 },
-      {
+      expect.objectContaining({
         duration: 520,
         motion,
         timeout: 3500,
-      },
+      }),
     )
   })
 
@@ -2038,7 +2048,7 @@ describe('BrowserActionOrchestrator', () => {
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
-      { duration: 0, timeout: 100 },
+      expect.objectContaining({ duration: 0, timeout: 100 }),
     )
   })
 
@@ -2167,11 +2177,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.click).toHaveBeenCalledWith(
       target,
       { x: 20, y: 30 },
-      {
+      expect.objectContaining({
         motion,
         timeout: 1500,
         refreshPointBeforeDown: expect.any(Function),
-      },
+      }),
     )
   })
 
@@ -2559,6 +2569,154 @@ describe('BrowserActionOrchestrator', () => {
       cursor: 'pointer',
       pressed: false,
     })
+  })
+
+  it('times out click perform during press dwell with action timeout cleanup', async () => {
+    vi.useFakeTimers()
+    const controlled = createBlockingTimeline()
+    const controller = new AbortController()
+    const { orchestrator, state, trace, visual } = createHarness({
+      enableVisual: true,
+      useRealGesture: true,
+      timeline: controlled.timeline,
+      cursorStyle: () => 'pointer',
+    })
+    let click
+
+    try {
+      click = orchestrator.click(css('#target-1'), {
+        duration: 0,
+        timeout: 25,
+        signal: controller.signal,
+      })
+      const clickResult = click.then(
+        () => 'resolved',
+        (error) => error,
+      )
+
+      await vi.waitFor(() => {
+        expect(controlled.pendingDelayCount).toBe(1)
+      })
+      expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
+        point: { x: 20, y: 30 },
+        cursor: 'pointer',
+        pressed: true,
+      })
+
+      const missedDeadline = Symbol('missedDeadline')
+      const deadline = new Promise((resolve) => {
+        setTimeout(() => resolve(missedDeadline), 25)
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      const result = await Promise.race([clickResult, deadline])
+
+      expect(result).toMatchObject({
+        code: 'ACTION_TIMEOUT',
+        details: {
+          operation: 'action.click',
+          timeout: 25,
+        },
+      })
+      expect(state.cleanup).toHaveBeenCalledOnce()
+      expect(visual.showCursor).toHaveBeenLastCalledWith({
+        point: { x: 20, y: 30 },
+        cursor: 'pointer',
+        pressed: false,
+      })
+      expect(trace.getTrace().spans.at(-1)).toEqual(
+        expect.objectContaining({
+          name: 'action.click',
+          status: 'error',
+          attributes: expect.objectContaining({
+            action: 'click',
+            phase: 'perform',
+          }),
+        }),
+      )
+    } finally {
+      controller.abort('test cleanup')
+      await click?.catch(() => {})
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes one perform signal to pointer actions with public timeouts', async () => {
+    const move = createHarness()
+
+    await expect(
+      move.orchestrator.moveTo(css('#target-1'), { timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(move.gesture.hover.mock.calls[0][1].signal)
+
+    const click = createHarness()
+
+    await expect(
+      click.orchestrator.click(css('#target-1'), { timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(click.gesture.click.mock.calls[0][2].signal)
+
+    const doubleClick = createHarness()
+
+    await expect(
+      doubleClick.orchestrator.doubleClick(css('#target-1'), { timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(doubleClick.gesture.doubleClick.mock.calls[0][2].signal)
+
+    const current = createHarness()
+
+    await expect(
+      current.orchestrator.moveTo(css('#target-1'), { duration: 0 }),
+    ).resolves.toBeUndefined()
+    current.gesture.click.mockClear()
+
+    await expect(
+      current.orchestrator.clickCurrent({ timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(current.gesture.click.mock.calls[0][2].signal)
+
+    const typeTarget = inputTargetHandle()
+    const typeInto = createHarness({ target: typeTarget })
+
+    await expect(
+      typeInto.orchestrator.typeInto(css('#target-1'), 'H', {
+        delay: 0,
+        focusStrategy: 'click',
+        timeout: 100,
+        focusClick: { duration: 0, pressDwell: 0 },
+      }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(typeInto.gesture.click.mock.calls[0][2].signal)
+
+    const source = targetHandle('drag-source')
+    const destination = targetHandle('drop-target')
+    const drag = createHarness({
+      target: source,
+      resolveTargets: [source, destination],
+      geometrySnapshots: [
+        geometryFor(source, { x: 10, y: 20 }),
+        geometryFor(destination, { x: 100, y: 110 }),
+        geometryFor(source, { x: 12, y: 22 }),
+        geometryFor(destination, { x: 112, y: 122 }),
+      ],
+      clickReports: [
+        clickReportFor(source),
+        clickReportFor(destination),
+        clickReportFor(source),
+        clickReportFor(destination),
+      ],
+    })
+
+    await expect(
+      drag.orchestrator.drag(css('#drag-source'), css('#drop-target'), { timeout: 100 }),
+    ).resolves.toBeUndefined()
+
+    expectCancellationSignal(drag.gesture.drag.mock.calls[0][2].signal)
   })
 
   it('restores pressed cursor visual when click cancellation emits pointer cancelled', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BrowserGestureEngine, createGestureEngine } from '../src/input/gesture-engine/index.js'
 import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
 import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
+import { cancellationError } from '../src/shared/index.js'
 
 function createTimeline(calls) {
   return {
@@ -286,6 +287,33 @@ describe('BrowserGestureEngine', () => {
       ['down', 'primary'],
       ['delay', 24, { signal: controller.signal }],
       ['up', 'primary'],
+    ])
+  })
+
+  it('cancels pointer state when click dwell is cancelled after pointer down', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    timeline.delay.mockImplementationOnce(async (duration, options) => {
+      const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+      calls.push(hasOptions ? ['delay', duration, options] : ['delay', duration])
+      throw cancellationError('timeline.delay', 'scenario stopped')
+    })
+
+    await expect(engine.click(createTarget(), { x: 3, y: 4 })).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: {
+        operation: 'timeline.delay',
+        reason: 'scenario stopped',
+      },
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 3, y: 4 }],
+      ['down', 'primary'],
+      ['delay', 80],
+      ['cancel'],
     ])
   })
 

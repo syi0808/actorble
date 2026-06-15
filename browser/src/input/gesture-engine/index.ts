@@ -1,4 +1,4 @@
-import { actorbleError } from '../../shared/index.js'
+import { actorbleError, cancellationError } from '../../shared/index.js'
 import { BrowserPointerEngine } from '../pointer-engine/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import type {
@@ -67,7 +67,12 @@ export class BrowserGestureEngine implements GestureEngine {
     point: Point,
     options: GestureClickOptions = {},
   ): Promise<GestureResult> {
-    return this.#clickSequence(point, options, normalizeClickCount(options.clickCount))
+    return this.#clickSequence(
+      'gesture.click',
+      point,
+      options,
+      normalizeClickCount(options.clickCount),
+    )
   }
 
   async doubleClick(
@@ -75,7 +80,7 @@ export class BrowserGestureEngine implements GestureEngine {
     point: Point,
     options: GestureClickOptions = {},
   ): Promise<GestureResult> {
-    return this.#clickSequence(point, options, 2)
+    return this.#clickSequence('gesture.doubleClick', point, options, 2)
   }
 
   async hover(point: Point, options: MoveOptions = {}): Promise<GestureResult> {
@@ -88,11 +93,13 @@ export class BrowserGestureEngine implements GestureEngine {
     let pressed = false
 
     await this.#pointer.moveTo(from, dragMovementOptions(options))
+    assertGestureNotCancelled('gesture.drag', options)
 
     try {
       await this.#pointer.down('primary')
       pressed = true
       await this.#pointer.moveTo(to, dragMovementOptions(options))
+      assertGestureNotCancelled('gesture.drag', options)
       await this.#pointer.up('primary')
       pressed = false
 
@@ -113,6 +120,7 @@ export class BrowserGestureEngine implements GestureEngine {
   }
 
   async #clickSequence(
+    operation: 'gesture.click' | 'gesture.doubleClick',
     point: Point,
     options: GestureClickOptions,
     clickCount: number,
@@ -120,27 +128,42 @@ export class BrowserGestureEngine implements GestureEngine {
     const button = options.button ?? 'primary'
     const pressDwell = normalizePressDwell(options.pressDwell)
     let currentPoint = point
+    let pressed = false
 
-    await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
+    try {
+      await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
 
-    for (let clickIndex = 0; clickIndex < clickCount; clickIndex += 1) {
-      const refreshedPoint = await options.refreshPointBeforeDown?.(currentPoint)
+      for (let clickIndex = 0; clickIndex < clickCount; clickIndex += 1) {
+        assertGestureNotCancelled(operation, options)
+        const refreshedPoint = await options.refreshPointBeforeDown?.(currentPoint)
+        assertGestureNotCancelled(operation, options)
 
-      if (refreshedPoint && !samePoint(currentPoint, refreshedPoint)) {
-        await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
-        currentPoint = refreshedPoint
+        if (refreshedPoint && !samePoint(currentPoint, refreshedPoint)) {
+          await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
+          currentPoint = refreshedPoint
+        }
+
+        assertGestureNotCancelled(operation, options)
+        await this.#pointer.down(button)
+        pressed = true
+
+        if (pressDwell > 0) {
+          await this.#timeline.delay(pressDwell, cancellationOptions(options))
+        }
+
+        assertGestureNotCancelled(operation, options)
+        await this.#pointer.up(button)
+        pressed = false
       }
 
-      await this.#pointer.down(button)
-
-      if (pressDwell > 0) {
-        await this.#timeline.delay(pressDwell, cancellationOptions(options))
+      return { completed: true }
+    } catch (error) {
+      if (pressed) {
+        await this.#pointer.cancel()
       }
 
-      await this.#pointer.up(button)
+      throw error
     }
-
-    return { completed: true }
   }
 }
 
@@ -180,6 +203,12 @@ function freshPointMovementOptions(options: ClickOptions): MoveOptions {
 
 function cancellationOptions(options: ClickOptions): CancellationOptions {
   return options.signal === undefined ? {} : { signal: options.signal }
+}
+
+function assertGestureNotCancelled(operation: string, options: CancellationOptions): void {
+  if (options.signal?.aborted) {
+    throw cancellationError(operation, options.signal.reason)
+  }
 }
 
 function normalizeClickCount(clickCount: number | undefined): number {

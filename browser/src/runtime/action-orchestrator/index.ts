@@ -25,8 +25,10 @@ import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.j
 import {
   ActorbleError,
   actorbleError,
+  cancellationError,
   element as elementLocator,
   resolveVisualFeedbackOptions,
+  timeoutError,
 } from '../../shared/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
 import type { FocusEngine } from '../../input/focus-engine/index.js'
@@ -35,6 +37,7 @@ import type {
   ClickCurrentOptions,
   ClickOptions,
   DomPort,
+  DurationMs,
   EventDispatchPort,
   ActorblePointerOptions,
   DragOptions,
@@ -148,6 +151,11 @@ type ActionPhase =
   | 'perform'
   | 'wait'
   | 'cleanup'
+
+type PointerPerformAction = Extract<
+  ActionName,
+  'moveTo' | 'click' | 'doubleClick' | 'clickCurrent' | 'typeInto' | 'drag'
+>
 
 type ClickDispatchState = {
   button: PointerButtonName
@@ -355,8 +363,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
       phase = 'perform'
       const commandId = this.#createPointerCommandId()
-      await this.#withSignalTarget(handle, commandId, () =>
-        this.#gesture.hover(point, publicMoveOptions(options)),
+      const moveTarget = handle
+      await this.#withPointerPerformTimeout(
+        'moveTo',
+        publicMoveOptions(options),
+        (performOptions) =>
+          this.#withSignalTarget(moveTarget, commandId, () =>
+            this.#gesture.hover(point, performOptions),
+          ),
       )
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -405,20 +419,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const clickTarget = handle
       let dispatchPoint = point
       const commandId = this.#createPointerCommandId()
-      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
-        this.#gesture.click(clickTarget, point, {
-          ...publicClickGestureOptions(options),
-          refreshPointBeforeDown: async () => {
-            dispatchPoint = await this.#refreshClickPointBeforeDown(
-              'click',
-              clickTarget,
-              point,
-              options,
-              span,
-            )
-            return dispatchPoint
-          },
-        }),
+      const result = await this.#withPointerPerformTimeout(
+        'click',
+        publicClickGestureOptions(options),
+        (performOptions) =>
+          this.#withSignalTarget(clickTarget, commandId, () =>
+            this.#gesture.click(clickTarget, point, {
+              ...performOptions,
+              refreshPointBeforeDown: async () => {
+                dispatchPoint = await this.#refreshClickPointBeforeDown(
+                  'click',
+                  clickTarget,
+                  point,
+                  options,
+                  span,
+                )
+                return dispatchPoint
+              },
+            }),
+          ),
       )
       const dispatchState = this.#clickDispatchState
       const activationDispatchCount = dispatchState?.activationCount ?? 0
@@ -489,22 +508,27 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       performStarted = true
       const clickTarget = handle
       const commandId = this.#createPointerCommandId()
-      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
-        this.#gesture.click(clickTarget, currentPoint, {
-          ...publicClickGestureOptions(options),
-          refreshPointBeforeDown: async () => {
-            this.#validateCurrentPointerTarget(clickTarget, span)
-            const freshSnapshot = await this.#geometry.snapshot(clickTarget)
-            const freshReport = await this.#interactability.canClick(
-              clickTarget,
-              freshSnapshot,
-              options,
-            )
+      const result = await this.#withPointerPerformTimeout(
+        'clickCurrent',
+        publicClickGestureOptions(options),
+        (performOptions) =>
+          this.#withSignalTarget(clickTarget, commandId, () =>
+            this.#gesture.click(clickTarget, currentPoint, {
+              ...performOptions,
+              refreshPointBeforeDown: async () => {
+                this.#validateCurrentPointerTarget(clickTarget, span)
+                const freshSnapshot = await this.#geometry.snapshot(clickTarget)
+                const freshReport = await this.#interactability.canClick(
+                  clickTarget,
+                  freshSnapshot,
+                  options,
+                )
 
-            assertCanClick('clickCurrent', clickTarget, freshReport)
-            return currentPoint
-          },
-        }),
+                assertCanClick('clickCurrent', clickTarget, freshReport)
+                return currentPoint
+              },
+            }),
+          ),
       )
       const dispatchState = this.#clickDispatchState
       const activationDispatchCount = dispatchState?.activationCount ?? 0
@@ -574,20 +598,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const clickTarget = handle
       let dispatchPoint = point
       const commandId = this.#createPointerCommandId()
-      const result = await this.#withSignalTarget(clickTarget, commandId, () =>
-        this.#gesture.doubleClick(clickTarget, point, {
-          ...publicClickGestureOptions(options),
-          refreshPointBeforeDown: async () => {
-            dispatchPoint = await this.#refreshClickPointBeforeDown(
-              'doubleClick',
-              clickTarget,
-              point,
-              options,
-              span,
-            )
-            return dispatchPoint
-          },
-        }),
+      const result = await this.#withPointerPerformTimeout(
+        'doubleClick',
+        publicClickGestureOptions(options),
+        (performOptions) =>
+          this.#withSignalTarget(clickTarget, commandId, () =>
+            this.#gesture.doubleClick(clickTarget, point, {
+              ...performOptions,
+              refreshPointBeforeDown: async () => {
+                dispatchPoint = await this.#refreshClickPointBeforeDown(
+                  'doubleClick',
+                  clickTarget,
+                  point,
+                  options,
+                  span,
+                )
+                return dispatchPoint
+              },
+            }),
+          ),
       )
       const dispatchState = this.#clickDispatchState
       const activationDispatchCount = dispatchState?.activationCount ?? 0
@@ -748,20 +777,25 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         clickFocusNeedsCleanup = true
 
         const commandId = this.#createPointerCommandId()
-        const result = await this.#withSignalTarget(typeTarget, commandId, () =>
-          this.#gesture.click(typeTarget, point, {
-            ...publicClickGestureOptions(clickOptions),
-            refreshPointBeforeDown: async () => {
-              dispatchPoint = await this.#refreshClickPointBeforeDown(
-                'typeInto',
-                typeTarget,
-                point,
-                clickOptions,
-                span,
-              )
-              return dispatchPoint
-            },
-          }),
+        const result = await this.#withPointerPerformTimeout(
+          'typeInto',
+          publicClickGestureOptions(clickOptions),
+          (performOptions) =>
+            this.#withSignalTarget(typeTarget, commandId, () =>
+              this.#gesture.click(typeTarget, point, {
+                ...performOptions,
+                refreshPointBeforeDown: async () => {
+                  dispatchPoint = await this.#refreshClickPointBeforeDown(
+                    'typeInto',
+                    typeTarget,
+                    point,
+                    clickOptions,
+                    span,
+                  )
+                  return dispatchPoint
+                },
+              }),
+            ),
         )
 
         clickFocusNeedsCleanup = false
@@ -1047,15 +1081,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         destinationPoint: freshDestination.point,
       })
 
-      const result = await this.#withDragSignalTarget(
-        source,
-        destination,
-        commandId,
-        () =>
-          this.#gesture.drag(
-            freshSource.point,
-            freshDestination.point,
-            publicMoveOptions(options),
+      const dragSource = source
+      const dragDestination = destination
+      const result = await this.#withPointerPerformTimeout(
+        'drag',
+        publicMoveOptions(options),
+        (performOptions) =>
+          this.#withDragSignalTarget(dragSource, dragDestination, commandId, () =>
+            this.#gesture.drag(freshSource.point, freshDestination.point, performOptions),
           ),
       )
 
@@ -1315,6 +1348,87 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     } finally {
       this.#signalContext = previousContext
     }
+  }
+
+  #withPointerPerformTimeout<TValue, TOptions extends OperationOptions>(
+    action: PointerPerformAction,
+    options: TOptions,
+    operation: (options: TOptions) => Promise<TValue>,
+  ): Promise<TValue> {
+    if (options.timeout === undefined) {
+      return operation(options)
+    }
+
+    const operationName = `action.${action}`
+    const timeout = normalizeDuration(options.timeout)
+    const timeoutFailure = timeoutError(operationName, timeout, {
+      details: { action, phase: 'perform' },
+    })
+    const controller = new AbortController()
+    const externalSignal = options.signal
+
+    return new Promise<TValue>((resolve, reject) => {
+      let timerId: ReturnType<typeof setTimeout> | null = null
+      let finished = false
+
+      const cleanup = () => {
+        if (timerId !== null) {
+          clearTimeout(timerId)
+          timerId = null
+        }
+
+        externalSignal?.removeEventListener('abort', onExternalAbort)
+      }
+
+      const complete = (value: TValue) => {
+        if (finished) {
+          return
+        }
+
+        finished = true
+        cleanup()
+        resolve(value)
+      }
+
+      const fail = (error: unknown) => {
+        if (finished) {
+          return
+        }
+
+        finished = true
+        cleanup()
+        reject(error)
+      }
+
+      const onExternalAbort = () => {
+        controller.abort(externalSignal?.reason)
+        fail(cancellationError(operationName, externalSignal?.reason))
+      }
+
+      if (externalSignal?.aborted) {
+        fail(cancellationError(operationName, externalSignal.reason))
+        return
+      }
+
+      externalSignal?.addEventListener('abort', onExternalAbort, { once: true })
+      timerId = setTimeout(() => {
+        controller.abort(timeoutFailure)
+        fail(timeoutFailure)
+      }, timeout)
+
+      Promise.resolve()
+        .then(() => operation({ ...options, signal: controller.signal } as TOptions))
+        .then(complete, (error: unknown) => {
+          fail(
+            normalizePointerPerformError(
+              error,
+              operationName,
+              timeout,
+              controller.signal.reason,
+            ),
+          )
+        })
+    })
   }
 
   async #refreshClickPointBeforeDown(
@@ -2375,6 +2489,14 @@ function clonePoint(point: Point): Point {
   return { x: point.x, y: point.y }
 }
 
+function normalizeDuration(duration: DurationMs): DurationMs {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0
+  }
+
+  return duration
+}
+
 function normalizeActionError(
   error: unknown,
   context: Readonly<{
@@ -2391,6 +2513,40 @@ function normalizeActionError(
     cause: error,
     details: context,
   })
+}
+
+function normalizePointerPerformError(
+  error: unknown,
+  operation: string,
+  timeout: DurationMs,
+  abortReason?: unknown,
+): unknown {
+  if (abortReason instanceof ActorbleError && abortReason.code === 'ACTION_TIMEOUT') {
+    return abortReason
+  }
+
+  if (!(error instanceof ActorbleError)) {
+    return error
+  }
+
+  if (error.code === 'ACTION_CANCELLED') {
+    const reason = abortReason ?? error.details?.reason
+
+    if (reason instanceof ActorbleError && reason.code === 'ACTION_TIMEOUT') {
+      return reason
+    }
+
+    return error
+  }
+
+  if (error.code === 'ACTION_TIMEOUT' && error.details?.operation !== operation) {
+    return timeoutError(operation, timeout, {
+      cause: error,
+      details: { operation },
+    })
+  }
+
+  return error
 }
 
 function operationOptions(options: OperationOptions): WaitOptions {
