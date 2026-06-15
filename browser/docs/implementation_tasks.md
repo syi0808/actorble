@@ -9,19 +9,23 @@
 - T2 diagnostics trace 최소 코어는 완료됐다. `src/diagnostics/diagnostics-trace/index.ts`가 in-memory span/event/snapshot/warning collector를 제공한다.
 - T3 platform adapter 최소 구현은 완료됐다. `src/platform/platform-adapter/*`가 jsdom 기반 DOM/event/state/style adapter 동작을 제공한다.
 - `src/`는 architecture layer를 드러내도록 `api`, `runtime`, `targeting`, `input`, `state`, `visual`, `platform`, `diagnostics`, `capability`, `shared`로 나뉜다.
-- 일부 public facade/orchestrator 메서드는 아직 `notImplemented()` shell로 남아 있다. 다음 작업은 shell을 실제 동작으로 좁게 채우는 방식으로 진행한다.
-- T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결하기 위한 후속 보강 태스크다.
-- T23-T25는 browser-like cursor visual, CSS `cursor` 반영, pointer press feedback을 기존 visual runtime 위에 보강하는 태스크다.
-- T26-T33은 example에서 확인된 visual fidelity 문제를 다룬다. 기본 입력 타이밍, click press 가시성, 조용한 visual 기본값, CSS pseudo-state mirror, cursor 의미 보정, browser smoke 검증을 순서대로 보강한다.
-- T34-T40은 scenario timeline과 runner 중 visual 안정성 문제를 다룬다. `delay` step, run-level pacing, click 기반 type focus, scroll/resize/layout 변화에 따른 cursor tracking과 dispatch 좌표 보정을 순서대로 보강한다.
+- Public facade 메서드는 composition root에서 resolver/orchestrator/runner/geometry/trace로 위임된다. 지원하지 않는 browser 한계는 silent shell 대신 capability/fidelity report 또는 `PLATFORM_UNSUPPORTED` error로 드러낸다.
+- T18-T22는 cursor overlay, motion profile, typing cadence, keystroke feedback, visual fidelity example을 실제 runtime에 연결한 완료 태스크다.
+- T23-T25는 browser-like cursor visual, CSS `cursor` 반영, pointer press feedback을 기존 visual runtime 위에 보강한 완료 태스크다.
+- T26-T33은 example에서 확인된 visual fidelity 문제를 다뤘다. 기본 입력 타이밍, click press 가시성, 조용한 visual 기본값, CSS pseudo-state mirror, cursor 의미 보정, browser smoke 검증을 순서대로 보강했다.
+- T34-T40은 scenario timeline과 runner 중 visual 안정성 문제를 다뤘다. `delay` step, run-level pacing, click 기반 type focus, scroll/resize/layout 변화에 따른 cursor tracking과 dispatch 좌표 보정을 순서대로 보강했다.
+- T0-T40 이후 follow-up 완료 기록과 최신 smoke 정합성은 `docs/tasks-2026-06-14.md`에서 관리한다. F 작업은 이 문서의 T41+ 항목으로 복제하지 않는다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
-기본 검증 명령:
+기본 검증 명령과 2026-06-15 기준 결과:
 
 ```txt
-pnpm test
-pnpm typecheck
-pnpm build
+pnpm test              -> pass, 23 files / 311 tests
+pnpm typecheck         -> pass
+pnpm build             -> pass
+pnpm example:typecheck -> pass
+pnpm example:build     -> pass
+pnpm example:smoke     -> pass
 ```
 
 ## 의존성 방향
