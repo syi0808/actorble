@@ -631,6 +631,26 @@ export type ScenarioClickStep = Readonly<{
   options?: ScenarioStepOptions<ClickOptions>
 }>
 
+export type ScenarioMoveToStep = Readonly<{
+  id?: string
+  action: 'moveTo'
+  target: TargetLike
+  options?: ScenarioStepOptions<MoveOptions>
+}>
+
+export type ScenarioClickCurrentStep = Readonly<{
+  id?: string
+  action: 'clickCurrent'
+  options?: ScenarioStepOptions<ClickCurrentOptions>
+}>
+
+export type ScenarioDoubleClickStep = Readonly<{
+  id?: string
+  action: 'doubleClick'
+  target: TargetLike
+  options?: ScenarioStepOptions<ClickOptions>
+}>
+
 export type ScenarioFocusStep = Readonly<{
   id?: string
   action: 'focus'
@@ -686,6 +706,14 @@ export type ScenarioScrollToPositionStep = Readonly<{
 
 export type ScenarioScrollToStep = ScenarioScrollToTargetStep | ScenarioScrollToPositionStep
 
+export type ScenarioDragStep = Readonly<{
+  id?: string
+  action: 'drag'
+  from: TargetLike
+  to: TargetLike
+  options?: ScenarioStepOptions<DragOptions>
+}>
+
 export type ScenarioWaitForStep = Readonly<{
   id?: string
   action: 'waitFor'
@@ -702,12 +730,16 @@ export type ScenarioDelayStep = Readonly<{
 
 export type ScenarioStep =
   | ScenarioClickStep
+  | ScenarioMoveToStep
+  | ScenarioClickCurrentStep
+  | ScenarioDoubleClickStep
   | ScenarioFocusStep
   | ScenarioTypeStep
   | ScenarioTypeIntoStep
   | ScenarioFillStep
   | ScenarioPressStep
   | ScenarioScrollToStep
+  | ScenarioDragStep
   | ScenarioWaitForStep
   | ScenarioDelayStep
 

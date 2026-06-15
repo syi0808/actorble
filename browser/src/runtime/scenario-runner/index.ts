@@ -12,9 +12,12 @@ import type { ActionOrchestrator } from '../action-orchestrator/index.js'
 import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
 import type {
+  ClickCurrentOptions,
   ClickOptions,
+  DragOptions,
   FillOptions,
   FocusOptions,
+  MoveOptions,
   PressOptions,
   RunOptions,
   Scenario,
@@ -247,9 +250,17 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     }
 
     switch (step.action) {
+      case 'moveTo':
+        assertTarget(step.target, step.action, stepIndex)
+        return this.#orchestrator.moveTo(step.target, withSignal(step.options, signal))
       case 'click':
         assertTarget(step.target, step.action, stepIndex)
         return this.#orchestrator.click(step.target, withSignal(step.options, signal))
+      case 'clickCurrent':
+        return this.#orchestrator.clickCurrent(withSignal(step.options, signal))
+      case 'doubleClick':
+        assertTarget(step.target, step.action, stepIndex)
+        return this.#orchestrator.doubleClick(step.target, withSignal(step.options, signal))
       case 'focus':
         assertTarget(step.target, step.action, stepIndex)
         return this.#orchestrator.focus(step.target, withSignal(step.options, signal))
@@ -277,6 +288,14 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         return this.#orchestrator.press(step.input, withSignal(step.options, signal))
       case 'scrollTo':
         return this.#executeScrollToStep(step, stepIndex, signal)
+      case 'drag':
+        assertTarget(step.from, step.action, stepIndex, 'from')
+        assertTarget(step.to, step.action, stepIndex, 'to')
+        return this.#orchestrator.drag(
+          step.from,
+          step.to,
+          withSignal(step.options, signal),
+        )
       case 'waitFor':
         assertWaitCondition(step.input, step.action, stepIndex)
         return this.#orchestrator
@@ -512,13 +531,14 @@ function assertTarget(
   target: TargetLike | undefined,
   action: string,
   stepIndex: number,
+  field = 'target',
 ): asserts target is TargetLike {
   if (target !== undefined) {
     return
   }
 
   throw actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" requires a target.`, {
-    details: { action, stepIndex, field: 'target' },
+    details: { action, stepIndex, field },
   })
 }
 
@@ -556,9 +576,12 @@ function assertWaitCondition(
 
 function withSignal<
   TOptions extends
+    | ClickCurrentOptions
     | ClickOptions
+    | DragOptions
     | FillOptions
     | FocusOptions
+    | MoveOptions
     | PressOptions
     | ScrollOptions
     | TypeOptions

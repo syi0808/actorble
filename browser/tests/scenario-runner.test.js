@@ -236,6 +236,79 @@ describe('BrowserScenarioRunner', () => {
     ])
   })
 
+  it('runs pointer scenario steps in order through the action orchestrator', async () => {
+    const calls = []
+    const moveTarget = css('#card')
+    const openTarget = css('#open')
+    const dragSource = css('#backlog-card')
+    const dragDestination = css('#done-column')
+    const orchestrator = createOrchestrator({
+      moveTo: vi.fn(async (target, options) => {
+        calls.push(['moveTo', target, options])
+      }),
+      clickCurrent: vi.fn(async (options) => {
+        calls.push(['clickCurrent', options])
+      }),
+      doubleClick: vi.fn(async (target, options) => {
+        calls.push(['doubleClick', target, options])
+      }),
+      drag: vi.fn(async (from, to, options) => {
+        calls.push(['drag', from, to, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run({
+        steps: [
+          { action: 'moveTo', target: moveTarget, options: { timeout: 10, duration: 40 } },
+          { action: 'clickCurrent', options: { timeout: 15, pressDwell: 5 } },
+          { action: 'doubleClick', target: openTarget, options: { timeout: 20, clickCount: 2 } },
+          { action: 'drag', from: dragSource, to: dragDestination, options: { timeout: 25, force: true } },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'moveTo',
+        moveTarget,
+        expect.objectContaining({
+          timeout: 10,
+          duration: 40,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'clickCurrent',
+        expect.objectContaining({
+          timeout: 15,
+          pressDwell: 5,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'doubleClick',
+        openTarget,
+        expect.objectContaining({
+          timeout: 20,
+          clickCount: 2,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+      [
+        'drag',
+        dragSource,
+        dragDestination,
+        expect.objectContaining({
+          timeout: 25,
+          force: true,
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ])
+  })
+
   it('adds scenario step context to unsupported scrollTo coordinate failures', async () => {
     const position = { x: 10, y: 20, coordinateSpace: 'screen' }
     const orchestrator = createOrchestrator({
@@ -1105,6 +1178,77 @@ describe('BrowserScenarioRunner', () => {
     }
   })
 
+  it('stops in-flight pointer steps through the scenario abort signal', async () => {
+    const cases = [
+      {
+        action: 'moveTo',
+        step: { action: 'moveTo', target: css('#card') },
+        override(signalRef) {
+          return {
+            moveTo: vi.fn((_target, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'clickCurrent',
+        step: { action: 'clickCurrent' },
+        override(signalRef) {
+          return {
+            clickCurrent: vi.fn((options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'doubleClick',
+        step: { action: 'doubleClick', target: css('#open') },
+        override(signalRef) {
+          return {
+            doubleClick: vi.fn((_target, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+      {
+        action: 'drag',
+        step: { action: 'drag', from: css('#card'), to: css('#done') },
+        override(signalRef) {
+          return {
+            drag: vi.fn((_from, _to, options) => {
+              signalRef.current = options.signal
+              return new Promise(() => {})
+            }),
+          }
+        },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const signalRef = { current: undefined }
+      const orchestrator = createOrchestrator(testCase.override(signalRef))
+      const runner = new BrowserScenarioRunner({ orchestrator })
+      const run = runner.run({ steps: [testCase.step] })
+      run.catch(() => {})
+
+      await vi.waitFor(() => expect(signalRef.current).toBeDefined())
+      runner.stop()
+
+      await expect(run).rejects.toMatchObject({
+        code: 'ACTION_CANCELLED',
+        details: { operation: 'scenario.run', reason: 'scenario stopped' },
+      })
+      expect(signalRef.current.aborted).toBe(true)
+      expect(orchestrator[testCase.action]).toHaveBeenCalledOnce()
+    }
+  })
+
   it('cancels in-flight type, fill, and press steps when the external run signal aborts', async () => {
     const cases = [
       {
@@ -1307,6 +1451,42 @@ describe('BrowserScenarioRunner', () => {
       status: 'failed',
       currentStepIndex: null,
     })
+  })
+
+  it('rejects pointer steps with missing required targets', async () => {
+    const cases = [
+      {
+        step: { action: 'moveTo' },
+        details: { action: 'moveTo', stepIndex: 0, field: 'target' },
+      },
+      {
+        step: { action: 'doubleClick' },
+        details: { action: 'doubleClick', stepIndex: 0, field: 'target' },
+      },
+      {
+        step: { action: 'drag', to: css('#done') },
+        details: { action: 'drag', stepIndex: 0, field: 'from' },
+      },
+      {
+        step: { action: 'drag', from: css('#card') },
+        details: { action: 'drag', stepIndex: 0, field: 'to' },
+      },
+    ]
+
+    for (const testCase of cases) {
+      const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+      await expect(
+        runner.run({ steps: [testCase.step] }),
+      ).rejects.toMatchObject({
+        code: 'PLATFORM_UNSUPPORTED',
+        details: testCase.details,
+      })
+      expect(runner.getSnapshot()).toMatchObject({
+        status: 'failed',
+        currentStepIndex: null,
+      })
+    }
   })
 
   it('rejects type, fill, and press steps with missing required input or target', async () => {
