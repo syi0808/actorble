@@ -96,6 +96,27 @@ describe('BrowserDomAdapter', () => {
     })
   })
 
+  it('describes native label accessible names after ARIA names', () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="email">Email</label>
+        <input id="email" />
+        <label>Name <input id="name" /></label>
+        <label for="alias">Native Alias</label>
+        <input id="alias" aria-label="ARIA Alias" />
+        <span id="preferred">ARIA Labelled</span>
+        <label for="labelled">Native Labelled</label>
+        <input id="labelled" aria-labelledby="preferred" />
+      </form>
+    `
+    const adapter = new BrowserDomAdapter(document)
+
+    expect(adapter.describeElement(document.querySelector('#email')).name).toBe('Email')
+    expect(adapter.describeElement(document.querySelector('#name')).name).toBe('Name')
+    expect(adapter.describeElement(document.querySelector('#alias')).name).toBe('ARIA Alias')
+    expect(adapter.describeElement(document.querySelector('#labelled')).name).toBe('ARIA Labelled')
+  })
+
   it('reads text content from the configured document or shadow root', () => {
     document.body.innerHTML = '<main>Saved <span>Project</span></main>'
     const documentAdapter = new BrowserDomAdapter(document)

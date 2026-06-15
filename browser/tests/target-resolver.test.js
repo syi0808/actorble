@@ -227,6 +227,51 @@ describe('BrowserTargetResolver', () => {
     })
   })
 
+  it('resolves role locators by native label accessible names', async () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="email">Email</label>
+        <input id="email" />
+        <label>Name <input id="name" /></label>
+        <label for="alias">Native Alias</label>
+        <input id="alias" aria-label="ARIA Alias" />
+        <span id="preferred">ARIA Labelled</span>
+        <label for="labelled">Native Labelled</label>
+        <input id="labelled" aria-labelledby="preferred" />
+        <label for="hidden-label" hidden>Hidden Label</label>
+        <input id="hidden-label" />
+        <label for="hidden-control">Hidden Control</label>
+        <input id="hidden-control" hidden />
+      </form>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(role('textbox', { name: 'Email' }))).resolves.toMatchObject({
+      element: document.querySelector('#email'),
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'Name' }))).resolves.toMatchObject({
+      element: document.querySelector('#name'),
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'ARIA Alias' }))).resolves.toMatchObject({
+      element: document.querySelector('#alias'),
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'Native Alias' }))).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'ARIA Labelled' }))).resolves.toMatchObject({
+      element: document.querySelector('#labelled'),
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'Native Labelled' }))).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'Hidden Label' }))).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+    })
+    await expect(resolver.resolve(role('textbox', { name: 'Hidden Control' }))).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+    })
+  })
+
   it('treats any multiple strict role candidates as ambiguous even when scores differ', async () => {
     document.body.innerHTML = `
       <button id="exact" aria-label="Create">Create</button>

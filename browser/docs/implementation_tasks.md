@@ -928,7 +928,7 @@ api/actorble-facade
 
 ### T42. Native label accessible names for role locators
 
-- Status: [ ] Not started
+- Status: [x] Completed
 
 브리핑: `role(kind, { name })`이 browser native label association을 accessible name 후보로 사용할 수 있게 한다. 새 accessibility dependency를 추가하지 않고, 현재 label locator가 이미 가진 `<label for>`와 nested label 탐색을 재사용한다.
 

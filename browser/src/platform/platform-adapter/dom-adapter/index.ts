@@ -557,6 +557,72 @@ function accessibleName(element: Element): string | undefined {
     return labelledByName
   }
 
+  const nativeLabelName = associatedLabelName(element)
+
+  if (nativeLabelName) {
+    return nativeLabelName
+  }
+
   const text = element.textContent?.replace(/\s+/g, ' ').trim()
   return text || undefined
+}
+
+const labelableSelector = 'button,input,meter,output,progress,select,textarea'
+
+function associatedLabelName(element: Element): string | undefined {
+  if (!element.matches(labelableSelector)) {
+    return undefined
+  }
+
+  const root = element.getRootNode()
+  const labels = new Set<Element>()
+
+  if (element.id && isQueryableRoot(root)) {
+    for (const label of Array.from(root.querySelectorAll('label'))) {
+      if (label.getAttribute('for') === element.id) {
+        labels.add(label)
+      }
+    }
+  }
+
+  const nestedLabel = element.closest('label')
+
+  if (nestedLabel) {
+    labels.add(nestedLabel)
+  }
+
+  const text = Array.from(labels)
+    .filter((label) => !isHiddenForAccessibleName(label))
+    .map((label) => normalizeAccessibleText(label.textContent ?? ''))
+    .filter(Boolean)
+    .join(' ')
+
+  return text || undefined
+}
+
+function normalizeAccessibleText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function isQueryableRoot(root: Node): root is Document | ShadowRoot {
+  return typeof (root as ParentNode).querySelectorAll === 'function'
+}
+
+function isHiddenForAccessibleName(element: Element): boolean {
+  let current: Element | null = element
+
+  while (current) {
+    if (current.hasAttribute('hidden') || current.getAttribute('aria-hidden') === 'true') {
+      return true
+    }
+
+    const style = getOwnerWindow(current).getComputedStyle(current)
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+      return true
+    }
+
+    current = current.parentElement
+  }
+
+  return false
 }
