@@ -81,11 +81,9 @@ export class BrowserVisualLayer implements VisualLayer {
 
     const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
-    const spec = scaleCursorVisualSpec(
-      CURSOR_VISUAL_SPECS[request.kind],
-      normalizeCursorScale(this.options.cursorScale),
-    )
-    const baseTransform = spec.style.transform ?? 'none'
+    const baseSpec = CURSOR_VISUAL_SPECS[request.kind]
+    const spec = scaleCursorVisualSpec(baseSpec, normalizeCursorScale(this.options.cursorScale))
+    const baseTransform = baseSpec.style.transform ?? 'none'
     cursor.setAttribute('data-actorble-cursor-kind', request.kind)
     cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
     cursor.setAttribute('data-actorble-cursor-hotspot-y', String(spec.hotspot.y))
@@ -106,22 +104,30 @@ export class BrowserVisualLayer implements VisualLayer {
     cursor.textContent = ''
     Object.assign(cursor.style, {
       boxSizing: 'border-box',
-      contain: 'layout paint style',
+      contain: 'layout style',
       display: 'block',
       height: `${spec.height}px`,
-      left: `${request.point.x - spec.hotspot.x}px`,
+      left: '0px',
+      overflow: 'visible',
       pointerEvents: 'none',
       position: 'absolute',
-      top: `${request.point.y - spec.hotspot.y}px`,
-      transformOrigin: `${spec.hotspot.x}px ${spec.hotspot.y}px`,
+      top: '0px',
+      transformOrigin: '0px 0px',
       width: `${spec.width}px`,
       ...spec.style,
-      transform: cursorTransform(baseTransform, request.pressed),
-      transition: 'transform 80ms ease-out',
+      transform: cursorPositionTransform(request.point),
+      transition: 'none',
+      willChange: 'transform',
     })
 
     if (spec.svg) {
-      cursor.append(createCursorSvg(cursor.ownerDocument, request.kind, spec.svg))
+      cursor.append(
+        createCursorSvg(cursor.ownerDocument, request.kind, spec.svg, {
+          baseTransform,
+          hotspot: baseSpec.hotspot,
+          pressed: request.pressed,
+        }),
+      )
     }
   }
 
@@ -714,12 +720,23 @@ function cursorTransform(baseTransform: string, pressed: boolean): string {
   return `${normalized} ${CURSOR_PRESSED_SCALE}`
 }
 
+function cursorPositionTransform(point: Point): string {
+  return `translate3d(${point.x}px, ${point.y}px, 0)`
+}
+
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
+type CursorSvgRenderOptions = Readonly<{
+  baseTransform: string
+  hotspot: Point
+  pressed: boolean
+}>
 
 function createCursorSvg(
   ownerDocument: Document,
   kind: SupportedCursorVisualKind,
   spec: CursorVisualSvgSpec,
+  options: CursorSvgRenderOptions,
 ): SVGSVGElement {
   const svg = ownerDocument.createElementNS(SVG_NAMESPACE, 'svg')
   svg.setAttribute('aria-hidden', 'true')
@@ -732,8 +749,19 @@ function createCursorSvg(
     display: 'block',
     height: '100%',
     overflow: 'visible',
+    pointerEvents: 'none',
+    transform: cursorTransform(options.baseTransform, options.pressed),
+    transformOrigin: '0px 0px',
+    transition: 'transform 80ms ease-out',
     width: '100%',
   })
+
+  const hotspotShift = ownerDocument.createElementNS(SVG_NAMESPACE, 'g')
+  hotspotShift.setAttribute('data-actorble-cursor-hotspot-shift', '')
+  hotspotShift.setAttribute(
+    'transform',
+    `translate(${-options.hotspot.x} ${-options.hotspot.y})`,
+  )
 
   for (const pathSpec of spec.paths) {
     const path = ownerDocument.createElementNS(SVG_NAMESPACE, 'path')
@@ -760,8 +788,10 @@ function createCursorSvg(
       path.setAttribute('stroke-linejoin', pathSpec.strokeLinejoin)
     }
 
-    svg.append(path)
+    hotspotShift.append(path)
   }
+
+  svg.append(hotspotShift)
 
   return svg
 }

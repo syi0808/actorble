@@ -1827,7 +1827,7 @@ const github = 'https://github.com/syi0808/actorble'
   :global([data-actorble-visual-cursor]) {
     z-index: 1000 !important;
     filter: drop-shadow(0 12px 20px rgba(33, 48, 38, 0.24)) !important;
-    transition: filter 180ms ease, transform 80ms ease-out !important;
+    transition: filter 180ms ease !important;
   }
 
   :global(:root[data-actorble-cursor="mac"] [data-actorble-visual-cursor]) {
@@ -1842,12 +1842,8 @@ const github = 'https://github.com/syi0808/actorble'
       drop-shadow(0 0 10px rgba(51, 230, 194, 0.64))
       drop-shadow(0 0 24px rgba(242, 184, 75, 0.22))
       drop-shadow(0 12px 20px rgba(33, 48, 38, 0.24)) !important;
-    transition:
-      left 320ms cubic-bezier(0.16, 1, 0.3, 1),
-      top 320ms cubic-bezier(0.16, 1, 0.3, 1),
-      filter 180ms ease,
-      transform 80ms ease-out !important;
-    will-change: left, top, transform;
+    transition: filter 180ms ease !important;
+    will-change: transform;
   }
 
   .section {

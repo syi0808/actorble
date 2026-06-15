@@ -2236,14 +2236,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showClick).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps pointer-producing command visuals as free points during dispatch and anchors after success', async () => {
+  it('anchors moveTo visuals after success so hover tracking can follow layout changes', async () => {
     const pointerVisual = createPointerVisualTrackerDouble()
     const { orchestrator, target } = createHarness({ pointerVisual })
 
     await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
-    await expect(
-      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
 
     const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
     const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
@@ -2255,6 +2252,29 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 20, y: 30 },
         pressed: false,
       },
+    ])
+    expect(targetAnchorModes).toHaveLength(1)
+    expect(targetAnchorModes[0]).toMatchObject({
+      kind: 'targetAnchor',
+      target,
+      anchor: { kind: 'clickablePoint' },
+      commandId: 1,
+      pressed: false,
+      lastPoint: { x: 20, y: 30 },
+    })
+  })
+
+  it('keeps click visuals at the final pointer coordinate after success', async () => {
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const { orchestrator } = createHarness({ pointerVisual })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
+
+    expect(modes).toEqual([
       {
         kind: 'freePoint',
         point: { x: 20, y: 30 },
@@ -2271,21 +2291,6 @@ describe('BrowserActionOrchestrator', () => {
         pressed: false,
       },
     ])
-    expect(targetAnchorModes).toHaveLength(2)
-    expect(targetAnchorModes[0]).toMatchObject({
-      kind: 'targetAnchor',
-      target,
-      anchor: { kind: 'clickablePoint' },
-      commandId: 1,
-      pressed: false,
-      lastPoint: { x: 20, y: 30 },
-    })
-    expect(targetAnchorModes[1]).toMatchObject({
-      kind: 'targetAnchor',
-      commandId: 2,
-      pressed: false,
-      lastPoint: { x: 20, y: 30 },
-    })
   })
 
   it('keeps timed pointer movement modes on free point coordinates until success', async () => {

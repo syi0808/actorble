@@ -191,6 +191,10 @@ type PointerSignalContext = {
   drag?: DragSignalContext
 }
 
+type PointerSignalContextOptions = Readonly<{
+  anchorAfterSuccess?: boolean
+}>
+
 type DragSignalContext = {
   source: TargetHandle
   destination: TargetHandle
@@ -437,6 +441,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                 return dispatchPoint
               },
             }),
+            { anchorAfterSuccess: false },
           ),
       )
       const dispatchState = this.#clickDispatchState
@@ -528,6 +533,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                 return currentPoint
               },
             }),
+            { anchorAfterSuccess: false },
           ),
       )
       const dispatchState = this.#clickDispatchState
@@ -616,6 +622,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                 return dispatchPoint
               },
             }),
+            { anchorAfterSuccess: false },
           ),
       )
       const dispatchState = this.#clickDispatchState
@@ -795,6 +802,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                   return dispatchPoint
                 },
               }),
+              { anchorAfterSuccess: false },
             ),
         )
 
@@ -1307,8 +1315,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     target: TargetHandle,
     commandId: number,
     operation: () => Promise<TValue>,
+    options: PointerSignalContextOptions = {},
   ): Promise<TValue> {
-    return this.#withSignalContext({ target, commandId }, operation)
+    return this.#withSignalContext({ target, commandId }, operation, options)
   }
 
   async #withDragSignalTarget<TValue>(
@@ -1316,6 +1325,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     destination: TargetHandle,
     commandId: number,
     operation: () => Promise<TValue>,
+    options: PointerSignalContextOptions = {},
   ): Promise<TValue> {
     return this.#withSignalContext(
       {
@@ -1328,12 +1338,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         },
       },
       operation,
+      options,
     )
   }
 
   async #withSignalContext<TValue>(
     context: PointerSignalContext,
     operation: () => Promise<TValue>,
+    options: PointerSignalContextOptions,
   ): Promise<TValue> {
     const previousContext = this.#signalContext
 
@@ -1342,7 +1354,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     try {
       const result = await operation()
 
-      this.#anchorPointerCursor(context)
+      if (options.anchorAfterSuccess !== false) {
+        this.#anchorPointerCursor(context)
+      }
 
       return result
     } finally {
