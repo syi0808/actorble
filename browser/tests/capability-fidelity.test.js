@@ -14,7 +14,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
       trustedEvents: false,
       crossOriginFrame: false,
       closedShadowRoot: false,
-      dragAndDrop: 'none',
+      dragAndDrop: 'pointer-gesture',
     })
 
     expect(reporter.getFidelity()).toEqual({
@@ -33,8 +33,8 @@ describe('BrowserCapabilityFidelityReporter', () => {
         'Events are synthetic DOM events and are not browser-trusted user input.',
         'Visual feedback is optional and does not make synthetic events browser-trusted.',
         'Cross-origin frames and closed shadow roots cannot be inspected from in-page JavaScript.',
-        'Drag and drop is not implemented in the initial browser vertical slice.',
-        'Unsupported public action APIs currently report PLATFORM_UNSUPPORTED: drag.',
+        'Synthetic pointer drag is supported through pointer move/down/move/up DOM events.',
+        'HTML5 DataTransfer drag/drop, native trusted drag/drop, editor selection drag, and custom drag adapters are not implemented yet.',
         'Debug event subscription APIs on/off are not implemented yet; use getTrace() for diagnostics snapshots.',
       ],
     })
@@ -47,7 +47,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
       pointerInput: 'synthetic',
       pseudoState: 'mirror',
       trustedEvents: false,
-      dragAndDrop: 'none',
+      dragAndDrop: 'pointer-gesture',
     })
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',

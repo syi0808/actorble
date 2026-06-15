@@ -451,10 +451,17 @@ export class BrowserTargetResolver implements TargetResolver {
       unsupported: ['cross-origin-frame', 'closed-shadow-root'],
     })
     this.#trace.warn(
-      'Browser actions dispatch synthetic events; trusted native input and native drag/drop are unavailable.',
+      'Browser actions dispatch synthetic events; native drag/drop fidelity is unavailable.',
       {
         trustedEvents: false,
-        dragAndDrop: 'none',
+        dragAndDrop: 'pointer-gesture',
+        nativeDnD: false,
+        unsupported: [
+          'html5-dnd',
+          'native-dnd',
+          'editor-selection-drag',
+          'custom-dnd-adapter',
+        ],
       },
     )
   }

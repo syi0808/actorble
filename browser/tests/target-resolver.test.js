@@ -342,7 +342,18 @@ describe('BrowserTargetResolver', () => {
         message: 'Browser resolver cannot inspect cross-origin frames or closed shadow roots.',
       }),
       expect.objectContaining({
-        message: 'Browser actions dispatch synthetic events; trusted native input and native drag/drop are unavailable.',
+        message: 'Browser actions dispatch synthetic events; native drag/drop fidelity is unavailable.',
+        details: expect.objectContaining({
+          trustedEvents: false,
+          dragAndDrop: 'pointer-gesture',
+          nativeDnD: false,
+          unsupported: expect.arrayContaining([
+            'html5-dnd',
+            'native-dnd',
+            'editor-selection-drag',
+            'custom-dnd-adapter',
+          ]),
+        }),
       }),
     ])
   })
