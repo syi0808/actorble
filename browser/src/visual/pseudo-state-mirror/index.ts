@@ -1,10 +1,16 @@
 import { BrowserStateApplier } from '../../platform/platform-adapter/state-applier/index.js'
 import { BrowserStyleAdapter } from '../../platform/platform-adapter/style-adapter/index.js'
-import { buildPseudoStateMirrorCss } from './stylesheet-mirror.js'
+import {
+  buildPseudoStateMirrorCss,
+  type PseudoStateMirrorBuildWarning,
+} from './stylesheet-mirror.js'
 import type { SpanRecorder } from '../../diagnostics/diagnostics-trace/index.js'
 import type {
   StyleSheetRuleSnapshot,
   StyleSheetScanner,
+  StyleSheetScanWarning,
+  StyleSheetVersionProvider,
+  StyleSheetVersionSnapshot,
 } from '../../platform/platform-adapter/style-adapter/index.js'
 import type {
   Disposable,
@@ -40,10 +46,12 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
   readonly #state: StateApplyPort
   readonly #style?: StylePort
   readonly #styleScanner?: StyleSheetScanner
+  readonly #styleVersion?: StyleSheetVersionProvider
   readonly #trace?: SpanRecorder
   readonly #mirrorStyleId: string
   readonly #mirrorCssText?: string
   readonly #activeTargets = new Map<StateEffectKind, Map<string, TargetHandle>>()
+  #mirrorCssCache?: PseudoStateMirrorCssCache
   #styleDisposable?: Disposable
   #styleAttempted = false
 
@@ -54,6 +62,9 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
     this.#style = style
     this.#styleScanner =
       options.styleScanner ?? (isStyleSheetScanner(style) ? style : undefined)
+    this.#styleVersion = isStyleSheetVersionProvider(this.#styleScanner)
+      ? this.#styleScanner
+      : undefined
     this.#trace = options.trace
     this.#mirrorStyleId = options.mirrorStyleId ?? defaultMirrorStyleId
     this.#mirrorCssText = options.mirrorCssText
@@ -145,29 +156,91 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
       return ''
     }
 
+    const version = this.#readStyleSheetVersion()
+    const cache = this.#cacheForVersion(version)
+
+    if (cache !== undefined) {
+      this.#recordCachedWarnings(cache.warnings)
+      this.#trace?.appendEvent('pseudo:mirror:stylesheet-scan', {
+        sourceRuleCount: cache.sourceRuleCount,
+        mirroredRuleCount: cache.mirroredRuleCount,
+        warningCount: cache.warnings.length,
+        cacheHit: true,
+      })
+
+      return cache.cssText
+    }
+
     try {
       const scan = this.#styleScanner.scanStyleSheets()
-
-      for (const warning of scan.warnings) {
-        this.#recordWarning('scan', warning.message, warning.details ?? {})
-      }
-
       const mirror = buildPseudoStateMirrorCss(scan.rules)
+      const warnings = collectMirrorWarnings(scan.warnings, mirror.warnings)
 
-      for (const warning of mirror.warnings) {
-        this.#recordWarning('rewrite', warning.message, warning.details ?? {})
+      for (const warning of warnings) {
+        this.#recordWarning(warning.phase, warning.error, warning.details ?? {})
       }
 
+      const sourceRuleCount = countStyleRules(scan.rules)
       this.#trace?.appendEvent('pseudo:mirror:stylesheet-scan', {
-        sourceRuleCount: countStyleRules(scan.rules),
+        sourceRuleCount,
         mirroredRuleCount: mirror.mirroredRuleCount,
-        warningCount: scan.warnings.length + mirror.warnings.length,
+        warningCount: warnings.length,
+        cacheHit: false,
       })
+
+      this.#mirrorCssCache =
+        version === undefined
+          ? undefined
+          : {
+              root: version.root,
+              version: version.version,
+              cssText: mirror.cssText,
+              sourceRuleCount,
+              mirroredRuleCount: mirror.mirroredRuleCount,
+              warnings,
+            }
 
       return mirror.cssText
     } catch (error) {
       this.#recordWarning('scan', error)
+      this.#mirrorCssCache = undefined
       return ''
+    }
+  }
+
+  #readStyleSheetVersion(): StyleSheetVersionSnapshot | undefined {
+    if (this.#styleVersion === undefined) {
+      return undefined
+    }
+
+    try {
+      return this.#styleVersion.getStyleSheetVersion()
+    } catch (error) {
+      this.#recordWarning('scan', error, { operation: 'stylesheet-version' })
+      return undefined
+    }
+  }
+
+  #cacheForVersion(
+    version: StyleSheetVersionSnapshot | undefined,
+  ): PseudoStateMirrorCssCache | undefined {
+    if (version === undefined || this.#mirrorCssCache === undefined) {
+      return undefined
+    }
+
+    if (
+      this.#mirrorCssCache.root !== version.root ||
+      this.#mirrorCssCache.version !== version.version
+    ) {
+      return undefined
+    }
+
+    return this.#mirrorCssCache
+  }
+
+  #recordCachedWarnings(warnings: readonly PseudoStateMirrorCachedWarning[]): void {
+    for (const warning of warnings) {
+      this.#recordWarning(warning.phase, warning.error, warning.details ?? {})
     }
   }
 
@@ -263,6 +336,50 @@ function isStyleSheetScanner(value: unknown): value is StyleSheetScanner {
     'scanStyleSheets' in value &&
     typeof scanner.scanStyleSheets === 'function'
   )
+}
+
+function isStyleSheetVersionProvider(value: unknown): value is StyleSheetVersionProvider {
+  const provider = value as { getStyleSheetVersion?: unknown }
+
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'getStyleSheetVersion' in value &&
+    typeof provider.getStyleSheetVersion === 'function'
+  )
+}
+
+type PseudoStateMirrorCachedWarning = Readonly<{
+  phase: 'scan' | 'rewrite'
+  error: string
+  details?: Readonly<Record<string, unknown>>
+}>
+
+type PseudoStateMirrorCssCache = Readonly<{
+  root: Document | ShadowRoot
+  version: string
+  cssText: string
+  sourceRuleCount: number
+  mirroredRuleCount: number
+  warnings: readonly PseudoStateMirrorCachedWarning[]
+}>
+
+function collectMirrorWarnings(
+  scanWarnings: readonly StyleSheetScanWarning[],
+  rewriteWarnings: readonly PseudoStateMirrorBuildWarning[],
+): readonly PseudoStateMirrorCachedWarning[] {
+  return [
+    ...scanWarnings.map((warning) => ({
+      phase: 'scan' as const,
+      error: warning.message,
+      details: warning.details,
+    })),
+    ...rewriteWarnings.map((warning) => ({
+      phase: 'rewrite' as const,
+      error: warning.message,
+      details: warning.details,
+    })),
+  ]
 }
 
 function countStyleRules(rules: readonly StyleSheetRuleSnapshot[]): number {

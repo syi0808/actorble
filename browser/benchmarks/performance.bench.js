@@ -27,6 +27,7 @@ const STYLE_RULE_COUNT = 50
 const GEOMETRY_REPEAT_COUNT = 200
 const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
 const WAIT_RETRY_REPEAT_COUNT = 50
+const PSEUDO_STATE_REPEAT_COUNT = 20
 const EXPENSIVE_WAIT_DOM_SIZE = 160
 const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1
 const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5
@@ -681,6 +682,7 @@ function ensureExpensiveWaitFixture() {
 
 function buildStylesheetFixture() {
   const style = document.createElement('style')
+  style.id = 'bench-pseudo-source'
   const rules = []
 
   for (let index = 0; index < STYLE_RULE_COUNT; index += 1) {
@@ -695,6 +697,11 @@ function buildStylesheetFixture() {
 
   style.textContent = rules.join('\n')
   document.head.append(style)
+
+  const mutationStyle = document.createElement('style')
+  mutationStyle.id = 'bench-pseudo-mutation-source'
+  mutationStyle.textContent = '.bench-pseudo-mutation:hover { color: rgb(0, 20, 40); }'
+  document.head.append(mutationStyle)
 }
 
 beforeAll(() => {
@@ -977,6 +984,11 @@ describe('geometry and surface cache', () => {
 
 describe('pseudo-state mirror', () => {
   let target
+  let cachedTarget
+  let cachedMirror
+  let mutationTarget
+  let mutationMirror
+  let mutationIndex = 0
 
   bench(
     'stylesheet scan and pseudo-state rewrite on first apply',
@@ -992,6 +1004,55 @@ describe('pseudo-state mirror', () => {
 
       mirror.apply({ target, states: ['hover', 'active', 'focus-visible'] })
       mirror.cleanup()
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'repeated mirror apply reuses cached pseudo-state rewrite',
+    () => {
+      cachedTarget ??= targetHandle(
+        `bench-save-${TARGET_INDEX}`,
+        document.querySelector(`#bench-save-${TARGET_INDEX}`),
+      )
+      cachedMirror ??= new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: new BrowserStyleAdapter(document),
+      })
+
+      for (let index = 0; index < PSEUDO_STATE_REPEAT_COUNT; index += 1) {
+        cachedMirror.apply({
+          target: cachedTarget,
+          states: ['hover', 'active', 'focus-visible'],
+        })
+        cachedMirror.cleanup()
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'stylesheet mutation refreshes pseudo-state mirror cache',
+    () => {
+      mutationTarget ??= targetHandle(
+        `bench-save-${TARGET_INDEX}`,
+        document.querySelector(`#bench-save-${TARGET_INDEX}`),
+      )
+      mutationMirror ??= new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: new BrowserStyleAdapter(document),
+      })
+
+      for (let index = 0; index < PSEUDO_STATE_REPEAT_COUNT; index += 1) {
+        mutationIndex += 1
+        document.querySelector('#bench-pseudo-mutation-source').textContent =
+          `.bench-pseudo-mutation:hover { color: rgb(${mutationIndex % 255}, 20, 40); }`
+        mutationMirror.apply({
+          target: mutationTarget,
+          states: ['hover', 'active', 'focus-visible'],
+        })
+        mutationMirror.cleanup()
+      }
     },
     BENCH_OPTIONS,
   )

@@ -221,4 +221,131 @@ describe('BrowserPseudoStateMirror', () => {
       }),
     ])
   })
+
+  it('reuses rewritten mirror CSS across cleanup when stylesheet version is unchanged', () => {
+    const target = targetHandle()
+    target.element.className = 'button'
+    const trace = createTrace()
+    const style = new BrowserStyleAdapter(document)
+    const scanner = {
+      getStyleSheetVersion: vi.fn(() => ({ root: document, version: 'v1' })),
+      scanStyleSheets: vi.fn(() => ({
+        rules: [
+          {
+            kind: 'style',
+            selectorText: '.button:hover',
+            styleText: 'color: red;',
+          },
+        ],
+        warnings: [],
+      })),
+    }
+    const mirror = new BrowserPseudoStateMirror({
+      state: new BrowserStateApplier(),
+      style,
+      styleScanner: scanner,
+      trace,
+    })
+
+    mirror.apply({ target, states: ['hover'] })
+    mirror.cleanup()
+    mirror.apply({ target, states: ['hover'] })
+
+    expect(scanner.scanStyleSheets).toHaveBeenCalledOnce()
+    expect(scanner.getStyleSheetVersion).toHaveBeenCalledTimes(2)
+    expect(
+      document.head.querySelector('style[data-actorble-style-id="actorble-pseudo-state-mirror"]')
+        ?.textContent,
+    ).toContain('.button[data-actorble-hover] { color: red; }')
+    expect(
+      trace
+        .getTrace()
+        .events.filter((event) => event.name === 'pseudo:mirror:stylesheet-scan')
+        .map((event) => event.data),
+    ).toEqual([
+      expect.objectContaining({ cacheHit: false }),
+      expect.objectContaining({ cacheHit: true }),
+    ])
+  })
+
+  it('rescans stylesheets when the stylesheet version changes after cleanup', () => {
+    const target = targetHandle()
+    target.element.className = 'button'
+    const style = new BrowserStyleAdapter(document)
+    let version = 'v1'
+    const scanner = {
+      getStyleSheetVersion: vi.fn(() => ({ root: document, version })),
+      scanStyleSheets: vi.fn(() => ({
+        rules: [
+          {
+            kind: 'style',
+            selectorText: '.button:hover',
+            styleText: version === 'v1' ? 'color: red;' : 'color: blue;',
+          },
+        ],
+        warnings: [],
+      })),
+    }
+    const mirror = new BrowserPseudoStateMirror({
+      state: new BrowserStateApplier(),
+      style,
+      styleScanner: scanner,
+    })
+
+    mirror.apply({ target, states: ['hover'] })
+    mirror.cleanup()
+    version = 'v2'
+    mirror.apply({ target, states: ['hover'] })
+
+    const mirrorCss = document.head.querySelector(
+      'style[data-actorble-style-id="actorble-pseudo-state-mirror"]',
+    )?.textContent
+    expect(scanner.scanStyleSheets).toHaveBeenCalledTimes(2)
+    expect(mirrorCss).toContain('.button[data-actorble-hover] { color: blue; }')
+    expect(mirrorCss).not.toContain('color: red;')
+  })
+
+  it('records fresh scan warnings when the stylesheet warning fingerprint changes', () => {
+    const target = targetHandle()
+    const trace = createTrace()
+    const style = new BrowserStyleAdapter(document)
+    let version = 'cdn-a'
+    const scanner = {
+      getStyleSheetVersion: vi.fn(() => ({ root: document, version })),
+      scanStyleSheets: vi.fn(() => ({
+        rules: [],
+        warnings: [
+          {
+            phase: 'scan',
+            message: 'Stylesheet is not accessible.',
+            details: { href: `https://cdn.example/${version}.css` },
+          },
+        ],
+      })),
+    }
+    const mirror = new BrowserPseudoStateMirror({
+      state: new BrowserStateApplier(),
+      style,
+      styleScanner: scanner,
+      trace,
+    })
+
+    mirror.apply({ target, states: ['hover'] })
+    mirror.cleanup()
+    version = 'cdn-b'
+    mirror.apply({ target, states: ['hover'] })
+
+    expect(scanner.scanStyleSheets).toHaveBeenCalledTimes(2)
+    expect(trace.getTrace().warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Pseudo state mirror scan failed.',
+          details: expect.objectContaining({
+            error: 'Stylesheet is not accessible.',
+            href: 'https://cdn.example/cdn-b.css',
+          }),
+        }),
+      ]),
+    )
+  })
 })

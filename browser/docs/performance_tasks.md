@@ -177,7 +177,7 @@ visual optimization
 
 ### P2026-06-16-07 Pseudo-state Stylesheet Mirror Cache
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: pseudo-state mirror가 동일 stylesheet set을 매 mirror lifecycle마다 scan/rewrite하지 않도록 reusable cache와 invalidation policy를 둔다.
 - Dependencies: `pseudo-state-mirror`, `style-adapter`, `diagnostics-trace`.
 - Completion criteria:

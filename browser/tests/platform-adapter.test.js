@@ -560,4 +560,40 @@ describe('BrowserStyleAdapter', () => {
       warnings: [],
     })
   })
+
+  it('reports a stable stylesheet version until app style content changes', () => {
+    const source = document.createElement('style')
+    source.textContent = '.button:hover { color: red; }'
+    document.head.append(source)
+    const adapter = new BrowserStyleAdapter(document)
+
+    const initial = adapter.getStyleSheetVersion()
+    const unchanged = adapter.getStyleSheetVersion()
+    source.textContent = '.button:hover { color: blue; }'
+    const changed = adapter.getStyleSheetVersion()
+
+    expect(initial.root).toBe(document)
+    expect(unchanged.version).toBe(initial.version)
+    expect(changed.version).not.toBe(initial.version)
+  })
+
+  it('changes stylesheet version for link mutations but ignores actorble runtime styles', () => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://cdn.example/app-a.css'
+    document.head.append(link)
+    const adapter = new BrowserStyleAdapter(document)
+
+    const initial = adapter.getStyleSheetVersion()
+    adapter.injectStyle({
+      id: 'actorble-pseudo-state-mirror',
+      cssText: '.button[data-actorble-hover] { color: red; }',
+    })
+    const afterRuntimeStyle = adapter.getStyleSheetVersion()
+    link.href = 'https://cdn.example/app-b.css'
+    const afterLinkMutation = adapter.getStyleSheetVersion()
+
+    expect(afterRuntimeStyle.version).toBe(initial.version)
+    expect(afterLinkMutation.version).not.toBe(initial.version)
+  })
 })

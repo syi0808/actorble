@@ -29,14 +29,24 @@ export type StyleSheetScanResult = Readonly<{
   warnings: readonly StyleSheetScanWarning[]
 }>
 
+export type StyleSheetVersionSnapshot = Readonly<{
+  root: Document | ShadowRoot
+  version: string
+}>
+
 export interface StyleSheetScanner {
   scanStyleSheets(): StyleSheetScanResult
 }
 
-export interface StyleAdapter extends StylePort, StyleSheetScanner {}
+export interface StyleSheetVersionProvider {
+  getStyleSheetVersion(): StyleSheetVersionSnapshot
+}
+
+export interface StyleAdapter extends StylePort, StyleSheetScanner, StyleSheetVersionProvider {}
 
 export class BrowserStyleAdapter implements StyleAdapter {
   private readonly stylesById = new Map<string, HTMLStyleElement>()
+  private readonly styleNodeVersionCache = new WeakMap<Element, StyleNodeVersionCache>()
 
   constructor(readonly root: Document | ShadowRoot = getGlobalDocument()) {}
 
@@ -72,6 +82,13 @@ export class BrowserStyleAdapter implements StyleAdapter {
 
     const selector = `style[data-actorble-style-id="${escapeAttributeValue(id)}"]`
     getStyleContainer(this.root).querySelectorAll(selector).forEach((style) => style.remove())
+  }
+
+  getStyleSheetVersion(): StyleSheetVersionSnapshot {
+    return {
+      root: this.root,
+      version: buildStyleSheetVersion(this.root, this.styleNodeVersionCache),
+    }
   }
 
   scanStyleSheets(): StyleSheetScanResult {
@@ -156,6 +173,133 @@ function isActorbleRuntimeStyleSheet(sheet: CSSStyleSheet): boolean {
 
 function isElementNode(node: Node | null | undefined): node is Element {
   return node?.nodeType === 1 && typeof (node as Element).hasAttribute === 'function'
+}
+
+type StyleNodeVersionCache = Readonly<{
+  index: number
+  media: string
+  text: string
+  versionPart: string
+}>
+
+function buildStyleSheetVersion(
+  root: Document | ShadowRoot,
+  styleNodeCache: WeakMap<Element, StyleNodeVersionCache>,
+): string {
+  const parts: string[] = []
+  const styleRoot = isDocument(root) ? getStyleContainer(root) : root
+
+  for (const [index, node] of Array.from(
+    styleRoot.querySelectorAll('style, link'),
+  ).entries()) {
+    if (!isAppStylesheetNode(node)) {
+      continue
+    }
+
+    parts.push(styleNodeVersionPart(index, node, styleNodeCache))
+  }
+
+  for (const [index, sheet] of Array.from(getStyleSheets(root)).entries()) {
+    if (isActorbleRuntimeStyleSheet(sheet)) {
+      continue
+    }
+
+    parts.push(styleSheetStatusVersionPart(index, sheet))
+  }
+
+  return parts.join('\n')
+}
+
+function isAppStylesheetNode(node: Element): boolean {
+  if (node.hasAttribute('data-actorble-style-id')) {
+    return false
+  }
+
+  if (node.localName === 'style') {
+    return true
+  }
+
+  if (node.localName !== 'link') {
+    return false
+  }
+
+  return (node.getAttribute('rel') ?? '')
+    .toLowerCase()
+    .split(/\s+/)
+    .includes('stylesheet')
+}
+
+function styleNodeVersionPart(
+  index: number,
+  node: Element,
+  styleNodeCache: WeakMap<Element, StyleNodeVersionCache>,
+): string {
+  if (node.localName === 'style') {
+    const media = node.getAttribute('media') ?? ''
+    const text = node.textContent ?? ''
+    const cached = styleNodeCache.get(node)
+
+    if (
+      cached !== undefined &&
+      cached.index === index &&
+      cached.media === media &&
+      cached.text === text
+    ) {
+      return cached.versionPart
+    }
+
+    const versionPart = [
+      'style',
+      index,
+      media,
+      textFingerprint(text),
+    ].join(':')
+
+    styleNodeCache.set(node, {
+      index,
+      media,
+      text,
+      versionPart,
+    })
+
+    return versionPart
+  }
+
+  return [
+    'link',
+    index,
+    node.getAttribute('href') ?? '',
+    node.getAttribute('rel') ?? '',
+    node.getAttribute('media') ?? '',
+    node.getAttribute('disabled') ?? '',
+    (node as HTMLLinkElement).disabled ? 'disabled' : 'enabled',
+    (node as HTMLLinkElement).href ?? '',
+  ].join(':')
+}
+
+function textFingerprint(text: string): string {
+  let hash = 2166136261
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return `${text.length}:${(hash >>> 0).toString(36)}`
+}
+
+function styleSheetStatusVersionPart(index: number, sheet: CSSStyleSheet): string {
+  try {
+    return ['sheet', index, 'accessible', sheet.href ?? '', sheet.cssRules.length].join(':')
+  } catch (error) {
+    return [
+      'sheet',
+      index,
+      'inaccessible',
+      sheet.href ?? '',
+      describeUnknownError(error),
+    ].join(':')
+  }
 }
 
 function snapshotRules(
