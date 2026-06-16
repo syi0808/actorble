@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { BrowserDomAdapter } from '../src/platform/platform-adapter/dom-adapter/index.js'
 import { css, element, label, point, role, testId, text } from '../src/shared/index.js'
@@ -23,9 +23,29 @@ function createResolver(options = {}) {
   })
 }
 
+function createReadCountingDom() {
+  const dom = new BrowserDomAdapter(document)
+  const describeCounts = new Map()
+  const computedStyleCounts = new Map()
+  const originalDescribeElement = dom.describeElement.bind(dom)
+  const originalGetComputedStyle = dom.getComputedStyle.bind(dom)
+
+  vi.spyOn(dom, 'describeElement').mockImplementation((element) => {
+    describeCounts.set(element, (describeCounts.get(element) ?? 0) + 1)
+    return originalDescribeElement(element)
+  })
+  vi.spyOn(dom, 'getComputedStyle').mockImplementation((element) => {
+    computedStyleCounts.set(element, (computedStyleCounts.get(element) ?? 0) + 1)
+    return originalGetComputedStyle(element)
+  })
+
+  return { dom, describeCounts, computedStyleCounts }
+}
+
 describe('BrowserTargetResolver', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    vi.restoreAllMocks()
   })
 
   it('resolves css locators into live snapshot handles in DOM order', async () => {
@@ -197,6 +217,107 @@ describe('BrowserTargetResolver', () => {
         }),
       }),
     ])
+  })
+
+  it('memoizes repeated role locator debug and style reads within one resolve pass', async () => {
+    document.body.innerHTML = `
+      <main id="workspace">
+        <section>
+          <button id="save" aria-label="Save project">Save</button>
+          <button id="cancel">Cancel</button>
+        </section>
+      </main>
+    `
+    const { dom, describeCounts, computedStyleCounts } = createReadCountingDom()
+    const resolver = createResolver({ dom })
+    const workspace = document.querySelector('#workspace')
+    const save = document.querySelector('#save')
+
+    await expect(resolver.resolve(role('button', { name: 'Save project' }))).resolves.toMatchObject({
+      element: save,
+      debug: { selector: '#save', role: 'button', name: 'Save project' },
+    })
+
+    expect(describeCounts.get(save)).toBe(1)
+    expect(computedStyleCounts.get(workspace)).toBe(1)
+  })
+
+  it('memoizes label locator hidden checks and accessible-name reads within one resolve pass', async () => {
+    document.body.innerHTML = `
+      <main>
+        <label for="email">Email address</label>
+        <input id="email" aria-label="Email address" />
+      </main>
+    `
+    const { dom, describeCounts, computedStyleCounts } = createReadCountingDom()
+    const resolver = createResolver({ dom })
+    const input = document.querySelector('#email')
+
+    await expect(resolver.resolve(label('Email address'))).resolves.toMatchObject({
+      element: input,
+      debug: { selector: '#email', name: 'Email address' },
+    })
+
+    expect(describeCounts.get(input)).toBe(1)
+    expect(computedStyleCounts.get(input)).toBe(1)
+  })
+
+  it('limits resolver read memoization to a single resolve call', async () => {
+    document.body.innerHTML = '<button id="save" aria-label="Save draft">Save</button>'
+    const resolver = createResolver()
+    const button = document.querySelector('#save')
+
+    await expect(resolver.resolve(role('button', { name: 'Save draft' }))).resolves.toMatchObject({
+      element: button,
+      debug: { name: 'Save draft' },
+    })
+
+    button.setAttribute('aria-label', 'Publish draft')
+
+    await expect(resolver.resolve(role('button', { name: 'Publish draft' }))).resolves.toMatchObject({
+      element: button,
+      debug: { name: 'Publish draft' },
+    })
+  })
+
+  it('keeps diagnostics candidate snapshot shape while reusing per-pass debug reads', async () => {
+    document.body.innerHTML = `
+      <button id="first" aria-label="Save">One</button>
+      <button id="second" aria-label="Save">Two</button>
+    `
+    const trace = new BrowserDiagnosticsTrace({ clock: createClock(5500), idPrefix: 'trace' })
+    const { dom } = createReadCountingDom()
+    const resolver = createResolver({ dom, trace })
+
+    await expect(resolver.resolve(role('button', { name: 'Save' }), { strict: true })).rejects.toMatchObject({
+      code: 'TARGET_AMBIGUOUS',
+    })
+
+    const snapshot = trace.getTrace().snapshots.at(-1)
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          locator: { kind: 'role', role: 'button', name: 'Save' },
+          rankingPolicy: 'score-desc-dom-order',
+          ambiguity: 'strict-multiple-candidates',
+          candidates: [
+            expect.objectContaining({
+              index: 0,
+              score: 100,
+              reasons: ['role', 'name:exact'],
+              debug: expect.objectContaining({ selector: '#first', role: 'button', name: 'Save' }),
+            }),
+            expect.objectContaining({
+              index: 1,
+              score: 100,
+              reasons: ['role', 'name:exact'],
+              debug: expect.objectContaining({ selector: '#second', role: 'button', name: 'Save' }),
+            }),
+          ],
+        }),
+      }),
+    )
   })
 
   it('resolves role locators by accessible name ranking and strict ambiguity', async () => {

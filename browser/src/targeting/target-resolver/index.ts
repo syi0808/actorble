@@ -63,9 +63,10 @@ export class BrowserTargetResolver implements TargetResolver {
     })
 
     try {
-      const candidates = this.#resolveCandidates(locator)
+      const pass = createResolutionPass()
+      const candidates = this.#resolveCandidates(locator, pass)
       const ambiguity = resolutionAmbiguity(candidates, options.strict === true)
-      this.#recordResolutionDiagnostics(locator, candidates, ambiguity)
+      this.#recordResolutionDiagnostics(locator, candidates, ambiguity, pass)
 
       if (candidates.length === 0) {
         throw this.#emptyResolveError(locator)
@@ -85,7 +86,7 @@ export class BrowserTargetResolver implements TargetResolver {
         )
       }
 
-      const handle = this.#createHandle(candidates[0].element, locator)
+      const handle = this.#createHandle(candidates[0].element, locator, pass)
       span?.end({ targetId: handle.id, count: candidates.length })
       return handle
     } catch (error) {
@@ -104,9 +105,10 @@ export class BrowserTargetResolver implements TargetResolver {
     })
 
     try {
-      const candidates = this.#resolveCandidates(locator)
-      this.#recordResolutionDiagnostics(locator, candidates, resolutionAmbiguity(candidates, false))
-      const handles = candidates.map((candidate) => this.#createHandle(candidate.element, locator))
+      const pass = createResolutionPass()
+      const candidates = this.#resolveCandidates(locator, pass)
+      this.#recordResolutionDiagnostics(locator, candidates, resolutionAmbiguity(candidates, false), pass)
+      const handles = candidates.map((candidate) => this.#createHandle(candidate.element, locator, pass))
       span?.end({ count: handles.length })
       return handles
     } catch (error) {
@@ -117,7 +119,8 @@ export class BrowserTargetResolver implements TargetResolver {
   }
 
   async exists(locator: Locator, _options: ResolveOptions = {}): Promise<boolean> {
-    const candidates = this.#resolveCandidates(locator)
+    const pass = createResolutionPass()
+    const candidates = this.#resolveCandidates(locator, pass)
     return candidates.length > 0
   }
 
@@ -189,7 +192,7 @@ export class BrowserTargetResolver implements TargetResolver {
     }
   }
 
-  #resolveCandidates(locator: Locator): readonly TargetCandidate[] {
+  #resolveCandidates(locator: Locator, pass: ResolutionPass): readonly TargetCandidate[] {
     switch (locator.kind) {
       case 'css':
         return this.#rankElements(
@@ -204,11 +207,11 @@ export class BrowserTargetResolver implements TargetResolver {
           ? this.#rankElements([locator.element], 100, ['element'])
           : []
       case 'role':
-        return this.#rankRoleLocator(locator)
+        return this.#rankRoleLocator(locator, pass)
       case 'text':
-        return this.#rankTextLocator(locator)
+        return this.#rankTextLocator(locator, pass)
       case 'label':
-        return this.#rankLabelLocator(locator)
+        return this.#rankLabelLocator(locator, pass)
       case 'testId':
         return this.#rankTestIdLocator(locator)
       case 'point':
@@ -216,15 +219,18 @@ export class BrowserTargetResolver implements TargetResolver {
     }
   }
 
-  #rankRoleLocator(locator: Extract<Locator, { kind: 'role' }>): readonly TargetCandidate[] {
+  #rankRoleLocator(
+    locator: Extract<Locator, { kind: 'role' }>,
+    pass: ResolutionPass,
+  ): readonly TargetCandidate[] {
     const candidates: TargetCandidate[] = []
 
     this.#allElements().forEach((element, order) => {
-      if (locator.includeHidden !== true && this.#isHidden(element)) {
+      if (locator.includeHidden !== true && this.#isHidden(element, pass)) {
         return
       }
 
-      const debug = this.#dom.describeElement(element)
+      const debug = this.#describeElement(element, pass)
       if (debug.role !== locator.role) {
         return
       }
@@ -252,9 +258,12 @@ export class BrowserTargetResolver implements TargetResolver {
     return sortCandidates(candidates)
   }
 
-  #rankTextLocator(locator: Extract<Locator, { kind: 'text' }>): readonly TargetCandidate[] {
+  #rankTextLocator(
+    locator: Extract<Locator, { kind: 'text' }>,
+    pass: ResolutionPass,
+  ): readonly TargetCandidate[] {
     const candidates = this.#allElements().flatMap((element, order): readonly TargetCandidate[] => {
-      if (this.#isHidden(element)) {
+      if (this.#isHidden(element, pass)) {
         return []
       }
 
@@ -277,11 +286,14 @@ export class BrowserTargetResolver implements TargetResolver {
     return sortCandidates(this.#withoutAncestorMatches(candidates))
   }
 
-  #rankLabelLocator(locator: Extract<Locator, { kind: 'label' }>): readonly TargetCandidate[] {
+  #rankLabelLocator(
+    locator: Extract<Locator, { kind: 'label' }>,
+    pass: ResolutionPass,
+  ): readonly TargetCandidate[] {
     const candidates: TargetCandidate[] = []
     const labels = this.#dom
       .querySelectorAll('label', this.#dom.getRoot())
-      .filter((labelElement) => this.#isElementInScope(labelElement) && !this.#isHidden(labelElement))
+      .filter((labelElement) => this.#isElementInScope(labelElement) && !this.#isHidden(labelElement, pass))
 
     labels.forEach((labelElement, order) => {
       const match = matchText(this.#dom.getTextContent(labelElement), locator.value, locator.exact === true)
@@ -291,7 +303,7 @@ export class BrowserTargetResolver implements TargetResolver {
       }
 
       for (const control of this.#associatedLabelControls(labelElement)) {
-        if (this.#isElementInScope(control) && !this.#isHidden(control)) {
+        if (this.#isElementInScope(control) && !this.#isHidden(control, pass)) {
           candidates.push({
             element: control,
             score: labelScore(match.kind),
@@ -303,11 +315,11 @@ export class BrowserTargetResolver implements TargetResolver {
     })
 
     this.#allLabelableControls().forEach((element, order) => {
-      if (this.#isHidden(element)) {
+      if (this.#isHidden(element, pass)) {
         return
       }
 
-      const match = matchText(this.#dom.describeElement(element).name ?? '', locator.value, locator.exact === true)
+      const match = matchText(this.#describeElement(element, pass).name ?? '', locator.value, locator.exact === true)
 
       if (match === null) {
         return
@@ -403,38 +415,77 @@ export class BrowserTargetResolver implements TargetResolver {
     )
   }
 
-  #isHidden(element: Element): boolean {
+  #isHidden(element: Element, pass: ResolutionPass): boolean {
+    const cached = pass.hiddenByElement.get(element)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    const inspected: Element[] = []
     let current: Element | null = element
 
     while (current) {
-      const debug = this.#dom.describeElement(current)
+      const cachedCurrent = pass.hiddenByElement.get(current)
+      if (cachedCurrent !== undefined) {
+        cacheHidden(inspected, cachedCurrent, pass)
+        return cachedCurrent
+      }
+
+      inspected.push(current)
+      const debug = this.#describeElement(current, pass)
       const attributes = debug.attributes ?? {}
 
       if ('hidden' in attributes || attributes['aria-hidden'] === 'true') {
+        cacheHidden(inspected, true, pass)
         return true
       }
 
-      const style = this.#dom.getComputedStyle(current)
+      const style = this.#getComputedStyle(current, pass)
       if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+        cacheHidden(inspected, true, pass)
         return true
       }
 
       current = this.#dom.getParentElement(current)
     }
 
+    cacheHidden(inspected, false, pass)
     return false
+  }
+
+  #describeElement(element: Element, pass: ResolutionPass): TargetDebugInfo {
+    const cached = pass.debugByElement.get(element)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    const debug = this.#dom.describeElement(element)
+    pass.debugByElement.set(element, debug)
+    return debug
+  }
+
+  #getComputedStyle(element: Element, pass: ResolutionPass): CSSStyleDeclaration {
+    const cached = pass.styleByElement.get(element)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    const style = this.#dom.getComputedStyle(element)
+    pass.styleByElement.set(element, style)
+    return style
   }
 
   #recordResolutionDiagnostics(
     locator: Locator,
     candidates: readonly TargetCandidate[],
     ambiguity: ResolutionAmbiguity,
+    pass: ResolutionPass,
   ): void {
     this.#trace?.attachSnapshot('target.resolve.candidates', {
       locator: summarizeLocator(locator),
       rankingPolicy,
       ambiguity,
-      candidates: this.#snapshotCandidates(candidates),
+      candidates: this.#snapshotCandidates(candidates, pass),
     })
 
     this.#warnBrowserFidelityLimits()
@@ -465,7 +516,7 @@ export class BrowserTargetResolver implements TargetResolver {
     )
   }
 
-  #createHandle(element: Element, locator?: Locator): TargetHandle {
+  #createHandle(element: Element, locator: Locator | undefined, pass: ResolutionPass): TargetHandle {
     return {
       id: `${this.#idPrefix}-${this.#nextTargetId++}`,
       element,
@@ -473,7 +524,7 @@ export class BrowserTargetResolver implements TargetResolver {
       resolvedAt: this.#clock.now(),
       root: this.#dom.getRoot(),
       validity: 'live',
-      debug: this.#dom.describeElement(element),
+      debug: this.#describeElement(element, pass),
     }
   }
 
@@ -526,12 +577,15 @@ export class BrowserTargetResolver implements TargetResolver {
     })
   }
 
-  #snapshotCandidates(candidates: readonly TargetCandidate[]): readonly TargetCandidateSnapshot[] {
+  #snapshotCandidates(
+    candidates: readonly TargetCandidate[],
+    pass: ResolutionPass,
+  ): readonly TargetCandidateSnapshot[] {
     return candidates.map((candidate, index) => ({
       index,
       score: candidate.score,
       reasons: candidate.reasons,
-      debug: this.#dom.describeElement(candidate.element),
+      debug: this.#describeElement(candidate.element, pass),
     }))
   }
 }
@@ -553,8 +607,32 @@ type TargetCandidateSnapshot = Readonly<{
   debug: TargetDebugInfo
 }>
 
+type ResolutionPass = Readonly<{
+  debugByElement: WeakMap<Element, TargetDebugInfo>
+  styleByElement: WeakMap<Element, CSSStyleDeclaration>
+  hiddenByElement: WeakMap<Element, boolean>
+}>
+
 const rankingPolicy = 'score-desc-dom-order'
 const labelableSelector = 'button,input,meter,output,progress,select,textarea'
+
+function createResolutionPass(): ResolutionPass {
+  return {
+    debugByElement: new WeakMap(),
+    styleByElement: new WeakMap(),
+    hiddenByElement: new WeakMap(),
+  }
+}
+
+function cacheHidden(
+  elements: readonly Element[],
+  value: boolean,
+  pass: ResolutionPass,
+): void {
+  for (const element of elements) {
+    pass.hiddenByElement.set(element, value)
+  }
+}
 
 function resolutionAmbiguity(
   candidates: readonly TargetCandidate[],

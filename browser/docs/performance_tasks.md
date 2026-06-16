@@ -73,7 +73,7 @@ visual optimization
 
 ### P2026-06-16-01 Resolver Per-pass Read Memoization
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `resolve()` 또는 `resolveAll()` 한 번 안에서 같은 element의 debug info, accessible name, hidden state, computed style을 반복 계산하지 않도록 per-pass cache를 둔다.
 - Dependencies: `target-resolver`, `platform-adapter/dom-adapter`.
 - Completion criteria:
