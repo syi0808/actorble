@@ -10,6 +10,7 @@
 - 2026-06-16 `pnpm bench` 결과에서 CSS locator 평균은 약 0.63ms였고, role/label/partial text locator는 약 145-256ms 범위였다. Visible wait의 role target path는 약 266ms였고 root text wait는 약 0.11ms였다.
 - Geometry/Interactability의 layout 비용은 jsdom 단독 측정보다 browser smoke 또는 instrumented DOM port가 더 적합하므로 별도 태스크로 둔다.
 - 모든 최적화는 기존 behavior test를 먼저 유지하고, 필요한 경우 benchmark 전후 결과를 PR 설명에 남긴다.
+- 특정 최적화가 기존 benchmark fixture에서 직접 드러나지 않으면, 해당 task에서 전용 benchmark fixture를 추가하거나 임시 before/after benchmark를 같은 코드로 실행해 결과를 남긴다.
 
 ## 의존성 원칙
 
@@ -18,6 +19,14 @@
 - Geometry 계산과 Interactability 판단은 계속 분리한다.
 - Action Orchestrator는 lifecycle coordinator로 남고, layout invalidation 또는 cache policy의 소유자가 되지 않는다.
 - Diagnostics는 성능 문제를 관찰 가능하게 만들되 긴 scenario에서 무제한 메모리 성장을 강제하지 않는다.
+
+## Benchmark 측정 원칙
+
+- 각 성능 task는 변경 전후의 같은 fixture, 같은 benchmark command, 같은 Node/pnpm runtime에서 mean/hz/RME를 비교한다.
+- 기존 `benchmarks/performance.bench.js`가 hot path를 직접 재현하지 못하면 task 전용 benchmark를 추가하거나 임시 benchmark worktree를 사용하고, fixture 크기와 측정 경로를 기록한다.
+- before/after 비교는 가능하면 직전 커밋과 task 커밋을 같은 benchmark 코드로 실행한다. 이미 구현 후 측정하는 경우에는 임시 worktree 또는 `git worktree`로 이전 커밋을 체크아웃해 비교한다.
+- PR 또는 완료 보고에는 최소한 benchmark 이름, fixture 크기, before mean, after mean, 개선 배율 또는 감소율, noise/RME 해석을 남긴다.
+- correctness test와 spy 기반 read-count test가 최적화의 계약을 고정하고, benchmark는 비용 변화 관찰 자료로 사용한다.
 
 ## 의존성 맵
 
@@ -112,6 +121,7 @@ visual optimization
   - 중첩 container/leaf text fixture의 기존 behavior regression test를 유지한다.
   - `pnpm test -- tests/target-resolver.test.js`
   - `pnpm bench -- "partial text"`
+  - 전용 large nested text fixture로 ancestor pruning before/after mean과 `contains()` read count 변화를 기록한다.
 
 ### P2026-06-16-04 Frame-scoped Geometry And Surface Cache
 
@@ -126,6 +136,7 @@ visual optimization
   - fake DOM port로 same-frame repeated geometry snapshot의 rect/style/scroll read count 감소를 검증한다.
   - invalidation 후 fresh DOM read가 발생하는 test를 추가한다.
   - `pnpm test -- tests/geometry-engine.test.js tests/surface-engine.test.js tests/interactability-engine.test.js`
+  - instrumented DOM port benchmark로 same-frame repeated geometry/surface snapshot과 invalidation-after-read 경로의 before/after read count 및 mean을 기록한다.
 
 ### P2026-06-16-05 Conditional Fresh Geometry Before Dispatch
 
@@ -140,6 +151,7 @@ visual optimization
   - no-dirty click path에서 geometry snapshot call count가 줄어드는 orchestrator test를 추가한다.
   - dirty event 이후 fresh point를 사용하는 기존 회귀 테스트가 계속 통과한다.
   - `pnpm test -- tests/action-orchestrator.test.js`
+  - 전용 orchestrator benchmark로 no-dirty click/doubleClick/typeInto click-focus 경로의 geometry snapshot count와 mean을 before/after 비교한다.
 
 ### P2026-06-16-06 Dirty-driven Wait Observation
 
@@ -155,6 +167,7 @@ visual optimization
   - injected resolver/geometry spies로 unchanged wait retry의 repeated work 감소를 검증한다.
   - mutation/layout invalidation 이후 observation이 갱신되는 test를 추가한다.
   - `pnpm test -- tests/wait-observation-engine.test.js`
+  - 전용 wait benchmark로 unchanged visible wait retry, dirty-after-retry visible wait, unchanged root text wait의 repeated resolve/read count와 mean을 기록한다.
 
 ### P2026-06-16-07 Pseudo-state Stylesheet Mirror Cache
 
@@ -169,6 +182,7 @@ visual optimization
   - style scanner spy로 두 번째 mirror apply에서 scan count가 줄어드는 test를 추가한다.
   - stylesheet mutation 후 scan이 다시 수행되는 test를 추가한다.
   - `pnpm test -- tests/pseudo-state-mirror.test.js tests/pseudo-state-selector-rewriter.test.js`
+  - `pnpm bench -- pseudo-state`와 전용 repeated mirror apply benchmark로 cache hit path와 stylesheet mutation miss path의 before/after mean을 기록한다.
 
 ### P2026-06-16-08 Visual Cursor DOM Diffing
 
@@ -183,6 +197,7 @@ visual optimization
   - repeated same-kind cursor update에서 SVG node identity가 유지되는 test를 추가한다.
   - cursor kind 변경 시 expected variant가 갱신되는 기존 visual tests를 유지한다.
   - `pnpm test -- tests/visual-layer.test.js tests/action-orchestrator.test.js`
+  - `pnpm bench -- visual`에 same-kind cursor update와 cursor kind switch를 분리해 before/after mean 및 DOM node churn 감소를 기록한다.
 
 ### P2026-06-16-09 Pointer Motion Allocation Control
 
@@ -197,6 +212,7 @@ visual optimization
   - existing pointer motion path tests를 유지한다.
   - long movement benchmark에서 allocation-sensitive path가 개선되었는지 `pnpm bench -- pointer`로 확인한다.
   - `pnpm test -- tests/pointer-engine.test.js tests/gesture-engine.test.js`
+  - 전용 long animated movement benchmark로 frame count, final path length, before/after mean을 기록하고 가능한 경우 allocation proxy metric을 함께 남긴다.
 
 ### P2026-06-16-10 Diagnostics Trace Retention Policy
 
@@ -211,6 +227,7 @@ visual optimization
   - retention limit이 적용된 trace에서 max events/snapshots를 넘지 않는 test를 추가한다.
   - default trace tests는 기존 snapshot immutability contract를 유지한다.
   - `pnpm test -- tests/diagnostics-trace.test.js tests/target-resolver.test.js tests/wait-observation-engine.test.js`
+  - 전용 long trace benchmark로 unlimited 기본값과 retention limit opt-in의 event/snapshot count, retained size proxy, append mean을 before/after 또는 default/limited로 비교한다.
 
 ## 첫 vertical slice
 
@@ -228,7 +245,8 @@ benchmark harness
 
 ## 실행 체크리스트
 
-- 성능 작업 전후에 `pnpm bench` 결과를 기록한다.
+- 성능 작업 전후에 `pnpm bench` 또는 task 전용 benchmark 결과를 기록한다.
+- 기존 benchmark가 최적화 경로를 직접 재지 못하면 전용 fixture를 추가하거나 임시 worktree benchmark로 같은 benchmark 코드의 before/after를 비교한다.
 - behavior 변경 전에는 실패하는 Vitest 또는 spy 기반 regression test를 먼저 추가한다.
 - DOM read cache는 mutation/frame boundary를 명확히 테스트한다.
 - 최적화 후 `pnpm test`, `pnpm typecheck`, `pnpm build`를 통과시킨다.
