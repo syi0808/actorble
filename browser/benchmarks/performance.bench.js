@@ -1223,17 +1223,38 @@ describe('pseudo-state mirror', () => {
 })
 
 describe('visual layer', () => {
-  const layer = new BrowserVisualLayer({ root: document })
-  let cursorIndex = 0
+  const sameKindLayer = new BrowserVisualLayer({ root: document })
+  const switchKindLayer = new BrowserVisualLayer({ root: document })
+  let sameKindCursorIndex = 0
+  let switchKindCursorIndex = 0
   const cursorKinds = ['default', 'pointer', 'text', 'grab', 'grabbing', 'wait']
 
   bench(
-    'cursor overlay update with SVG cursor variants',
+    'same-kind cursor overlay update repositions existing SVG',
     () => {
-      const cursor = cursorKinds[cursorIndex % cursorKinds.length]
-      cursorIndex += 1
-      layer.showCursor({
-        point: { x: cursorIndex % 300, y: (cursorIndex * 3) % 300 },
+      sameKindCursorIndex += 1
+      sameKindLayer.showCursor({
+        point: {
+          x: sameKindCursorIndex % 300,
+          y: (sameKindCursorIndex * 3) % 300,
+        },
+        cursor: 'pointer',
+        pressed: sameKindCursorIndex % 2 === 0,
+      })
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'cursor overlay update switches SVG cursor variants',
+    () => {
+      const cursor = cursorKinds[switchKindCursorIndex % cursorKinds.length]
+      switchKindCursorIndex += 1
+      switchKindLayer.showCursor({
+        point: {
+          x: switchKindCursorIndex % 300,
+          y: (switchKindCursorIndex * 3) % 300,
+        },
         cursor,
         pressed: cursor === 'grabbing',
       })

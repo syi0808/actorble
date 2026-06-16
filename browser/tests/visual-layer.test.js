@@ -340,6 +340,79 @@ describe('BrowserVisualLayer', () => {
     expect(getCursorSvg(cursor).style.transition).toBe('transform 80ms ease-out')
   })
 
+  it('reuses the SVG subtree for repeated same-kind cursor updates', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({
+      point: { x: 50, y: 60 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+
+    const cursor = getCursorElement()
+    const svg = getCursorSvg(cursor)
+    const hotspotShift = getCursorHotspotShift(cursor)
+    const path = svg.querySelector('path')
+    expect(path).not.toBeNull()
+
+    layer.showCursor({
+      point: { x: 70, y: 80 },
+      cursor: 'pointer',
+      pressed: true,
+    })
+
+    expectCursorAtPoint(cursor, { x: 70, y: 80 })
+    expect(getCursorSvg(cursor)).toBe(svg)
+    expect(getCursorHotspotShift(cursor)).toBe(hotspotShift)
+    expect(getCursorSvg(cursor).querySelector('path')).toBe(path)
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(true)
+    expect(svg.style.transform).toBe('scale(0.9)')
+
+    layer.showCursor({
+      point: { x: 90, y: 100 },
+      cursor: 'pointer',
+      pressed: false,
+    })
+
+    expectCursorAtPoint(cursor, { x: 90, y: 100 })
+    expect(getCursorSvg(cursor)).toBe(svg)
+    expect(getCursorHotspotShift(cursor)).toBe(hotspotShift)
+    expect(getCursorSvg(cursor).querySelector('path')).toBe(path)
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+    expect(svg.style.transform).toBe('none')
+  })
+
+  it('updates same-kind cursor scale without replacing the SVG subtree', () => {
+    const options = { root: document, cursorScale: 1 }
+    const layer = new BrowserVisualLayer(options)
+
+    layer.showCursor({
+      point: { x: 50, y: 60 },
+      cursor: 'pointer',
+    })
+
+    const cursor = getCursorElement()
+    const svg = getCursorSvg(cursor)
+    const path = svg.querySelector('path')
+    expect(path).not.toBeNull()
+
+    options.cursorScale = 2
+    layer.showCursor({
+      point: { x: 70, y: 80 },
+      cursor: 'pointer',
+    })
+
+    expect(getCursorSvg(cursor)).toBe(svg)
+    expect(getCursorSvg(cursor).querySelector('path')).toBe(path)
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('pointer')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('14')
+    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('4')
+    expect(cursor.style.width).toBe('36px')
+    expect(cursor.style.height).toBe('48px')
+    expectCursorAtPoint(cursor, { x: 70, y: 80 })
+    expectCursorSvgShift(cursor, 7, 2)
+  })
+
   it('accepts cursor visual request metadata without leaking stale variant state', () => {
     const layer = new BrowserVisualLayer({ root: document })
 

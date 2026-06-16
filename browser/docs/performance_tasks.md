@@ -192,7 +192,7 @@ visual optimization
 
 ### P2026-06-16-08 Visual Cursor DOM Diffing
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: cursor overlay가 같은 cursor kind에서 매 move마다 style 전체와 SVG subtree를 다시 만들지 않고 transform/pressed 상태만 갱신한다.
 - Dependencies: `visual-layer`, `pointer-visual-tracker`, `action-orchestrator` visual callbacks.
 - Completion criteria:

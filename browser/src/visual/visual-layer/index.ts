@@ -71,6 +71,7 @@ export interface VisualLayer {
 export class BrowserVisualLayer implements VisualLayer {
   #rootElement: HTMLElement | null = null
   readonly #parts = new Map<string, HTMLElement>()
+  #cursorRenderState: CursorRenderState | null = null
 
   constructor(readonly options: VisualLayerOptions = {}) {}
 
@@ -82,52 +83,53 @@ export class BrowserVisualLayer implements VisualLayer {
     const request = normalizeCursorVisualRequest(input)
     const cursor = this.#ensurePart('cursor', 'data-actorble-visual-cursor')
     const baseSpec = CURSOR_VISUAL_SPECS[request.kind]
-    const spec = scaleCursorVisualSpec(baseSpec, normalizeCursorScale(this.options.cursorScale))
+    const scale = normalizeCursorScale(this.options.cursorScale)
+    const spec = scaleCursorVisualSpec(baseSpec, scale)
     const baseTransform = baseSpec.style.transform ?? 'none'
-    cursor.setAttribute('data-actorble-cursor-kind', request.kind)
-    cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
-    cursor.setAttribute('data-actorble-cursor-hotspot-y', String(spec.hotspot.y))
+    const currentState = this.#cursorRenderState
+    const shouldReplaceGraphic =
+      !currentState ||
+      currentState.element !== cursor ||
+      currentState.kind !== request.kind ||
+      Boolean(currentState.svg) !== Boolean(baseSpec.svg) ||
+      Boolean(currentState.svg && !currentState.svg.isConnected)
 
-    if (request.cssCursor) {
-      cursor.setAttribute('data-actorble-css-cursor', request.cssCursor)
+    applyCursorMetadata(cursor, request, spec)
+
+    if (shouldReplaceGraphic) {
+      cursor.removeAttribute('style')
+      cursor.textContent = ''
+      applyCursorElementStyle(cursor, spec, request.point)
+
+      const svg = baseSpec.svg
+        ? createCursorSvg(cursor.ownerDocument, request.kind, baseSpec.svg, {
+            baseTransform,
+            hotspot: baseSpec.hotspot,
+            pressed: request.pressed,
+          })
+        : null
+
+      if (svg) {
+        cursor.append(svg)
+      }
+
+      this.#cursorRenderState = {
+        element: cursor,
+        kind: request.kind,
+        scale,
+        svg,
+      }
     } else {
-      cursor.removeAttribute('data-actorble-css-cursor')
-    }
+      if (currentState.scale !== scale) {
+        applyCursorElementSize(cursor, spec)
+        currentState.scale = scale
+      }
 
-    if (request.pressed) {
-      cursor.setAttribute('data-actorble-cursor-pressed', '')
-    } else {
-      cursor.removeAttribute('data-actorble-cursor-pressed')
-    }
+      cursor.style.transform = cursorPositionTransform(request.point)
 
-    cursor.removeAttribute('style')
-    cursor.textContent = ''
-    Object.assign(cursor.style, {
-      boxSizing: 'border-box',
-      contain: 'layout style',
-      display: 'block',
-      height: `${spec.height}px`,
-      left: '0px',
-      overflow: 'visible',
-      pointerEvents: 'none',
-      position: 'absolute',
-      top: '0px',
-      transformOrigin: '0px 0px',
-      width: `${spec.width}px`,
-      ...spec.style,
-      transform: cursorPositionTransform(request.point),
-      transition: 'none',
-      willChange: 'transform',
-    })
-
-    if (spec.svg) {
-      cursor.append(
-        createCursorSvg(cursor.ownerDocument, request.kind, spec.svg, {
-          baseTransform,
-          hotspot: baseSpec.hotspot,
-          pressed: request.pressed,
-        }),
-      )
+      if (currentState.svg) {
+        currentState.svg.style.transform = cursorTransform(baseTransform, request.pressed)
+      }
     }
   }
 
@@ -274,6 +276,7 @@ export class BrowserVisualLayer implements VisualLayer {
     this.#rootElement?.remove()
     this.#rootElement = null
     this.#parts.clear()
+    this.#cursorRenderState = null
   }
 
   get #enabled(): boolean {
@@ -337,6 +340,10 @@ export class BrowserVisualLayer implements VisualLayer {
 
     part.remove()
     this.#parts.delete(key)
+
+    if (key === 'cursor') {
+      this.#cursorRenderState = null
+    }
   }
 }
 
@@ -414,6 +421,13 @@ type CursorVisualSvgPathSpec = Readonly<{
   strokeLinejoin?: string
   strokeWidth?: string
 }>
+
+type CursorRenderState = {
+  element: HTMLElement
+  kind: SupportedCursorVisualKind
+  scale: number
+  svg: SVGSVGElement | null
+}
 
 const CURSOR_FILL = 'CanvasText'
 const CURSOR_HALO = 'Canvas'
@@ -722,6 +736,56 @@ function cursorTransform(baseTransform: string, pressed: boolean): string {
 
 function cursorPositionTransform(point: Point): string {
   return `translate3d(${point.x}px, ${point.y}px, 0)`
+}
+
+function applyCursorMetadata(
+  cursor: HTMLElement,
+  request: NormalizedCursorVisualRequest,
+  spec: CursorVisualSpec,
+): void {
+  cursor.setAttribute('data-actorble-cursor-kind', request.kind)
+  cursor.setAttribute('data-actorble-cursor-hotspot-x', String(spec.hotspot.x))
+  cursor.setAttribute('data-actorble-cursor-hotspot-y', String(spec.hotspot.y))
+
+  if (request.cssCursor) {
+    cursor.setAttribute('data-actorble-css-cursor', request.cssCursor)
+  } else {
+    cursor.removeAttribute('data-actorble-css-cursor')
+  }
+
+  if (request.pressed) {
+    cursor.setAttribute('data-actorble-cursor-pressed', '')
+  } else {
+    cursor.removeAttribute('data-actorble-cursor-pressed')
+  }
+}
+
+function applyCursorElementStyle(
+  cursor: HTMLElement,
+  spec: CursorVisualSpec,
+  point: Point,
+): void {
+  Object.assign(cursor.style, {
+    boxSizing: 'border-box',
+    contain: 'layout style',
+    display: 'block',
+    left: '0px',
+    overflow: 'visible',
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: '0px',
+    transformOrigin: '0px 0px',
+    ...spec.style,
+    transform: cursorPositionTransform(point),
+    transition: 'none',
+    willChange: 'transform',
+  })
+  applyCursorElementSize(cursor, spec)
+}
+
+function applyCursorElementSize(cursor: HTMLElement, spec: CursorVisualSpec): void {
+  cursor.style.height = `${spec.height}px`
+  cursor.style.width = `${spec.width}px`
 }
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
