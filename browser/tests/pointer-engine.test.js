@@ -77,6 +77,45 @@ function createEngine(options = {}) {
   }
 }
 
+function trackPointArrayIterations() {
+  const originalIterator = Array.prototype[Symbol.iterator]
+  let pointArrayIterations = 0
+
+  Object.defineProperty(Array.prototype, Symbol.iterator, {
+    configurable: true,
+    writable: true,
+    value: function trackedIterator() {
+      if (this.length > 0 && this.every(isPointLike)) {
+        pointArrayIterations += 1
+      }
+
+      return originalIterator.call(this)
+    },
+  })
+
+  return {
+    get pointArrayIterations() {
+      return pointArrayIterations
+    },
+    restore() {
+      Object.defineProperty(Array.prototype, Symbol.iterator, {
+        configurable: true,
+        writable: true,
+        value: originalIterator,
+      })
+    },
+  }
+}
+
+function isPointLike(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof value.x === 'number' &&
+    typeof value.y === 'number'
+  )
+}
+
 describe('BrowserPointerEngine', () => {
   it('starts with deterministic immutable pointer state', () => {
     const { engine } = createEngine()
@@ -96,6 +135,23 @@ describe('BrowserPointerEngine', () => {
 
     expect(engine.getState().buttons.pressed).toEqual([])
     expect(engine.getState().motion.path).toBeUndefined()
+  })
+
+  it('returns immutable snapshots of recorded movement paths', async () => {
+    const timeline = createTimeline(25)
+    const { engine } = createEngine({ timeline })
+
+    const result = await engine.moveTo({ x: 100, y: 0 }, { duration: 100 })
+
+    result.motion.path.push({ x: 999, y: 999 })
+    result.motion.path[0].x = -1
+
+    expect(engine.getState().motion.path).toEqual([
+      { x: 25, y: 0 },
+      { x: 50, y: 0 },
+      { x: 75, y: 0 },
+      { x: 100, y: 0 },
+    ])
   })
 
   it('moves immediately and emits one moved signal', async () => {
@@ -165,6 +221,25 @@ describe('BrowserPointerEngine', () => {
         ],
       },
     })
+  })
+
+  it('appends movement path frames without iterating the accumulated path', async () => {
+    const frameCount = 64
+    const timeline = createTimeline(1)
+    const { engine } = createEngine({ timeline })
+    const tracker = trackPointArrayIterations()
+
+    try {
+      await engine.moveTo(
+        { x: frameCount, y: 0 },
+        { motion: { kind: 'linear', duration: frameCount } },
+      )
+    } finally {
+      tracker.restore()
+    }
+
+    expect(engine.getState().motion.path).toHaveLength(frameCount)
+    expect(tracker.pointArrayIterations).toBe(0)
   })
 
   it('accepts a linear motion profile as a skeleton hook for duration movement', async () => {

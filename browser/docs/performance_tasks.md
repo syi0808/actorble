@@ -207,7 +207,7 @@ visual optimization
 
 ### P2026-06-16-09 Pointer Motion Allocation Control
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Pointer Engine의 animated movement가 frame마다 path 배열 전체를 복사하지 않도록 allocation을 줄인다.
 - Dependencies: `pointer-engine`, `pointer-signals`, `gesture-engine`.
 - Completion criteria:

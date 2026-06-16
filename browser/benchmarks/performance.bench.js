@@ -31,6 +31,7 @@ const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
 const WAIT_RETRY_REPEAT_COUNT = 50
 const PSEUDO_STATE_REPEAT_COUNT = 20
 const PSEUDO_STATE_WORST_REPEAT_COUNT = 5
+const POINTER_LONG_FRAME_COUNT = 512
 const EXPENSIVE_WAIT_DOM_SIZE = 160
 const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1
 const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5
@@ -1279,6 +1280,27 @@ describe('pointer engine', () => {
         direction > 0 ? { x: 300, y: 200 } : { x: 0, y: 0 },
         { motion: { kind: 'ease', duration: 250 } },
       )
+    },
+    BENCH_OPTIONS,
+  )
+
+  const longPointer = new BrowserPointerEngine({
+    timeline: createFrameTimeline(),
+  })
+  let longDirection = -1
+
+  bench(
+    'long animated pointer movement records path across many frames',
+    async () => {
+      longDirection *= -1
+      const state = await longPointer.moveTo(
+        longDirection > 0 ? { x: 512, y: 256 } : { x: 0, y: 0 },
+        { motion: { kind: 'linear', duration: POINTER_LONG_FRAME_COUNT * 16 } },
+      )
+
+      if (state.motion.path?.length !== POINTER_LONG_FRAME_COUNT) {
+        throw new Error(`Expected ${POINTER_LONG_FRAME_COUNT} pointer path frames.`)
+      }
     },
     BENCH_OPTIONS,
   )

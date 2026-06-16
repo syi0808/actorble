@@ -59,10 +59,30 @@ type NormalizedMotionProfile = Readonly<{
   easing?: PointerEasingName
 }>
 
+type InternalPointerState = {
+  id: string
+  position: Point
+  previousPosition: Point | null
+  motion: {
+    status: PointerMotionStatus
+    from?: Point
+    to?: Point
+    path?: Point[]
+  }
+  buttons: {
+    pressed: PointerButtonName[]
+    primary: PointerButtonName | null
+  }
+  surface: {
+    id: string | null
+    coordinateSpace: CoordinateSpace
+  }
+}
+
 export class BrowserPointerEngine implements PointerEngine {
   readonly #signals: PointerSignalBus
   readonly #timeline: TimelineEngine
-  #state: PointerState
+  #state: InternalPointerState
   #motionRunId = 0
 
   constructor(options: PointerEngineOptions = {}) {
@@ -214,7 +234,9 @@ export class BrowserPointerEngine implements PointerEngine {
   #applyMovement(point: Point): void {
     const previousPoint = clonePoint(this.#state.position)
     const nextPoint = clonePoint(point)
-    const path = [...(this.#state.motion.path ?? []), nextPoint]
+    const path = this.#state.motion.path ?? []
+
+    path.push(nextPoint)
 
     this.#state = {
       ...this.#state,
@@ -249,7 +271,7 @@ export function createPointerEngine(options: PointerEngineOptions = {}): Pointer
   return new BrowserPointerEngine(options)
 }
 
-function cloneState(state: PointerState): PointerState {
+function cloneState(state: InternalPointerState): PointerState {
   return {
     id: state.id,
     position: clonePoint(state.position),
