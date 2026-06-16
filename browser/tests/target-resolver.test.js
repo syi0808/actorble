@@ -242,6 +242,45 @@ describe('BrowserTargetResolver', () => {
     expect(computedStyleCounts.get(workspace)).toBe(1)
   })
 
+  it('short-circuits exists after the first matching role candidate', async () => {
+    document.body.innerHTML = `
+      <main>
+        <button id="first" aria-label="Save">Save</button>
+        <button id="second" aria-label="Save">Save</button>
+      </main>
+    `
+    const { dom, describeCounts, computedStyleCounts } = createReadCountingDom()
+    const resolver = createResolver({ dom })
+    const second = document.querySelector('#second')
+
+    await expect(resolver.exists(role('button', { name: 'Save' }))).resolves.toBe(true)
+
+    expect(describeCounts.get(second) ?? 0).toBe(0)
+    expect(computedStyleCounts.get(second) ?? 0).toBe(0)
+  })
+
+  it('uses the first scoped css and test id candidate for non-strict resolve without filtering all matches', async () => {
+    document.body.innerHTML = `
+      <button id="first" class="choice" data-testid="save">One</button>
+      <button id="second" class="choice" data-testid="save">Two</button>
+    `
+    const dom = new BrowserDomAdapter(document)
+    const contains = vi.spyOn(dom, 'contains')
+    const resolver = createResolver({ dom })
+
+    await expect(resolver.resolve(css('.choice'))).resolves.toMatchObject({
+      element: document.querySelector('#first'),
+    })
+    expect(contains).toHaveBeenCalledTimes(1)
+
+    contains.mockClear()
+
+    await expect(resolver.resolve(testId('save'))).resolves.toMatchObject({
+      element: document.querySelector('#first'),
+    })
+    expect(contains).toHaveBeenCalledTimes(1)
+  })
+
   it('memoizes label locator hidden checks and accessible-name reads within one resolve pass', async () => {
     document.body.innerHTML = `
       <main>
@@ -260,6 +299,33 @@ describe('BrowserTargetResolver', () => {
 
     expect(describeCounts.get(input)).toBe(1)
     expect(computedStyleCounts.get(input)).toBe(1)
+  })
+
+  it('keeps diagnostics-enabled css resolve on the full candidate snapshot path', async () => {
+    document.body.innerHTML = `
+      <button id="first" class="choice">One</button>
+      <button id="second" class="choice">Two</button>
+    `
+    const trace = new BrowserDiagnosticsTrace({ clock: createClock(5750), idPrefix: 'trace' })
+    const resolver = createResolver({ trace })
+
+    await expect(resolver.resolve(css('.choice'))).resolves.toMatchObject({
+      element: document.querySelector('#first'),
+    })
+
+    const snapshot = trace.getTrace().snapshots.at(-1)
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          ambiguity: 'single-best',
+          candidates: [
+            expect.objectContaining({ index: 0, score: 100, reasons: ['css'] }),
+            expect.objectContaining({ index: 1, score: 100, reasons: ['css'] }),
+          ],
+        }),
+      }),
+    )
   })
 
   it('limits resolver read memoization to a single resolve call', async () => {

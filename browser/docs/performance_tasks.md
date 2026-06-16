@@ -87,7 +87,7 @@ visual optimization
 
 ### P2026-06-16-02 Resolver Fast Paths
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `exists()`와 common locator paths가 후보 전체 ranking을 만들지 않고 필요한 시점에 short-circuit할 수 있게 한다.
 - Dependencies: 완료된 P2026-06-16-01, `target-resolver`.
 - Completion criteria:

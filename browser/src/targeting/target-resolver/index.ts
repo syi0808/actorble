@@ -64,6 +64,18 @@ export class BrowserTargetResolver implements TargetResolver {
 
     try {
       const pass = createResolutionPass()
+      const fastCandidate = this.#resolveFirstCandidate(locator, pass, options)
+
+      if (fastCandidate !== undefined) {
+        if (fastCandidate === null) {
+          throw this.#emptyResolveError(locator)
+        }
+
+        const handle = this.#createHandle(fastCandidate.element, locator, pass)
+        span?.end({ targetId: handle.id, count: 1 })
+        return handle
+      }
+
       const candidates = this.#resolveCandidates(locator, pass)
       const ambiguity = resolutionAmbiguity(candidates, options.strict === true)
       this.#recordResolutionDiagnostics(locator, candidates, ambiguity, pass)
@@ -120,8 +132,7 @@ export class BrowserTargetResolver implements TargetResolver {
 
   async exists(locator: Locator, _options: ResolveOptions = {}): Promise<boolean> {
     const pass = createResolutionPass()
-    const candidates = this.#resolveCandidates(locator, pass)
-    return candidates.length > 0
+    return this.#hasCandidate(locator, pass)
   }
 
   async inspect(target: TargetLike): Promise<TargetInspection> {
@@ -217,6 +228,189 @@ export class BrowserTargetResolver implements TargetResolver {
       case 'point':
         return this.#rankPointLocator(locator)
     }
+  }
+
+  #resolveFirstCandidate(
+    locator: Locator,
+    pass: ResolutionPass,
+    options: ResolveOptions,
+  ): TargetCandidate | null | undefined {
+    if (options.strict === true || this.#trace !== undefined) {
+      return undefined
+    }
+
+    switch (locator.kind) {
+      case 'css':
+        return this.#firstScopedCandidate(
+          this.#dom.querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot()),
+          100,
+          ['css'],
+        )
+      case 'element':
+        return this.#isElementInScope(locator.element)
+          ? { element: locator.element, score: 100, reasons: ['element'], order: 0 }
+          : null
+      case 'testId': {
+        const attribute = locator.attribute ?? 'data-testid'
+        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`
+        return this.#firstScopedCandidate(
+          this.#dom.querySelectorAll(selector, this.#dom.getRoot()),
+          100,
+          ['testId', `attribute:${attribute}`],
+        )
+      }
+      case 'point': {
+        if (locator.coordinateSpace !== undefined && locator.coordinateSpace !== 'viewport') {
+          throw actorbleError(
+            'PLATFORM_UNSUPPORTED',
+            `Point locator coordinate space "${locator.coordinateSpace}" must be mapped before target resolution.`,
+            {
+              details: { locator: summarizeLocator(locator) },
+            },
+          )
+        }
+
+        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true })
+        return element !== null && this.#isElementInScope(element)
+          ? { element, score: 100, reasons: ['point'], order: 0 }
+          : null
+      }
+      case 'role':
+      case 'text':
+      case 'label':
+        return undefined
+    }
+  }
+
+  #hasCandidate(locator: Locator, pass: ResolutionPass): boolean {
+    switch (locator.kind) {
+      case 'css':
+        return (
+          this.#firstScopedElement(
+            this.#dom.querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot()),
+          ) !== null
+        )
+      case 'element':
+        return this.#isElementInScope(locator.element)
+      case 'role':
+        return this.#hasRoleCandidate(locator, pass)
+      case 'text':
+        return this.#hasTextCandidate(locator, pass)
+      case 'label':
+        return this.#hasLabelCandidate(locator, pass)
+      case 'testId': {
+        const attribute = locator.attribute ?? 'data-testid'
+        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`
+        return this.#firstScopedElement(this.#dom.querySelectorAll(selector, this.#dom.getRoot())) !== null
+      }
+      case 'point': {
+        if (locator.coordinateSpace !== undefined && locator.coordinateSpace !== 'viewport') {
+          throw actorbleError(
+            'PLATFORM_UNSUPPORTED',
+            `Point locator coordinate space "${locator.coordinateSpace}" must be mapped before target resolution.`,
+            {
+              details: { locator: summarizeLocator(locator) },
+            },
+          )
+        }
+
+        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true })
+        return element !== null && this.#isElementInScope(element)
+      }
+    }
+  }
+
+  #hasRoleCandidate(locator: Extract<Locator, { kind: 'role' }>, pass: ResolutionPass): boolean {
+    for (const element of this.#dom.querySelectorAll('*', this.#dom.getRoot())) {
+      if (!this.#isElementInScope(element)) {
+        continue
+      }
+
+      if (locator.includeHidden !== true && this.#isHidden(element, pass)) {
+        continue
+      }
+
+      const debug = this.#describeElement(element, pass)
+      if (debug.role !== locator.role) {
+        continue
+      }
+
+      if (
+        locator.name !== undefined &&
+        matchText(debug.name ?? '', locator.name, locator.exact === true) === null
+      ) {
+        continue
+      }
+
+      return true
+    }
+
+    return false
+  }
+
+  #hasTextCandidate(locator: Extract<Locator, { kind: 'text' }>, pass: ResolutionPass): boolean {
+    for (const element of this.#dom.querySelectorAll('*', this.#dom.getRoot())) {
+      if (!this.#isElementInScope(element) || this.#isHidden(element, pass)) {
+        continue
+      }
+
+      if (matchText(this.#dom.getTextContent(element), locator.value, locator.exact === true) !== null) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  #hasLabelCandidate(locator: Extract<Locator, { kind: 'label' }>, pass: ResolutionPass): boolean {
+    const labels = this.#dom.querySelectorAll('label', this.#dom.getRoot())
+
+    for (const labelElement of labels) {
+      if (!this.#isElementInScope(labelElement) || this.#isHidden(labelElement, pass)) {
+        continue
+      }
+
+      if (matchText(this.#dom.getTextContent(labelElement), locator.value, locator.exact === true) === null) {
+        continue
+      }
+
+      for (const control of this.#associatedLabelControls(labelElement)) {
+        if (this.#isElementInScope(control) && !this.#isHidden(control, pass)) {
+          return true
+        }
+      }
+    }
+
+    for (const element of this.#dom.querySelectorAll(labelableSelector, this.#dom.getRoot())) {
+      if (!this.#isElementInScope(element) || this.#isHidden(element, pass)) {
+        continue
+      }
+
+      if (matchText(this.#describeElement(element, pass).name ?? '', locator.value, locator.exact === true) !== null) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  #firstScopedCandidate(
+    elements: readonly Element[],
+    score: number,
+    reasons: readonly string[],
+  ): TargetCandidate | null {
+    const element = this.#firstScopedElement(elements)
+    return element === null ? null : { element, score, reasons, order: 0 }
+  }
+
+  #firstScopedElement(elements: readonly Element[]): Element | null {
+    for (const element of elements) {
+      if (this.#isElementInScope(element)) {
+        return element
+      }
+    }
+
+    return null
   }
 
   #rankRoleLocator(
