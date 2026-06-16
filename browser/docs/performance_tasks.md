@@ -110,7 +110,7 @@ visual optimization
 
 ### P2026-06-16-03 Text Locator Ancestor Pruning
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: text locator의 ancestor match 제거가 후보 수에 대해 O(n²)로 커지지 않도록 pruning 알고리즘을 바꾼다.
 - Dependencies: 완료된 P2026-06-16-01, `target-resolver`, `DomPort.contains`.
 - Completion criteria:

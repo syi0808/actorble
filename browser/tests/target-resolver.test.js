@@ -503,6 +503,64 @@ describe('BrowserTargetResolver', () => {
     })
   })
 
+  it('keeps leaf text candidates ahead of matching ancestor containers', async () => {
+    document.body.innerHTML = `
+      <main id="workspace">
+        <section id="first-card">
+          <article id="first-copy">
+            <span id="first-leaf">Nested target copy</span>
+          </article>
+        </section>
+        <section id="second-card">
+          <article id="second-copy">
+            <span id="second-leaf">Nested target copy</span>
+          </article>
+        </section>
+        <p id="standalone">Nested target copy</p>
+      </main>
+    `
+    const resolver = createResolver()
+
+    const all = await resolver.resolveAll(text('Nested target'))
+
+    expect(all.map((handle) => handle.element)).toEqual([
+      document.querySelector('#first-leaf'),
+      document.querySelector('#second-leaf'),
+      document.querySelector('#standalone'),
+    ])
+  })
+
+  it('prunes large nested text matches without pairwise contains reads', async () => {
+    const rowCount = 24
+    document.body.innerHTML = `
+      <main id="large-nested-text">
+        ${Array.from(
+          { length: rowCount },
+          (_, index) => `
+            <section class="nested-row" data-row="${index}">
+              <article class="nested-card">
+                <div class="nested-copy">
+                  <span id="nested-leaf-${index}">Needle text ${index}</span>
+                </div>
+              </article>
+            </section>
+          `,
+        ).join('')}
+      </main>
+    `
+    const dom = new BrowserDomAdapter(document)
+    const contains = vi.spyOn(dom, 'contains')
+    const resolver = createResolver({ dom })
+    const elementCount = document.querySelectorAll('*').length
+
+    const all = await resolver.resolveAll(text('Needle text'))
+
+    expect(all.map((handle) => handle.element)).toEqual(
+      Array.from({ length: rowCount }, (_, index) => document.querySelector(`#nested-leaf-${index}`)),
+    )
+    expect(contains.mock.calls.length).toBeLessThanOrEqual(elementCount + 1)
+  })
+
   it('resolves label locators to their associated controls', async () => {
     document.body.innerHTML = `
       <form>

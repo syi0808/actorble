@@ -19,6 +19,7 @@ const BENCH_OPTIONS = {
 
 const LARGE_DOM_SIZE = 80
 const TARGET_INDEX = LARGE_DOM_SIZE - 1
+const NESTED_TEXT_ROW_COUNT = 120
 const STYLE_RULE_COUNT = 50
 
 function createClock() {
@@ -111,6 +112,27 @@ function buildLargeDomFixture() {
   })
 }
 
+function buildNestedTextFixture() {
+  const root = document.createElement('main')
+  root.id = 'bench-nested-text-root'
+
+  const chunks = []
+  for (let index = 0; index < NESTED_TEXT_ROW_COUNT; index += 1) {
+    chunks.push(`
+      <section class="nested-text-row" data-row="${index}">
+        <article class="nested-text-card">
+          <div class="nested-text-copy">
+            <span id="nested-text-leaf-${index}">Nested performance target ${index}</span>
+          </div>
+        </article>
+      </section>
+    `)
+  }
+
+  root.innerHTML = chunks.join('')
+  document.body.append(root)
+}
+
 function buildStylesheetFixture() {
   const style = document.createElement('style')
   const rules = []
@@ -133,6 +155,7 @@ beforeAll(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
   buildLargeDomFixture()
+  buildNestedTextFixture()
   buildStylesheetFixture()
 })
 
@@ -167,6 +190,14 @@ describe('target resolver', () => {
     'partial text locator ranks many text matches',
     async () => {
       await resolver.resolveAll(text('Save item'))
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'partial text locator prunes large nested matches',
+    async () => {
+      await resolver.resolveAll(text('Nested performance target'))
     },
     BENCH_OPTIONS,
   )

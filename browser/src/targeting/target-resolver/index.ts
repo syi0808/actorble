@@ -601,12 +601,54 @@ export class BrowserTargetResolver implements TargetResolver {
   }
 
   #withoutAncestorMatches(candidates: readonly TargetCandidate[]): readonly TargetCandidate[] {
-    return candidates.filter(
-      (candidate) =>
-        !candidates.some(
-          (other) => other.element !== candidate.element && this.#dom.contains(candidate.element, other.element),
-        ),
-    )
+    if (candidates.length < 2) {
+      return candidates
+    }
+
+    const candidateElements = new Set(candidates.map((candidate) => candidate.element))
+    const ancestorsWithMatchedDescendants = new Set<Element>()
+    const nearestMatchedAncestorByElement = new WeakMap<Element, Element | null>()
+    const findNearestMatchedAncestor = (element: Element): Element | null => {
+      if (nearestMatchedAncestorByElement.has(element)) {
+        return nearestMatchedAncestorByElement.get(element) ?? null
+      }
+
+      const inspected: Element[] = []
+      let current = this.#dom.getParentElement(element)
+      let matchedAncestor: Element | null = null
+
+      while (current !== null) {
+        if (candidateElements.has(current)) {
+          matchedAncestor = current
+          break
+        }
+
+        if (nearestMatchedAncestorByElement.has(current)) {
+          matchedAncestor = nearestMatchedAncestorByElement.get(current) ?? null
+          break
+        }
+
+        inspected.push(current)
+        current = this.#dom.getParentElement(current)
+      }
+
+      for (const inspectedElement of inspected) {
+        nearestMatchedAncestorByElement.set(inspectedElement, matchedAncestor)
+      }
+      nearestMatchedAncestorByElement.set(element, matchedAncestor)
+
+      return matchedAncestor
+    }
+
+    for (const candidate of candidates) {
+      const ancestor = findNearestMatchedAncestor(candidate.element)
+
+      if (ancestor !== null) {
+        ancestorsWithMatchedDescendants.add(ancestor)
+      }
+    }
+
+    return candidates.filter((candidate) => !ancestorsWithMatchedDescendants.has(candidate.element))
   }
 
   #isHidden(element: Element, pass: ResolutionPass): boolean {
