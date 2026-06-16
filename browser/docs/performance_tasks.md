@@ -140,7 +140,7 @@ visual optimization
 
 ### P2026-06-16-05 Conditional Fresh Geometry Before Dispatch
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: pointer dispatch 직전 geometry refresh를 항상 수행하지 않고, initial geometry 이후 layout dirty 신호가 있었을 때만 수행할 수 있게 한다.
 - Dependencies: 완료된 P2026-06-16-04, `action-orchestrator`, `layout-invalidation-tracker`, `gesture-engine`.
 - Completion criteria:

@@ -6,6 +6,7 @@ import {
   BrowserStateApplier,
   BrowserStyleAdapter,
 } from '../src/platform/platform-adapter/index.js'
+import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserWaitObservationEngine } from '../src/runtime/wait-observation-engine/index.js'
 import { css, label, role, text } from '../src/shared/index.js'
 import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
@@ -286,6 +287,187 @@ function buildStylesheetFixture() {
   document.head.append(style)
 }
 
+function createBenchmarkLayoutInvalidationTracker() {
+  const listeners = new Set()
+  let running = true
+
+  return {
+    start() {
+      running = true
+    },
+    stop() {
+      running = false
+    },
+    isRunning() {
+      return running
+    },
+    markDirty(reason) {
+      if (!running) {
+        return
+      }
+
+      for (const listener of [...listeners]) {
+        listener({
+          reason,
+          reasons: [reason],
+          at: 0,
+          coalesced: 1,
+        })
+      }
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+
+      return {
+        dispose() {
+          listeners.delete(listener)
+        },
+      }
+    },
+    dispose() {
+      listeners.clear()
+      running = false
+    },
+  }
+}
+
+function createBenchmarkGesture() {
+  return {
+    async click(_target, point, options = {}) {
+      await options.refreshPointBeforeDown?.(point)
+      return { completed: true }
+    },
+    async doubleClick(_target, point, options = {}) {
+      const firstPoint = (await options.refreshPointBeforeDown?.(point)) ?? point
+      await options.refreshPointBeforeDown?.(firstPoint)
+      return { completed: true }
+    },
+    async hover() {
+      return { completed: true }
+    },
+    async drag() {
+      return { completed: true }
+    },
+    async cancel() {
+      return { completed: false }
+    },
+  }
+}
+
+function createActionOrchestratorBenchmarkFixture(kind = 'button') {
+  const element =
+    kind === 'input' ? document.createElement('input') : document.createElement('button')
+  element.id = `bench-action-${kind}`
+  document.body.append(element)
+
+  const target = targetHandle(element.id, element)
+  const geometrySnapshot = {
+    target,
+    rect: { x: 20, y: 30, width: 120, height: 32 },
+    visibleRect: { x: 20, y: 30, width: 120, height: 32 },
+    center: { x: 80, y: 46 },
+    clickablePoint: {
+      ok: true,
+      point: { x: 80, y: 46 },
+      strategy: 'center',
+    },
+    coordinateSpace: 'viewport',
+    computedAt: 1,
+  }
+  const counts = {
+    geometrySnapshots: 0,
+    clickPreflights: 0,
+  }
+  const resolver = {
+    resolve: async () => target,
+    resolveAll: async () => [target],
+    exists: async () => true,
+    inspect: async () => ({ target, debug: target.debug, validity: 'live' }),
+    validate: async () => target,
+  }
+  const surface = {
+    getSurfaceFor: () => ({
+      id: 'viewport',
+      root: document,
+      coordinateSpace: 'viewport',
+      viewport: null,
+      clippingChain: [],
+    }),
+    getScrollableAncestors: () => [],
+    ensureVisible: async () => {},
+    scrollTo: async () => {},
+    mapPoint: (point) => point,
+  }
+  const geometry = {
+    snapshot: async () => {
+      counts.geometrySnapshots += 1
+      return geometrySnapshot
+    },
+  }
+  const interactability = {
+    inspect: async () => ({ target, canClick: true, blockingReasons: [] }),
+    canClick: async () => {
+      counts.clickPreflights += 1
+      return clickReport(target)
+    },
+    canFocus: async () => clickReport(target),
+    canType: async () => clickReport(target),
+  }
+  const focus = {
+    focus: async () => ({ active: target, previous: null, focusVisible: false }),
+    blur: async () => {},
+    getFocused: async () => ({ active: target, previous: null, focusVisible: false }),
+    tab: async () => ({ active: target, previous: null, focusVisible: true }),
+  }
+  const orchestrator = new BrowserActionOrchestrator({
+    resolver,
+    surface,
+    geometry,
+    interactability,
+    gesture: createBenchmarkGesture(),
+    focus,
+    keyboard: {
+      getState: () => ({ pressedKeys: [], modifiers: [] }),
+      keyDown: async () => ({ pressedKeys: [], modifiers: [] }),
+      keyUp: async () => ({ pressedKeys: [], modifiers: [] }),
+      press: async () => ({ pressedKeys: [], modifiers: [] }),
+    },
+    text: {
+      type: async (_text) => ({ strategy: 'type', text: _text }),
+      typeInto: async (_target, textValue) => ({ strategy: 'typeInto', text: textValue }),
+      fill: async (_target, textValue) => ({ strategy: 'fill', text: textValue }),
+    },
+    wait: {
+      waitFor: async () => ({ satisfied: true, strategy: 'immediate' }),
+      settle: async () => null,
+      invalidateGeometry() {},
+    },
+    state: {
+      applyStateEffects() {},
+      cleanup() {},
+    },
+    layoutInvalidation: createBenchmarkLayoutInvalidationTracker(),
+    visualFeedback: { enabled: false },
+  })
+
+  return { counts, orchestrator, target }
+}
+
+function clickReport(target) {
+  return {
+    target,
+    visible: true,
+    enabled: true,
+    receivesPointerEvents: true,
+    canClick: true,
+    canFocus: true,
+    canType: true,
+    blockingReasons: [],
+    forceBypassedReasons: [],
+    unforceableReasons: [],
+  }
+}
+
 beforeAll(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
@@ -423,6 +605,49 @@ describe('geometry and surface cache', () => {
       fixture.rects.set(fixture.target, { x: 20, y: 30, width: 100, height: 50 })
       fixture.cache.invalidate('mutation')
       await fixture.geometry.snapshot(fixture.handle)
+    },
+    BENCH_OPTIONS,
+  )
+})
+
+describe('action orchestrator dispatch geometry refresh', () => {
+  let clickFixture
+  let doubleClickFixture
+  let typeIntoFixture
+
+  bench(
+    'orchestrator clean click skips dispatch geometry refresh',
+    async () => {
+      clickFixture ??= createActionOrchestratorBenchmarkFixture('button')
+      await clickFixture.orchestrator.click(css('#bench-action-button'), {
+        duration: 0,
+        pressDwell: 0,
+      })
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'orchestrator clean doubleClick skips dispatch geometry refresh',
+    async () => {
+      doubleClickFixture ??= createActionOrchestratorBenchmarkFixture('button')
+      await doubleClickFixture.orchestrator.doubleClick(css('#bench-action-button'), {
+        duration: 0,
+        pressDwell: 0,
+      })
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'orchestrator clean typeInto click-focus skips dispatch geometry refresh',
+    async () => {
+      typeIntoFixture ??= createActionOrchestratorBenchmarkFixture('input')
+      await typeIntoFixture.orchestrator.typeInto(css('#bench-action-input'), 'x', {
+        delay: 0,
+        focusStrategy: 'click',
+        focusClick: { duration: 0, pressDwell: 0 },
+      })
     },
     BENCH_OPTIONS,
   )
