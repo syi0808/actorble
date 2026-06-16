@@ -99,6 +99,22 @@ type WaitAttemptDiagnostics = {
 
 type WaitErrorDetailsProvider = ActorbleErrorDetails | (() => ActorbleErrorDetails)
 
+type TargetWaitObservationCache = {
+  handle?: TargetHandle
+  observation?: TargetWaitObservation
+  observedLayoutRevision: number
+}
+
+type TargetWaitObservationResult = Readonly<{
+  observation: TargetWaitObservation
+  handle?: TargetHandle
+}>
+
+type TextWaitObservationCache = {
+  observation?: TextWaitObservation
+  observedTextRevision: number
+}
+
 export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #dom: DomPort
   readonly #resolver: TargetResolver
@@ -108,7 +124,10 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #trace?: WaitTraceRecorder
   readonly #onGeometryInvalidated?: GeometryInvalidationHook
   readonly #geometrySurfaceCache?: FrameGeometrySurfaceCache
+  readonly #layoutInvalidation?: LayoutInvalidationTracker
   readonly #layoutInvalidationSubscription?: { dispose(): void }
+  #layoutRevision = 0
+  #textRevision = 0
 
   constructor(options: WaitObservationEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
@@ -135,6 +154,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       new BrowserInteractabilityEngine({ dom: this.#dom, geometry: this.#geometry })
     this.#trace = options.trace
     this.#onGeometryInvalidated = options.onGeometryInvalidated
+    this.#layoutInvalidation = options.layoutInvalidation
     this.#layoutInvalidationSubscription = options.layoutInvalidation?.subscribe((event) => {
       this.#recordLayoutInvalidation(event)
     })
@@ -228,6 +248,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   invalidateGeometry(reason: string): void {
+    this.#recordDirtyReason(reason)
     this.#geometrySurfaceCache?.invalidate(reason)
     this.#trace?.appendEvent?.('geometry:invalidate', {
       reason,
@@ -237,6 +258,12 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   #recordLayoutInvalidation(event: LayoutInvalidationEvent): void {
+    this.#recordDirtyReason(event.reason)
+    for (const reason of event.reasons) {
+      if (reason !== event.reason) {
+        this.#recordDirtyReason(reason)
+      }
+    }
     this.#geometrySurfaceCache?.invalidate(event.reason)
     this.#trace?.appendEvent?.('layout:invalidate', {
       reason: event.reason,
@@ -246,6 +273,14 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       root: rootKind(this.#dom.getRoot()),
     })
     this.#onGeometryInvalidated?.(event.reason)
+  }
+
+  #recordDirtyReason(reason: string): void {
+    this.#layoutRevision += 1
+
+    if (reason === 'mutation') {
+      this.#textRevision += 1
+    }
   }
 
   async #waitForCondition(
@@ -313,11 +348,15 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       throw unsupportedTargetScopedTextWait(condition)
     }
 
+    const cache: TextWaitObservationCache = {
+      observedTextRevision: -1,
+    }
+
     for (;;) {
       assertNotCancelled('wait.for', signal)
       diagnostics.attempts += 1
 
-      const observation = this.#observeRootText(condition.value)
+      const observation = this.#observeRootTextForWait(condition.value, cache)
       diagnostics.lastObservation = observation
 
       assertNotCancelled('wait.for', signal)
@@ -344,11 +383,15 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     signal: WaitOptions['signal'],
     diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
+    const cache: TargetWaitObservationCache = {
+      observedLayoutRevision: -1,
+    }
+
     for (;;) {
       assertNotCancelled('wait.for', signal)
       diagnostics.attempts += 1
 
-      const observation = await this.#observeTarget(condition.target)
+      const observation = await this.#observeTargetForWait(condition.target, cache)
       diagnostics.lastObservation = observation
 
       assertNotCancelled('wait.for', signal)
@@ -370,22 +413,84 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
   }
 
-  async #observeTarget(target: TargetLike): Promise<TargetWaitObservation> {
+  async #observeTargetForWait(
+    target: TargetLike,
+    cache: TargetWaitObservationCache,
+  ): Promise<TargetWaitObservation> {
+    const reuseEnabled = this.#canReuseWaitObservations()
+
+    if (
+      reuseEnabled &&
+      cache.observation !== undefined &&
+      cache.observedLayoutRevision === this.#layoutRevision &&
+      canReuseTargetObservation(cache.observation)
+    ) {
+      return cache.observation
+    }
+
+    const result = await this.#readTargetObservation(
+      target,
+      reuseEnabled ? cache.handle : undefined,
+    )
+
+    if (!reuseEnabled) {
+      return result.observation
+    }
+
+    cache.observation = result.observation
+    cache.observedLayoutRevision = this.#layoutRevision
+
+    if (result.handle === undefined) {
+      delete cache.handle
+    } else {
+      cache.handle = result.handle
+    }
+
+    return result.observation
+  }
+
+  async #readTargetObservation(
+    target: TargetLike,
+    cachedHandle: TargetHandle | undefined,
+  ): Promise<TargetWaitObservationResult> {
     try {
-      const handle = await this.#resolveTarget(target)
+      const handle = await this.#resolveTarget(target, cachedHandle)
       const snapshot = await this.#geometry.snapshot(handle)
       const report = await this.#interactability.inspect(handle, snapshot)
 
-      return observationFromReport(report)
+      return {
+        observation: observationFromReport(report),
+        handle,
+      }
     } catch (error) {
       const observation = observationFromTargetError(error, target)
 
       if (observation !== null) {
-        return observation
+        return { observation }
       }
 
       throw error
     }
+  }
+
+  #observeRootTextForWait(
+    value: string | RegExp,
+    cache: TextWaitObservationCache,
+  ): TextWaitObservation {
+    if (
+      this.#canReuseWaitObservations() &&
+      cache.observation !== undefined &&
+      cache.observedTextRevision === this.#textRevision
+    ) {
+      return cache.observation
+    }
+
+    const observation = this.#observeRootText(value)
+
+    cache.observation = observation
+    cache.observedTextRevision = this.#textRevision
+
+    return observation
   }
 
   #observeRootText(value: string | RegExp): TextWaitObservation {
@@ -403,12 +508,19 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
   }
 
-  async #resolveTarget(target: TargetLike): Promise<TargetHandle> {
-    const handle = isTargetHandle(target)
+  async #resolveTarget(
+    target: TargetLike,
+    cachedHandle: TargetHandle | undefined,
+  ): Promise<TargetHandle> {
+    const handle = cachedHandle ?? (isTargetHandle(target)
       ? target
-      : await this.#resolver.resolve(toLocator(target), {})
+      : await this.#resolver.resolve(toLocator(target), {}))
 
     return await this.#resolver.validate(handle)
+  }
+
+  #canReuseWaitObservations(): boolean {
+    return this.#layoutInvalidation?.isRunning() === true
   }
 
   #withTimeout<TValue>(
@@ -598,6 +710,10 @@ function isTargetConditionSatisfied(
   }
 
   return observation.state !== 'visible'
+}
+
+function canReuseTargetObservation(observation: TargetWaitObservation): boolean {
+  return observation.state !== 'detached' && observation.state !== 'stale'
 }
 
 function textMatches(actualValue: string, expectedValue: string | RegExp): boolean {

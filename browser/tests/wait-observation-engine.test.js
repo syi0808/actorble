@@ -107,6 +107,43 @@ function createObservationPorts(target, options = {}) {
   }
 }
 
+function createManualLayoutInvalidationTracker({ running = true } = {}) {
+  const listeners = []
+
+  return {
+    tracker: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      isRunning: vi.fn(() => running),
+      markDirty: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        listeners.push(listener)
+
+        return {
+          dispose() {
+            const index = listeners.indexOf(listener)
+
+            if (index >= 0) {
+              listeners.splice(index, 1)
+            }
+          },
+        }
+      }),
+      dispose: vi.fn(),
+    },
+    emit(reason = 'mutation') {
+      for (const listener of [...listeners]) {
+        listener({
+          reason,
+          reasons: [reason],
+          at: Date.now(),
+          coalesced: 1,
+        })
+      }
+    },
+  }
+}
+
 describe('BrowserWaitObservationEngine', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -453,6 +490,82 @@ describe('BrowserWaitObservationEngine', () => {
     expect(timeline.settle).toHaveBeenCalledTimes(2)
   })
 
+  it('reuses target observations across unchanged retries while the layout tracker is running', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const layoutInvalidation = createManualLayoutInvalidationTracker()
+    let settleAttempts = 0
+    const ports = createObservationPorts(target, {
+      reports: [
+        interactabilityReportFor(target, {
+          visible: false,
+          visibilityRatio: 0,
+          blockingReasons: ['not-visible'],
+        }),
+        interactabilityReportFor(target),
+      ],
+    })
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        settleAttempts += 1
+
+        if (settleAttempts === 2) {
+          layoutInvalidation.emit('mutation')
+        }
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+      ...ports,
+    })
+
+    await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(timeline.settle).toHaveBeenCalledTimes(2)
+    expect(ports.resolver.resolve).toHaveBeenCalledOnce()
+    expect(ports.resolver.validate).toHaveBeenCalledTimes(2)
+    expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
+    expect(ports.interactability.inspect).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps eager target retries when the layout tracker is not running', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const layoutInvalidation = createManualLayoutInvalidationTracker({ running: false })
+    const ports = createObservationPorts(target, {
+      reports: [
+        interactabilityReportFor(target, {
+          visible: false,
+          visibilityRatio: 0,
+          blockingReasons: ['not-visible'],
+        }),
+        interactabilityReportFor(target),
+      ],
+    })
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+      ...ports,
+    })
+
+    await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(timeline.settle).toHaveBeenCalledOnce()
+    expect(ports.resolver.resolve).toHaveBeenCalledTimes(2)
+    expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
+    expect(ports.interactability.inspect).toHaveBeenCalledTimes(2)
+  })
+
   it('records timeout diagnostics for visible waits with the last observed target state', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
@@ -606,6 +719,40 @@ describe('BrowserWaitObservationEngine', () => {
     expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
     expect(ports.interactability.inspect).toHaveBeenCalledTimes(2)
     expect(timeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('reuses root text observations across unchanged retries and refreshes after mutation', async () => {
+    const layoutInvalidation = createManualLayoutInvalidationTracker()
+    const rootTexts = ['Loading', 'Project created']
+    const dom = {
+      getRoot: vi.fn(() => document),
+      getRootTextContent: vi.fn(() => rootTexts.shift() ?? 'Project created'),
+    }
+    let settleAttempts = 0
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        settleAttempts += 1
+
+        if (settleAttempts === 2) {
+          layoutInvalidation.emit('mutation')
+        }
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({
+      dom,
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+    })
+
+    await expect(
+      engine.waitFor({ kind: 'text', value: 'Project created' }),
+    ).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'settled',
+    })
+
+    expect(timeline.settle).toHaveBeenCalledTimes(2)
+    expect(dom.getRootTextContent).toHaveBeenCalledTimes(2)
   })
 
   it('connects geometry invalidation reasons to the injected hook and diagnostics', () => {

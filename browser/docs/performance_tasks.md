@@ -161,7 +161,7 @@ visual optimization
 
 ### P2026-06-16-06 Dirty-driven Wait Observation
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: wait loop가 매 settle마다 resolve/geometry/interactability 또는 root text normalization을 반복하지 않고, DOM/layout dirty 신호와 polling strategy를 조합한다.
 - Dependencies: `wait-observation-engine`, `layout-invalidation-tracker`, `target-resolver`, `geometry-engine`, `interactability-engine`.
 - Completion criteria:

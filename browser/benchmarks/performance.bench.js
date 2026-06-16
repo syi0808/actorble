@@ -26,6 +26,7 @@ const NESTED_TEXT_ROW_COUNT = 120
 const STYLE_RULE_COUNT = 50
 const GEOMETRY_REPEAT_COUNT = 200
 const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
+const WAIT_RETRY_REPEAT_COUNT = 50
 
 function createClock() {
   let current = 1
@@ -211,6 +212,200 @@ function createResolver() {
   })
 }
 
+function createManualLayoutInvalidationTracker() {
+  const listeners = []
+
+  return {
+    tracker: {
+      start() {},
+      stop() {},
+      isRunning: () => true,
+      markDirty() {},
+      subscribe(listener) {
+        listeners.push(listener)
+
+        return {
+          dispose() {
+            const index = listeners.indexOf(listener)
+
+            if (index >= 0) {
+              listeners.splice(index, 1)
+            }
+          },
+        }
+      },
+      dispose() {},
+    },
+    emit(reason = 'mutation') {
+      for (const listener of [...listeners]) {
+        listener({
+          reason,
+          reasons: [reason],
+          at: 1,
+          coalesced: 1,
+        })
+      }
+    },
+  }
+}
+
+function createVisibleWaitRetryFixture({ dirtyAfterSettles }) {
+  const element = document.querySelector(`#bench-save-${TARGET_INDEX}`)
+  const target = targetHandle('bench-wait-visible-target', element)
+  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const counts = {
+    resolve: 0,
+    validate: 0,
+    geometry: 0,
+    inspect: 0,
+  }
+  let settleAttempts = 0
+  let visible = false
+  const geometrySnapshot = {
+    target,
+    rect: { x: 20, y: 30, width: 120, height: 32 },
+    visibleRect: { x: 20, y: 30, width: 120, height: 32 },
+    center: { x: 80, y: 46 },
+    clickablePoint: {
+      ok: true,
+      point: { x: 80, y: 46 },
+      strategy: 'center',
+    },
+    coordinateSpace: 'viewport',
+    computedAt: 1,
+  }
+  const timeline = {
+    ...createFrameTimeline(),
+    async settle() {
+      settleAttempts += 1
+
+      if (settleAttempts === dirtyAfterSettles) {
+        visible = true
+        layoutInvalidation.emit('mutation')
+      }
+    },
+  }
+  const engine = new BrowserWaitObservationEngine({
+    layoutInvalidation: layoutInvalidation.tracker,
+    timeline,
+    resolver: {
+      async resolve() {
+        counts.resolve += 1
+        return target
+      },
+      async resolveAll() {
+        return [target]
+      },
+      async exists() {
+        return true
+      },
+      async inspect() {
+        return { target, debug: target.debug, validity: 'live' }
+      },
+      async validate(handle) {
+        counts.validate += 1
+        return handle
+      },
+    },
+    geometry: {
+      async snapshot() {
+        counts.geometry += 1
+        return geometrySnapshot
+      },
+      getBoundingRect: () => geometrySnapshot.rect,
+      getVisibleRect: () => geometrySnapshot.visibleRect,
+      getCenter: () => geometrySnapshot.center,
+      getClickablePoint: () => geometrySnapshot.clickablePoint,
+    },
+    interactability: {
+      async inspect() {
+        counts.inspect += 1
+
+        return {
+          target,
+          visible,
+          visibilityRatio: visible ? 1 : 0,
+          enabled: true,
+          editable: false,
+          focusable: false,
+          receivesPointerEvents: true,
+          canClick: visible,
+          canFocus: false,
+          canType: false,
+          blockingReasons: visible ? [] : ['not-visible'],
+          forceBypassedReasons: [],
+          unforceableReasons: [],
+        }
+      },
+      async canClick() {},
+      async canFocus() {},
+      async canType() {},
+    },
+  })
+
+  return {
+    counts,
+    engine,
+    reset() {
+      counts.resolve = 0
+      counts.validate = 0
+      counts.geometry = 0
+      counts.inspect = 0
+      settleAttempts = 0
+      visible = false
+    },
+  }
+}
+
+function createRootTextWaitRetryFixture() {
+  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const counts = {
+    rootText: 0,
+  }
+  let settleAttempts = 0
+  let ready = false
+  const timeline = {
+    ...createFrameTimeline(),
+    async settle() {
+      settleAttempts += 1
+
+      if (settleAttempts === 2) {
+        ready = true
+        layoutInvalidation.emit('mutation')
+      }
+    },
+  }
+  const engine = new BrowserWaitObservationEngine({
+    layoutInvalidation: layoutInvalidation.tracker,
+    timeline,
+    dom: {
+      getRoot: () => document,
+      getRootTextContent() {
+        counts.rootText += 1
+        return ready ? 'Project created' : 'Loading'
+      },
+    },
+  })
+
+  return {
+    counts,
+    engine,
+    reset() {
+      counts.rootText = 0
+      settleAttempts = 0
+      ready = false
+    },
+  }
+}
+
+function assertCounts(actual, expected) {
+  for (const [name, value] of Object.entries(expected)) {
+    if (actual[name] !== value) {
+      throw new Error(`Expected ${name} count ${value}, received ${actual[name]}.`)
+    }
+  }
+}
+
 function buildLargeDomFixture() {
   const root = document.createElement('main')
   root.id = 'bench-root'
@@ -343,6 +538,22 @@ describe('wait observation', () => {
     dom: new BrowserDomAdapter(document),
     timeline: createFrameTimeline(),
   })
+  let unchangedVisibleRetry
+  let dirtyVisibleRetry
+  let unchangedRootTextRetry
+
+  const getUnchangedVisibleRetry = () => {
+    unchangedVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 2 })
+    return unchangedVisibleRetry
+  }
+  const getDirtyVisibleRetry = () => {
+    dirtyVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 1 })
+    return dirtyVisibleRetry
+  }
+  const getUnchangedRootTextRetry = () => {
+    unchangedRootTextRetry ??= createRootTextWaitRetryFixture()
+    return unchangedRootTextRetry
+  }
 
   bench(
     'visible wait resolves and inspects an already-visible role target',
@@ -362,6 +573,75 @@ describe('wait observation', () => {
         kind: 'text',
         value: `Searchable copy for item ${TARGET_INDEX}`,
       })
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'unchanged visible wait retry reuses target observation until dirty',
+    async () => {
+      const fixture = getUnchangedVisibleRetry()
+
+      for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
+        fixture.reset()
+
+        await fixture.engine.waitFor({
+          kind: 'visible',
+          target: css(`#bench-save-${TARGET_INDEX}`),
+        })
+
+        assertCounts(fixture.counts, {
+          resolve: 1,
+          validate: 2,
+          geometry: 2,
+          inspect: 2,
+        })
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'dirty-after-retry visible wait refreshes target observation',
+    async () => {
+      const fixture = getDirtyVisibleRetry()
+
+      for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
+        fixture.reset()
+
+        await fixture.engine.waitFor({
+          kind: 'visible',
+          target: css(`#bench-save-${TARGET_INDEX}`),
+        })
+
+        assertCounts(fixture.counts, {
+          resolve: 1,
+          validate: 2,
+          geometry: 2,
+          inspect: 2,
+        })
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'unchanged root text wait retry reuses normalized text until mutation',
+    async () => {
+      const fixture = getUnchangedRootTextRetry()
+
+      for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
+        fixture.reset()
+
+        await fixture.engine.waitFor({
+          kind: 'text',
+          value: 'Project created',
+        })
+
+        assertCounts(fixture.counts, {
+          rootText: 2,
+        })
+      }
     },
     BENCH_OPTIONS,
   )
