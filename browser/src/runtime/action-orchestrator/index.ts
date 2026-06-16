@@ -73,7 +73,12 @@ import type {
   InteractionStateDiff,
   InteractionStateStore,
 } from '../../state/interaction-state-store/index.js'
-import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
+import {
+  createLayoutInvalidationTracker,
+  NoopLayoutInvalidationTracker,
+  type LayoutInvalidationEvent,
+  type LayoutInvalidationTracker,
+} from '../../targeting/layout-invalidation-tracker/index.js'
 import type { PointerVisualTracker } from '../../visual/pointer-visual-tracker/index.js'
 import type { PointerSignal, PointerSignalBus } from '../../input/pointer-signals/index.js'
 import type { SurfaceEngine } from '../../targeting/surface-engine/index.js'
@@ -196,6 +201,14 @@ type PointerSignalContextOptions = Readonly<{
   anchorAfterSuccess?: boolean
 }>
 
+type TargetPointTrackingAction = 'moveTo' | 'click' | 'typeInto' | 'doubleClick' | 'drag'
+
+type TargetPointTracker = Readonly<{
+  currentPoint(): Point
+  resolveEndpoint(currentPoint: Point): Promise<Point>
+  dispose(): void
+}>
+
 type DragSignalContext = {
   source: TargetHandle
   destination: TargetHandle
@@ -232,6 +245,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #visualFeedback: ResolvedVisualFeedbackOptions
   readonly #pointerVisual: PointerVisualTracker
   readonly #wait: WaitObservationEngine
+  readonly #layoutInvalidation: LayoutInvalidationTracker
   #signalContext: PointerSignalContext | null = null
   #clickDispatchState: ClickDispatchState | null = null
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
@@ -245,6 +259,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
     const dom = options.dom ?? new BrowserDomAdapter()
     const timeline = options.timeline ?? new BrowserTimelineEngine()
+    const layoutInvalidation =
+      options.layoutInvalidation ?? createActionLayoutInvalidationTracker(dom, timeline)
     const store = options.store ?? new BrowserInteractionStateStore()
     const events = options.events ?? new BrowserEventDispatcher()
     const state =
@@ -256,7 +272,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       })
     const signals = options.signals ?? new BrowserPointerSignalBus()
     const geometrySurfaceCache = createFrameGeometrySurfaceCache({
-      layoutInvalidation: options.layoutInvalidation,
+      layoutInvalidation,
       timeline,
     })
     const surface = options.surface ?? new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
@@ -294,6 +310,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#store = store
     this.#surface = surface
     this.#timeline = timeline
+    this.#layoutInvalidation = layoutInvalidation
     this.#visual = options.visual ?? new NoopVisualLayer()
     this.#visualFeedback =
       options.visualFeedback === undefined
@@ -307,7 +324,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       options.pointerVisual ??
       new BrowserPointerVisualTracker({
         geometry,
-        layoutInvalidation: options.layoutInvalidation,
+        layoutInvalidation,
         trace,
         onUpdate: (update) => {
           this.#renderPointerCursor(update.point, update.target, update.pressed)
@@ -349,7 +366,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         resolver: this.#resolver,
         geometry,
         interactability: this.#interactability,
-        layoutInvalidation: options.layoutInvalidation,
+        layoutInvalidation,
         timeline,
         trace,
       })
@@ -382,10 +399,20 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#withPointerPerformTimeout(
         'moveTo',
         publicMoveOptions(options),
-        (performOptions) =>
-          this.#withSignalTarget(moveTarget, commandId, () =>
-            this.#gesture.hover(point, performOptions),
-          ),
+        (performOptions) => {
+          const pointTracker = this.#createTargetPointTracker('moveTo', moveTarget, point, span)
+
+          return this.#withSignalTarget(moveTarget, commandId, async () => {
+            try {
+              return await this.#gesture.hover(point, {
+                ...performOptions,
+                resolveEndpoint: pointTracker.resolveEndpoint,
+              })
+            } finally {
+              pointTracker.dispose()
+            }
+          })
+        },
       )
       phase = 'wait'
       await this.#wait.settle('settled', operationOptions(options))
@@ -437,23 +464,30 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const result = await this.#withPointerPerformTimeout(
         'click',
         publicClickGestureOptions(options),
-        (performOptions) =>
-          this.#withSignalTarget(clickTarget, commandId, () =>
-            this.#gesture.click(clickTarget, point, {
-              ...performOptions,
-              refreshPointBeforeDown: async () => {
-                dispatchPoint = await this.#refreshClickPointBeforeDown(
-                  'click',
-                  clickTarget,
-                  point,
-                  options,
-                  span,
-                )
-                return dispatchPoint
-              },
-            }),
-            { anchorAfterSuccess: false },
-          ),
+        (performOptions) => {
+          const pointTracker = this.#createTargetPointTracker('click', clickTarget, point, span)
+
+          return this.#withSignalTarget(clickTarget, commandId, async () => {
+            try {
+              return await this.#gesture.click(clickTarget, point, {
+                ...performOptions,
+                resolveEndpoint: pointTracker.resolveEndpoint,
+                refreshPointBeforeDown: async (currentPoint) => {
+                  dispatchPoint = await this.#refreshClickPointBeforeDown(
+                    'click',
+                    clickTarget,
+                    currentPoint,
+                    options,
+                    span,
+                  )
+                  return dispatchPoint
+                },
+              })
+            } finally {
+              pointTracker.dispose()
+            }
+          }, { anchorAfterSuccess: false })
+        },
       )
       const dispatchState = this.#clickDispatchState
       const activationDispatchCount = dispatchState?.activationCount ?? 0
@@ -618,23 +652,30 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const result = await this.#withPointerPerformTimeout(
         'doubleClick',
         publicClickGestureOptions(options),
-        (performOptions) =>
-          this.#withSignalTarget(clickTarget, commandId, () =>
-            this.#gesture.doubleClick(clickTarget, point, {
-              ...performOptions,
-              refreshPointBeforeDown: async () => {
-                dispatchPoint = await this.#refreshClickPointBeforeDown(
-                  'doubleClick',
-                  clickTarget,
-                  point,
-                  options,
-                  span,
-                )
-                return dispatchPoint
-              },
-            }),
-            { anchorAfterSuccess: false },
-          ),
+        (performOptions) => {
+          const pointTracker = this.#createTargetPointTracker('doubleClick', clickTarget, point, span)
+
+          return this.#withSignalTarget(clickTarget, commandId, async () => {
+            try {
+              return await this.#gesture.doubleClick(clickTarget, point, {
+                ...performOptions,
+                resolveEndpoint: pointTracker.resolveEndpoint,
+                refreshPointBeforeDown: async (currentPoint) => {
+                  dispatchPoint = await this.#refreshClickPointBeforeDown(
+                    'doubleClick',
+                    clickTarget,
+                    currentPoint,
+                    options,
+                    span,
+                  )
+                  return dispatchPoint
+                },
+              })
+            } finally {
+              pointTracker.dispose()
+            }
+          }, { anchorAfterSuccess: false })
+        },
       )
       const dispatchState = this.#clickDispatchState
       const activationDispatchCount = dispatchState?.activationCount ?? 0
@@ -798,23 +839,30 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         const result = await this.#withPointerPerformTimeout(
           'typeInto',
           publicClickGestureOptions(clickOptions),
-          (performOptions) =>
-            this.#withSignalTarget(typeTarget, commandId, () =>
-              this.#gesture.click(typeTarget, point, {
-                ...performOptions,
-                refreshPointBeforeDown: async () => {
-                  dispatchPoint = await this.#refreshClickPointBeforeDown(
-                    'typeInto',
-                    typeTarget,
-                    point,
-                    clickOptions,
-                    span,
-                  )
-                  return dispatchPoint
-                },
-              }),
-              { anchorAfterSuccess: false },
-            ),
+          (performOptions) => {
+            const pointTracker = this.#createTargetPointTracker('typeInto', typeTarget, point, span)
+
+            return this.#withSignalTarget(typeTarget, commandId, async () => {
+              try {
+                return await this.#gesture.click(typeTarget, point, {
+                  ...performOptions,
+                  resolveEndpoint: pointTracker.resolveEndpoint,
+                  refreshPointBeforeDown: async (currentPoint) => {
+                    dispatchPoint = await this.#refreshClickPointBeforeDown(
+                      'typeInto',
+                      typeTarget,
+                      currentPoint,
+                      clickOptions,
+                      span,
+                    )
+                    return dispatchPoint
+                  },
+                })
+              } finally {
+                pointTracker.dispose()
+              }
+            }, { anchorAfterSuccess: false })
+          },
         )
 
         clickFocusNeedsCleanup = false
@@ -1102,13 +1150,43 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
       const dragSource = source
       const dragDestination = destination
+      let outputSourcePoint = freshSource.point
+      let outputDestinationPoint = freshDestination.point
       const result = await this.#withPointerPerformTimeout(
         'drag',
         publicMoveOptions(options),
-        (performOptions) =>
-          this.#withDragSignalTarget(dragSource, dragDestination, commandId, () =>
-            this.#gesture.drag(freshSource.point, freshDestination.point, performOptions),
-          ),
+        (performOptions) => {
+          const sourcePointTracker = this.#createTargetPointTracker(
+            'drag',
+            dragSource,
+            freshSource.point,
+            span,
+          )
+          const destinationPointTracker = this.#createTargetPointTracker(
+            'drag',
+            dragDestination,
+            freshDestination.point,
+            span,
+          )
+
+          return this.#withDragSignalTarget(dragSource, dragDestination, commandId, async () => {
+            try {
+              const dragResult = await this.#gesture.drag(freshSource.point, freshDestination.point, {
+                ...performOptions,
+                resolveFromEndpoint: sourcePointTracker.resolveEndpoint,
+                resolveToEndpoint: destinationPointTracker.resolveEndpoint,
+              })
+
+              outputSourcePoint = sourcePointTracker.currentPoint()
+              outputDestinationPoint = destinationPointTracker.currentPoint()
+
+              return dragResult
+            } finally {
+              sourcePointTracker.dispose()
+              destinationPointTracker.dispose()
+            }
+          })
+        },
       )
 
       phase = 'wait'
@@ -1121,8 +1199,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         output: {
           sourceTargetId: source.id,
           destinationTargetId: destination.id,
-          sourcePoint: freshSource.point,
-          destinationPoint: freshDestination.point,
+          sourcePoint: outputSourcePoint,
+          destinationPoint: outputDestinationPoint,
           capability: 'pointer-gesture',
           nativeDnD: false,
           gestureCompleted: result.completed,
@@ -1380,6 +1458,16 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     options: TOptions,
     operation: (options: TOptions) => Promise<TValue>,
   ): Promise<TValue> {
+    return this.#withPointerLayoutTracking(() =>
+      this.#withPointerPerformTimeoutOnly(action, options, operation),
+    )
+  }
+
+  #withPointerPerformTimeoutOnly<TValue, TOptions extends OperationOptions>(
+    action: PointerPerformAction,
+    options: TOptions,
+    operation: (options: TOptions) => Promise<TValue>,
+  ): Promise<TValue> {
     if (options.timeout === undefined) {
       return operation(options)
     }
@@ -1454,6 +1542,79 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           )
         })
     })
+  }
+
+  async #withPointerLayoutTracking<TValue>(operation: () => Promise<TValue>): Promise<TValue> {
+    const wasRunning = this.#layoutInvalidation.isRunning()
+
+    if (!wasRunning) {
+      this.#layoutInvalidation.start()
+    }
+
+    try {
+      return await operation()
+    } finally {
+      if (!wasRunning) {
+        this.#layoutInvalidation.stop()
+      }
+    }
+  }
+
+  #createTargetPointTracker(
+    action: TargetPointTrackingAction,
+    target: TargetHandle,
+    initialPoint: Point,
+    span: TraceSpanHandle,
+  ): TargetPointTracker {
+    let currentPoint = clonePoint(initialPoint)
+    let dirtyEvent: LayoutInvalidationEvent | null = null
+    const subscription = this.#layoutInvalidation.subscribe((event) => {
+      dirtyEvent = event
+    })
+
+    return {
+      currentPoint: () => clonePoint(currentPoint),
+      resolveEndpoint: async () => {
+        const event = dirtyEvent
+
+        if (!event) {
+          return clonePoint(currentPoint)
+        }
+
+        dirtyEvent = null
+        const previousPoint = clonePoint(currentPoint)
+
+        try {
+          const snapshot = await this.#geometry.snapshot(target)
+          const freshPoint = clickablePointOrThrow(action, target, snapshot)
+
+          currentPoint = clonePoint(freshPoint)
+          span.event('pointer:endpoint-refresh', {
+            action,
+            targetId: target.id,
+            previousPoint,
+            freshPoint,
+            changed: !samePoint(previousPoint, freshPoint),
+            reason: event.reason,
+            reasons: event.reasons,
+            coalesced: event.coalesced,
+            computedAt: snapshot.computedAt,
+          })
+        } catch (error) {
+          this.#trace.warn('Pointer endpoint refresh failed.', {
+            action,
+            targetId: target.id,
+            reason: event.reason,
+            error: describeUnknownError(error),
+          })
+        }
+
+        return clonePoint(currentPoint)
+      },
+      dispose: () => {
+        subscription.dispose()
+      },
+    }
   }
 
   async #refreshClickPointBeforeDown(
@@ -2314,6 +2475,15 @@ function publicClickGestureOptions(options: ClickOptions): ClickOptions {
     ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
     ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
   }
+}
+
+function createActionLayoutInvalidationTracker(
+  dom: DomPort,
+  timeline: TimelineEngine,
+): LayoutInvalidationTracker {
+  return typeof dom.observeLayoutInvalidations === 'function'
+    ? createLayoutInvalidationTracker({ dom, timeline })
+    : new NoopLayoutInvalidationTracker()
 }
 
 function resolveCursorForTarget(dom: DomPort, element: Element): string | undefined {

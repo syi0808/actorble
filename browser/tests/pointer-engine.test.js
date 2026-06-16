@@ -223,6 +223,31 @@ describe('BrowserPointerEngine', () => {
     })
   })
 
+  it('retargets in-flight motion to a dynamic endpoint without extending duration', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+    const resolveEndpoint = vi.fn(async () => ({ x: 200, y: 0 }))
+
+    await engine.moveTo({ x: 100, y: 0 }, { duration: 100, resolveEndpoint })
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(resolveEndpoint).toHaveBeenCalledTimes(3)
+    expect(events.map((event) => event.point.x)).toEqual([
+      25,
+      83.33333333333333,
+      141.66666666666666,
+      200,
+    ])
+    expect(engine.getState()).toMatchObject({
+      position: { x: 200, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 200, y: 0 },
+      },
+    })
+  })
+
   it('appends movement path frames without iterating the accumulated path', async () => {
     const frameCount = 64
     const timeline = createTimeline(1)

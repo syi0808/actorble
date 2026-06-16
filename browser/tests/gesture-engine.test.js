@@ -254,6 +254,27 @@ describe('BrowserGestureEngine', () => {
     ])
   })
 
+  it('routes dynamic click endpoints into pointer movement before pressing', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+    const resolveEndpoint = vi.fn(async () => ({ x: 18, y: 24 }))
+
+    await engine.click(createTarget(), { x: 12, y: 18 }, {
+      duration: 120,
+      resolveEndpoint,
+      pressDwell: 0,
+    })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 12, y: 18 }, {
+        duration: 120,
+        resolveEndpoint,
+      }],
+      ['down', 'primary'],
+      ['up', 'primary'],
+    ])
+  })
+
   it('lets callers disable or customize click press dwell', async () => {
     const first = createFakePointer()
     const firstEngine = new BrowserGestureEngine({

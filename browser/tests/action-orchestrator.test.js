@@ -148,6 +148,73 @@ function createBlockingTimeline() {
   }
 }
 
+function createManualLayoutInvalidationTracker(options = {}) {
+  const listeners = []
+  let running = options.running ?? false
+
+  return {
+    tracker: {
+      start: vi.fn(() => {
+        running = true
+      }),
+      stop: vi.fn(() => {
+        running = false
+      }),
+      isRunning: vi.fn(() => running),
+      markDirty: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        listeners.push(listener)
+
+        return {
+          dispose() {
+            const index = listeners.indexOf(listener)
+
+            if (index >= 0) {
+              listeners.splice(index, 1)
+            }
+          },
+        }
+      }),
+      dispose: vi.fn(),
+    },
+    emit(reason = 'scroll') {
+      for (const listener of [...listeners]) {
+        listener({
+          reason,
+          reasons: [reason],
+          at: 123,
+          coalesced: 1,
+        })
+      }
+    },
+  }
+}
+
+function createLayoutEmittingTimeline(layoutInvalidation, options = {}) {
+  let now = 0
+  let frame = 0
+  const frameInterval = options.frameInterval ?? 25
+
+  return {
+    now: vi.fn(() => now),
+    delay: vi.fn(async (duration) => {
+      now += duration
+    }),
+    nextFrame: vi.fn(async () => {
+      frame += 1
+      now += frameInterval
+
+      if (frame === (options.emitFrame ?? 1)) {
+        layoutInvalidation.emit(options.reason ?? 'scroll')
+      }
+
+      return now
+    }),
+    settle: vi.fn(async () => {}),
+    withTimeout: vi.fn(async (operation) => operation),
+  }
+}
+
 async function flushMicrotasks(count = 10) {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve()
@@ -1112,6 +1179,81 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('retargets click movement when layout invalidation moves the target before pointer down', async () => {
+    const target = targetHandle()
+    const initialGeometry = geometryFor(target, { x: 100, y: 0 })
+    const movedGeometry = geometryFor(target, { x: 200, y: 0 })
+    const layoutInvalidation = createManualLayoutInvalidationTracker()
+    const timeline = createLayoutEmittingTimeline(layoutInvalidation, { frameInterval: 25 })
+    const { events, orchestrator, trace } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, movedGeometry, movedGeometry],
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+      useRealGesture: true,
+    })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 100, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    const pointerMoves = events.dispatchPointerEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'pointermove')
+
+    expect(layoutInvalidation.tracker.start).toHaveBeenCalledOnce()
+    expect(layoutInvalidation.tracker.stop).toHaveBeenCalledOnce()
+    expect(pointerMoves.map((event) => event.point.x)).toEqual([
+      25,
+      83.33333333333333,
+      141.66666666666666,
+      200,
+    ])
+    expect(events.dispatchPointerEvent).toHaveBeenCalledWith({
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 200, y: 0 },
+      button: 'primary',
+      buttons: ['primary'],
+    })
+    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
+      type: 'click',
+      target: target.element,
+      point: { x: 200, y: 0 },
+      button: 'primary',
+      buttons: [],
+      detail: 1,
+    })
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pointer:endpoint-refresh',
+          data: expect.objectContaining({
+            action: 'click',
+            changed: true,
+            freshPoint: { x: 200, y: 0 },
+            previousPoint: { x: 100, y: 0 },
+            reason: 'scroll',
+            targetId: 'target-1',
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('preserves an already running layout invalidation tracker during pointer actions', async () => {
+    const layoutInvalidation = createManualLayoutInvalidationTracker({ running: true })
+    const { orchestrator } = createHarness({ layoutInvalidation: layoutInvalidation.tracker })
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(layoutInvalidation.tracker.start).not.toHaveBeenCalled()
+    expect(layoutInvalidation.tracker.stop).not.toHaveBeenCalled()
+  })
+
   it('fails fresh click preflight before pointer down and cleans up perform state', async () => {
     const target = targetHandle()
     const initialGeometry = geometryFor(target, { x: 20, y: 30 })
@@ -1372,7 +1514,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.drag).toHaveBeenCalledWith(
       { x: 12, y: 22 },
       { x: 112, y: 122 },
-      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 } },
+      expect.objectContaining({
+        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+        resolveFromEndpoint: expect.any(Function),
+        resolveToEndpoint: expect.any(Function),
+      }),
     )
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
@@ -2035,7 +2181,10 @@ describe('BrowserActionOrchestrator', () => {
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
-      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 } },
+      expect.objectContaining({
+        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+        resolveEndpoint: expect.any(Function),
+      }),
     )
   })
 

@@ -10,6 +10,7 @@ import type {
   TargetHandle,
 } from '../../shared/index.js'
 import type { PointerEngine } from '../pointer-engine/index.js'
+import type { PointerEndpointResolver, PointerMoveOptions } from '../pointer-engine/index.js'
 import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
 
 export type DragCapability =
@@ -26,6 +27,18 @@ export type GestureResult = Readonly<{
 export type GestureClickOptions = ClickOptions &
   Readonly<{
     refreshPointBeforeDown?: (point: Point) => Point | Promise<Point>
+    resolveEndpoint?: PointerEndpointResolver
+  }>
+
+export type GestureMoveOptions = MoveOptions &
+  Readonly<{
+    resolveEndpoint?: PointerEndpointResolver
+  }>
+
+export type GestureDragOptions = DragOptions &
+  Readonly<{
+    resolveFromEndpoint?: PointerEndpointResolver
+    resolveToEndpoint?: PointerEndpointResolver
   }>
 
 export type GestureEngineOptions = Readonly<{
@@ -42,8 +55,8 @@ export interface GestureEngine {
     point: Point,
     options?: GestureClickOptions,
   ): Promise<GestureResult>
-  hover(point: Point, options?: MoveOptions): Promise<GestureResult>
-  drag(from: Point, to: Point, options?: DragOptions): Promise<GestureResult>
+  hover(point: Point, options?: GestureMoveOptions): Promise<GestureResult>
+  drag(from: Point, to: Point, options?: GestureDragOptions): Promise<GestureResult>
   cancel(): Promise<GestureResult>
 }
 
@@ -83,22 +96,22 @@ export class BrowserGestureEngine implements GestureEngine {
     return this.#clickSequence('gesture.doubleClick', point, options, 2)
   }
 
-  async hover(point: Point, options: MoveOptions = {}): Promise<GestureResult> {
+  async hover(point: Point, options: GestureMoveOptions = {}): Promise<GestureResult> {
     await this.#pointer.moveTo(point, options)
 
     return { completed: true }
   }
 
-  async drag(from: Point, to: Point, options: DragOptions = {}): Promise<GestureResult> {
+  async drag(from: Point, to: Point, options: GestureDragOptions = {}): Promise<GestureResult> {
     let pressed = false
 
-    await this.#pointer.moveTo(from, dragMovementOptions(options))
+    await this.#pointer.moveTo(from, dragMovementOptions(options, options.resolveFromEndpoint))
     assertGestureNotCancelled('gesture.drag', options)
 
     try {
       await this.#pointer.down('primary')
       pressed = true
-      await this.#pointer.moveTo(to, dragMovementOptions(options))
+      await this.#pointer.moveTo(to, dragMovementOptions(options, options.resolveToEndpoint))
       assertGestureNotCancelled('gesture.drag', options)
       await this.#pointer.up('primary')
       pressed = false
@@ -131,7 +144,11 @@ export class BrowserGestureEngine implements GestureEngine {
     let pressed = false
 
     try {
-      await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
+      const movement = await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
+
+      if (options.resolveEndpoint) {
+        currentPoint = movement.position
+      }
 
       for (let clickIndex = 0; clickIndex < clickCount; clickIndex += 1) {
         assertGestureNotCancelled(operation, options)
@@ -171,23 +188,28 @@ export function createGestureEngine(options: GestureEngineOptions = {}): Gesture
   return new BrowserGestureEngine(options)
 }
 
-function pointerMovementOptions(options: ClickOptions): MoveOptions | undefined {
-  const movement: MoveOptions = {
+function pointerMovementOptions(options: GestureClickOptions): PointerMoveOptions | undefined {
+  const movement: PointerMoveOptions = {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.duration === undefined ? {} : { duration: options.duration }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
+    ...(options.resolveEndpoint === undefined ? {} : { resolveEndpoint: options.resolveEndpoint }),
   }
 
   return Object.keys(movement).length === 0 ? undefined : movement
 }
 
-function dragMovementOptions(options: DragOptions): MoveOptions | undefined {
-  const movement: MoveOptions = {
+function dragMovementOptions(
+  options: GestureDragOptions,
+  resolveEndpoint?: PointerEndpointResolver,
+): PointerMoveOptions | undefined {
+  const movement: PointerMoveOptions = {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.duration === undefined ? {} : { duration: options.duration }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
+    ...(resolveEndpoint === undefined ? {} : { resolveEndpoint }),
   }
 
   return Object.keys(movement).length === 0 ? undefined : movement

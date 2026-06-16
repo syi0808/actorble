@@ -14,6 +14,13 @@ export type PointerMotionStatus = 'idle' | 'moving' | 'settling' | 'cancelled'
 
 export type PointerPath = readonly Point[]
 
+export type PointerEndpointResolver = (currentPoint: Point) => Point | Promise<Point>
+
+export type PointerMoveOptions = MoveOptions &
+  Readonly<{
+    resolveEndpoint?: PointerEndpointResolver
+  }>
+
 export type PointerState = Readonly<{
   id: string
   position: Point
@@ -36,7 +43,7 @@ export type PointerState = Readonly<{
 
 export interface PointerEngine {
   getState(): PointerState
-  moveTo(point: Point, options?: MoveOptions): Promise<PointerState>
+  moveTo(point: Point, options?: PointerMoveOptions): Promise<PointerState>
   down(button?: PointerButtonName): Promise<PointerState>
   up(button?: PointerButtonName): Promise<PointerState>
   cancel(): Promise<PointerState>
@@ -106,11 +113,14 @@ export class BrowserPointerEngine implements PointerEngine {
     return cloneState(this.#state)
   }
 
-  async moveTo(point: Point, options: MoveOptions = {}): Promise<PointerState> {
-    const target = clonePoint(point)
+  async moveTo(point: Point, options: PointerMoveOptions = {}): Promise<PointerState> {
+    let target = clonePoint(point)
     const from = clonePoint(this.#state.position)
     const motion = normalizeMotionProfile(options)
     const motionRunId = ++this.#motionRunId
+    let segmentFrom = clonePoint(from)
+    let segmentStartedAt = this.#timeline.now()
+    let segmentDuration = motion.duration
 
     this.#state = {
       ...this.#state,
@@ -128,7 +138,7 @@ export class BrowserPointerEngine implements PointerEngine {
       return this.getState()
     }
 
-    const startedAt = this.#timeline.now()
+    const deadline = segmentStartedAt + motion.duration
 
     try {
       while (true) {
@@ -138,17 +148,31 @@ export class BrowserPointerEngine implements PointerEngine {
           return this.getState()
         }
 
-        const progress = Math.min(1, (this.#timeline.now() - startedAt) / motion.duration)
+        const now = this.#timeline.now()
+        const progress =
+          segmentDuration === 0 ? 1 : Math.min(1, (now - segmentStartedAt) / segmentDuration)
         const nextPoint =
           progress >= 1
             ? target
-            : interpolatePoint(from, target, sampleMotionProgress(motion, progress))
+            : interpolatePoint(segmentFrom, target, sampleMotionProgress(motion, progress))
 
         this.#applyMovement(nextPoint)
 
         if (progress >= 1) {
           this.#finishMovement(from, target)
           return this.getState()
+        }
+
+        const refreshedTarget = options.resolveEndpoint
+          ? await resolveDynamicEndpoint(options, target)
+          : null
+
+        if (refreshedTarget && !samePoint(target, refreshedTarget)) {
+          target = refreshedTarget
+          segmentFrom = clonePoint(this.#state.position)
+          segmentStartedAt = now
+          segmentDuration = Math.max(0, deadline - now)
+          this.#setMotionTarget(target)
         }
       }
     } catch (error) {
@@ -157,6 +181,16 @@ export class BrowserPointerEngine implements PointerEngine {
       }
 
       throw error
+    }
+  }
+
+  #setMotionTarget(target: Point): void {
+    this.#state = {
+      ...this.#state,
+      motion: {
+        ...this.#state.motion,
+        to: clonePoint(target),
+      },
     }
   }
 
@@ -322,6 +356,15 @@ function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
     case 'spring':
       return { kind: 'spring', duration }
   }
+}
+
+async function resolveDynamicEndpoint(
+  options: PointerMoveOptions,
+  currentTarget: Point,
+): Promise<Point | null> {
+  const endpoint = await options.resolveEndpoint?.(clonePoint(currentTarget))
+
+  return endpoint ? clonePoint(endpoint) : null
 }
 
 function samePoint(left: Point, right: Point): boolean {
