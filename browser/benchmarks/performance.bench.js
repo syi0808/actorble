@@ -24,10 +24,13 @@ const LARGE_DOM_SIZE = 80
 const TARGET_INDEX = LARGE_DOM_SIZE - 1
 const NESTED_TEXT_ROW_COUNT = 120
 const STYLE_RULE_COUNT = 50
+const PSEUDO_STATE_WORST_STYLE_COUNT = 8
+const PSEUDO_STATE_WORST_RULES_PER_STYLE = 80
 const GEOMETRY_REPEAT_COUNT = 200
 const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
 const WAIT_RETRY_REPEAT_COUNT = 50
 const PSEUDO_STATE_REPEAT_COUNT = 20
+const PSEUDO_STATE_WORST_REPEAT_COUNT = 5
 const EXPENSIVE_WAIT_DOM_SIZE = 160
 const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1
 const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5
@@ -105,17 +108,26 @@ function createPassthroughGeometrySurfaceCache() {
   }
 }
 
-function targetHandle(id, element) {
+function targetHandle(id, element, root = document) {
   return {
     id,
     element,
-    root: document,
+    root,
     resolvedAt: 1,
     validity: 'live',
     debug: {
       selector: `#${id}`,
       description: `${element.tagName.toLowerCase()}#${id}`,
     },
+  }
+}
+
+function createNoopStylePort() {
+  return {
+    injectStyle() {
+      return { dispose() {} }
+    },
+    removeStyle() {},
   }
 }
 
@@ -704,6 +716,86 @@ function buildStylesheetFixture() {
   document.head.append(mutationStyle)
 }
 
+function createWorstCasePseudoStateFixture() {
+  let target = document.querySelector('#pseudo-worst-target')
+
+  if (target === null) {
+    const fixtureRoot = document.createElement('section')
+    fixtureRoot.id = 'pseudo-worst-root'
+    target = document.createElement('button')
+    target.id = 'pseudo-worst-target'
+    target.className = 'pseudo-worst-action'
+    target.textContent = 'Worst case target'
+    fixtureRoot.append(target)
+    document.body.append(fixtureRoot)
+  }
+
+  for (let sheetIndex = 0; sheetIndex < PSEUDO_STATE_WORST_STYLE_COUNT; sheetIndex += 1) {
+    if (document.querySelector(`#pseudo-worst-source-${sheetIndex}`) !== null) {
+      continue
+    }
+
+    const style = document.createElement('style')
+    style.id = `pseudo-worst-source-${sheetIndex}`
+    const rules = []
+
+    for (
+      let ruleIndex = 0;
+      ruleIndex < PSEUDO_STATE_WORST_RULES_PER_STYLE;
+      ruleIndex += 1
+    ) {
+      const hue = (sheetIndex * 31 + ruleIndex * 7) % 255
+
+      rules.push(`
+        .pseudo-worst-shell-${sheetIndex} .card-${ruleIndex}:hover > .label {
+          color: rgb(${hue}, 20, 40);
+          background-color: rgba(${hue}, 80, 120, 0.15);
+        }
+        .pseudo-worst-shell-${sheetIndex} button.action-${ruleIndex}:active,
+        .pseudo-worst-shell-${sheetIndex} a.link-${ruleIndex}:hover {
+          transform: translateY(1px) scale(0.99);
+        }
+        @media (min-width: ${(ruleIndex % 5) + 1}px) {
+          .pseudo-worst-shell-${sheetIndex} input.field-${ruleIndex}:focus-visible {
+            outline: 2px solid rgb(${hue}, 90, 160);
+            box-shadow: 0 0 0 3px rgba(${hue}, 90, 160, 0.2);
+          }
+        }
+        .pseudo-worst-shell-${sheetIndex} .static-${ruleIndex} {
+          border-color: rgb(${hue}, 120, 180);
+        }
+      `)
+    }
+
+    style.textContent = rules.join('\n')
+    document.head.append(style)
+  }
+
+  let mutationStyle = document.querySelector('#pseudo-worst-mutation-source')
+
+  if (mutationStyle === null) {
+    mutationStyle = document.createElement('style')
+    mutationStyle.id = 'pseudo-worst-mutation-source'
+    mutationStyle.textContent = worstCaseMutationRule(0)
+    document.head.append(mutationStyle)
+  }
+
+  return {
+    root: document,
+    mutationStyle,
+    target: targetHandle('pseudo-worst-target', target, document),
+  }
+}
+
+function worstCaseMutationRule(index) {
+  return `
+    .pseudo-worst-mutation-${index % 11}:hover {
+      color: rgb(${index % 255}, 40, 80);
+      text-decoration-color: rgb(${(index * 3) % 255}, 120, 180);
+    }
+  `
+}
+
 beforeAll(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
@@ -989,6 +1081,12 @@ describe('pseudo-state mirror', () => {
   let mutationTarget
   let mutationMirror
   let mutationIndex = 0
+  let worstFirstApplyFixture
+  let worstCachedFixture
+  let worstCachedMirror
+  let worstMutationFixture
+  let worstMutationMirror
+  let worstMutationIndex = 0
 
   bench(
     'stylesheet scan and pseudo-state rewrite on first apply',
@@ -1052,6 +1150,72 @@ describe('pseudo-state mirror', () => {
           states: ['hover', 'active', 'focus-visible'],
         })
         mutationMirror.cleanup()
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'worst-case stylesheet scan and pseudo-state rewrite on first apply',
+    () => {
+      worstFirstApplyFixture ??= createWorstCasePseudoStateFixture()
+      const scanner = new BrowserStyleAdapter(worstFirstApplyFixture.root)
+      const mirror = new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: createNoopStylePort(),
+        styleScanner: scanner,
+      })
+
+      mirror.apply({
+        target: worstFirstApplyFixture.target,
+        states: ['hover', 'active', 'focus-visible'],
+      })
+      mirror.cleanup()
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'worst-case repeated mirror apply reuses cached pseudo-state rewrite',
+    () => {
+      worstCachedFixture ??= createWorstCasePseudoStateFixture()
+      worstCachedMirror ??= new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: createNoopStylePort(),
+        styleScanner: new BrowserStyleAdapter(worstCachedFixture.root),
+      })
+
+      for (let index = 0; index < PSEUDO_STATE_WORST_REPEAT_COUNT; index += 1) {
+        worstCachedMirror.apply({
+          target: worstCachedFixture.target,
+          states: ['hover', 'active', 'focus-visible'],
+        })
+        worstCachedMirror.cleanup()
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'worst-case stylesheet mutation refreshes pseudo-state mirror cache',
+    () => {
+      worstMutationFixture ??= createWorstCasePseudoStateFixture()
+      worstMutationMirror ??= new BrowserPseudoStateMirror({
+        state: new BrowserStateApplier(),
+        style: createNoopStylePort(),
+        styleScanner: new BrowserStyleAdapter(worstMutationFixture.root),
+      })
+
+      for (let index = 0; index < PSEUDO_STATE_WORST_REPEAT_COUNT; index += 1) {
+        worstMutationIndex += 1
+        worstMutationFixture.mutationStyle.textContent = worstCaseMutationRule(
+          worstMutationIndex,
+        )
+        worstMutationMirror.apply({
+          target: worstMutationFixture.target,
+          states: ['hover', 'active', 'focus-visible'],
+        })
+        worstMutationMirror.cleanup()
       }
     },
     BENCH_OPTIONS,
