@@ -140,8 +140,14 @@ visual optimization
 
 ### P2026-06-16-05 Conditional Fresh Geometry Before Dispatch
 
-- Status: [x] Completed
+- Status: [-] Rejected (반려됨)
 - Briefing: pointer dispatch 직전 geometry refresh를 항상 수행하지 않고, initial geometry 이후 layout dirty 신호가 있었을 때만 수행할 수 있게 한다.
+- Decision history:
+  - 2026-06-16 `081c6a6`에서 layout invalidation revision 기반으로 no-dirty dispatch geometry refresh를 생략하는 구현을 시도했다.
+  - 전용 benchmark의 평균 개선은 clean click `0.0314ms -> 0.0280ms`, clean doubleClick `0.0331ms -> 0.0299ms`, clean typeInto click-focus `0.0227ms -> 0.0199ms`로 절대 개선폭이 작았다.
+  - 검토 결과 click-focused typeInto에서 click-specific preflight가 생략될 수 있고, animation/transition 중간 프레임처럼 dirty 신호와 geometry 변화가 완전히 일치하지 않는 경로에 stale point 위험이 있었다.
+  - Action Orchestrator에 dispatch refresh 정책 분기를 추가하는 복잡도 대비 이득이 작다고 판단해 구현을 revert하고 태스크를 반려한다.
+  - 향후 재시도한다면 dispatch refresh 생략이 아니라 Geometry/Interactability 경계의 명시적 cache contract와 더 강한 invalidation 보장을 먼저 설계한다.
 - Dependencies: 완료된 P2026-06-16-04, `action-orchestrator`, `layout-invalidation-tracker`, `gesture-engine`.
 - Completion criteria:
   - click/doubleClick/typeInto click-focus/drag는 layout이 변하지 않은 경우 중복 snapshot을 피한다.

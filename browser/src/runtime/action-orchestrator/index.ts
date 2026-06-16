@@ -37,7 +37,6 @@ import type {
   CancellationOptions,
   ClickCurrentOptions,
   ClickOptions,
-  Disposable,
   DomPort,
   DurationMs,
   EventDispatchPort,
@@ -187,11 +186,6 @@ type CurrentPointerContext = {
   source: 'hovered-target' | 'hit-test'
 }
 
-type DispatchGeometryFreshnessToken = {
-  readonly tracking: boolean
-  readonly revision: number
-}
-
 type PointerSignalContext = {
   target: TargetHandle
   commandId: number
@@ -238,11 +232,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #visualFeedback: ResolvedVisualFeedbackOptions
   readonly #pointerVisual: PointerVisualTracker
   readonly #wait: WaitObservationEngine
-  readonly #layoutInvalidation?: LayoutInvalidationTracker
-  readonly #layoutInvalidationSubscription?: Disposable
   #signalContext: PointerSignalContext | null = null
   #clickDispatchState: ClickDispatchState | null = null
-  #layoutRevision = 0
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
   #cursorVisualState: CursorVisualState | null = null
   #currentPointerPoint: Point | null = null
@@ -256,7 +247,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const timeline = options.timeline ?? new BrowserTimelineEngine()
     const store = options.store ?? new BrowserInteractionStateStore()
     const events = options.events ?? new BrowserEventDispatcher()
-    const layoutInvalidation = options.layoutInvalidation
     const state =
       options.state ??
       new BrowserPseudoStateMirror({
@@ -266,7 +256,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       })
     const signals = options.signals ?? new BrowserPointerSignalBus()
     const geometrySurfaceCache = createFrameGeometrySurfaceCache({
-      layoutInvalidation,
+      layoutInvalidation: options.layoutInvalidation,
       timeline,
     })
     const surface = options.surface ?? new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
@@ -317,7 +307,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       options.pointerVisual ??
       new BrowserPointerVisualTracker({
         geometry,
-        layoutInvalidation,
+        layoutInvalidation: options.layoutInvalidation,
         trace,
         onUpdate: (update) => {
           this.#renderPointerCursor(update.point, update.target, update.pressed)
@@ -359,15 +349,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         resolver: this.#resolver,
         geometry,
         interactability: this.#interactability,
-        layoutInvalidation,
+        layoutInvalidation: options.layoutInvalidation,
         timeline,
         trace,
       })
-
-    this.#layoutInvalidation = layoutInvalidation
-    this.#layoutInvalidationSubscription = layoutInvalidation?.subscribe(() => {
-      this.#layoutRevision += 1
-    })
 
     signals.subscribe((signal) => {
       this.#applyPointerSignal(signal)
@@ -436,7 +421,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#surface.ensureVisible(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
-      const dispatchGeometry = this.#captureDispatchGeometryFreshness()
       const point = clickablePointOrThrow('click', handle, snapshot)
       this.#showTargetHighlight(handle, snapshot)
 
@@ -462,7 +446,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                   'click',
                   clickTarget,
                   point,
-                  dispatchGeometry,
                   options,
                   span,
                 )
@@ -619,7 +602,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#surface.ensureVisible(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
-      const dispatchGeometry = this.#captureDispatchGeometryFreshness()
       const point = clickablePointOrThrow('doubleClick', handle, snapshot)
       this.#showTargetHighlight(handle, snapshot)
 
@@ -645,7 +627,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                   'doubleClick',
                   clickTarget,
                   point,
-                  dispatchGeometry,
                   options,
                   span,
                 )
@@ -795,7 +776,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#surface.ensureVisible(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
-      const dispatchGeometry = this.#captureDispatchGeometryFreshness()
       this.#showTargetHighlight(handle, snapshot)
       phase = 'preflight'
       const report = await this.#interactability.canType(handle)
@@ -827,7 +807,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
                     'typeInto',
                     typeTarget,
                     point,
-                    dispatchGeometry,
                     clickOptions,
                     span,
                   )
@@ -1054,7 +1033,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#surface.ensureVisible(source, options)
       phase = 'geometry'
       const sourceSnapshot = await this.#geometry.snapshot(source)
-      const sourceDispatchGeometry = this.#captureDispatchGeometryFreshness()
       const sourcePoint = clickablePointOrThrow('drag', source, sourceSnapshot)
       this.#showTargetHighlight(source, sourceSnapshot)
 
@@ -1064,7 +1042,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#surface.ensureVisible(destination, options)
       phase = 'geometry'
       const destinationSnapshot = await this.#geometry.snapshot(destination)
-      const destinationDispatchGeometry = this.#captureDispatchGeometryFreshness()
       const destinationPoint = clickablePointOrThrow('drag', destination, destinationSnapshot)
       this.#showTargetHighlight(destination, destinationSnapshot)
 
@@ -1084,8 +1061,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         'source',
         source,
         sourcePoint,
-        sourceSnapshot,
-        sourceDispatchGeometry,
         options,
         span,
       )
@@ -1093,31 +1068,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         'destination',
         destination,
         destinationPoint,
-        destinationSnapshot,
-        destinationDispatchGeometry,
         options,
         span,
       )
-
-      if (freshSource.refreshed) {
-        const freshSourceReport = await this.#interactability.canClick(
-          source,
-          freshSource.snapshot,
-          options,
-        )
-        assertCanClick('drag', source, freshSourceReport)
-        this.#warnForceBypass('drag', source, freshSourceReport)
-      }
-
-      if (freshDestination.refreshed) {
-        const freshDestinationReport = await this.#interactability.canClick(
-          destination,
-          freshDestination.snapshot,
-          options,
-        )
-        assertCanClick('drag', destination, freshDestinationReport)
-        this.#warnForceBypass('drag', destination, freshDestinationReport)
-      }
+      const freshSourceReport = await this.#interactability.canClick(
+        source,
+        freshSource.snapshot,
+        options,
+      )
+      assertCanClick('drag', source, freshSourceReport)
+      this.#warnForceBypass('drag', source, freshSourceReport)
+      const freshDestinationReport = await this.#interactability.canClick(
+        destination,
+        freshDestination.snapshot,
+        options,
+      )
+      assertCanClick('drag', destination, freshDestinationReport)
+      this.#warnForceBypass('drag', destination, freshDestinationReport)
 
       phase = 'perform'
       performStarted = true
@@ -1489,29 +1456,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     })
   }
 
-  #captureDispatchGeometryFreshness(): DispatchGeometryFreshnessToken {
-    return {
-      tracking: this.#layoutInvalidation?.isRunning() === true,
-      revision: this.#layoutRevision,
-    }
-  }
-
-  #canReuseInitialDispatchGeometry(token: DispatchGeometryFreshnessToken): boolean {
-    return token.tracking && token.revision === this.#layoutRevision
-  }
-
   async #refreshClickPointBeforeDown(
     action: Extract<ActionName, 'click' | 'typeInto' | 'doubleClick'>,
     target: TargetHandle,
     initialPoint: Point,
-    freshness: DispatchGeometryFreshnessToken,
     options: ClickOptions,
     span: TraceSpanHandle,
   ): Promise<Point> {
-    if (this.#canReuseInitialDispatchGeometry(freshness)) {
-      return initialPoint
-    }
-
     const snapshot = await this.#geometry.snapshot(target)
     const freshPoint = clickablePointOrThrow(action, target, snapshot)
 
@@ -1535,15 +1486,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     endpoint: 'source' | 'destination',
     target: TargetHandle,
     initialPoint: Point,
-    initialSnapshot: GeometrySnapshot,
-    freshness: DispatchGeometryFreshnessToken,
     options: DragOptions,
     span: TraceSpanHandle,
-  ): Promise<Readonly<{ point: Point; snapshot: GeometrySnapshot; refreshed: boolean }>> {
-    if (this.#canReuseInitialDispatchGeometry(freshness)) {
-      return { point: initialPoint, snapshot: initialSnapshot, refreshed: false }
-    }
-
+  ): Promise<Readonly<{ point: Point; snapshot: GeometrySnapshot }>> {
     const snapshot = await this.#geometry.snapshot(target)
     const freshPoint = clickablePointOrThrow('drag', target, snapshot)
 
@@ -1557,7 +1502,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       computedAt: snapshot.computedAt,
     })
 
-    return { point: freshPoint, snapshot, refreshed: true }
+    return { point: freshPoint, snapshot }
   }
 
   #applyPointerSignal(signal: PointerSignal): void {

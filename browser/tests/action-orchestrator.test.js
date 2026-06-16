@@ -178,48 +178,6 @@ function createPointerVisualTrackerDouble() {
   }
 }
 
-function createManualLayoutInvalidationTracker(options = {}) {
-  const listeners = []
-  let running = options.running ?? true
-
-  return {
-    tracker: {
-      start: vi.fn(() => {
-        running = true
-      }),
-      stop: vi.fn(() => {
-        running = false
-      }),
-      isRunning: vi.fn(() => running),
-      markDirty: vi.fn(),
-      subscribe: vi.fn((listener) => {
-        listeners.push(listener)
-
-        return {
-          dispose() {
-            const index = listeners.indexOf(listener)
-
-            if (index >= 0) {
-              listeners.splice(index, 1)
-            }
-          },
-        }
-      }),
-      dispose: vi.fn(),
-    },
-    emit(reason = 'mutation') {
-      for (const listener of [...listeners]) {
-        listener({
-          reason,
-          reasons: [reason],
-          at: 123,
-          coalesced: 1,
-        })
-      }
-    },
-  }
-}
-
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
@@ -281,7 +239,7 @@ function createHarness(options = {}) {
     inspect: vi.fn(async () => ({ target, canClick: true, blockingReasons: [] })),
     canClick: vi.fn(async () => {
       calls.push('interactability.canClick')
-      const report =
+      return (
         clickReports.shift() ??
         options.clickReport ?? {
           target,
@@ -295,10 +253,7 @@ function createHarness(options = {}) {
           forceBypassedReasons: [],
           unforceableReasons: [],
         }
-
-      options.afterCanClick?.(report)
-
-      return report
+      )
     }),
     canFocus: vi.fn(async () => {
       calls.push('interactability.canFocus')
@@ -486,7 +441,6 @@ function createHarness(options = {}) {
   const events = {
     dispatchPointerEvent: vi.fn((event) => {
       calls.push(`event.${event.type}`)
-      options.onPointerEvent?.(event)
       return options.pointerDispatchResult?.[event.type] ?? true
     }),
     dispatchMouseEvent: vi.fn((event) => {
@@ -876,50 +830,6 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('skips fresh doubleClick geometry before each pointer down when layout stays clean', async () => {
-    const target = targetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    const { calls, events, interactability, orchestrator } = createHarness({
-      target,
-      geometry: initialGeometry,
-      geometrySnapshots: [initialGeometry, freshGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      useRealGesture: true,
-    })
-
-    await expect(
-      orchestrator.doubleClick(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
-
-    expect(calls.filter((call) => call === 'geometry.snapshot')).toHaveLength(1)
-    expect(interactability.canClick).toHaveBeenCalledTimes(1)
-    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
-      'pointermove',
-      'pointerdown',
-      'pointerup',
-      'pointerdown',
-      'pointerup',
-    ])
-    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        type: 'click',
-        detail: 1,
-        point: { x: 20, y: 30 },
-      }),
-    )
-    expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        type: 'click',
-        detail: 2,
-        point: { x: 20, y: 30 },
-      }),
-    )
-  })
-
   it('doubleClick forwards explicit public pointer timing options without force', async () => {
     const motion = { kind: 'ease', easing: 'ease-in-out', duration: 420 }
     const { gesture, orchestrator } = createHarness()
@@ -1137,77 +1047,14 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('skips fresh click geometry before pointer down when layout stays clean', async () => {
+  it('refreshes click geometry before pointer down and dispatches at the fresh point', async () => {
     const target = targetHandle()
     const initialGeometry = geometryFor(target, { x: 20, y: 30 })
     const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    const { calls, events, interactability, orchestrator, trace } = createHarness({
-      target,
-      geometry: initialGeometry,
-      geometrySnapshots: [initialGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      useRealGesture: true,
-    })
-
-    await expect(
-      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
-
-    expect(calls.filter((call) => call === 'geometry.snapshot')).toHaveLength(1)
-    expect(interactability.canClick).toHaveBeenCalledTimes(1)
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
-      type: 'pointermove',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      buttons: [],
-    })
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
-      type: 'pointerdown',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: ['primary'],
-    })
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
-      type: 'pointerup',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: [],
-    })
-    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
-      type: 'click',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: [],
-      detail: 1,
-    })
-    expect(trace.getTrace().events).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'pointer:fresh-geometry',
-        }),
-      ]),
-    )
-  })
-
-  it('refreshes click geometry before pointer down after layout invalidation', async () => {
-    const target = targetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
     const { events, orchestrator, trace } = createHarness({
       target,
       geometry: initialGeometry,
       geometrySnapshots: [initialGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      onPointerEvent: (event) => {
-        if (event.type === 'pointermove') {
-          layoutInvalidation.emit('mutation')
-        }
-      },
       useRealGesture: true,
     })
 
@@ -1265,21 +1112,14 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('fails fresh click preflight after layout invalidation and cleans up perform state', async () => {
+  it('fails fresh click preflight before pointer down and cleans up perform state', async () => {
     const target = targetHandle()
     const initialGeometry = geometryFor(target, { x: 20, y: 30 })
     const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
     const { events, orchestrator, state, trace } = createHarness({
       target,
       geometry: initialGeometry,
       geometrySnapshots: [initialGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      onPointerEvent: (event) => {
-        if (event.type === 'pointermove') {
-          layoutInvalidation.emit('mutation')
-        }
-      },
       clickReports: [
         clickReportFor(target),
         clickReportFor(target, {
@@ -1490,60 +1330,13 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('drag skips fresh endpoint geometry before dispatch when layout stays clean', async () => {
+  it('drag resolves both endpoints, refreshes geometry before dispatch, preflights, settles, and traces synthetic pointer drag', async () => {
     const source = targetHandle('drag-source')
     const destination = targetHandle('drop-target')
     const sourceInitial = geometryFor(source, { x: 10, y: 20 })
     const destinationInitial = geometryFor(destination, { x: 100, y: 110 })
     const sourceFresh = geometryFor(source, { x: 12, y: 22 })
     const destinationFresh = geometryFor(destination, { x: 112, y: 122 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    const { calls, events, gesture, interactability, orchestrator } = createHarness({
-      target: source,
-      resolveTargets: [source, destination],
-      geometrySnapshots: [sourceInitial, destinationInitial, sourceFresh, destinationFresh],
-      clickReports: [
-        clickReportFor(source),
-        clickReportFor(destination),
-        clickReportFor(source),
-        clickReportFor(destination),
-      ],
-      hitTestResults: [source.element, source.element, destination.element, destination.element],
-      layoutInvalidation: layoutInvalidation.tracker,
-    })
-
-    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
-
-    expect(calls.filter((call) => call === 'geometry.snapshot')).toHaveLength(2)
-    expect(interactability.canClick).toHaveBeenCalledTimes(2)
-    expect(gesture.drag).toHaveBeenCalledWith(
-      { x: 10, y: 20 },
-      { x: 100, y: 110 },
-      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 } },
-    )
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
-      type: 'pointermove',
-      target: source.element,
-      point: { x: 10, y: 20 },
-      buttons: [],
-    })
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
-      type: 'pointermove',
-      target: destination.element,
-      point: { x: 100, y: 110 },
-      buttons: ['primary'],
-    })
-  })
-
-  it('drag resolves both endpoints, refreshes geometry after layout invalidation, preflights, settles, and traces synthetic pointer drag', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
-    const sourceInitial = geometryFor(source, { x: 10, y: 20 })
-    const destinationInitial = geometryFor(destination, { x: 100, y: 110 })
-    const sourceFresh = geometryFor(source, { x: 12, y: 22 })
-    const destinationFresh = geometryFor(destination, { x: 112, y: 122 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    let emittedInvalidation = false
     const { calls, events, gesture, orchestrator, trace, wait } = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -1555,13 +1348,6 @@ describe('BrowserActionOrchestrator', () => {
         clickReportFor(destination),
       ],
       hitTestResults: [source.element, source.element, destination.element, destination.element],
-      layoutInvalidation: layoutInvalidation.tracker,
-      afterCanClick: () => {
-        if (!emittedInvalidation) {
-          emittedInvalidation = true
-          layoutInvalidation.emit('mutation')
-        }
-      },
     })
 
     await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
@@ -3210,78 +2996,14 @@ describe('BrowserActionOrchestrator', () => {
     expect(timeline.delay).toHaveBeenCalledWith(5, {})
   })
 
-  it('skips fresh geometry for click-focused typeInto when layout stays clean', async () => {
+  it('uses fresh geometry for click-focused typeInto focus clicks', async () => {
     const target = inputTargetHandle()
     const initialGeometry = geometryFor(target, { x: 20, y: 30 })
     const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    const { calls, events, interactability, orchestrator, text } = createHarness({
-      target,
-      geometry: initialGeometry,
-      geometrySnapshots: [initialGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      useRealGesture: true,
-    })
-
-    await expect(
-      orchestrator.typeInto(css('#target-1'), 'H', {
-        delay: 0,
-        focusStrategy: 'click',
-        focusClick: { duration: 0, pressDwell: 0 },
-      }),
-    ).resolves.toBeUndefined()
-
-    expect(calls.filter((call) => call === 'geometry.snapshot')).toHaveLength(1)
-    expect(interactability.canClick).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
-      type: 'pointermove',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      buttons: [],
-    })
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
-      type: 'pointerdown',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: ['primary'],
-    })
-    expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
-      type: 'pointerup',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: [],
-    })
-    expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
-      type: 'click',
-      target: target.element,
-      point: { x: 20, y: 30 },
-      button: 'primary',
-      buttons: [],
-      detail: 1,
-    })
-    expect(text.typeInto).toHaveBeenCalledWith(target, 'H', {
-      delay: 0,
-      focusStrategy: 'none',
-    })
-  })
-
-  it('uses fresh geometry for click-focused typeInto focus clicks after layout invalidation', async () => {
-    const target = inputTargetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
     const { events, orchestrator, text } = createHarness({
       target,
       geometry: initialGeometry,
       geometrySnapshots: [initialGeometry, freshGeometry],
-      layoutInvalidation: layoutInvalidation.tracker,
-      onPointerEvent: (event) => {
-        if (event.type === 'pointermove') {
-          layoutInvalidation.emit('mutation')
-        }
-      },
       useRealGesture: true,
     })
 
