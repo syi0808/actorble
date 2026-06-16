@@ -328,6 +328,37 @@ describe('BrowserTargetResolver', () => {
     )
   })
 
+  it('retains the latest diagnostics candidate snapshot when snapshot retention is limited', async () => {
+    document.body.innerHTML = `
+      <button id="first" class="choice">One</button>
+      <button id="second" class="choice">Two</button>
+    `
+    const trace = new BrowserDiagnosticsTrace({
+      clock: createClock(5800),
+      idPrefix: 'trace',
+      retention: { maxSnapshots: 1 },
+    })
+    const resolver = createResolver({ trace })
+
+    await resolver.resolve(css('#first'))
+    await resolver.resolve(css('.choice'))
+
+    expect(trace.getTrace().snapshots).toEqual([
+      expect.objectContaining({
+        name: 'target.resolve.candidates',
+        data: expect.objectContaining({
+          locator: { kind: 'css', selector: '.choice' },
+          rankingPolicy: 'score-desc-dom-order',
+          ambiguity: 'single-best',
+          candidates: [
+            expect.objectContaining({ index: 0, score: 100, reasons: ['css'] }),
+            expect.objectContaining({ index: 1, score: 100, reasons: ['css'] }),
+          ],
+        }),
+      }),
+    ])
+  })
+
   it('limits resolver read memoization to a single resolve call', async () => {
     document.body.innerHTML = '<button id="save" aria-label="Save draft">Save</button>'
     const resolver = createResolver()

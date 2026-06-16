@@ -626,6 +626,70 @@ describe('BrowserWaitObservationEngine', () => {
     ])
   })
 
+  it('retains limited wait events while preserving timeout context on the span error', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    const ports = createObservationPorts(target, {
+      reports: [
+        interactabilityReportFor(target, {
+          visible: false,
+          visibilityRatio: 0,
+          blockingReasons: ['not-visible'],
+        }),
+      ],
+    })
+    const timeline = createTimeline({
+      settle: vi.fn(() => new Promise(() => {})),
+    })
+    const trace = new BrowserDiagnosticsTrace({
+      clock: traceClock(),
+      idPrefix: 'trace',
+      retention: { maxEvents: 2 },
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline, trace, ...ports })
+    const promise = engine.waitFor({ kind: 'visible', target: css('#save') }, { timeout: 25 })
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    const snapshot = trace.getTrace()
+    expect(snapshot.events).toEqual([
+      expect.objectContaining({
+        name: 'wait:retry',
+        data: expect.objectContaining({
+          attempts: 1,
+          observation: expect.objectContaining({ state: 'hidden' }),
+        }),
+      }),
+      expect.objectContaining({
+        name: 'wait:timeout',
+        data: expect.objectContaining({
+          attempts: 1,
+          lastObservation: expect.objectContaining({ state: 'hidden' }),
+        }),
+      }),
+    ])
+    expect(snapshot.spans).toEqual([
+      expect.objectContaining({
+        name: 'wait.for',
+        status: 'error',
+        error: expect.objectContaining({
+          code: 'ACTION_TIMEOUT',
+          details: expect.objectContaining({
+            attempts: 1,
+            lastObservation: expect.objectContaining({ state: 'hidden' }),
+          }),
+        }),
+      }),
+    ])
+  })
+
   it('cancels visible waits before resolving when the signal is aborted', async () => {
     document.body.innerHTML = '<button id="save">Save</button>'
     const save = document.querySelector('#save')

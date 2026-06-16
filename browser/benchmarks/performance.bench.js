@@ -1,4 +1,5 @@
 import { beforeAll, bench, describe } from 'vitest'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
 import {
@@ -39,6 +40,8 @@ const EXPENSIVE_WAIT_BENCH_OPTIONS = {
   time: 240,
   warmupTime: 40,
 }
+const LONG_TRACE_APPEND_COUNT = 400
+const TRACE_RETENTION_LIMIT = 40
 
 function createClock() {
   let current = 1
@@ -797,12 +800,139 @@ function worstCaseMutationRule(index) {
   `
 }
 
+function createDiagnosticsCandidateSnapshot(index) {
+  return {
+    locator: {
+      kind: 'css',
+      selector: `.bench-diagnostics-target-${index}`,
+    },
+    rankingPolicy: 'score-desc-dom-order',
+    ambiguity: 'single-best',
+    candidates: [
+      {
+        index: 0,
+        score: 100,
+        reasons: ['css'],
+        debug: {
+          selector: `#bench-diagnostics-target-${index}`,
+          description: `button#bench-diagnostics-target-${index}`,
+          role: 'button',
+          name: `Diagnostics target ${index}`,
+        },
+      },
+      {
+        index: 1,
+        score: 90,
+        reasons: ['role', 'name:partial'],
+        debug: {
+          selector: `#bench-diagnostics-fallback-${index}`,
+          description: `button#bench-diagnostics-fallback-${index}`,
+          role: 'button',
+          name: `Diagnostics fallback ${index}`,
+        },
+      },
+    ],
+  }
+}
+
+function appendLongDiagnosticsTrace(trace, count = LONG_TRACE_APPEND_COUNT) {
+  for (let index = 0; index < count; index += 1) {
+    const span = trace.startSpan('diagnostics.bench.step', {
+      stepIndex: index,
+      action: 'click',
+    })
+
+    span.event('wait:retry', {
+      attempts: index + 1,
+      observation: {
+        state: 'hidden',
+        targetId: `bench-diagnostics-target-${index}`,
+        visible: false,
+      },
+    })
+    trace.attachSnapshot('target.resolve.candidates', createDiagnosticsCandidateSnapshot(index))
+    trace.warn('Diagnostics benchmark warning.', {
+      stepIndex: index,
+      reason: 'benchmark',
+    })
+    span.end({ completed: true })
+  }
+
+  const snapshot = trace.getTrace()
+
+  return {
+    events: snapshot.events.length,
+    snapshots: snapshot.snapshots.length,
+    warnings: snapshot.warnings.length,
+    retainedSize: retainedDiagnosticsSize(snapshot),
+  }
+}
+
+function retainedDiagnosticsSize(trace) {
+  return JSON.stringify({
+    events: trace.events,
+    snapshots: trace.snapshots,
+    warnings: trace.warnings,
+  }).length
+}
+
+function assertTraceSummary(actual, expected) {
+  for (const [name, value] of Object.entries(expected)) {
+    if (actual[name] !== value) {
+      throw new Error(`Expected ${name} ${value}, received ${actual[name]}.`)
+    }
+  }
+
+  if (actual.retainedSize <= 0) {
+    throw new Error('Expected retained diagnostics size to be positive.')
+  }
+}
+
 beforeAll(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
   buildLargeDomFixture()
   buildNestedTextFixture()
   buildStylesheetFixture()
+})
+
+describe('diagnostics trace', () => {
+  bench(
+    'unlimited diagnostics trace appends long event snapshot warning stream',
+    () => {
+      const trace = new BrowserDiagnosticsTrace({ clock: createClock() })
+      const summary = appendLongDiagnosticsTrace(trace)
+
+      assertTraceSummary(summary, {
+        events: LONG_TRACE_APPEND_COUNT,
+        snapshots: LONG_TRACE_APPEND_COUNT,
+        warnings: LONG_TRACE_APPEND_COUNT,
+      })
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'limited diagnostics trace retains bounded event snapshot warning stream',
+    () => {
+      const trace = new BrowserDiagnosticsTrace({
+        clock: createClock(),
+        retention: {
+          maxEvents: TRACE_RETENTION_LIMIT,
+          maxSnapshots: TRACE_RETENTION_LIMIT,
+          maxWarnings: TRACE_RETENTION_LIMIT,
+        },
+      })
+      const summary = appendLongDiagnosticsTrace(trace)
+
+      assertTraceSummary(summary, {
+        events: TRACE_RETENTION_LIMIT,
+        snapshots: TRACE_RETENTION_LIMIT,
+        warnings: TRACE_RETENTION_LIMIT,
+      })
+    },
+    BENCH_OPTIONS,
+  )
 })
 
 describe('target resolver', () => {

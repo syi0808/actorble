@@ -72,9 +72,16 @@ export interface TraceEventSubscriber {
 
 export interface TraceCollector extends SpanRecorder, TraceReader, TraceEventSubscriber {}
 
+export type DiagnosticsTraceRetentionOptions = Readonly<{
+  maxEvents?: number
+  maxSnapshots?: number
+  maxWarnings?: number
+}>
+
 export type DiagnosticsTraceOptions = Readonly<{
   clock?: Clock
   idPrefix?: string
+  retention?: DiagnosticsTraceRetentionOptions
 }>
 
 type MutableTraceSpan = {
@@ -116,6 +123,7 @@ function cloneEvent(event: TraceEvent): TraceEvent {
 export class BrowserDiagnosticsTrace implements TraceCollector {
   readonly #clock: Clock
   readonly #idPrefix: string
+  readonly #retention: DiagnosticsTraceRetentionOptions
   #nextSpanId = 1
   readonly #spans: MutableTraceSpan[] = []
   readonly #events: TraceEvent[] = []
@@ -127,6 +135,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
   constructor(options: DiagnosticsTraceOptions = {}) {
     this.#clock = options.clock ?? defaultClock
     this.#idPrefix = options.idPrefix ?? 'span'
+    this.#retention = normalizeRetention(options.retention)
   }
 
   startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle {
@@ -194,6 +203,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       at: this.#clock.now(),
       data,
     })
+    retainNewest(this.#snapshots, this.#retention.maxSnapshots)
   }
 
   warn(message: string, details?: ActorbleErrorDetails): void {
@@ -202,6 +212,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       at: this.#clock.now(),
       ...(details === undefined ? {} : { details: { ...details } }),
     })
+    retainNewest(this.#warnings, this.#retention.maxWarnings)
   }
 
   getTrace(): Trace {
@@ -223,6 +234,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
 
     this.#events.push(event)
     this.#emitEvent(event)
+    retainNewest(this.#events, this.#retention.maxEvents)
   }
 
   #emitEvent(event: TraceEvent): void {
@@ -281,4 +293,30 @@ function describeUnknownError(error: unknown): string {
   }
 
   return String(error)
+}
+
+function normalizeRetention(
+  retention: DiagnosticsTraceRetentionOptions | undefined,
+): DiagnosticsTraceRetentionOptions {
+  return {
+    maxEvents: normalizeRetentionLimit(retention?.maxEvents),
+    maxSnapshots: normalizeRetentionLimit(retention?.maxSnapshots),
+    maxWarnings: normalizeRetentionLimit(retention?.maxWarnings),
+  }
+}
+
+function normalizeRetentionLimit(limit: number | undefined): number | undefined {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return undefined
+  }
+
+  return Math.max(0, Math.floor(limit))
+}
+
+function retainNewest<TRecord>(records: TRecord[], limit: number | undefined): void {
+  if (limit === undefined || records.length <= limit) {
+    return
+  }
+
+  records.splice(0, records.length - limit)
 }

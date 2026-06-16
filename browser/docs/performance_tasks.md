@@ -222,7 +222,7 @@ visual optimization
 
 ### P2026-06-16-10 Diagnostics Trace Retention Policy
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: 긴 scenario에서 span/event/snapshot/warning이 무제한으로 커지지 않도록 retention 또는 sampling option을 추가한다.
 - Dependencies: `diagnostics-trace`, `target-resolver`, `wait-observation-engine`, `scenario-runner`.
 - Completion criteria:

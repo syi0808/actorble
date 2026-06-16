@@ -187,6 +187,70 @@ describe('diagnostics trace', () => {
     ])
   })
 
+  it('retains the newest events, snapshots, and warnings when limits are configured', () => {
+    const trace = createDiagnosticsTrace({
+      clock: deterministicClock(5000),
+      retention: {
+        maxEvents: 2,
+        maxSnapshots: 1,
+        maxWarnings: 2,
+      },
+    })
+
+    const firstSpan = trace.startSpan('scenario.step')
+    firstSpan.end()
+    const secondSpan = trace.startSpan('scenario.step')
+    secondSpan.end()
+    const thirdSpan = trace.startSpan('scenario.step')
+    thirdSpan.end()
+
+    trace.appendEvent('scenario:start', { scenarioId: 's1' })
+    trace.appendEvent('scenario:pause', { currentStepIndex: 0 })
+    trace.appendEvent('scenario:resume', { currentStepIndex: 0 })
+    trace.attachSnapshot('first', { index: 1 })
+    trace.attachSnapshot('second', { index: 2 })
+    trace.warn('first warning')
+    trace.warn('second warning')
+    trace.warn('third warning')
+
+    expect(trace.getTrace()).toMatchObject({
+      spans: [
+        expect.objectContaining({ id: 'span-1', status: 'ok' }),
+        expect.objectContaining({ id: 'span-2', status: 'ok' }),
+        expect.objectContaining({ id: 'span-3', status: 'ok' }),
+      ],
+      events: [
+        { name: 'scenario:pause', at: 5007, data: { currentStepIndex: 0 } },
+        { name: 'scenario:resume', at: 5008, data: { currentStepIndex: 0 } },
+      ],
+      snapshots: [{ name: 'second', at: 5010, data: { index: 2 } }],
+      warnings: [
+        { message: 'second warning', at: 5012 },
+        { message: 'third warning', at: 5013 },
+      ],
+    })
+  })
+
+  it('notifies subscribers even when event retention stores no events', () => {
+    const trace = createDiagnosticsTrace({
+      clock: deterministicClock(6000),
+      retention: {
+        maxEvents: 0,
+      },
+    })
+    const listener = vi.fn()
+
+    trace.on('scenario:start', listener)
+    trace.appendEvent('scenario:start', { scenarioId: 's1' })
+
+    expect(listener).toHaveBeenCalledWith({
+      name: 'scenario:start',
+      at: 6000,
+      data: { scenarioId: 's1' },
+    })
+    expect(trace.getTrace().events).toEqual([])
+  })
+
   it('keeps the diagnostics trace boundary limited to shared primitives', async () => {
     const source = await readFile(
       join(process.cwd(), 'src/diagnostics/diagnostics-trace/index.ts'),
