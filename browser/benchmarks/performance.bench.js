@@ -27,6 +27,13 @@ const STYLE_RULE_COUNT = 50
 const GEOMETRY_REPEAT_COUNT = 200
 const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
 const WAIT_RETRY_REPEAT_COUNT = 50
+const EXPENSIVE_WAIT_DOM_SIZE = 160
+const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1
+const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5
+const EXPENSIVE_WAIT_BENCH_OPTIONS = {
+  time: 240,
+  warmupTime: 40,
+}
 
 function createClock() {
   let current = 1
@@ -406,6 +413,174 @@ function assertCounts(actual, expected) {
   }
 }
 
+function createExpensiveWaitTimeline({ dirtyAfterSettles, onDirty }) {
+  const timeline = createFrameTimeline()
+  let settleAttempts = 0
+
+  return {
+    ...timeline,
+    async settle() {
+      settleAttempts += 1
+
+      if (settleAttempts === dirtyAfterSettles) {
+        onDirty()
+      }
+    },
+    reset() {
+      settleAttempts = 0
+    },
+  }
+}
+
+function createExpensiveRoleWaitRetryFixture() {
+  ensureExpensiveWaitFixture()
+  const dom = new BrowserDomAdapter(document)
+  const resolver = new BrowserTargetResolver({ dom, clock: createClock() })
+  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const counts = {
+    resolve: 0,
+    validate: 0,
+    geometry: 0,
+    inspect: 0,
+  }
+  let visible = false
+  const timeline = createExpensiveWaitTimeline({
+    dirtyAfterSettles: EXPENSIVE_WAIT_UNCHANGED_RETRIES + 1,
+    onDirty() {
+      visible = true
+      layoutInvalidation.emit('mutation')
+    },
+  })
+  const engine = new BrowserWaitObservationEngine({
+    layoutInvalidation: layoutInvalidation.tracker,
+    timeline,
+    resolver: {
+      async resolve(locator, options) {
+        counts.resolve += 1
+        return await resolver.resolve(locator, options)
+      },
+      async resolveAll(locator, options) {
+        return await resolver.resolveAll(locator, options)
+      },
+      async exists(locator, options) {
+        return await resolver.exists(locator, options)
+      },
+      async inspect(target) {
+        return await resolver.inspect(target)
+      },
+      async validate(handle) {
+        counts.validate += 1
+        return await resolver.validate(handle)
+      },
+    },
+    geometry: {
+      async snapshot(target) {
+        counts.geometry += 1
+
+        return {
+          target,
+          rect: { x: 20, y: 30, width: 120, height: 32 },
+          visibleRect: { x: 20, y: 30, width: 120, height: 32 },
+          center: { x: 80, y: 46 },
+          clickablePoint: {
+            ok: true,
+            point: { x: 80, y: 46 },
+            strategy: 'center',
+          },
+          coordinateSpace: 'viewport',
+          computedAt: 1,
+        }
+      },
+      getBoundingRect: () => ({ x: 20, y: 30, width: 120, height: 32 }),
+      getVisibleRect: () => ({ x: 20, y: 30, width: 120, height: 32 }),
+      getCenter: () => ({ x: 80, y: 46 }),
+      getClickablePoint: () => ({
+        ok: true,
+        point: { x: 80, y: 46 },
+        strategy: 'center',
+      }),
+    },
+    interactability: {
+      async inspect(target) {
+        counts.inspect += 1
+
+        return {
+          target,
+          visible,
+          visibilityRatio: visible ? 1 : 0,
+          enabled: true,
+          editable: false,
+          focusable: false,
+          receivesPointerEvents: true,
+          canClick: visible,
+          canFocus: false,
+          canType: false,
+          blockingReasons: visible ? [] : ['not-visible'],
+          forceBypassedReasons: [],
+          unforceableReasons: [],
+        }
+      },
+      async canClick() {},
+      async canFocus() {},
+      async canType() {},
+    },
+  })
+
+  return {
+    counts,
+    engine,
+    locator: role('button', {
+      name: `Launch expensive wait item ${EXPENSIVE_WAIT_TARGET_INDEX}`,
+    }),
+    reset() {
+      counts.resolve = 0
+      counts.validate = 0
+      counts.geometry = 0
+      counts.inspect = 0
+      visible = false
+      timeline.reset()
+    },
+  }
+}
+
+function createExpensiveRootTextWaitRetryFixture() {
+  ensureExpensiveWaitFixture()
+  const realDom = new BrowserDomAdapter(document)
+  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const status = document.querySelector('#bench-expensive-wait-status')
+  const counts = {
+    rootText: 0,
+  }
+  const timeline = createExpensiveWaitTimeline({
+    dirtyAfterSettles: EXPENSIVE_WAIT_UNCHANGED_RETRIES + 1,
+    onDirty() {
+      status.textContent = 'Expensive wait benchmark completed'
+      layoutInvalidation.emit('mutation')
+    },
+  })
+  const engine = new BrowserWaitObservationEngine({
+    layoutInvalidation: layoutInvalidation.tracker,
+    timeline,
+    dom: {
+      getRoot: () => document,
+      getRootTextContent(root) {
+        counts.rootText += 1
+        return realDom.getRootTextContent(root)
+      },
+    },
+  })
+
+  return {
+    counts,
+    engine,
+    reset() {
+      counts.rootText = 0
+      status.textContent = 'Expensive wait benchmark loading'
+      timeline.reset()
+    },
+  }
+}
+
 function buildLargeDomFixture() {
   const root = document.createElement('main')
   root.id = 'bench-root'
@@ -461,6 +636,47 @@ function buildNestedTextFixture() {
 
   root.innerHTML = chunks.join('')
   document.body.append(root)
+}
+
+function buildExpensiveWaitFixture() {
+  if (document.querySelector('#bench-expensive-wait-root') !== null) {
+    return
+  }
+
+  const root = document.createElement('main')
+  root.id = 'bench-expensive-wait-root'
+
+  const chunks = [
+    '<div id="bench-expensive-wait-status">Expensive wait benchmark loading</div>',
+  ]
+
+  for (let index = 0; index < EXPENSIVE_WAIT_DOM_SIZE; index += 1) {
+    chunks.push(`
+      <section class="expensive-wait-row" data-row="${index}">
+        <h2>Workflow checkpoint ${index}</h2>
+        <p>
+          Large wait observation copy ${index}
+          repeats searchable document text and accessible content to make
+          role and root text observation expensive in jsdom.
+        </p>
+        <label for="expensive-wait-input-${index}">Expensive wait email ${index}</label>
+        <input id="expensive-wait-input-${index}" type="text" value="" />
+        <button
+          id="expensive-wait-save-${index}"
+          aria-label="Launch expensive wait item ${index}"
+        >
+          Launch expensive wait item ${index}
+        </button>
+      </section>
+    `)
+  }
+
+  root.innerHTML = chunks.join('')
+  document.body.append(root)
+}
+
+function ensureExpensiveWaitFixture() {
+  buildExpensiveWaitFixture()
 }
 
 function buildStylesheetFixture() {
@@ -541,6 +757,8 @@ describe('wait observation', () => {
   let unchangedVisibleRetry
   let dirtyVisibleRetry
   let unchangedRootTextRetry
+  let expensiveRoleRetry
+  let expensiveRootTextRetry
 
   const getUnchangedVisibleRetry = () => {
     unchangedVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 2 })
@@ -553,6 +771,14 @@ describe('wait observation', () => {
   const getUnchangedRootTextRetry = () => {
     unchangedRootTextRetry ??= createRootTextWaitRetryFixture()
     return unchangedRootTextRetry
+  }
+  const getExpensiveRoleRetry = () => {
+    expensiveRoleRetry ??= createExpensiveRoleWaitRetryFixture()
+    return expensiveRoleRetry
+  }
+  const getExpensiveRootTextRetry = () => {
+    expensiveRootTextRetry ??= createExpensiveRootTextWaitRetryFixture()
+    return expensiveRootTextRetry
   }
 
   bench(
@@ -644,6 +870,47 @@ describe('wait observation', () => {
       }
     },
     BENCH_OPTIONS,
+  )
+
+  bench(
+    'expensive role wait reuses unchanged retries until mutation',
+    async () => {
+      const fixture = getExpensiveRoleRetry()
+
+      fixture.reset()
+
+      await fixture.engine.waitFor({
+        kind: 'visible',
+        target: fixture.locator,
+      })
+
+      assertCounts(fixture.counts, {
+        resolve: 1,
+        validate: 2,
+        geometry: 2,
+        inspect: 2,
+      })
+    },
+    EXPENSIVE_WAIT_BENCH_OPTIONS,
+  )
+
+  bench(
+    'expensive root text wait reuses unchanged retries until mutation',
+    async () => {
+      const fixture = getExpensiveRootTextRetry()
+
+      fixture.reset()
+
+      await fixture.engine.waitFor({
+        kind: 'text',
+        value: 'Expensive wait benchmark completed',
+      })
+
+      assertCounts(fixture.counts, {
+        rootText: 2,
+      })
+    },
+    EXPENSIVE_WAIT_BENCH_OPTIONS,
   )
 })
 
