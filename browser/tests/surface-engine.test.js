@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserSurfaceEngine, createSurfaceEngine } from '../src/targeting/surface-engine/index.js'
+import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
 import { css, element } from '../src/shared/index.js'
 
 function targetHandle(id, target, options = {}) {
@@ -65,6 +66,62 @@ function defineScrollMetrics(element, metrics) {
       configurable: true,
       value,
     })
+  }
+}
+
+function createFrameTimeline() {
+  const frameResolvers = []
+
+  return {
+    timeline: {
+      nextFrame: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            frameResolvers.push(resolve)
+          }),
+      ),
+    },
+    async resolveFrame(timestamp = 16) {
+      frameResolvers.shift()?.(timestamp)
+      await Promise.resolve()
+    },
+  }
+}
+
+function createManualLayoutInvalidationTracker() {
+  const listeners = []
+
+  return {
+    tracker: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      isRunning: vi.fn(() => true),
+      markDirty: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        listeners.push(listener)
+
+        return {
+          dispose() {
+            const index = listeners.indexOf(listener)
+
+            if (index >= 0) {
+              listeners.splice(index, 1)
+            }
+          },
+        }
+      }),
+      dispose: vi.fn(),
+    },
+    emit(reason = 'scroll') {
+      for (const listener of [...listeners]) {
+        listener({
+          reason,
+          reasons: [reason],
+          at: 123,
+          coalesced: 1,
+        })
+      }
+    },
   }
 }
 
@@ -234,5 +291,85 @@ describe('BrowserSurfaceEngine', () => {
         }),
       }),
     )
+  })
+
+  it('reuses scrollable ancestor discovery within a frame and refreshes after layout invalidation', () => {
+    const clip = document.createElement('section')
+    const save = document.createElement('button')
+    let scrollable = true
+    const dom = createDomPort({
+      getParentElement: vi.fn((element) => (element === save ? clip : null)),
+      getComputedStyle: vi.fn(() => ({
+        overflow: 'visible',
+        overflowX: 'visible',
+        overflowY: scrollable ? 'scroll' : 'visible',
+      })),
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 100,
+        scrollHeight: scrollable ? 200 : 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+    })
+    const { timeline } = createFrameTimeline()
+    const invalidation = createManualLayoutInvalidationTracker()
+    const cache = createFrameGeometrySurfaceCache({
+      timeline,
+      layoutInvalidation: invalidation.tracker,
+    })
+    const engine = new BrowserSurfaceEngine({ dom, cache })
+    const handle = targetHandle('target-1', save)
+
+    expect(engine.getSurfaceFor(handle).clippingChain).toEqual([clip])
+    expect(engine.getSurfaceFor(handle).clippingChain).toEqual([clip])
+    expect(engine.getScrollableAncestors(handle)).toEqual([clip])
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(1)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(1)
+    expect(dom.getViewportRect).toHaveBeenCalledTimes(1)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(1)
+
+    scrollable = false
+    invalidation.emit('resize')
+
+    expect(engine.getSurfaceFor(handle).clippingChain).toEqual([])
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
+    expect(dom.getViewportRect).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates cached surface reads after scroll writes', async () => {
+    const clip = document.createElement('section')
+    const save = document.createElement('button')
+    let scrollable = true
+    const dom = createDomPort({
+      getParentElement: vi.fn((element) => (element === save ? clip : null)),
+      getComputedStyle: vi.fn(() => ({
+        overflow: 'visible',
+        overflowX: 'visible',
+        overflowY: scrollable ? 'scroll' : 'visible',
+      })),
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 100,
+        scrollHeight: scrollable ? 200 : 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+    })
+    const cache = createFrameGeometrySurfaceCache({ timeline: createFrameTimeline().timeline })
+    const engine = new BrowserSurfaceEngine({ dom, cache })
+    const handle = targetHandle('target-1', save)
+
+    expect(engine.getScrollableAncestors(handle)).toEqual([clip])
+    scrollable = false
+    await engine.ensureVisible(handle)
+    expect(engine.getScrollableAncestors(handle)).toEqual([])
+
+    expect(dom.scrollIntoView).toHaveBeenCalledWith(save, undefined)
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
   })
 })

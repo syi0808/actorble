@@ -1,5 +1,7 @@
 import { actorbleError } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
+import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
+import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import type {
   CoordinateSpace,
   DomPort,
@@ -35,16 +37,19 @@ export interface SurfaceEngine {
 }
 
 export type SurfaceEngineOptions = Readonly<{
+  cache?: FrameGeometrySurfaceCache
   dom?: DomPort
 }>
 
 const supportedScrollPositionCoordinateSpaces = ['viewport', 'document'] as const
 
 export class BrowserSurfaceEngine implements SurfaceEngine {
+  readonly #cache: FrameGeometrySurfaceCache
   readonly #dom: DomPort
 
   constructor(options: SurfaceEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
+    this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
   }
 
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot {
@@ -52,12 +57,20 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       id: target.surfaceId ?? 'viewport',
       root: target.root,
       coordinateSpace: 'viewport',
-      viewport: this.#dom.getViewportRect(target.root),
+      viewport: this.#cache.getViewportRect(target.root, () =>
+        this.#dom.getViewportRect(target.root),
+      ),
       clippingChain: this.getScrollableAncestors(target),
     }
   }
 
   getScrollableAncestors(target: TargetHandle): readonly Element[] {
+    return this.#cache.getScrollableAncestors(target.element, () =>
+      this.#findScrollableAncestors(target),
+    )
+  }
+
+  #findScrollableAncestors(target: TargetHandle): readonly Element[] {
     const scrollableAncestors: Element[] = []
     let current = this.#dom.getParentElement(target.element)
 
@@ -74,6 +87,7 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
 
   async ensureVisible(target: TargetHandle, options: RevealOptions = {}): Promise<void> {
     this.#dom.scrollIntoView(target.element, revealToScrollIntoViewOptions(options))
+    this.#cache.invalidate('scroll')
   }
 
   async scrollTo(
@@ -82,10 +96,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   ): Promise<void> {
     if (isScrollPosition(targetOrPosition)) {
       this.#scrollViewportTo(targetOrPosition, options)
+      this.#cache.invalidate('scroll')
       return
     }
 
     this.#dom.scrollTo(targetElementForScroll(targetOrPosition), { x: 0, y: 0 }, options)
+    this.#cache.invalidate('scroll')
   }
 
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point {
@@ -153,8 +169,9 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   #getViewportScrollOffset(): Point {
-    const metrics = this.#dom.getScrollMetrics(
-      this.#dom.getViewportScrollTarget(this.#dom.getRoot()),
+    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
+    const metrics = this.#cache.getScrollMetrics(target, () =>
+      this.#dom.getScrollMetrics(target),
     )
 
     return {
@@ -164,8 +181,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   #isScrollable(element: Element): boolean {
-    const style = this.#dom.getComputedStyle(element)
-    const metrics = this.#dom.getScrollMetrics(element)
+    const style = this.#cache.getComputedStyle(element, () =>
+      this.#dom.getComputedStyle(element),
+    )
+    const metrics = this.#cache.getScrollMetrics(element, () =>
+      this.#dom.getScrollMetrics(element),
+    )
     const overflowX = normalizeAxisOverflow(style.overflowX, style.overflow)
     const overflowY = normalizeAxisOverflow(style.overflowY, style.overflow)
     const canScrollX = allowsScrolling(overflowX) && metrics.scrollWidth > metrics.clientWidth

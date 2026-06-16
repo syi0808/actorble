@@ -2,9 +2,11 @@ import { BrowserActionOrchestrator } from '../../runtime/action-orchestrator/ind
 import { BrowserCapabilityFidelityReporter } from '../../capability/capability-fidelity/index.js'
 import { BrowserDiagnosticsTrace } from '../../diagnostics/diagnostics-trace/index.js'
 import { BrowserGeometryEngine } from '../../targeting/geometry-engine/index.js'
+import { createFrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import { createLayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/index.js'
 import { BrowserScenarioRunner } from '../../runtime/scenario-runner/index.js'
+import { BrowserSurfaceEngine } from '../../targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
@@ -78,9 +80,21 @@ export class Actorble {
     const dom = options.dom ?? new BrowserDomAdapter(root)
     const timeline = new BrowserTimelineEngine()
     const layoutInvalidation = createLayoutInvalidationTracker({ dom, timeline })
+    const geometrySurfaceCache = createFrameGeometrySurfaceCache({
+      layoutInvalidation,
+      timeline,
+    })
+    const surface = new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
-    const geometry = options.geometry ?? new BrowserGeometryEngine({ dom, clock: timeline })
+    const geometry =
+      options.geometry ??
+      new BrowserGeometryEngine({
+        dom,
+        surface,
+        cache: geometrySurfaceCache,
+        clock: timeline,
+      })
     const visual = visualForOptions(options.visual, dom.getRoot(), options.mode)
     const visualFeedback = visualFeedbackForOptions(options.visual, options.mode)
     const orchestrator =
@@ -88,6 +102,7 @@ export class Actorble {
       new BrowserActionOrchestrator({
         dom,
         geometry,
+        surface,
         resolver,
         timeline,
         trace,

@@ -7,6 +7,7 @@ import {
 } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
 import { BrowserGeometryEngine } from '../../targeting/geometry-engine/index.js'
+import { createFrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
@@ -25,6 +26,7 @@ import type {
   WaitOptions,
 } from '../../shared/index.js'
 import type { GeometryEngine } from '../../targeting/geometry-engine/index.js'
+import type { FrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../../targeting/interactability-engine/index.js'
 import type { TargetResolver } from '../../targeting/target-resolver/index.js'
 import type { TimelineEngine, WaitStrategy } from '../timeline-engine/index.js'
@@ -105,6 +107,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #timeline: TimelineEngine
   readonly #trace?: WaitTraceRecorder
   readonly #onGeometryInvalidated?: GeometryInvalidationHook
+  readonly #geometrySurfaceCache?: FrameGeometrySurfaceCache
   readonly #layoutInvalidationSubscription?: { dispose(): void }
 
   constructor(options: WaitObservationEngineOptions = {}) {
@@ -112,8 +115,21 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
     this.#resolver =
       options.resolver ?? new BrowserTargetResolver({ dom: this.#dom, clock: this.#timeline })
+    const geometrySurfaceCache =
+      options.geometry === undefined
+        ? createFrameGeometrySurfaceCache({
+            layoutInvalidation: options.layoutInvalidation,
+            timeline: this.#timeline,
+          })
+        : undefined
+    this.#geometrySurfaceCache = geometrySurfaceCache
     this.#geometry =
-      options.geometry ?? new BrowserGeometryEngine({ dom: this.#dom, clock: this.#timeline })
+      options.geometry ??
+      new BrowserGeometryEngine({
+        dom: this.#dom,
+        cache: geometrySurfaceCache,
+        clock: this.#timeline,
+      })
     this.#interactability =
       options.interactability ??
       new BrowserInteractabilityEngine({ dom: this.#dom, geometry: this.#geometry })
@@ -212,6 +228,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   invalidateGeometry(reason: string): void {
+    this.#geometrySurfaceCache?.invalidate(reason)
     this.#trace?.appendEvent?.('geometry:invalidate', {
       reason,
       root: rootKind(this.#dom.getRoot()),
@@ -220,6 +237,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   #recordLayoutInvalidation(event: LayoutInvalidationEvent): void {
+    this.#geometrySurfaceCache?.invalidate(event.reason)
     this.#trace?.appendEvent?.('layout:invalidate', {
       reason: event.reason,
       reasons: [...event.reasons],

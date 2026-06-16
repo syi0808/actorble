@@ -259,4 +259,20 @@ describe('BrowserInteractabilityEngine', () => {
       { ignoreActorbleInternal: true },
     )
   })
+
+  it('does not cache interactability judgment reads across repeated inspections', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const button = document.querySelector('#save')
+    const handle = targetHandle('target-1', button)
+    const geometry = geometryFor(handle)
+    const dom = createDomPort({ elementFromPoint: vi.fn(() => button) })
+    const engine = new BrowserInteractabilityEngine({ dom, geometry: createGeometry(geometry) })
+
+    await engine.canClick(handle, geometry)
+    await engine.canClick(handle, geometry)
+
+    expect(dom.describeElement).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.elementFromPoint).toHaveBeenCalledTimes(2)
+  })
 })

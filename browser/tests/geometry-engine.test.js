@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserGeometryEngine, createGeometryEngine } from '../src/targeting/geometry-engine/index.js'
+import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
+import { BrowserSurfaceEngine } from '../src/targeting/surface-engine/index.js'
 import { css, element } from '../src/shared/index.js'
 
 function targetHandle(id, target, options = {}) {
@@ -68,6 +70,25 @@ function createSurface(options = {}) {
 function fixedClock(now) {
   return {
     now: vi.fn(() => now),
+  }
+}
+
+function createFrameTimeline() {
+  const frameResolvers = []
+
+  return {
+    timeline: {
+      nextFrame: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            frameResolvers.push(resolve)
+          }),
+      ),
+    },
+    async resolveFrame(timestamp = 16) {
+      frameResolvers.shift()?.(timestamp)
+      await Promise.resolve()
+    },
   }
 }
 
@@ -205,5 +226,75 @@ describe('BrowserGeometryEngine', () => {
       code: 'PLATFORM_UNSUPPORTED',
       details: { locatorKind: 'css' },
     })
+  })
+
+  it('reuses same-frame geometry and surface reads until frame or manual invalidation', async () => {
+    const clip = document.createElement('section')
+    const save = document.createElement('button')
+    const handle = targetHandle('target-1', save)
+    const rects = new Map([
+      [save, { x: 10, y: 20, width: 100, height: 50 }],
+      [clip, { x: 0, y: 10, width: 80, height: 60 }],
+    ])
+    const dom = createDomPort(rects, {
+      getParentElement: vi.fn((element) => (element === save ? clip : null)),
+      getComputedStyle: vi.fn(() => ({
+        overflow: 'visible',
+        overflowX: 'visible',
+        overflowY: 'scroll',
+      })),
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 80,
+        scrollHeight: 160,
+        clientWidth: 80,
+        clientHeight: 60,
+      })),
+    })
+    const { timeline, resolveFrame } = createFrameTimeline()
+    const cache = createFrameGeometrySurfaceCache({ timeline })
+    const surface = new BrowserSurfaceEngine({ dom, cache })
+    const engine = new BrowserGeometryEngine({
+      dom,
+      surface,
+      cache,
+      clock: fixedClock(5000),
+    })
+
+    const first = await engine.snapshot(handle)
+    const second = await engine.snapshot(handle)
+
+    expect(second).toEqual(first)
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(2)
+    expect(dom.getViewportRect).toHaveBeenCalledTimes(1)
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(1)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(1)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(1)
+
+    rects.set(save, { x: 20, y: 30, width: 100, height: 50 })
+    await resolveFrame()
+
+    await expect(engine.snapshot(handle)).resolves.toMatchObject({
+      rect: { x: 20, y: 30, width: 100, height: 50 },
+      visibleRect: { x: 20, y: 30, width: 60, height: 40 },
+    })
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(4)
+    expect(dom.getViewportRect).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
+
+    rects.set(save, { x: 40, y: 50, width: 120, height: 50 })
+    cache.invalidate('manual')
+
+    await expect(engine.snapshot(handle)).resolves.toMatchObject({
+      rect: { x: 40, y: 50, width: 120, height: 50 },
+      visibleRect: { x: 40, y: 50, width: 40, height: 20 },
+    })
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(6)
+    expect(dom.getViewportRect).toHaveBeenCalledTimes(3)
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(3)
+    expect(dom.getScrollMetrics).toHaveBeenCalledTimes(3)
   })
 })

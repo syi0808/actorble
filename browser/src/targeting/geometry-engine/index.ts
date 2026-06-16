@@ -1,6 +1,8 @@
 import { actorbleError } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
+import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import { BrowserSurfaceEngine } from '../surface-engine/index.js'
+import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import type { SurfaceEngine, SurfaceSnapshot } from '../surface-engine/index.js'
 import type {
   Clock,
@@ -58,6 +60,7 @@ export interface GeometryEngine {
 }
 
 export type GeometryEngineOptions = Readonly<{
+  cache?: FrameGeometrySurfaceCache
   dom?: DomPort
   surface?: SurfaceEngine
   clock?: Clock
@@ -70,13 +73,15 @@ const defaultClock: Clock = {
 }
 
 export class BrowserGeometryEngine implements GeometryEngine {
+  readonly #cache: FrameGeometrySurfaceCache
   readonly #dom: DomPort
   readonly #surface: SurfaceEngine
   readonly #clock: Clock
 
   constructor(options: GeometryEngineOptions = {}) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
-    this.#surface = options.surface ?? new BrowserSurfaceEngine({ dom: this.#dom })
+    this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
+    this.#surface = options.surface ?? new BrowserSurfaceEngine({ dom: this.#dom, cache: this.#cache })
     this.#clock = options.clock ?? defaultClock
   }
 
@@ -98,7 +103,9 @@ export class BrowserGeometryEngine implements GeometryEngine {
   }
 
   getBoundingRect(target: TargetHandle): Rect {
-    return this.#dom.getBoundingClientRect(target.element)
+    return this.#cache.getBoundingRect(target.element, () =>
+      this.#dom.getBoundingClientRect(target.element),
+    )
   }
 
   getVisibleRect(target: TargetHandle): Rect | null {
@@ -135,7 +142,9 @@ export class BrowserGeometryEngine implements GeometryEngine {
 
       visibleRect = intersectRects(
         visibleRect,
-        this.#dom.getBoundingClientRect(clippingElement),
+        this.#cache.getBoundingRect(clippingElement, () =>
+          this.#dom.getBoundingClientRect(clippingElement),
+        ),
       )
     }
 

@@ -8,6 +8,9 @@ import {
 } from '../src/platform/platform-adapter/index.js'
 import { BrowserWaitObservationEngine } from '../src/runtime/wait-observation-engine/index.js'
 import { css, label, role, text } from '../src/shared/index.js'
+import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
+import { BrowserGeometryEngine } from '../src/targeting/geometry-engine/index.js'
+import { BrowserSurfaceEngine } from '../src/targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../src/targeting/target-resolver/index.js'
 import { BrowserVisualLayer } from '../src/visual/visual-layer/index.js'
 import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
@@ -21,6 +24,8 @@ const LARGE_DOM_SIZE = 80
 const TARGET_INDEX = LARGE_DOM_SIZE - 1
 const NESTED_TEXT_ROW_COUNT = 120
 const STYLE_RULE_COUNT = 50
+const GEOMETRY_REPEAT_COUNT = 200
+const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
 
 function createClock() {
   let current = 1
@@ -55,6 +60,42 @@ function createFrameTimeline() {
   }
 }
 
+function createHeldFrameTimeline() {
+  let current = 0
+
+  return {
+    now() {
+      return current
+    },
+    nextFrame() {
+      current += 16
+      return new Promise(() => {})
+    },
+  }
+}
+
+function createPassthroughGeometrySurfaceCache() {
+  return {
+    getBoundingRect(_element, read) {
+      return read()
+    },
+    getViewportRect(_root, read) {
+      return read()
+    },
+    getScrollMetrics(_target, read) {
+      return read()
+    },
+    getComputedStyle(_element, read) {
+      return read()
+    },
+    getScrollableAncestors(_target, read) {
+      return read()
+    },
+    invalidate() {},
+    dispose() {},
+  }
+}
+
 function targetHandle(id, element) {
   return {
     id,
@@ -67,6 +108,100 @@ function targetHandle(id, element) {
       description: `${element.tagName.toLowerCase()}#${id}`,
     },
   }
+}
+
+function createInstrumentedGeometryFixture(
+  cache = createFrameGeometrySurfaceCache({ timeline: createHeldFrameTimeline() }),
+) {
+  const clips = Array.from({ length: GEOMETRY_SCROLL_ANCESTOR_COUNT }, () =>
+    document.createElement('section'),
+  )
+  const target = document.createElement('button')
+  const counts = {
+    rect: 0,
+    style: 0,
+    scrollMetrics: 0,
+    viewport: 0,
+  }
+  const rects = new Map([
+    [target, { x: 10, y: 20, width: 100, height: 50 }],
+  ])
+
+  clips.forEach((clip, index) => {
+    rects.set(clip, {
+      x: index,
+      y: 10 + index,
+      width: 100 - index * 2,
+      height: 70 - index,
+    })
+  })
+  const dom = {
+    getRoot: () => document,
+    querySelectorAll: () => [],
+    getBoundingClientRect(element) {
+      counts.rect += 1
+      return rects.get(element) ?? { x: 0, y: 0, width: 0, height: 0 }
+    },
+    getComputedStyle() {
+      counts.style += 1
+      return {
+        overflow: 'visible',
+        overflowX: 'visible',
+        overflowY: 'scroll',
+      }
+    },
+    getViewportRect() {
+      counts.viewport += 1
+      return { x: 0, y: 0, width: 1024, height: 768 }
+    },
+    getViewportScrollTarget: () => window,
+    getParentElement(element) {
+      if (element === target) {
+        return clips[0]
+      }
+
+      const index = clips.indexOf(element)
+
+      return index >= 0 ? (clips[index + 1] ?? null) : null
+    },
+    getScrollMetrics() {
+      counts.scrollMetrics += 1
+      return {
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 80,
+        scrollHeight: 160,
+        clientWidth: 80,
+        clientHeight: 60,
+      }
+    },
+    elementFromPoint: () => null,
+    getAttribute: () => null,
+    getTextContent: () => '',
+    getRootTextContent: () => '',
+    contains: (parent, child) => parent.contains(child),
+    isConnected: () => true,
+    getActiveElement: () => null,
+    describeElement: (element) => ({
+      selector: element === target ? '#bench-geometry-target' : '#bench-geometry-clip',
+      description: element === target ? 'button#bench-geometry-target' : 'section#bench-geometry-clip',
+    }),
+    observeLayoutInvalidations: () => ({ dispose() {} }),
+    focus() {},
+    blur() {},
+    scrollIntoView() {},
+    scrollTo() {},
+  }
+  const surface = new BrowserSurfaceEngine({ dom, cache })
+  const geometry = new BrowserGeometryEngine({
+    dom,
+    surface,
+    cache,
+    clock: createClock(),
+  })
+  const handle = targetHandle('bench-geometry-target', target)
+
+  return { cache, counts, geometry, handle, rects, surface, target }
 }
 
 function createResolver() {
@@ -227,6 +362,67 @@ describe('wait observation', () => {
         kind: 'text',
         value: `Searchable copy for item ${TARGET_INDEX}`,
       })
+    },
+    BENCH_OPTIONS,
+  )
+})
+
+describe('geometry and surface cache', () => {
+  const uncachedFixture = createInstrumentedGeometryFixture(createPassthroughGeometrySurfaceCache())
+  const fixture = createInstrumentedGeometryFixture()
+
+  bench(
+    'uncached repeated geometry snapshots baseline',
+    async () => {
+      for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
+        await uncachedFixture.geometry.snapshot(uncachedFixture.handle)
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'same-frame repeated geometry snapshots reuse cached surface reads',
+    async () => {
+      fixture.cache.invalidate('manual')
+
+      for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
+        await fixture.geometry.snapshot(fixture.handle)
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'uncached repeated surface snapshots baseline',
+    () => {
+      for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
+        uncachedFixture.surface.getSurfaceFor(uncachedFixture.handle)
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'same-frame repeated surface snapshots reuse scrollable ancestors',
+    () => {
+      fixture.cache.invalidate('manual')
+
+      for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
+        fixture.surface.getSurfaceFor(fixture.handle)
+      }
+    },
+    BENCH_OPTIONS,
+  )
+
+  bench(
+    'geometry cache refreshes after invalidation',
+    async () => {
+      fixture.cache.invalidate('manual')
+      await fixture.geometry.snapshot(fixture.handle)
+      fixture.rects.set(fixture.target, { x: 20, y: 30, width: 100, height: 50 })
+      fixture.cache.invalidate('mutation')
+      await fixture.geometry.snapshot(fixture.handle)
     },
     BENCH_OPTIONS,
   )

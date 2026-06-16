@@ -16,6 +16,7 @@ import {
 } from '../../platform/platform-adapter/index.js'
 import { BrowserPointerVisualTracker } from '../../visual/pointer-visual-tracker/index.js'
 import { BrowserPseudoStateMirror } from '../../visual/pseudo-state-mirror/index.js'
+import { createFrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import { BrowserSurfaceEngine } from '../../targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTextInputEngine } from '../../input/text-input-engine/index.js'
@@ -254,9 +255,19 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         trace,
       })
     const signals = options.signals ?? new BrowserPointerSignalBus()
-    const surface = options.surface ?? new BrowserSurfaceEngine({ dom })
+    const geometrySurfaceCache = createFrameGeometrySurfaceCache({
+      layoutInvalidation: options.layoutInvalidation,
+      timeline,
+    })
+    const surface = options.surface ?? new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
     const geometry =
-      options.geometry ?? new BrowserGeometryEngine({ dom, surface, clock: timeline })
+      options.geometry ??
+      new BrowserGeometryEngine({
+        dom,
+        surface,
+        cache: geometrySurfaceCache,
+        clock: timeline,
+      })
     const focus = options.focus ?? new BrowserFocusEngine({ dom, store })
 
     this.#dom = dom

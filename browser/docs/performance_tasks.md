@@ -125,7 +125,7 @@ visual optimization
 
 ### P2026-06-16-04 Frame-scoped Geometry And Surface Cache
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: 같은 animation frame 안에서 같은 target/ancestor의 rect, scroll metrics, scrollable ancestor chain을 반복 계산하지 않도록 layout invalidation과 연결된 cache를 도입한다.
 - Dependencies: `layout-invalidation-tracker`, `surface-engine`, `geometry-engine`, `interactability-engine`.
 - Completion criteria:
