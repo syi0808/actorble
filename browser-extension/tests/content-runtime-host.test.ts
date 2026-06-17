@@ -67,6 +67,26 @@ describe('content runtime host', () => {
     expect(actorble.destroy).toHaveBeenCalledOnce()
   })
 
+  it('creates page runtimes with interactive visual feedback enabled', async () => {
+    const actorble = createMockActorble()
+    const createActorble = vi.fn(() => actorble as unknown as ContentActorbleFacade)
+    const host = createContentRuntimeHost({
+      createActorble,
+      sendMessage: async () => {},
+    })
+
+    await host.handleMessage(createRunMessage())
+    await flushAsyncRun()
+
+    expect(createActorble).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'interactive',
+        visual: true,
+        trace: expect.any(Object),
+      }),
+    )
+  })
+
   it('emits failed status and cleans up when Actorble rejects a run', async () => {
     const sent: ActorbleExtensionMessage[] = []
     const actorble = createMockActorble({

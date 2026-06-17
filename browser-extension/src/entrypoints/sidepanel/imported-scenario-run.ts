@@ -44,12 +44,14 @@ export type ImportedScenarioRunSnapshot = Readonly<{
 
 export type ImportedScenarioRunnerClient = Readonly<{
   getActiveTab(): Promise<SidepanelActiveTab | null>
+  getTab?(tabId: number): Promise<SidepanelActiveTab | null>
   sendMessage(message: ActorbleExtensionMessage): Promise<unknown>
 }>
 
 export type ImportedScenarioRunnerOptions = Readonly<{
   createRunId?: () => string
   frameId?: number
+  targetTabId?: number
 }>
 
 export type ImportedScenarioRunner = Readonly<{
@@ -93,6 +95,7 @@ export function createImportedScenarioRunner(
 ): ImportedScenarioRunner {
   const createRunId = options.createRunId ?? defaultRunId
   const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const targetTabId = options.targetTabId
   let currentRun: RequiredRunCorrelation | null = null
   let snapshot = idleSnapshot()
 
@@ -134,7 +137,7 @@ export function createImportedScenarioRunner(
       return preparation
     }
 
-    const activeTab = await resolveActiveTab(client)
+    const activeTab = await resolveRunTargetTab(client, targetTabId)
     if (!activeTab.ok) {
       snapshot = {
         ...idleSnapshot(),
@@ -307,6 +310,50 @@ async function resolveActiveTab(
   return ok({
     ...activeTab,
     id: activeTab.id,
+  })
+}
+
+async function resolveRunTargetTab(
+  client: ImportedScenarioRunnerClient,
+  targetTabId: number | undefined,
+): Promise<ExtensionResult<SidepanelActiveTab & Readonly<{ id: number }>>> {
+  if (targetTabId === undefined) {
+    return resolveActiveTab(client)
+  }
+
+  if (client.getTab === undefined) {
+    return failure({
+      code: 'routing_error',
+      message: `Target tab ${targetTabId} cannot be resolved from this panel.`,
+      details: { tabId: targetTabId },
+    })
+  }
+
+  let tab: SidepanelActiveTab | null
+  try {
+    tab = await client.getTab(targetTabId)
+  } catch (error) {
+    return failure({
+      code: 'routing_error',
+      message: `Target tab ${targetTabId} lookup failed.`,
+      details: {
+        tabId: targetTabId,
+        reason: describeUnknownError(error),
+      },
+    })
+  }
+
+  if (tab?.id === undefined) {
+    return failure({
+      code: 'routing_error',
+      message: `Target tab ${targetTabId} was not found.`,
+      details: { tabId: targetTabId },
+    })
+  }
+
+  return ok({
+    ...tab,
+    id: tab.id,
   })
 }
 

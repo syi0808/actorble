@@ -131,6 +131,31 @@ describe('sidepanel imported scenario run flow', () => {
     })
   })
 
+  it('dispatches a fallback panel run to the explicit target tab', async () => {
+    const { runner, sent } = createTestRunner({
+      activeTab: { id: 99, url: 'chrome-extension://extension-id/sidepanel.html' },
+      targetTab: { id: 7, url: 'http://127.0.0.1:59178/login.html' },
+      targetTabId: 7,
+    })
+
+    const result = await runner.run(JSON.stringify(browserLoginFlow))
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        tabId: 7,
+        scenarioId: 'browser-login-flow',
+        status: 'running',
+      },
+    })
+    expect(sent[0]).toMatchObject({
+      kind: 'scenario:run',
+      payload: {
+        tabId: 7,
+      },
+    })
+  })
+
   it('surfaces background routing failures after dispatch', async () => {
     const { runner } = createTestRunner({
       sendResponse: failure({
@@ -232,6 +257,8 @@ describe('sidepanel imported scenario run flow', () => {
 
 type TestRunnerOptions = Readonly<{
   activeTab?: SidepanelActiveTab | null
+  targetTab?: SidepanelActiveTab | null
+  targetTabId?: number
   sendResponse?: ExtensionResult<unknown>
 }>
 
@@ -242,6 +269,9 @@ function createTestRunner(options: TestRunnerOptions = {}) {
       async getActiveTab() {
         return options.activeTab ?? { id: 7, url: 'http://localhost:3000/login' }
       },
+      async getTab() {
+        return options.targetTab ?? null
+      },
       async sendMessage(message) {
         sent.push(message)
         return options.sendResponse ?? ok({ contentReady: true })
@@ -250,6 +280,7 @@ function createTestRunner(options: TestRunnerOptions = {}) {
     {
       createRunId: () => 'run-1',
       frameId: 0,
+      targetTabId: options.targetTabId,
     },
   )
 

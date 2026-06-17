@@ -15,9 +15,14 @@ const runner = createImportedScenarioRunner({
     })
     return activeTab ?? null
   },
+  async getTab(tabId) {
+    return await browser.tabs.get(tabId)
+  },
   sendMessage(message) {
     return browser.runtime.sendMessage(message)
   },
+}, {
+  targetTabId: targetTabIdFromLocation(window.location),
 })
 
 const scenarioJson = requiredElement<HTMLTextAreaElement>('#scenario-json')
@@ -40,6 +45,7 @@ scenarioJson.addEventListener('input', () => {
     ...runner.getSnapshot(),
     issues: [],
   })
+  validationSummary.textContent = 'Edited'
 })
 
 scenarioFile.addEventListener('change', () => {
@@ -47,11 +53,15 @@ scenarioFile.addEventListener('change', () => {
 })
 
 validateButton.addEventListener('click', () => {
-  const result = runner.validate(scenarioJson.value)
-  render(runner.getSnapshot())
+  try {
+    const result = runner.validate(scenarioJson.value)
+    render(runner.getSnapshot())
 
-  if (result.ok) {
-    validationSummary.textContent = 'Ready'
+    if (result.ok) {
+      validationSummary.textContent = 'Ready'
+    }
+  } catch (error) {
+    renderIssue(error, 'Validation failed before the document could be checked.')
   }
 })
 
@@ -73,27 +83,37 @@ async function importSelectedFile(): Promise<void> {
     return
   }
 
-  scenarioJson.value = await file.text()
-  const validation = validateImportedScenarioText(scenarioJson.value)
-  render(
-    validation.ok
-      ? {
-          ...runner.getSnapshot(),
-          document: validation.value.document,
-          issues: [],
-        }
-      : {
-          ...runner.getSnapshot(),
-          issues: validation.issues,
-        },
-  )
+  try {
+    scenarioJson.value = await file.text()
+    const validation = validateImportedScenarioText(scenarioJson.value)
+    render(
+      validation.ok
+        ? {
+            ...runner.getSnapshot(),
+            document: validation.value.document,
+            issues: [],
+          }
+        : {
+            ...runner.getSnapshot(),
+            issues: validation.issues,
+          },
+    )
+  } catch (error) {
+    renderIssue(error, 'Import failed before the file could be read.')
+  }
 }
 
 async function runImportedScenario(): Promise<void> {
-  const run = runner.run(scenarioJson.value)
-  render(runner.getSnapshot())
-  await run
-  render(runner.getSnapshot())
+  validationSummary.textContent = 'Running'
+
+  try {
+    const run = runner.run(scenarioJson.value)
+    render(runner.getSnapshot())
+    await run
+    render(runner.getSnapshot())
+  } catch (error) {
+    renderIssue(error, 'Run failed before it could be dispatched.')
+  }
 }
 
 function render(snapshot: ImportedScenarioRunSnapshot): void {
@@ -188,4 +208,27 @@ function requiredElement<TElement extends HTMLElement>(selector: string): TEleme
 
 function capitalize(value: string): string {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+}
+
+function renderIssue(error: unknown, fallbackMessage: string): void {
+  render({
+    ...runner.getSnapshot(),
+    pending: false,
+    issues: [
+      {
+        code: 'runtime_error',
+        message: error instanceof Error ? `${fallbackMessage} ${error.message}` : fallbackMessage,
+      },
+    ],
+  })
+}
+
+function targetTabIdFromLocation(location: Location): number | undefined {
+  const rawValue = new URL(location.href).searchParams.get('targetTabId')
+  if (rawValue === null) {
+    return undefined
+  }
+
+  const value = Number(rawValue)
+  return Number.isInteger(value) && value > 0 ? value : undefined
 }
