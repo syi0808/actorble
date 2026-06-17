@@ -85,6 +85,28 @@ describe('browser options model', () => {
     })
   })
 
+  it('normalizes run-level motion and action defaults', () => {
+    const signal = new AbortController().signal
+
+    expect(
+      resolveRunOptions({
+        timeout: 250,
+        signal,
+        motion: false,
+        actionDefaults: {
+          click: { timeout: 50, pressDwell: 0 },
+        },
+      }),
+    ).toEqual({
+      timeout: 250,
+      signal,
+      motion: false,
+      actionDefaults: {
+        click: { timeout: 50, pressDwell: 0 },
+      },
+    })
+  })
+
   it('merges defaults, actorble defaults, run policy, run action defaults, and call options in order', () => {
     const signal = new AbortController().signal
     const actorble = resolveActorbleOptions({

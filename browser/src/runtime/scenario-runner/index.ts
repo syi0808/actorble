@@ -1,5 +1,10 @@
 import { BrowserActionOrchestrator } from '../action-orchestrator/index.js'
 import { BrowserDiagnosticsTrace } from '../../diagnostics/diagnostics-trace/index.js'
+import {
+  resolveActionOptions,
+  resolveActorbleOptions,
+  resolveRunOptions,
+} from '../../options/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import {
   ActorbleError,
@@ -12,24 +17,21 @@ import type { ActionOrchestrator } from '../action-orchestrator/index.js'
 import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
 import type {
-  ClickCurrentOptions,
-  ClickOptions,
-  DragOptions,
-  FillOptions,
-  FocusOptions,
-  MoveOptions,
-  PressOptions,
+  BrowserActionName,
+  BrowserActionOptions,
+  BrowserActorbleOptions,
+  ResolvedActorbleOptions,
+  ResolvedRunOptions,
+} from '../../options/index.js'
+import type {
   RunOptions,
   Scenario,
   ScenarioDelayStep,
   ScenarioScrollToStep,
   ScenarioStep,
-  ScrollOptions,
   ScrollPosition,
   TargetLike,
-  TypeOptions,
   WaitCondition,
-  WaitOptions,
 } from '../../shared/index.js'
 import type { TimelineEngine } from '../timeline-engine/index.js'
 
@@ -50,6 +52,7 @@ export interface ScenarioRunner {
 }
 
 export type ScenarioRunnerOptions = Readonly<{
+  actorble?: BrowserActorbleOptions | ResolvedActorbleOptions
   layoutInvalidation?: LayoutInvalidationTracker
   orchestrator?: ActionOrchestrator
   timeline?: TimelineEngine
@@ -57,6 +60,7 @@ export type ScenarioRunnerOptions = Readonly<{
 }>
 
 export class BrowserScenarioRunner implements ScenarioRunner {
+  readonly #actorbleOptions: ResolvedActorbleOptions
   readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #orchestrator: ActionOrchestrator
   readonly #timeline: TimelineEngine
@@ -69,11 +73,13 @@ export class BrowserScenarioRunner implements ScenarioRunner {
   #resumePausedRun: (() => void) | null = null
 
   constructor(options: ScenarioRunnerOptions = {}) {
+    const actorbleOptions = resolveActorbleOptions(options.actorble)
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
     const timeline = options.timeline ?? new BrowserTimelineEngine()
     const layoutInvalidation =
       options.layoutInvalidation ?? new BrowserLayoutInvalidationTracker({ timeline })
 
+    this.#actorbleOptions = actorbleOptions
     this.#layoutInvalidation = layoutInvalidation
     this.#orchestrator =
       options.orchestrator ??
@@ -89,15 +95,16 @@ export class BrowserScenarioRunner implements ScenarioRunner {
       })
     }
 
+    const runOptions = resolveRunOptions(options)
     const span = this.#trace.startSpan('scenario.run', {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
       steps: scenario.steps.length,
-      timeout: options.timeout,
+      timeout: runOptions.timeout,
       startedAt: this.#timeline.now(),
     })
     const controller = new AbortController()
-    const cleanupExternalAbort = linkExternalAbort(options.signal, controller)
+    const cleanupExternalAbort = linkExternalAbort(runOptions.signal, controller)
     let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     this.#scenario = scenario
@@ -107,8 +114,8 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     this.#pauseRequested = false
     this.#layoutInvalidation.start()
 
-    if (options.timeout !== undefined) {
-      const timeout = normalizeDuration(options.timeout)
+    if (runOptions.timeout !== undefined) {
+      const timeout = normalizeDuration(runOptions.timeout)
       const timeoutFailure = timeoutError('scenario.run', timeout, {
         details: {
           scenarioId: scenario.id,
@@ -131,11 +138,11 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         await this.#waitIfPaused(controller.signal)
         assertScenarioNotCancelled(controller.signal)
         await raceWithScenarioSignal(
-          this.#executeStep(step, index, controller.signal),
+          this.#executeStep(step, index, controller.signal, runOptions),
           controller.signal,
         )
         await this.#executePacingDelay(
-          options.pacing?.betweenSteps,
+          runOptions.pacing?.betweenSteps,
           index,
           scenario.steps.length,
           controller.signal,
@@ -244,7 +251,12 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     })
   }
 
-  #executeStep(step: ScenarioStep, stepIndex: number, signal: AbortSignal): Promise<void> {
+  #executeStep(
+    step: ScenarioStep,
+    stepIndex: number,
+    signal: AbortSignal,
+    runOptions: ResolvedRunOptions,
+  ): Promise<void> {
     if (!isScenarioStepRecord(step)) {
       throw unsupportedStepError(undefined, stepIndex)
     }
@@ -252,28 +264,45 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     switch (step.action) {
       case 'moveTo':
         assertTarget(step.target, step.action, stepIndex)
-        return this.#orchestrator.moveTo(step.target, withSignal(step.options, signal))
+        return this.#orchestrator.moveTo(
+          step.target,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'click':
         assertTarget(step.target, step.action, stepIndex)
-        return this.#orchestrator.click(step.target, withSignal(step.options, signal))
+        return this.#orchestrator.click(
+          step.target,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'clickCurrent':
-        return this.#orchestrator.clickCurrent(withSignal(step.options, signal))
+        return this.#orchestrator.clickCurrent(
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'doubleClick':
         assertTarget(step.target, step.action, stepIndex)
-        return this.#orchestrator.doubleClick(step.target, withSignal(step.options, signal))
+        return this.#orchestrator.doubleClick(
+          step.target,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'focus':
         assertTarget(step.target, step.action, stepIndex)
-        return this.#orchestrator.focus(step.target, withSignal(step.options, signal))
+        return this.#orchestrator.focus(
+          step.target,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'type':
         assertStringInput(step.input, step.action, stepIndex)
-        return this.#orchestrator.type(step.input, withSignal(step.options, signal))
+        return this.#orchestrator.type(
+          step.input,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'typeInto':
         assertTarget(step.target, step.action, stepIndex)
         assertStringInput(step.input, step.action, stepIndex)
         return this.#orchestrator.typeInto(
           step.target,
           step.input,
-          withSignal(step.options, signal),
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
         )
       case 'fill':
         assertTarget(step.target, step.action, stepIndex)
@@ -281,25 +310,31 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         return this.#orchestrator.fill(
           step.target,
           step.input,
-          withSignal(step.options, signal),
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
         )
       case 'press':
         assertStringInput(step.input, step.action, stepIndex)
-        return this.#orchestrator.press(step.input, withSignal(step.options, signal))
+        return this.#orchestrator.press(
+          step.input,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'scrollTo':
-        return this.#executeScrollToStep(step, stepIndex, signal)
+        return this.#executeScrollToStep(step, stepIndex, signal, runOptions)
       case 'drag':
         assertTarget(step.from, step.action, stepIndex, 'from')
         assertTarget(step.to, step.action, stepIndex, 'to')
         return this.#orchestrator.drag(
           step.from,
           step.to,
-          withSignal(step.options, signal),
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
         )
       case 'waitFor':
         assertWaitCondition(step.input, step.action, stepIndex)
         return this.#orchestrator
-          .waitFor(step.input, withSignal(step.options, signal))
+          .waitFor(
+            step.input,
+            this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+          )
           .then(() => undefined)
       case 'delay':
         return this.#executeDelayStep(step, stepIndex, signal)
@@ -312,14 +347,34 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     step: ScenarioScrollToStep,
     stepIndex: number,
     signal: AbortSignal,
+    runOptions: ResolvedRunOptions,
   ): Promise<void> {
     const targetOrPosition = scrollToTargetOrPosition(step, stepIndex)
 
     try {
-      await this.#orchestrator.scrollTo(targetOrPosition, withSignal(step.options, signal))
+      await this.#orchestrator.scrollTo(
+        targetOrPosition,
+        this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+      )
     } catch (error) {
       throw enrichStepError(error, step.action, stepIndex)
     }
+  }
+
+  #resolveStepOptions<TAction extends BrowserActionName>(
+    action: TAction,
+    options: Readonly<Partial<BrowserActionOptions<TAction>>> | undefined,
+    signal: AbortSignal,
+    runOptions: ResolvedRunOptions,
+  ): BrowserActionOptions<TAction> {
+    return resolveActionOptions(action, {
+      actorble: this.#actorbleOptions,
+      run: runOptions,
+      options: {
+        ...(options ?? {}),
+        signal,
+      } as Readonly<Partial<BrowserActionOptions<TAction>>>,
+    })
   }
 
   async #executeDelayStep(
@@ -572,28 +627,6 @@ function assertWaitCondition(
       details: { action, stepIndex, field: 'input' },
     },
   )
-}
-
-function withSignal<
-  TOptions extends
-    | ClickCurrentOptions
-    | ClickOptions
-    | DragOptions
-    | FillOptions
-    | FocusOptions
-    | MoveOptions
-    | PressOptions
-    | ScrollOptions
-    | TypeOptions
-    | WaitOptions,
->(
-  options: Omit<TOptions, 'signal'> | undefined,
-  signal: AbortSignal,
-): TOptions {
-  return {
-    ...(options ?? {}),
-    signal,
-  } as unknown as TOptions
 }
 
 function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: unknown } {

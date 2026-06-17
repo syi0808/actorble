@@ -224,6 +224,39 @@ describe('Actorble facade', () => {
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { delay: 5 })
   })
 
+  it('applies actorble-level defaults to the default scenario runner', async () => {
+    const { orchestrator, resolver, trace } = createDependencies()
+    const actorble = new Actorble({
+      orchestrator,
+      resolver,
+      trace,
+      actionDefaults: {
+        click: { timeout: 100, pressDwell: 0 },
+      },
+    })
+    const locator = css('#target-1')
+
+    await expect(
+      actorble.run(
+        {
+          steps: [{ action: 'click', target: locator }],
+        },
+        {
+          actionDefaults: {
+            click: { timeout: 50 },
+          },
+        },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      timeout: 50,
+      pressDwell: 0,
+      signal: expect.any(AbortSignal),
+    })
+  })
+
   it('applies actorble-level motion policy to direct pointer calls without overriding call movement', async () => {
     const { orchestrator, resolver, runner, trace } = createDependencies()
     const motion = { kind: 'ease', easing: 'ease-out', duration: 40 }

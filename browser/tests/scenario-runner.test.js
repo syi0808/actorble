@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BROWSER_OPTION_DEFAULTS } from '../src/options/index.js'
 import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserScenarioRunner } from '../src/runtime/scenario-runner/index.js'
 import { actorbleError, css } from '../src/shared/index.js'
@@ -307,6 +308,170 @@ describe('BrowserScenarioRunner', () => {
         }),
       ],
     ])
+  })
+
+  it('materializes run-level action defaults before executing scenario steps', async () => {
+    const clickTarget = css('#save')
+    const typeTarget = css('#name')
+    const calls = []
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async (target, options) => {
+        calls.push(['click', target, options])
+      }),
+      typeInto: vi.fn(async (target, input, options) => {
+        calls.push(['typeInto', target, input, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run(
+        {
+          steps: [
+            { action: 'click', target: clickTarget },
+            { action: 'typeInto', target: typeTarget, input: 'actorble' },
+          ],
+        },
+        {
+          actionDefaults: {
+            click: { timeout: 100, pressDwell: 0 },
+            typeInto: { delay: 5 },
+          },
+        },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'click',
+        clickTarget,
+        {
+          motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+          timeout: 100,
+          pressDwell: 0,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+      [
+        'typeInto',
+        typeTarget,
+        'actorble',
+        {
+          delay: 5,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+    ])
+  })
+
+  it('lets step options override run-level defaults and motion policy', async () => {
+    const explicitMotion = { kind: 'ease', easing: 'ease-out', duration: 30 }
+    const clickTarget = css('#save')
+    const moveTarget = css('#card')
+    const calls = []
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async (target, options) => {
+        calls.push(['click', target, options])
+      }),
+      moveTo: vi.fn(async (target, options) => {
+        calls.push(['moveTo', target, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run(
+        {
+          steps: [
+            { action: 'click', target: clickTarget, options: { timeout: 10, duration: 45 } },
+            { action: 'moveTo', target: moveTarget, options: { motion: explicitMotion } },
+          ],
+        },
+        {
+          motion: false,
+          actionDefaults: {
+            click: { timeout: 100, pressDwell: 20 },
+            moveTo: { duration: 90 },
+          },
+        },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'click',
+        clickTarget,
+        {
+          duration: 45,
+          timeout: 10,
+          pressDwell: 20,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+      [
+        'moveTo',
+        moveTarget,
+        {
+          motion: explicitMotion,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+    ])
+  })
+
+  it('keeps pointer steps executable when run-level motion is disabled', async () => {
+    const target = css('#save')
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async () => {}),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run(
+        {
+          steps: [{ action: 'click', target }],
+        },
+        { motion: false },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(orchestrator.click).toHaveBeenCalledWith(target, {
+      duration: 0,
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+      signal: expect.any(AbortSignal),
+    })
+  })
+
+  it('preserves the scenario cancellation signal after option resolution', async () => {
+    let actionSignal
+    const orchestrator = createOrchestrator({
+      click: vi.fn((_target, options) => {
+        actionSignal = options.signal
+        return new Promise(() => {})
+      }),
+    })
+    const runDefaultSignal = new AbortController().signal
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run(
+      { steps: [{ action: 'click', target: css('#save') }] },
+      {
+        actionDefaults: {
+          click: { signal: runDefaultSignal },
+        },
+      },
+    )
+    run.catch(() => {})
+
+    await vi.waitFor(() => expect(actionSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(actionSignal).toBeInstanceOf(AbortSignal)
+    expect(actionSignal).not.toBe(runDefaultSignal)
+    expect(actionSignal.aborted).toBe(true)
   })
 
   it('adds scenario step context to unsupported scrollTo coordinate failures', async () => {

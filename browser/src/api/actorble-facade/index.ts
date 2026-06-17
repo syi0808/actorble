@@ -133,7 +133,13 @@ export class Actorble {
     this.#resolver = resolver
     this.#runner =
       options.runner ??
-      new BrowserScenarioRunner({ orchestrator, timeline, trace, layoutInvalidation })
+      new BrowserScenarioRunner({
+        actorble: resolvedOptions,
+        orchestrator,
+        timeline,
+        trace,
+        layoutInvalidation,
+      })
     this.#visual = visual
   }
 

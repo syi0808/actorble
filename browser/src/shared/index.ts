@@ -437,6 +437,8 @@ export type ScenarioPacingOptions = Readonly<{
 export type RunOptions = OperationOptions &
   Readonly<{
     pacing?: ScenarioPacingOptions
+    motion?: boolean
+    actionDefaults?: BrowserActionDefaults
   }>
 
 export type PointerButtonName =

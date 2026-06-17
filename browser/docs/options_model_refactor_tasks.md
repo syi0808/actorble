@@ -228,7 +228,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-04 Runner Defaults And Step Override Resolution
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Scenario Runner가 run-level motion policy와 actionDefaults를 적용해
   각 scenario step option을 최종 action option으로 materialize한다.
 - Dependencies: BOPT-01, BOPT-03, `scenario-runner`, `action-orchestrator`.
