@@ -1,5 +1,5 @@
 import type {
-  ActorbleMode,
+  ActorbleFeedback,
   ActorbleOptions,
   ClickCurrentOptions,
   ClickOptions,
@@ -9,11 +9,10 @@ import type {
   MoveOptions,
   PointerMotionProfile,
   PressOptions,
-  ResolvedVisualFeedbackOptions,
   RunOptions,
   ScrollOptions,
   TypeOptions,
-  VisualFeedbackOptions,
+  VisualTextVisibility,
   WaitOptions,
 } from '../shared/index.js'
 
@@ -23,17 +22,48 @@ const DEFAULT_POINTER_MOTION = {
   duration: 250,
 } as const satisfies PointerMotionProfile
 
-const DEFAULT_VISUAL_FEEDBACK = {
+const DEFAULT_FEEDBACK = {
   enabled: false,
-  preset: 'quiet',
-} as const satisfies VisualFeedbackOptions
+  cursor: false,
+  targetHighlight: false,
+  clickFeedback: false,
+  focusOverlay: false,
+  typingIndicator: false,
+  keystrokeOverlay: false,
+} as const satisfies ResolvedBrowserFeedbackOptions
 
 export const BROWSER_OPTION_DEFAULTS = {
   pointerMotion: DEFAULT_POINTER_MOTION,
   typingDelay: 60,
   clickPressDwell: 80,
-  visualFeedback: DEFAULT_VISUAL_FEEDBACK,
+  feedback: DEFAULT_FEEDBACK,
 } as const
+
+export type BrowserFeedbackOptions = Readonly<{
+  cursor?: boolean
+  targetHighlight?: boolean
+  clickFeedback?: boolean
+  focusOverlay?: boolean
+  typingIndicator?: boolean
+  keystrokeOverlay?: boolean
+  textVisibility?: VisualTextVisibility
+}>
+
+export type ResolvedBrowserFeedbackOptions = Readonly<{
+  enabled: boolean
+  cursor: boolean
+  targetHighlight: boolean
+  clickFeedback: boolean
+  focusOverlay: boolean
+  typingIndicator: boolean
+  keystrokeOverlay: boolean
+  textVisibility?: VisualTextVisibility
+}>
+
+export type BrowserFeedbackInput =
+  | ActorbleFeedback
+  | BrowserFeedbackOptions
+  | ResolvedBrowserFeedbackOptions
 
 export type BrowserActionName =
   | 'moveTo'
@@ -90,10 +120,9 @@ export type BrowserActorbleOptions = ActorbleOptions &
 
 export type ResolvedActorbleOptions = Readonly<{
   root?: ActorbleOptions['root']
-  mode: ActorbleMode
   debug: boolean
   pointer?: ActorbleOptions['pointer']
-  visualFeedback: ResolvedVisualFeedbackOptions
+  feedback: ResolvedBrowserFeedbackOptions
   motion: boolean
   actionDefaults: BrowserActionDefaults
 }>
@@ -120,26 +149,22 @@ export type BrowserActionResolutionInput<TAction extends BrowserActionName> =
 export function resolveActorbleOptions(
   options: BrowserActorbleOptions | ResolvedActorbleOptions = {},
 ): ResolvedActorbleOptions {
-  const mode = options.mode ?? 'interactive'
-
-  if ('visualFeedback' in options) {
+  if (isResolvedActorbleOptions(options)) {
     return {
       root: options.root,
-      mode,
-      debug: options.debug,
+      debug: options.debug ?? false,
       pointer: options.pointer,
-      visualFeedback: options.visualFeedback,
-      motion: options.motion,
-      actionDefaults: options.actionDefaults,
+      feedback: options.feedback,
+      motion: options.motion ?? true,
+      actionDefaults: options.actionDefaults ?? {},
     }
   }
 
   return {
     root: options.root,
-    mode,
     debug: options.debug ?? false,
     pointer: options.pointer,
-    visualFeedback: resolveBrowserVisualFeedbackOptions(options.visual, mode),
+    feedback: resolveBrowserFeedbackOptions(options.feedback),
     motion: options.motion ?? true,
     actionDefaults: options.actionDefaults ?? {},
   }
@@ -182,65 +207,138 @@ export function resolveActionOptions<TAction extends BrowserActionName>(
   return resolved as BrowserActionOptions<TAction>
 }
 
-export function resolveBrowserVisualFeedbackOptions(
-  visual: boolean | VisualFeedbackOptions | undefined,
-  mode: ActorbleMode = 'interactive',
-  defaults: VisualFeedbackOptions = BROWSER_OPTION_DEFAULTS.visualFeedback,
-): ResolvedVisualFeedbackOptions {
-  if (mode === 'headless') {
-    return resolveVisualFeedbackPolicy({ enabled: false, preset: 'quiet' })
+export function resolveBrowserFeedbackOptions(
+  feedback: BrowserFeedbackInput | undefined = undefined,
+): ResolvedBrowserFeedbackOptions {
+  if (feedback === undefined || feedback === 'off') {
+    return { ...feedbackOffDefaults }
   }
 
-  if (typeof visual === 'boolean') {
-    return resolveVisualFeedbackPolicy({ enabled: visual, preset: 'quiet' }, defaults)
+  if (feedback === 'cursor') {
+    return { ...feedbackOffDefaults, enabled: true, cursor: true }
   }
 
-  if (typeof visual === 'object' && visual !== null) {
-    return resolveVisualFeedbackPolicy({ enabled: true, preset: 'quiet', ...visual }, defaults)
+  if (feedback === 'debug') {
+    return { ...debugFeedbackDefaults }
   }
 
-  return resolveVisualFeedbackPolicy(defaults)
+  if (isResolvedBrowserFeedbackOptions(feedback)) {
+    return { ...feedback }
+  }
+
+  if (isPublicFeedbackObject(feedback)) {
+    return resolvePublicFeedbackObject(feedback)
+  }
+
+  return resolveInternalFeedbackObject(feedback)
 }
 
-function resolveVisualFeedbackPolicy(
-  visual: boolean | VisualFeedbackOptions | undefined,
-  defaults: VisualFeedbackOptions = {},
-): ResolvedVisualFeedbackOptions {
-  const options = typeof visual === 'object' && visual !== null ? visual : {}
+function isResolvedActorbleOptions(
+  options: BrowserActorbleOptions | ResolvedActorbleOptions,
+): options is ResolvedActorbleOptions {
+  return isResolvedBrowserFeedbackOptions(options.feedback)
+}
+
+function isResolvedBrowserFeedbackOptions(
+  feedback: BrowserFeedbackInput | undefined,
+): feedback is ResolvedBrowserFeedbackOptions {
+  return (
+    typeof feedback === 'object' &&
+    feedback !== null &&
+    'enabled' in feedback &&
+    'targetHighlight' in feedback
+  )
+}
+
+function isPublicFeedbackObject(
+  feedback: BrowserFeedbackInput,
+): feedback is Exclude<ActorbleFeedback, string> {
+  return (
+    typeof feedback === 'object' &&
+    feedback !== null &&
+    ('target' in feedback ||
+      'click' in feedback ||
+      'focus' in feedback ||
+      'typing' in feedback ||
+      'keystroke' in feedback ||
+      'text' in feedback)
+  )
+}
+
+function resolvePublicFeedbackObject(
+  feedback: Exclude<ActorbleFeedback, string>,
+): ResolvedBrowserFeedbackOptions {
+  return resolveFeedbackChannels({
+    cursor: feedback.cursor ?? false,
+    targetHighlight: feedback.target ?? false,
+    clickFeedback: feedback.click ?? false,
+    focusOverlay: feedback.focus ?? false,
+    typingIndicator: feedback.typing ?? false,
+    keystrokeOverlay: feedback.keystroke ?? false,
+    textVisibility: feedback.text,
+  })
+}
+
+function resolveInternalFeedbackObject(
+  feedback: BrowserFeedbackOptions,
+): ResolvedBrowserFeedbackOptions {
+  return resolveFeedbackChannels({
+    cursor: feedback.cursor ?? quietFeedbackDefaults.cursor,
+    targetHighlight: feedback.targetHighlight ?? quietFeedbackDefaults.targetHighlight,
+    clickFeedback: feedback.clickFeedback ?? quietFeedbackDefaults.clickFeedback,
+    focusOverlay: feedback.focusOverlay ?? quietFeedbackDefaults.focusOverlay,
+    typingIndicator: feedback.typingIndicator ?? quietFeedbackDefaults.typingIndicator,
+    keystrokeOverlay: feedback.keystrokeOverlay ?? quietFeedbackDefaults.keystrokeOverlay,
+    textVisibility: feedback.textVisibility,
+  })
+}
+
+function resolveFeedbackChannels(
+  feedback: BrowserFeedbackOptions,
+): ResolvedBrowserFeedbackOptions {
+  const resolved = {
+    cursor: feedback.cursor ?? false,
+    targetHighlight: feedback.targetHighlight ?? false,
+    clickFeedback: feedback.clickFeedback ?? false,
+    focusOverlay: feedback.focusOverlay ?? false,
+    typingIndicator: feedback.typingIndicator ?? false,
+    keystrokeOverlay: feedback.keystrokeOverlay ?? false,
+    textVisibility: feedback.textVisibility,
+  }
   const enabled =
-    typeof visual === 'boolean' ? visual : (options.enabled ?? defaults.enabled ?? false)
-  const preset = options.preset ?? defaults.preset ?? 'quiet'
-  const presetDefaults =
-    preset === 'debug' ? debugVisualFeedbackDefaults : quietVisualFeedbackDefaults
+    resolved.cursor ||
+    resolved.targetHighlight ||
+    resolved.clickFeedback ||
+    resolved.focusOverlay ||
+    resolved.typingIndicator ||
+    resolved.keystrokeOverlay
 
   return {
     enabled,
-    cursor: options.cursor ?? defaults.cursor ?? presetDefaults.cursor,
-    cursorScale: resolveVisualCursorScale(options, defaults),
-    targetHighlight:
-      options.targetHighlight ?? defaults.targetHighlight ?? presetDefaults.targetHighlight,
-    clickFeedback:
-      options.clickFeedback ?? defaults.clickFeedback ?? presetDefaults.clickFeedback,
-    focusOverlay:
-      options.focusOverlay ?? defaults.focusOverlay ?? presetDefaults.focusOverlay,
-    typingIndicator:
-      options.typingIndicator ?? defaults.typingIndicator ?? presetDefaults.typingIndicator,
-    keystrokeOverlay:
-      options.keystrokeOverlay ?? defaults.keystrokeOverlay ?? presetDefaults.keystrokeOverlay,
-    textVisibility: options.textVisibility ?? defaults.textVisibility,
+    ...resolved,
   }
 }
 
-function resolveVisualCursorScale(
-  options: VisualFeedbackOptions,
-  defaults: VisualFeedbackOptions,
-): number {
-  const cursorScale = options.cursorScale === undefined ? defaults.cursorScale : options.cursorScale
+const feedbackOffDefaults = DEFAULT_FEEDBACK
 
-  return cursorScale !== undefined && Number.isFinite(cursorScale) && cursorScale > 0
-    ? cursorScale
-    : 1
-}
+const quietFeedbackDefaults = {
+  cursor: true,
+  targetHighlight: false,
+  clickFeedback: false,
+  focusOverlay: false,
+  typingIndicator: false,
+  keystrokeOverlay: false,
+} as const satisfies BrowserFeedbackOptions
+
+const debugFeedbackDefaults = {
+  enabled: true,
+  cursor: true,
+  targetHighlight: true,
+  clickFeedback: true,
+  focusOverlay: true,
+  typingIndicator: true,
+  keystrokeOverlay: true,
+} as const satisfies ResolvedBrowserFeedbackOptions
 
 function centralizedActionDefaults(action: BrowserActionName): Record<string, unknown> {
   switch (action) {

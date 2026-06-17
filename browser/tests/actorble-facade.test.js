@@ -574,7 +574,7 @@ describe('Actorble facade', () => {
     })
   })
 
-  it('uses quiet cursor-only feedback for visual true without changing click behavior', async () => {
+  it('uses cursor feedback without changing click behavior', async () => {
     const button = document.createElement('button')
     button.id = 'create'
     button.textContent = 'Create'
@@ -596,7 +596,7 @@ describe('Actorble facade', () => {
     button.addEventListener('pointerdown', () => seen.push('pointerdown'))
     button.addEventListener('pointerup', () => seen.push('pointerup'))
     button.addEventListener('click', () => seen.push('click'))
-    const actorble = createActorble({ visual: true })
+    const actorble = createActorble({ feedback: 'cursor' })
 
     await expect(actorble.click(css('#create'))).resolves.toBeUndefined()
 
@@ -611,9 +611,9 @@ describe('Actorble facade', () => {
     expect(overlay.querySelector('[data-actorble-visual-keystroke]')).toBeNull()
   })
 
-  it('restores legacy extra feedback through the debug visual preset', async () => {
+  it('enables debug feedback channels', async () => {
     const { seen } = createClickableButton('debug-visual')
-    const actorble = createActorble({ visual: { preset: 'debug' } })
+    const actorble = createActorble({ feedback: 'debug' })
 
     await expect(actorble.click(css('#debug-visual'))).resolves.toBeUndefined()
 
@@ -625,27 +625,9 @@ describe('Actorble facade', () => {
     expect(overlay.querySelector('[data-actorble-visual-click]')).not.toBeNull()
   })
 
-  it('passes public cursor scale options into the default visual layer', async () => {
-    const { seen } = createClickableButton('scaled-cursor')
-    const actorble = createActorble({ visual: { cursorScale: 2 } })
-
-    await expect(actorble.click(css('#scaled-cursor'))).resolves.toBeUndefined()
-
-    const cursor = document.body.querySelector('[data-actorble-visual-cursor]')
-    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
-    expect(cursor).not.toBeNull()
-    expect(cursor.getAttribute('data-actorble-cursor-hotspot-x')).toBe('4')
-    expect(cursor.getAttribute('data-actorble-cursor-hotspot-y')).toBe('4')
-    expect(cursor.style.left).toBe('0px')
-    expect(cursor.style.top).toBe('0px')
-    expect(cursor.style.transform).toBe('translate3d(40px, 35px, 0)')
-    expect(cursor.style.width).toBe('40px')
-    expect(cursor.style.height).toBe('60px')
-  })
-
-  it('does not create overlay DOM when visual feedback is disabled', async () => {
+  it('does not create overlay DOM when feedback is off', async () => {
     const { seen } = createClickableButton('disabled-visual')
-    const actorble = createActorble({ visual: { enabled: false } })
+    const actorble = createActorble({ feedback: 'off' })
 
     await expect(actorble.click(css('#disabled-visual'))).resolves.toBeUndefined()
 
@@ -653,29 +635,19 @@ describe('Actorble facade', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('does not create the default visual layer in headless mode', async () => {
-    const { seen } = createClickableButton('headless-visual')
-    const actorble = createActorble({ mode: 'headless', visual: true })
-
-    await expect(actorble.click(css('#headless-visual'))).resolves.toBeUndefined()
-
-    expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
-    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
-  })
-
-  it('honors an injected visual layer in headless mode without creating default overlay DOM', async () => {
+  it('honors an injected visual layer without creating default overlay DOM', async () => {
     const { button, seen } = createClickableButton('injected-visual')
-    const visual = createFakeVisualLayer()
-    const actorble = createActorble({ mode: 'headless', visual })
+    const visualLayer = createFakeVisualLayer()
+    const actorble = createActorble({ feedback: 'debug', visualLayer })
 
     await expect(actorble.click(css('#injected-visual'))).resolves.toBeUndefined()
 
     expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
-    expect(visual.highlightTarget).toHaveBeenCalledWith({
+    expect(visualLayer.highlightTarget).toHaveBeenCalledWith({
       target: expect.objectContaining({ element: button }),
       rect: { x: 15, y: 25, width: 50, height: 20 },
     })
-    const cursorRequests = visual.showCursor.mock.calls.map(([request]) => request)
+    const cursorRequests = visualLayer.showCursor.mock.calls.map(([request]) => request)
 
     expect(cursorRequests.length).toBeGreaterThanOrEqual(3)
     expect(cursorRequests).toEqual(
@@ -688,14 +660,14 @@ describe('Actorble facade', () => {
       point: { x: 40, y: 35 },
       pressed: false,
     })
-    expect(visual.showClick).toHaveBeenCalledWith({ x: 40, y: 35 })
+    expect(visualLayer.showClick).toHaveBeenCalledWith({ x: 40, y: 35 })
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
   it('passes text visibility into opt-in keystroke feedback with focus feedback', async () => {
     createTypeableInput('secret')
     const actorble = createActorble({
-      visual: { focusOverlay: true, keystrokeOverlay: true, textVisibility: 'masked' },
+      feedback: { focus: true, keystroke: true, text: 'masked' },
     })
 
     await expect(actorble.typeInto(css('#secret'), 's')).resolves.toBeUndefined()
@@ -710,14 +682,10 @@ describe('Actorble facade', () => {
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
   })
 
-  it('creates only explicitly requested granular visual feedback parts', async () => {
+  it('creates only explicitly requested feedback parts', async () => {
     const { seen } = createClickableButton('granular-visual')
     const actorble = createActorble({
-      visual: {
-        cursor: false,
-        targetHighlight: true,
-        clickFeedback: true,
-      },
+      feedback: { target: true, click: true },
     })
 
     await expect(actorble.click(css('#granular-visual'))).resolves.toBeUndefined()
@@ -751,7 +719,7 @@ describe('Actorble facade', () => {
     }))
     document.body.append(button)
     document.elementFromPoint = vi.fn(() => button)
-    const actorble = createActorble({ visual: { targetHighlight: true } })
+    const actorble = createActorble({ feedback: { target: true } })
 
     await expect(actorble.click(css('#blocked-action'))).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
@@ -761,10 +729,10 @@ describe('Actorble facade', () => {
     expect(overlay?.querySelector('[data-actorble-visual-highlight]')).toBeNull()
   })
 
-  it('runs a public API visual flow without letting the overlay block target hit-testing', async () => {
+  it('runs a public API feedback flow without letting the overlay block target hit-testing', async () => {
     const input = createTypeableInput('project-name')
     const { button, seen } = createClickableButton('create-project')
-    const actorble = createActorble({ visual: { preset: 'debug' } })
+    const actorble = createActorble({ feedback: 'debug' })
 
     await expect(actorble.moveTo(css('#project-name'))).resolves.toBeUndefined()
     await expect(

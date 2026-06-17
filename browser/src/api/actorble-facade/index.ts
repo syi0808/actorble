@@ -10,7 +10,7 @@ import { BrowserSurfaceEngine } from '../../targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
-import { resolveBrowserVisualFeedbackOptions } from '../../options/index.js'
+import { resolveActorbleOptions } from '../../options/index.js'
 import type { ActionOrchestrator } from '../../runtime/action-orchestrator/index.js'
 import type {
   CapabilityFidelityReporter,
@@ -25,6 +25,7 @@ import type { DomPort } from '../../shared/index.js'
 import type { ScenarioRunner } from '../../runtime/scenario-runner/index.js'
 import type { TargetResolver } from '../../targeting/target-resolver/index.js'
 import type { VisualLayer } from '../../visual/visual-layer/index.js'
+import type { ResolvedBrowserFeedbackOptions } from '../../options/index.js'
 import type {
   ActorbleListener,
   ActorbleOptions,
@@ -46,12 +47,11 @@ import type {
   TargetInspection,
   TargetLike,
   TypeOptions,
-  VisualFeedbackOptions,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
 
-export type ActorbleFacadeOptions = Omit<ActorbleOptions, 'visual'> &
+export type ActorbleFacadeOptions = ActorbleOptions &
   Readonly<{
     capabilities?: CapabilityFidelityReporter
     dom?: DomPort
@@ -60,7 +60,7 @@ export type ActorbleFacadeOptions = Omit<ActorbleOptions, 'visual'> &
     resolver?: TargetResolver
     runner?: ScenarioRunner
     trace?: TraceCollector
-    visual?: boolean | VisualFeedbackOptions | VisualLayer
+    visualLayer?: VisualLayer
   }>
 
 export class Actorble {
@@ -76,8 +76,9 @@ export class Actorble {
   #destroyed = false
 
   constructor(readonly options: ActorbleFacadeOptions = {}) {
+    const resolvedOptions = resolveActorbleOptions(options)
     const trace = options.trace ?? new BrowserDiagnosticsTrace()
-    const root = rootForDomAdapter(options.root)
+    const root = rootForDomAdapter(resolvedOptions.root)
     const dom = options.dom ?? new BrowserDomAdapter(root)
     const timeline = new BrowserTimelineEngine()
     const layoutInvalidation = createLayoutInvalidationTracker({ dom, timeline })
@@ -96,8 +97,7 @@ export class Actorble {
         cache: geometrySurfaceCache,
         clock: timeline,
       })
-    const visual = visualForOptions(options.visual, dom.getRoot(), options.mode)
-    const visualFeedback = visualFeedbackForOptions(options.visual, options.mode)
+    const visual = visualForOptions(options.visualLayer, dom.getRoot(), resolvedOptions.feedback)
     const orchestrator =
       options.orchestrator ??
       new BrowserActionOrchestrator({
@@ -109,8 +109,8 @@ export class Actorble {
         trace,
         layoutInvalidation,
         visual,
-        visualFeedback,
-        pointer: options.pointer,
+        visualFeedback: resolvedOptions.feedback,
+        pointer: resolvedOptions.pointer,
       })
 
     this.#trace = trace
@@ -118,7 +118,10 @@ export class Actorble {
     this.#capabilities =
       options.capabilities ??
       new BrowserCapabilityFidelityReporter({
-        visualOverlay: visualOverlayFidelityForOptions(options.visual, options.mode),
+        visualOverlay: visualOverlayFidelityForOptions(
+          options.visualLayer,
+          resolvedOptions.feedback,
+        ),
       })
     this.#geometry = geometry
     this.#orchestrator = orchestrator
@@ -313,39 +316,29 @@ function isElementRoot(root: Document | ShadowRoot | Element): root is Element {
 }
 
 function visualForOptions(
-  visual: ActorbleFacadeOptions['visual'],
+  visualLayer: ActorbleFacadeOptions['visualLayer'],
   root: Document | ShadowRoot,
-  mode: ActorbleFacadeOptions['mode'],
+  feedback: ResolvedBrowserFeedbackOptions,
 ): VisualLayer | undefined {
-  if (isVisualLayer(visual)) {
-    return visual
+  if (visualLayer !== undefined) {
+    return visualLayer
   }
 
-  if (mode === 'headless') {
+  if (!feedback.enabled) {
     return undefined
   }
 
-  if (visual === true) {
-    return new BrowserVisualLayer({ root })
-  }
-
-  if (typeof visual === 'object' && visual !== null && visual.enabled !== false) {
-    return new BrowserVisualLayer({
-      enabled: visual.enabled,
-      root,
-      cursorScale: visual.cursorScale,
-      textVisibility: visual.textVisibility,
-    })
-  }
-
-  return undefined
+  return new BrowserVisualLayer({
+    root,
+    textVisibility: feedback.textVisibility,
+  })
 }
 
 function visualOverlayFidelityForOptions(
-  visual: ActorbleFacadeOptions['visual'],
-  mode: ActorbleFacadeOptions['mode'],
+  visualLayer: ActorbleFacadeOptions['visualLayer'],
+  feedback: ResolvedBrowserFeedbackOptions,
 ): VisualOverlayFidelity {
-  if (isVisualLayer(visual)) {
+  if (visualLayer !== undefined && feedback.enabled) {
     return {
       implementation: 'custom-layer',
       runtime: 'enabled',
@@ -354,12 +347,7 @@ function visualOverlayFidelityForOptions(
     }
   }
 
-  const enabled =
-    mode !== 'headless' &&
-    (visual === true ||
-      (typeof visual === 'object' && visual !== null && visual.enabled !== false))
-
-  if (enabled) {
+  if (feedback.enabled) {
     return {
       implementation: 'browser-overlay',
       runtime: 'enabled',
@@ -376,31 +364,10 @@ function visualOverlayFidelityForOptions(
   }
 }
 
-function visualFeedbackForOptions(
-  visual: ActorbleFacadeOptions['visual'],
-  mode: ActorbleFacadeOptions['mode'],
-): VisualFeedbackOptions | undefined {
-  if (isVisualLayer(visual)) {
-    return undefined
-  }
-
-  return resolveBrowserVisualFeedbackOptions(visual, mode)
-}
-
 function describeUnknownError(error: unknown): string {
   if (error instanceof Error) {
     return error.message
   }
 
   return String(error)
-}
-
-function isVisualLayer(visual: ActorbleFacadeOptions['visual']): visual is VisualLayer {
-  return (
-    typeof visual === 'object' &&
-    visual !== null &&
-    'showCursor' in visual &&
-    'highlightTarget' in visual &&
-    'showClick' in visual
-  )
 }

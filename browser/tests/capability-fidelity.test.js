@@ -61,7 +61,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
   })
 
   it('reports enabled browser visual runtime separately from synthetic input limits', () => {
-    const actorble = createActorble({ visual: true })
+    const actorble = createActorble({ feedback: 'cursor' })
 
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',
@@ -76,14 +76,14 @@ describe('BrowserCapabilityFidelityReporter', () => {
   })
 
   it('does not conflate visual runtime fidelity with feedback detail options', () => {
-    const quiet = createActorble({ visual: true })
-    const debug = createActorble({ visual: { preset: 'debug' } })
+    const cursor = createActorble({ feedback: 'cursor' })
+    const debug = createActorble({ feedback: 'debug' })
 
-    expect(quiet.getFidelity().visualOverlay).toEqual(debug.getFidelity().visualOverlay)
+    expect(cursor.getFidelity().visualOverlay).toEqual(debug.getFidelity().visualOverlay)
   })
 
   it('reports custom visual layers as caller-owned runtime fidelity', () => {
-    const visual = {
+    const visualLayer = {
       showCursor() {},
       highlightTarget() {},
       showClick() {},
@@ -94,7 +94,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
       hide() {},
       destroy() {},
     }
-    const actorble = createActorble({ mode: 'headless', visual })
+    const actorble = createActorble({ feedback: 'debug', visualLayer })
 
     expect(actorble.getFidelity()).toMatchObject({
       visualOverlay: {

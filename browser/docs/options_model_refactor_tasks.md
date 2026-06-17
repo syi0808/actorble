@@ -183,7 +183,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-02 Feedback Surface Replacement
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: public `mode`/`visual` 옵션을 제거하고 `feedback` surface로 facade
   composition, visual feedback routing, capability/fidelity report를 정렬한다.
 - Dependencies: BOPT-01, `actorble-facade`, `visual-layer`, `capability-fidelity`.

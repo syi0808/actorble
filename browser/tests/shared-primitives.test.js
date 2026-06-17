@@ -7,7 +7,6 @@ import {
   cancellationError,
   err,
   ok,
-  resolveVisualFeedbackOptions,
   timeoutError,
 } from '../src/shared/index.js'
 
@@ -45,20 +44,6 @@ describe('shared primitives', () => {
     expect(error.cause).toBe(reason)
   })
 
-  it('normalizes public visual cursor scale options', () => {
-    expect(
-      resolveVisualFeedbackOptions({ enabled: true, cursorScale: 2 }).cursorScale,
-    ).toBe(2)
-    expect(
-      resolveVisualFeedbackOptions({ enabled: true }, { cursorScale: 1.5 }).cursorScale,
-    ).toBe(1.5)
-
-    for (const cursorScale of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(
-        resolveVisualFeedbackOptions({ enabled: true, cursorScale }).cursorScale,
-      ).toBe(1)
-    }
-  })
 })
 
 describe('shared boundary', () => {

@@ -5,7 +5,7 @@ import {
   BROWSER_OPTION_DEFAULTS,
   resolveActionOptions,
   resolveActorbleOptions,
-  resolveBrowserVisualFeedbackOptions,
+  resolveBrowserFeedbackOptions,
   resolveRunOptions,
 } from '../src/options/index.js'
 
@@ -19,10 +19,9 @@ describe('browser options model', () => {
     expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60)
     expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80)
 
-    expect(resolveActorbleOptions().visualFeedback).toEqual({
+    expect(resolveActorbleOptions().feedback).toEqual({
       enabled: false,
-      cursor: true,
-      cursorScale: 1,
+      cursor: false,
       targetHighlight: false,
       clickFeedback: false,
       focusOverlay: false,
@@ -32,20 +31,23 @@ describe('browser options model', () => {
     })
   })
 
-  it('normalizes legacy public visual feedback at the browser option boundary', () => {
-    expect(resolveBrowserVisualFeedbackOptions(true)).toMatchObject({
+  it('normalizes public feedback at the browser option boundary', () => {
+    expect(resolveBrowserFeedbackOptions('off')).toMatchObject({
+      enabled: false,
+      cursor: false,
+      targetHighlight: false,
+      clickFeedback: false,
+      focusOverlay: false,
+      typingIndicator: false,
+      keystrokeOverlay: false,
+    })
+    expect(resolveBrowserFeedbackOptions('cursor')).toMatchObject({
       enabled: true,
       cursor: true,
       targetHighlight: false,
       clickFeedback: false,
     })
-    expect(resolveActorbleOptions({ mode: 'headless', visual: true }).visualFeedback).toMatchObject({
-      enabled: false,
-      cursor: true,
-      targetHighlight: false,
-      clickFeedback: false,
-    })
-    expect(resolveActorbleOptions({ visual: { preset: 'debug' } }).visualFeedback).toMatchObject({
+    expect(resolveActorbleOptions({ feedback: 'debug' }).feedback).toMatchObject({
       enabled: true,
       cursor: true,
       targetHighlight: true,
@@ -53,6 +55,20 @@ describe('browser options model', () => {
       focusOverlay: true,
       typingIndicator: true,
       keystrokeOverlay: true,
+    })
+    expect(
+      resolveActorbleOptions({
+        feedback: { target: true, click: true, text: 'masked' },
+      }).feedback,
+    ).toMatchObject({
+      enabled: true,
+      cursor: false,
+      targetHighlight: true,
+      clickFeedback: true,
+      focusOverlay: false,
+      typingIndicator: false,
+      keystrokeOverlay: false,
+      textVisibility: 'masked',
     })
   })
 

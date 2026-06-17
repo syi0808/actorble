@@ -2337,7 +2337,7 @@ describe('BrowserActionOrchestrator', () => {
   it('routes pointer and click visual hooks without changing core dispatch order', async () => {
     const { calls, orchestrator, visual } = createHarness({
       enableVisual: true,
-      visualFeedback: { preset: 'debug' },
+      visualFeedback: 'debug',
     })
 
     await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
@@ -3912,7 +3912,7 @@ describe('BrowserActionOrchestrator', () => {
       dom,
       timeline: createFrameTimeline(),
       trace,
-      visualFeedback: { enabled: false },
+      visualFeedback: 'off',
     })
 
     await expect(orchestrator.waitFor(condition)).resolves.toEqual({

@@ -1,4 +1,4 @@
-import { createActorble, type TypeOptions } from '../../src/index.js'
+import { createActorble, type ActorbleFeedback, type TypeOptions } from '../../src/index.js'
 import {
   byId,
   renderRows,
@@ -329,22 +329,29 @@ function createDemoActorble(
   mode: VisualMode,
 ): DemoActorble {
   return createActorble({
-    mode: 'interactive',
     debug: true,
-    visual: visualOptionsForMode(mode),
+    feedback: feedbackForMode(mode),
   })
 }
 
-function visualOptionsForMode(
+function feedbackForMode(
   mode: VisualMode,
-): true | { preset: 'debug'; textVisibility: 'masked' } | { enabled: false } {
+): ActorbleFeedback {
   switch (mode) {
     case 'debug':
-      return { preset: 'debug', textVisibility: 'masked' }
+      return {
+        cursor: true,
+        target: true,
+        click: true,
+        focus: true,
+        typing: true,
+        keystroke: true,
+        text: 'masked',
+      }
     case 'off':
-      return { enabled: false }
+      return 'off'
     case 'quiet':
-      return true
+      return 'cursor'
   }
 }
 

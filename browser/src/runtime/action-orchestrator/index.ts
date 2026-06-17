@@ -25,7 +25,7 @@ import { NoopVisualLayer } from '../../visual/visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
 import {
   resolveActionOptions,
-  resolveBrowserVisualFeedbackOptions,
+  resolveBrowserFeedbackOptions,
 } from '../../options/index.js'
 import {
   ActorbleError,
@@ -55,7 +55,6 @@ import type {
   PointerButtonName,
   ScrollOptions,
   ScrollPosition,
-  ResolvedVisualFeedbackOptions,
   StateApplyPort,
   StateEffect,
   TargetDebugInfo,
@@ -63,10 +62,13 @@ import type {
   TargetLike,
   TargetValidity,
   TypeOptions,
-  VisualFeedbackOptions,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
+import type {
+  BrowserFeedbackInput,
+  ResolvedBrowserFeedbackOptions,
+} from '../../options/index.js'
 import type { GeometryEngine, GeometrySnapshot } from '../../targeting/geometry-engine/index.js'
 import type { GestureEngine } from '../../input/gesture-engine/index.js'
 import type { KeyboardEngine, KeyboardState } from '../../input/keyboard-engine/index.js'
@@ -144,7 +146,7 @@ export type ActionOrchestratorOptions = Readonly<{
   timeline?: TimelineEngine
   trace?: SpanRecorder
   visual?: VisualLayer
-  visualFeedback?: VisualFeedbackOptions
+  visualFeedback?: BrowserFeedbackInput
   pointer?: ActorblePointerOptions
   pointerVisual?: PointerVisualTracker
   wait?: WaitObservationEngine
@@ -238,7 +240,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #timeline: TimelineEngine
   readonly #trace: SpanRecorder
   readonly #visual: VisualLayer
-  readonly #visualFeedback: ResolvedVisualFeedbackOptions
+  readonly #visualFeedback: ResolvedBrowserFeedbackOptions
   readonly #pointerVisual: PointerVisualTracker
   readonly #wait: WaitObservationEngine
   readonly #layoutInvalidation: LayoutInvalidationTracker
@@ -310,12 +312,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#visual = options.visual ?? new NoopVisualLayer()
     this.#visualFeedback =
       options.visualFeedback === undefined
-        ? resolveBrowserVisualFeedbackOptions({ enabled: true, preset: 'debug' })
-        : resolveBrowserVisualFeedbackOptions({
-            enabled: true,
-            preset: 'quiet',
-            ...options.visualFeedback,
-          })
+        ? resolveBrowserFeedbackOptions('debug')
+        : resolveBrowserFeedbackOptions(options.visualFeedback)
     this.#pointerVisual =
       options.pointerVisual ??
       new BrowserPointerVisualTracker({

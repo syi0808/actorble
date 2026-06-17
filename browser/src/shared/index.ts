@@ -147,110 +147,32 @@ export function err<TError = ActorbleError>(error: TError): Result<never, TError
   return { ok: false, error }
 }
 
-export type ActorbleMode = 'interactive' | 'headless'
-
 export type VisualTextVisibility = 'hidden' | 'masked' | 'plain'
 
-export type VisualFeedbackPreset = 'quiet' | 'debug'
-
-export type VisualFeedbackOptions = Readonly<{
-  enabled?: boolean
-  preset?: VisualFeedbackPreset
-  cursor?: boolean
-  cursorScale?: number
-  targetHighlight?: boolean
-  clickFeedback?: boolean
-  focusOverlay?: boolean
-  typingIndicator?: boolean
-  keystrokeOverlay?: boolean
-  textVisibility?: VisualTextVisibility
-}>
-
-export type ResolvedVisualFeedbackOptions = Readonly<{
-  enabled: boolean
-  cursor: boolean
-  cursorScale: number
-  targetHighlight: boolean
-  clickFeedback: boolean
-  focusOverlay: boolean
-  typingIndicator: boolean
-  keystrokeOverlay: boolean
-  textVisibility?: VisualTextVisibility
-}>
+export type ActorbleFeedback =
+  | 'off'
+  | 'cursor'
+  | 'debug'
+  | Readonly<{
+      cursor?: boolean
+      target?: boolean
+      click?: boolean
+      focus?: boolean
+      typing?: boolean
+      keystroke?: boolean
+      text?: VisualTextVisibility
+    }>
 
 export type ActorbleOptions = Readonly<{
   root?: Document | ShadowRoot | Element
-  mode?: ActorbleMode
   debug?: boolean
   pointer?: ActorblePointerOptions
-  visual?: boolean | VisualFeedbackOptions
+  feedback?: ActorbleFeedback
 }>
 
 export type ActorblePointerOptions = Readonly<{
   initialPosition?: Point
 }>
-
-export function resolveVisualFeedbackOptions(
-  visual: boolean | VisualFeedbackOptions | undefined,
-  defaults: VisualFeedbackOptions = {},
-): ResolvedVisualFeedbackOptions {
-  const options = typeof visual === 'object' && visual !== null ? visual : {}
-  const enabled =
-    typeof visual === 'boolean' ? visual : (options.enabled ?? defaults.enabled ?? false)
-  const preset = options.preset ?? defaults.preset ?? 'quiet'
-  const presetDefaults =
-    preset === 'debug' ? debugVisualFeedbackDefaults : quietVisualFeedbackDefaults
-
-  return {
-    enabled,
-    cursor: options.cursor ?? defaults.cursor ?? presetDefaults.cursor,
-    cursorScale: resolveVisualCursorScale(options, defaults),
-    targetHighlight:
-      options.targetHighlight ?? defaults.targetHighlight ?? presetDefaults.targetHighlight,
-    clickFeedback:
-      options.clickFeedback ?? defaults.clickFeedback ?? presetDefaults.clickFeedback,
-    focusOverlay:
-      options.focusOverlay ?? defaults.focusOverlay ?? presetDefaults.focusOverlay,
-    typingIndicator:
-      options.typingIndicator ?? defaults.typingIndicator ?? presetDefaults.typingIndicator,
-    keystrokeOverlay:
-      options.keystrokeOverlay ?? defaults.keystrokeOverlay ?? presetDefaults.keystrokeOverlay,
-    textVisibility: options.textVisibility ?? defaults.textVisibility,
-  }
-}
-
-function resolveVisualCursorScale(
-  options: VisualFeedbackOptions,
-  defaults: VisualFeedbackOptions,
-): number {
-  return normalizeVisualCursorScale(
-    options.cursorScale === undefined ? defaults.cursorScale : options.cursorScale,
-  )
-}
-
-function normalizeVisualCursorScale(cursorScale: number | undefined): number {
-  return cursorScale !== undefined && Number.isFinite(cursorScale) && cursorScale > 0
-    ? cursorScale
-    : 1
-}
-
-const quietVisualFeedbackDefaults = {
-  cursor: true,
-  targetHighlight: false,
-  clickFeedback: false,
-  focusOverlay: false,
-  typingIndicator: false,
-  keystrokeOverlay: false,
-} as const
-
-const debugVisualFeedbackDefaults = {
-  cursor: true,
-  targetHighlight: true,
-  clickFeedback: true,
-  focusOverlay: true,
-  typingIndicator: true,
-  keystrokeOverlay: true,
-} as const
 
 export type LocatorKind =
   | 'css'
