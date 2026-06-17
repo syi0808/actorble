@@ -10,34 +10,107 @@
     <main>
       <header class="app-header">
         <p class="eyebrow">Actorble</p>
-        <h1>Scenario Runner</h1>
+        <h1>Scenario Builder</h1>
       </header>
-      <section aria-labelledby="import-title">
+
+      <section aria-labelledby="library-title">
         <div class="section-heading">
-          <h2 id="import-title">Imported JSON</h2>
-          <span id="document-summary" class="summary">No scenario loaded</span>
+          <h2 id="library-title">Scenarios</h2>
+          <span id="scenario-summary" class="summary">Loading</span>
         </div>
-        <textarea
-          id="scenario-json"
-          spellcheck="false"
-          aria-label="Scenario JSON"
-        ></textarea>
+        <label class="field">
+          <span>Saved scenario</span>
+          <select id="scenario-select" aria-label="Saved scenario">
+            <option>Loading scenarios</option>
+          </select>
+        </label>
         <div class="toolbar">
           <label class="file-button">
             <input id="scenario-file" type="file" accept="application/json,.json" />
             Import
           </label>
+          <button id="export-button" type="button">Export</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="document-title">
+        <div class="section-heading">
+          <h2 id="document-title">Document</h2>
+          <span id="validation-summary" class="summary">Idle</span>
+        </div>
+        <label class="field">
+          <span>Name</span>
+          <input id="scenario-name" type="text" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <textarea id="scenario-description" class="compact-textarea"></textarea>
+        </label>
+        <div class="toolbar">
           <button id="validate-button" type="button">Validate</button>
+          <button id="save-button" type="button">Save</button>
           <button id="run-button" type="button" class="primary">Run</button>
         </div>
       </section>
+
+      <section aria-labelledby="steps-title">
+        <div class="section-heading">
+          <h2 id="steps-title">Steps</h2>
+          <span id="step-summary" class="summary">No step selected</span>
+        </div>
+        <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
+      </section>
+
+      <section aria-labelledby="step-editor-title">
+        <div class="section-heading">
+          <h2 id="step-editor-title">Step Editor</h2>
+          <button id="dry-run-button" type="button">Dry run</button>
+        </div>
+        <div class="field-grid">
+          <label class="field">
+            <span>Action</span>
+            <input id="step-action" type="text" readonly />
+          </label>
+          <label class="field">
+            <span>Duration</span>
+            <input id="step-duration" type="number" min="0" step="1" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Note</span>
+          <input id="step-note" type="text" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Text input</span>
+          <input id="step-input" type="text" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Target JSON</span>
+          <textarea id="step-target-json" spellcheck="false"></textarea>
+        </label>
+        <div class="field-grid">
+          <label class="field">
+            <span>From JSON</span>
+            <textarea id="step-from-json" spellcheck="false"></textarea>
+          </label>
+          <label class="field">
+            <span>To JSON</span>
+            <textarea id="step-to-json" spellcheck="false"></textarea>
+          </label>
+        </div>
+        <label class="field">
+          <span>Object input JSON</span>
+          <textarea id="step-input-json" spellcheck="false"></textarea>
+        </label>
+      </section>
+
       <section aria-labelledby="validation-title">
         <div class="section-heading">
           <h2 id="validation-title">Validation</h2>
-          <span id="validation-summary" class="summary">Idle</span>
         </div>
         <ul id="issue-list" class="issue-list" aria-live="polite"></ul>
       </section>
+
       <section aria-labelledby="run-title">
         <div class="section-heading">
           <h2 id="run-title">Run</h2>
@@ -50,7 +123,7 @@
           </div>
           <div>
             <dt>Trace</dt>
-            <dd id="trace-feedback">No trace event</dd>
+            <dd id="trace-feedback">No active run</dd>
           </div>
         </dl>
       </section>

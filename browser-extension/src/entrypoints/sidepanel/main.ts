@@ -1,13 +1,29 @@
 import { browser } from 'wxt/browser'
+import { createWxtScenarioStorageRepository } from '../../storage/index.js'
 import {
-  createImportedScenarioRunner,
-  formatIssue,
-  formatIssuePath,
-  validateImportedScenarioText,
-  type ImportedScenarioRunSnapshot,
-} from './imported-scenario-run.js'
+  createSidepanelScenarioEditor,
+  createSidepanelScenarioEditorView,
+  type SidepanelButtonView,
+  type SidepanelScenarioEditorSnapshot,
+} from './scenario-editor.js'
 
-const runner = createImportedScenarioRunner({
+const scenarioRepository = createWxtScenarioStorageRepository()
+const editor = createSidepanelScenarioEditor({
+  listScenarios() {
+    return scenarioRepository.list()
+  },
+  saveScenario(input) {
+    return scenarioRepository.save(input)
+  },
+  updateScenario(id, update) {
+    return scenarioRepository.update(id, update)
+  },
+  importScenarioJson(jsonText) {
+    return scenarioRepository.importJson(jsonText)
+  },
+  exportScenarioJson(id) {
+    return scenarioRepository.exportJson(id)
+  },
   async getActiveTab() {
     const [activeTab] = await browser.tabs.query({
       active: true,
@@ -25,11 +41,26 @@ const runner = createImportedScenarioRunner({
   targetTabId: targetTabIdFromLocation(window.location),
 })
 
-const scenarioJson = requiredElement<HTMLTextAreaElement>('#scenario-json')
+const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
+const scenarioSummary = requiredElement<HTMLElement>('#scenario-summary')
+const scenarioName = requiredElement<HTMLInputElement>('#scenario-name')
+const scenarioDescription = requiredElement<HTMLTextAreaElement>('#scenario-description')
 const validateButton = requiredElement<HTMLButtonElement>('#validate-button')
+const saveButton = requiredElement<HTMLButtonElement>('#save-button')
+const exportButton = requiredElement<HTMLButtonElement>('#export-button')
 const runButton = requiredElement<HTMLButtonElement>('#run-button')
-const documentSummary = requiredElement<HTMLElement>('#document-summary')
+const stepList = requiredElement<HTMLUListElement>('#step-list')
+const stepSummary = requiredElement<HTMLElement>('#step-summary')
+const stepAction = requiredElement<HTMLInputElement>('#step-action')
+const stepNote = requiredElement<HTMLInputElement>('#step-note')
+const stepInput = requiredElement<HTMLInputElement>('#step-input')
+const stepDuration = requiredElement<HTMLInputElement>('#step-duration')
+const stepTargetJson = requiredElement<HTMLTextAreaElement>('#step-target-json')
+const stepFromJson = requiredElement<HTMLTextAreaElement>('#step-from-json')
+const stepToJson = requiredElement<HTMLTextAreaElement>('#step-to-json')
+const stepInputJson = requiredElement<HTMLTextAreaElement>('#step-input-json')
+const dryRunButton = requiredElement<HTMLButtonElement>('#dry-run-button')
 const validationSummary = requiredElement<HTMLElement>('#validation-summary')
 const issueList = requiredElement<HTMLUListElement>('#issue-list')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
@@ -40,12 +71,19 @@ for (const section of document.querySelectorAll<HTMLElement>('section')) {
   section.tabIndex = 0
 }
 
-scenarioJson.addEventListener('input', () => {
-  render({
-    ...runner.getSnapshot(),
-    issues: [],
-  })
-  validationSummary.textContent = 'Edited'
+scenarioSelect.addEventListener('change', () => {
+  editor.selectScenario(scenarioSelect.value)
+  render(editor.getSnapshot())
+})
+
+scenarioName.addEventListener('input', () => {
+  editor.updateDocumentFields({ name: scenarioName.value })
+  render(editor.getSnapshot())
+})
+
+scenarioDescription.addEventListener('input', () => {
+  editor.updateDocumentFields({ description: scenarioDescription.value })
+  render(editor.getSnapshot())
 })
 
 scenarioFile.addEventListener('change', () => {
@@ -53,29 +91,88 @@ scenarioFile.addEventListener('change', () => {
 })
 
 validateButton.addEventListener('click', () => {
-  try {
-    const result = runner.validate(scenarioJson.value)
-    render(runner.getSnapshot())
+  editor.validateDraft()
+  render(editor.getSnapshot())
+})
 
-    if (result.ok) {
-      validationSummary.textContent = 'Ready'
-    }
-  } catch (error) {
-    renderIssue(error, 'Validation failed before the document could be checked.')
-  }
+saveButton.addEventListener('click', () => {
+  void runAction(() => editor.saveDraft())
+})
+
+exportButton.addEventListener('click', () => {
+  void exportSelectedScenario()
 })
 
 runButton.addEventListener('click', () => {
-  void runImportedScenario()
+  void runAction(() => editor.runSelectedScenario())
+})
+
+stepList.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-step-index]',
+  )
+  if (button == null) {
+    return
+  }
+
+  editor.selectStep(Number(button.dataset.stepIndex))
+  render(editor.getSnapshot())
+})
+
+stepNote.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ note: stepNote.value })
+  render(editor.getSnapshot())
+})
+
+stepInput.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ input: stepInput.value })
+  render(editor.getSnapshot())
+})
+
+stepDuration.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ duration: stepDuration.value })
+  render(editor.getSnapshot())
+})
+
+stepTargetJson.addEventListener('change', () => {
+  editor.updateSelectedStepFields({ targetJson: stepTargetJson.value })
+  render(editor.getSnapshot())
+})
+
+stepFromJson.addEventListener('change', () => {
+  editor.updateSelectedStepFields({ fromJson: stepFromJson.value })
+  render(editor.getSnapshot())
+})
+
+stepToJson.addEventListener('change', () => {
+  editor.updateSelectedStepFields({ toJson: stepToJson.value })
+  render(editor.getSnapshot())
+})
+
+stepInputJson.addEventListener('change', () => {
+  editor.updateSelectedStepFields({ inputJson: stepInputJson.value })
+  render(editor.getSnapshot())
+})
+
+dryRunButton.addEventListener('click', () => {
+  void runAction(() => editor.dryRunSelectedStep())
 })
 
 browser.runtime.onMessage.addListener((message) => {
-  if (runner.ingestMessage(message)) {
-    render(runner.getSnapshot())
+  if (editor.ingestMessage(message)) {
+    render(editor.getSnapshot())
   }
 })
 
-render(runner.getSnapshot())
+render(editor.getSnapshot())
+void runAction(() => editor.refresh())
+
+async function runAction(action: () => Promise<unknown>): Promise<void> {
+  const operation = action()
+  render(editor.getSnapshot())
+  await operation
+  render(editor.getSnapshot())
+}
 
 async function importSelectedFile(): Promise<void> {
   const file = scenarioFile.files?.[0]
@@ -84,117 +181,169 @@ async function importSelectedFile(): Promise<void> {
   }
 
   try {
-    scenarioJson.value = await file.text()
-    const validation = validateImportedScenarioText(scenarioJson.value)
-    render(
-      validation.ok
-        ? {
-            ...runner.getSnapshot(),
-            document: validation.value.document,
-            issues: [],
-          }
-        : {
-            ...runner.getSnapshot(),
-            issues: validation.issues,
-          },
-    )
-  } catch (error) {
-    renderIssue(error, 'Import failed before the file could be read.')
+    await runAction(async () => {
+      await editor.importJson(await file.text())
+    })
+  } finally {
+    scenarioFile.value = ''
   }
 }
 
-async function runImportedScenario(): Promise<void> {
-  validationSummary.textContent = 'Running'
-
-  try {
-    const run = runner.run(scenarioJson.value)
-    render(runner.getSnapshot())
-    await run
-    render(runner.getSnapshot())
-  } catch (error) {
-    renderIssue(error, 'Run failed before it could be dispatched.')
+async function exportSelectedScenario(): Promise<void> {
+  const operation = editor.exportSelected()
+  render(editor.getSnapshot())
+  const exported = await operation
+  if (exported.ok) {
+    downloadJson(exported.value.filename, exported.value.jsonText)
   }
+  render(editor.getSnapshot())
 }
 
-function render(snapshot: ImportedScenarioRunSnapshot): void {
-  const hasJson = scenarioJson.value.trim().length > 0
+function render(snapshot: SidepanelScenarioEditorSnapshot): void {
+  const view = createSidepanelScenarioEditorView(snapshot)
 
-  validateButton.disabled = snapshot.pending || !hasJson
-  runButton.disabled = snapshot.pending || !hasJson
-  validateButton.dataset.pending = snapshot.pending ? 'true' : 'false'
-  runButton.dataset.pending = snapshot.pending ? 'true' : 'false'
-
-  documentSummary.textContent = documentLabel(snapshot)
-  validationSummary.textContent = validationLabel(snapshot)
-  renderIssues(snapshot)
+  renderScenarioOptions(view.scenarioOptions, view.selectedScenarioId)
+  scenarioSummary.textContent = documentSummary(snapshot)
+  setInputValue(scenarioName, view.documentFields.name)
+  setInputValue(scenarioDescription, view.documentFields.description)
+  renderStepList(view.stepRows)
+  stepSummary.textContent = selectedStepSummary(snapshot)
+  setInputValue(stepAction, view.selectedStepFields.action)
+  setInputValue(stepNote, view.selectedStepFields.note)
+  setInputValue(stepInput, view.selectedStepFields.input)
+  setInputValue(stepDuration, view.selectedStepFields.duration)
+  setInputValue(stepTargetJson, view.selectedStepFields.targetJson)
+  setInputValue(stepFromJson, view.selectedStepFields.fromJson)
+  setInputValue(stepToJson, view.selectedStepFields.toJson)
+  setInputValue(stepInputJson, view.selectedStepFields.inputJson)
+  validationSummary.textContent = view.validationSummary
+  renderIssues(view.issueViews)
   renderStatus(snapshot)
-  runId.textContent = snapshot.runId ?? 'None'
-  traceFeedback.textContent = traceLabel(snapshot)
+  traceFeedback.textContent = view.runSummary
+
+  scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
+  scenarioFile.disabled = view.buttons.import.disabled
+  applyButtonView(validateButton, view.buttons.validate)
+  applyButtonView(saveButton, view.buttons.save)
+  applyButtonView(exportButton, view.buttons.export)
+  applyButtonView(runButton, view.buttons.run)
+  applyButtonView(dryRunButton, view.buttons.dryRun)
 }
 
-function renderIssues(snapshot: ImportedScenarioRunSnapshot): void {
+function renderScenarioOptions(
+  options: readonly Readonly<{ value: string; label: string }>[],
+  selectedScenarioId: string | undefined,
+): void {
+  scenarioSelect.replaceChildren()
+
+  if (options.length === 0) {
+    const option = document.createElement('option')
+    option.value = ''
+    option.textContent = 'No saved scenarios'
+    scenarioSelect.append(option)
+    return
+  }
+
+  for (const optionView of options) {
+    const option = document.createElement('option')
+    option.value = optionView.value
+    option.textContent = optionView.label
+    option.selected = optionView.value === selectedScenarioId
+    scenarioSelect.append(option)
+  }
+}
+
+function renderStepList(rows: ReturnType<typeof createSidepanelScenarioEditorView>['stepRows']): void {
+  stepList.replaceChildren()
+
+  for (const row of rows) {
+    const item = document.createElement('li')
+    const button = document.createElement('button')
+    const title = document.createElement('span')
+    const detail = document.createElement('span')
+    const status = document.createElement('span')
+
+    button.type = 'button'
+    button.dataset.stepIndex = String(row.index)
+    button.dataset.selected = row.selected ? 'true' : 'false'
+    button.dataset.validation = row.validationStatus
+    title.className = 'step-title'
+    title.textContent = `${row.index + 1}. ${row.action}`
+    detail.className = 'step-detail'
+    detail.textContent = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
+    status.className = 'step-status'
+    status.textContent = row.validationStatus
+    button.append(title, detail, status)
+    item.append(button)
+    stepList.append(item)
+  }
+}
+
+function renderIssues(issues: readonly Readonly<{ path: string; message: string }>[]): void {
   issueList.replaceChildren()
 
-  for (const issue of snapshot.issues) {
+  for (const issue of issues) {
     const item = document.createElement('li')
     const path = document.createElement('span')
     const message = document.createElement('span')
 
     path.className = 'issue-path'
-    path.textContent = formatIssuePath(issue.path ?? [])
+    path.textContent = issue.path
     message.textContent = issue.message
-    item.title = formatIssue(issue)
+    item.title = `${issue.path}: ${issue.message}`
     item.append(path, message)
     issueList.append(item)
   }
 }
 
-function renderStatus(snapshot: ImportedScenarioRunSnapshot): void {
-  statusPill.textContent = capitalize(snapshot.status)
-  statusPill.dataset.status = snapshot.status
+function renderStatus(snapshot: SidepanelScenarioEditorSnapshot): void {
+  const status = snapshot.currentRun?.status ?? 'idle'
+  statusPill.textContent = capitalize(status)
+  statusPill.dataset.status = status
+  runId.textContent = snapshot.currentRun?.runId ?? 'None'
 }
 
-function documentLabel(snapshot: ImportedScenarioRunSnapshot): string {
-  if (snapshot.document === undefined) {
-    return 'No scenario loaded'
-  }
-
-  const name = snapshot.document.name ?? snapshot.document.id ?? 'Imported scenario'
-  const stepCount = snapshot.document.steps.length
-  return `${name} · ${stepCount} step${stepCount === 1 ? '' : 's'}`
+function applyButtonView(button: HTMLButtonElement, view: SidepanelButtonView): void {
+  button.textContent = view.label
+  button.disabled = view.disabled
+  button.dataset.pending = view.pending ? 'true' : 'false'
 }
 
-function validationLabel(snapshot: ImportedScenarioRunSnapshot): string {
-  if (snapshot.pending) {
-    return 'Running'
+function documentSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
+  if (snapshot.draftDocument === undefined) {
+    return `${snapshot.scenarios.length} saved`
   }
 
-  if (snapshot.issues.length > 0) {
-    return `${snapshot.issues.length} issue${snapshot.issues.length === 1 ? '' : 's'}`
-  }
-
-  if (snapshot.document !== undefined) {
-    return 'Ready'
-  }
-
-  return 'Idle'
+  const stepCount = snapshot.draftDocument.steps.length
+  return `${stepCount} step${stepCount === 1 ? '' : 's'} · ${snapshot.scenarios.length} saved`
 }
 
-function traceLabel(snapshot: ImportedScenarioRunSnapshot): string {
-  if (snapshot.latestTrace !== undefined) {
-    const details =
-      snapshot.latestTrace.message ??
-      (snapshot.latestTrace.stepId === undefined ? undefined : snapshot.latestTrace.stepId)
-    return details === undefined
-      ? snapshot.latestTrace.name
-      : `${snapshot.latestTrace.name}: ${details}`
+function selectedStepSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
+  const step = snapshot.draftDocument?.steps[snapshot.selectedStepIndex]
+  return step === undefined
+    ? 'No step selected'
+    : `Step ${snapshot.selectedStepIndex + 1} · ${step.action}`
+}
+
+function setInputValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+): void {
+  if (document.activeElement === element || element.value === value) {
+    return
   }
 
-  if (snapshot.message !== undefined) {
-    return snapshot.message
-  }
+  element.value = value
+}
 
-  return snapshot.status === 'failed' ? 'Run failed' : 'No trace event'
+function downloadJson(filename: string, jsonText: string): void {
+  const url = URL.createObjectURL(new Blob([jsonText], { type: 'application/json' }))
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function requiredElement<TElement extends HTMLElement>(selector: string): TElement {
@@ -208,19 +357,6 @@ function requiredElement<TElement extends HTMLElement>(selector: string): TEleme
 
 function capitalize(value: string): string {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
-}
-
-function renderIssue(error: unknown, fallbackMessage: string): void {
-  render({
-    ...runner.getSnapshot(),
-    pending: false,
-    issues: [
-      {
-        code: 'runtime_error',
-        message: error instanceof Error ? `${fallbackMessage} ${error.message}` : fallbackMessage,
-      },
-    ],
-  })
 }
 
 function targetTabIdFromLocation(location: Location): number | undefined {

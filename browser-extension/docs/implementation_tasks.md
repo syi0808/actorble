@@ -266,7 +266,7 @@ src/recorder
 
 ### T9 Side Panel Scenario List And Editor Shell
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Expand side panel into the primary authoring surface for scenario
   list, step list, lightweight editing, validation feedback, import/export, and
   per-step dry-run entrypoints.
