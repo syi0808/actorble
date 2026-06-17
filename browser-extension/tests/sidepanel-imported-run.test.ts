@@ -185,7 +185,7 @@ describe('sidepanel imported scenario run flow', () => {
     })
   })
 
-  it('updates status and latest trace feedback for the active run only', async () => {
+  it('updates status and trace display feedback for the active run only', async () => {
     const { runner } = createTestRunner()
     await runner.run(JSON.stringify(browserLoginFlow))
 
@@ -240,9 +240,13 @@ describe('sidepanel imported scenario run flow', () => {
     expect(acceptedTrace).toBe(true)
     expect(runner.getSnapshot()).toMatchObject({
       status: 'completed',
-      latestTrace: {
-        name: 'scenario:start',
-        runId: 'run-1',
+      currentTrace: {
+        latestEvent: {
+          name: 'scenario:start',
+          runId: 'run-1',
+          stepId: 'email',
+        },
+        summary: 'Completed run-1 with 1 event.',
       },
     })
   })

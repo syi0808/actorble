@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json'
-import type { ActorbleExtensionMessage } from '../src/messaging/index.js'
+import {
+  createExtensionMessage,
+  type ActorbleExtensionMessage,
+} from '../src/messaging/index.js'
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
@@ -219,6 +222,90 @@ describe('sidepanel scenario editor', () => {
       throw new Error(`Expected scenario:run, received ${runMessage.kind}`)
     }
     expect(runMessage.payload.compilation.scenario.steps).toHaveLength(1)
+  })
+
+  it('renders failure trace details for the active run only', async () => {
+    const { editor } = createTestEditor()
+    await editor.refresh()
+    await editor.runSelectedScenario()
+
+    const ignored = editor.ingestMessage(
+      createExtensionMessage({
+        kind: 'trace:event',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'other-run',
+          event: {
+            runId: 'other-run',
+            scenarioId: 'newest-scenario',
+            timestamp: 100,
+            name: 'target:missing',
+            level: 'error',
+          },
+        },
+      }),
+    )
+    const acceptedTrace = editor.ingestMessage(
+      createExtensionMessage({
+        kind: 'trace:event',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'run-1',
+          event: {
+            runId: 'run-1',
+            scenarioId: 'newest-scenario',
+            timestamp: 110,
+            name: 'target:missing',
+            level: 'error',
+            message: 'Target not found.',
+            details: {
+              stepId: 'password',
+            },
+          },
+        },
+      }),
+    )
+    const acceptedStatus = editor.ingestMessage(
+      createExtensionMessage({
+        kind: 'runtime:status',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'run-1',
+          status: 'failed',
+          message: 'Run failed at password.',
+        },
+      }),
+    )
+
+    expect(ignored).toBe(false)
+    expect(acceptedTrace).toBe(true)
+    expect(acceptedStatus).toBe(true)
+    expect(editor.getSnapshot()).toMatchObject({
+      currentRun: {
+        runId: 'run-1',
+        status: 'failed',
+      },
+      currentTrace: {
+        latestEvent: {
+          name: 'target:missing',
+          stepId: 'password',
+        },
+        failure: {
+          message: 'Run failed at password.',
+          stepId: 'password',
+          eventName: 'target:missing',
+        },
+      },
+    })
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).runSummary).toBe(
+      'Failed run-1 after 1 event: Run failed at password.',
+    )
   })
 })
 

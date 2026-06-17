@@ -286,7 +286,7 @@ src/recorder
 
 ### T10 Trace Display
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Build extension-owned trace ingestion and display for run status and
   failure detail while preserving runtime trace semantics from `@actorble/browser`.
 - Dependencies: T3, T5, T6.

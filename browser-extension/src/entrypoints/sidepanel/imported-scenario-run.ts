@@ -12,7 +12,13 @@ import {
 import type { ScenarioDocument } from '../../scenario/types.js'
 import { validateScenarioDocument } from '../../scenario/validate.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
-import type { RuntimeRunStatus, TraceDisplayEvent } from '../../trace/index.js'
+import {
+  createTraceDisplayStore,
+  type RuntimeRunStatus,
+  type RuntimeStatusSnapshot,
+  type TraceDisplayState,
+  type TraceRunDisplayView,
+} from '../../trace/index.js'
 
 export type SidepanelActiveTab = Readonly<{
   id?: number
@@ -39,7 +45,8 @@ export type ImportedScenarioRunSnapshot = Readonly<{
   tabId?: number
   frameId?: number
   message?: string
-  latestTrace?: TraceDisplayEvent
+  trace: TraceDisplayState
+  currentTrace: TraceRunDisplayView | undefined
 }>
 
 export type ImportedScenarioRunnerClient = Readonly<{
@@ -52,6 +59,9 @@ export type ImportedScenarioRunnerOptions = Readonly<{
   createRunId?: () => string
   frameId?: number
   targetTabId?: number
+  now?: () => number
+  traceHistoryLimit?: number
+  traceRunLimit?: number
 }>
 
 export type ImportedScenarioRunner = Readonly<{
@@ -96,22 +106,27 @@ export function createImportedScenarioRunner(
   const createRunId = options.createRunId ?? defaultRunId
   const frameId = options.frameId ?? DEFAULT_FRAME_ID
   const targetTabId = options.targetTabId
+  const now = options.now ?? Date.now
+  const traceStore = createTraceDisplayStore({
+    historyLimit: options.traceHistoryLimit,
+    runLimit: options.traceRunLimit,
+  })
   let currentRun: RequiredRunCorrelation | null = null
-  let snapshot = idleSnapshot()
+  let snapshot = idleSnapshot(traceStore.getState())
 
   function validate(jsonText: string): ExtensionResult<ImportedScenarioPreparation> {
     const preparation = validateImportedScenarioText(jsonText)
 
     if (!preparation.ok) {
       snapshot = {
-        ...idleSnapshot(),
+        ...idleSnapshot(traceStore.getState()),
         issues: preparation.issues,
       }
       return preparation
     }
 
     snapshot = {
-      ...idleSnapshot(),
+      ...idleSnapshot(traceStore.getState()),
       document: preparation.value.document,
     }
     return preparation
@@ -125,13 +140,13 @@ export function createImportedScenarioRunner(
       pending: true,
       issues: [],
       message: undefined,
-      latestTrace: undefined,
+      currentTrace: undefined,
     }
 
     const preparation = validateImportedScenarioText(jsonText)
     if (!preparation.ok) {
       snapshot = {
-        ...idleSnapshot(),
+        ...idleSnapshot(traceStore.getState()),
         issues: preparation.issues,
       }
       return preparation
@@ -140,7 +155,7 @@ export function createImportedScenarioRunner(
     const activeTab = await resolveRunTargetTab(client, targetTabId)
     if (!activeTab.ok) {
       snapshot = {
-        ...idleSnapshot(),
+        ...idleSnapshot(traceStore.getState()),
         document: preparation.value.document,
         issues: activeTab.issues,
       }
@@ -177,7 +192,7 @@ export function createImportedScenarioRunner(
         ...issues[0],
       })
       snapshot = {
-        ...idleSnapshot(),
+        ...idleSnapshot(traceStore.getState()),
         document: preparation.value.document,
         issues,
       }
@@ -187,7 +202,7 @@ export function createImportedScenarioRunner(
     const responseResult = readExtensionResult(response)
     if (responseResult !== null && !responseResult.ok) {
       snapshot = {
-        ...idleSnapshot(),
+        ...idleSnapshot(traceStore.getState()),
         document: preparation.value.document,
         issues: responseResult.issues,
       }
@@ -195,6 +210,7 @@ export function createImportedScenarioRunner(
     }
 
     currentRun = correlation
+    traceStore.startRun(statusSnapshotFrom(correlation, 'running', now()))
     snapshot = {
       pending: false,
       status: 'running',
@@ -204,6 +220,7 @@ export function createImportedScenarioRunner(
       runId,
       tabId: activeTab.value.id,
       frameId,
+      ...traceFields(),
     }
 
     return ok({
@@ -218,19 +235,27 @@ export function createImportedScenarioRunner(
     }
 
     if (message.kind === 'runtime:status' && matchesCurrentRun(currentRun, message.payload)) {
+      traceStore.ingestStatus(statusSnapshotFrom(
+        message.payload,
+        message.payload.status,
+        now(),
+        message.payload.message,
+      ))
       snapshot = {
         ...snapshot,
         pending: false,
         status: message.payload.status,
         message: message.payload.message,
+        ...traceFields(),
       }
       return true
     }
 
     if (message.kind === 'trace:event' && matchesCurrentRun(currentRun, message.payload)) {
+      traceStore.ingestEvent(message.payload.event)
       snapshot = {
         ...snapshot,
-        latestTrace: message.payload.event,
+        ...traceFields(),
       }
       return true
     }
@@ -240,6 +265,13 @@ export function createImportedScenarioRunner(
 
   function getSnapshot(): ImportedScenarioRunSnapshot {
     return snapshot
+  }
+
+  function traceFields(): Pick<ImportedScenarioRunSnapshot, 'trace' | 'currentTrace'> {
+    return {
+      trace: traceStore.getState(),
+      currentTrace: traceStore.getCurrentView(),
+    }
   }
 
   return {
@@ -365,11 +397,28 @@ function defaultRunId(): string {
   return `run-${Date.now()}-${nextRunSequence++}`
 }
 
-function idleSnapshot(): ImportedScenarioRunSnapshot {
+function idleSnapshot(trace: TraceDisplayState): ImportedScenarioRunSnapshot {
   return {
     pending: false,
     status: 'idle',
     issues: [],
+    trace,
+    currentTrace: undefined,
+  }
+}
+
+function statusSnapshotFrom(
+  correlation: RequiredRunCorrelation,
+  status: RuntimeRunStatus,
+  updatedAt: number,
+  message?: string,
+): RuntimeStatusSnapshot {
+  return {
+    runId: correlation.runId,
+    scenarioId: correlation.scenarioId,
+    status,
+    updatedAt,
+    ...(message === undefined ? {} : { message }),
   }
 }
 

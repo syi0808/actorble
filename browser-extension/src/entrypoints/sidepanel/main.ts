@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser'
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
+import type { TraceRunDisplayView } from '../../trace/index.js'
 import {
   createSidepanelScenarioEditor,
   createSidepanelScenarioEditorView,
@@ -65,7 +66,9 @@ const validationSummary = requiredElement<HTMLElement>('#validation-summary')
 const issueList = requiredElement<HTMLUListElement>('#issue-list')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
 const runId = requiredElement<HTMLElement>('#run-id')
+const runSummaryOutput = requiredElement<HTMLElement>('#run-summary')
 const traceFeedback = requiredElement<HTMLElement>('#trace-feedback')
+const failureDetail = requiredElement<HTMLElement>('#failure-detail')
 
 for (const section of document.querySelectorAll<HTMLElement>('section')) {
   section.tabIndex = 0
@@ -219,7 +222,9 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   validationSummary.textContent = view.validationSummary
   renderIssues(view.issueViews)
   renderStatus(snapshot)
-  traceFeedback.textContent = view.runSummary
+  runSummaryOutput.textContent = view.runSummary
+  traceFeedback.textContent = latestEventSummary(view.traceView)
+  failureDetail.textContent = failureSummary(view.traceView)
 
   scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
   scenarioFile.disabled = view.buttons.import.disabled
@@ -301,6 +306,32 @@ function renderStatus(snapshot: SidepanelScenarioEditorSnapshot): void {
   statusPill.textContent = capitalize(status)
   statusPill.dataset.status = status
   runId.textContent = snapshot.currentRun?.runId ?? 'None'
+}
+
+function latestEventSummary(traceView: TraceRunDisplayView | undefined): string {
+  const event = traceView?.latestEvent
+  if (event === undefined) {
+    return 'No trace events'
+  }
+
+  return [
+    event.name,
+    event.stepId === undefined ? undefined : `step ${event.stepId}`,
+    event.message,
+  ].filter((part) => part !== undefined && part.length > 0).join(' · ')
+}
+
+function failureSummary(traceView: TraceRunDisplayView | undefined): string {
+  const failure = traceView?.failure
+  if (failure === undefined) {
+    return 'None'
+  }
+
+  return [
+    failure.message,
+    failure.stepId === undefined ? undefined : `step ${failure.stepId}`,
+    failure.eventName,
+  ].filter((part) => part !== undefined && part.length > 0).join(' · ')
 }
 
 function applyButtonView(button: HTMLButtonElement, view: SidepanelButtonView): void {

@@ -18,7 +18,13 @@ import type {
   ScenarioRecordInput,
   ScenarioRecordUpdate,
 } from '../../storage/index.js'
-import type { RuntimeRunStatus, TraceDisplayEvent } from '../../trace/index.js'
+import {
+  createTraceDisplayStore,
+  type RuntimeRunStatus,
+  type RuntimeStatusSnapshot,
+  type TraceDisplayState,
+  type TraceRunDisplayView,
+} from '../../trace/index.js'
 import { formatIssuePath } from './imported-scenario-run.js'
 
 export type SidepanelActiveTab = Readonly<{
@@ -48,7 +54,8 @@ export type SidepanelScenarioEditorSnapshot = Readonly<{
   pendingAction: SidepanelPendingAction | null
   issues: readonly ExtensionIssue[]
   currentRun?: SidepanelScenarioRunReceipt
-  latestTrace?: TraceDisplayEvent
+  trace: TraceDisplayState
+  currentTrace: TraceRunDisplayView | undefined
   message?: string
 }>
 
@@ -71,6 +78,9 @@ export type SidepanelScenarioEditorOptions = Readonly<{
   createDryRunId?: () => string
   frameId?: number
   targetTabId?: number
+  now?: () => number
+  traceHistoryLimit?: number
+  traceRunLimit?: number
 }>
 
 export type SidepanelDocumentFieldUpdate = Readonly<{
@@ -131,6 +141,7 @@ export type SidepanelScenarioEditorView = Readonly<{
   issueViews: readonly SidepanelIssueView[]
   validationSummary: string
   runSummary: string
+  traceView: TraceRunDisplayView | undefined
   buttons: Readonly<{
     validate: SidepanelButtonView
     save: SidepanelButtonView
@@ -172,7 +183,12 @@ export function createSidepanelScenarioEditor(
   const createDryRunId = options.createDryRunId ?? defaultDryRunId
   const frameId = options.frameId ?? DEFAULT_FRAME_ID
   const targetTabId = options.targetTabId
-  let snapshot = emptySnapshot()
+  const now = options.now ?? Date.now
+  const traceStore = createTraceDisplayStore({
+    historyLimit: options.traceHistoryLimit,
+    runLimit: options.traceRunLimit,
+  })
+  let snapshot = emptySnapshot(traceStore.getState())
 
   async function refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>> {
     snapshot = {
@@ -473,6 +489,12 @@ export function createSidepanelScenarioEditor(
     }
 
     if (message.kind === 'runtime:status' && matchesCurrentRun(snapshot.currentRun, message.payload)) {
+      traceStore.ingestStatus(statusSnapshotFrom(
+        message.payload,
+        message.payload.status,
+        now(),
+        message.payload.message,
+      ))
       snapshot = {
         ...snapshot,
         currentRun: {
@@ -483,14 +505,16 @@ export function createSidepanelScenarioEditor(
           status: message.payload.status,
         },
         message: message.payload.message,
+        ...traceFields(),
       }
       return true
     }
 
     if (message.kind === 'trace:event' && matchesCurrentRun(snapshot.currentRun, message.payload)) {
+      traceStore.ingestEvent(message.payload.event)
       snapshot = {
         ...snapshot,
-        latestTrace: message.payload.event,
+        ...traceFields(),
       }
       return true
     }
@@ -553,7 +577,7 @@ export function createSidepanelScenarioEditor(
       pendingAction,
       issues: [],
       message: undefined,
-      latestTrace: undefined,
+      currentTrace: undefined,
     }
 
     const validation = validateScenarioDocument(document)
@@ -619,11 +643,13 @@ export function createSidepanelScenarioEditor(
       ...correlation,
       status: 'running',
     } satisfies SidepanelScenarioRunReceipt
+    traceStore.startRun(statusSnapshotFrom(correlation, 'running', now()))
     snapshot = {
       ...snapshot,
       pendingAction: null,
       issues: [],
       currentRun: receipt,
+      ...traceFields(),
     }
     return ok(receipt)
   }
@@ -659,6 +685,13 @@ export function createSidepanelScenarioEditor(
       scenarios: exists
         ? snapshot.scenarios.map((scenario) => (scenario.id === record.id ? record : scenario))
         : [record, ...snapshot.scenarios],
+    }
+  }
+
+  function traceFields(): Pick<SidepanelScenarioEditorSnapshot, 'trace' | 'currentTrace'> {
+    return {
+      trace: traceStore.getState(),
+      currentTrace: traceStore.getCurrentView(),
     }
   }
 
@@ -704,6 +737,7 @@ export function createSidepanelScenarioEditorView(
     })),
     validationSummary: validationSummary(snapshot),
     runSummary: runSummary(snapshot),
+    traceView: snapshot.currentTrace,
     buttons: {
       validate: {
         label: 'Validate',
@@ -857,13 +891,9 @@ function validationSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
 
 function runSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   if (snapshot.currentRun !== undefined) {
-    const status = capitalize(snapshot.currentRun.status)
-    const runId = snapshot.currentRun.runId
-    if (snapshot.latestTrace !== undefined) {
-      return `${status} ${runId}: ${snapshot.latestTrace.name}`
-    }
-
-    return `${status} ${runId}`
+    return snapshot.currentTrace?.summary ?? `${capitalize(snapshot.currentRun.status)} ${
+      snapshot.currentRun.runId
+    }`
   }
 
   return snapshot.message ?? 'No active run'
@@ -1067,12 +1097,14 @@ function createRunMessage(
   })
 }
 
-function emptySnapshot(): SidepanelScenarioEditorSnapshot {
+function emptySnapshot(trace: TraceDisplayState): SidepanelScenarioEditorSnapshot {
   return {
     scenarios: [],
     selectedStepIndex: 0,
     pendingAction: null,
     issues: [],
+    trace,
+    currentTrace: undefined,
   }
 }
 
@@ -1171,6 +1203,21 @@ function matchesCurrentRun(
     payload.scenarioId === currentRun.scenarioId &&
     payload.runId === currentRun.runId
   )
+}
+
+function statusSnapshotFrom(
+  correlation: RequiredRunCorrelation,
+  status: RuntimeRunStatus,
+  updatedAt: number,
+  message?: string,
+): RuntimeStatusSnapshot {
+  return {
+    runId: correlation.runId,
+    scenarioId: correlation.scenarioId,
+    status,
+    updatedAt,
+    ...(message === undefined ? {} : { message }),
+  }
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
