@@ -405,6 +405,8 @@ function compileTarget(
   if (isTargetGroup(target)) {
     rejectPlatformExtensions(target.platform, [...path, 'platform'], issues)
 
+    // Runtime scenarios currently accept one TargetLike, so target groups use
+    // their primary locator until fallback and strict semantics are representable.
     const firstLocator = target.locators[0]
 
     if (firstLocator === undefined) {

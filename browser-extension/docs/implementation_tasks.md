@@ -146,6 +146,11 @@ src/recorder
 - Test expectations:
   - Vitest covers the browser login example, each locator strategy, each step
     family, default propagation, step id preservation, and unsupported inputs.
+- Implementation note:
+  - Current `@actorble/browser` runtime scenario targets accept a single
+    `TargetLike`, so draft target groups compile to their first locator.
+    Fallback locator and group-level `strict` semantics should be preserved
+    when the runtime scenario shape can represent them.
 
 ### T3 Message Contracts And Correlation Metadata
 
