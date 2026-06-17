@@ -154,7 +154,7 @@ src/recorder
 
 ### T3 Message Contracts And Correlation Metadata
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Define typed extension messages for scenario, recorder, inspector,
   trace, and runtime status channels before entrypoints depend on ad hoc message
   shapes.
