@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "click-button",
+  "steps": [
+    {
+      "action": "click",
+      "target": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Create"
+      },
+      "options": {
+        "timeout": 3000
+      }
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "browser-login-flow",
+  "name": "Browser login flow",
+  "defaults": {
+    "timeout": 5000,
+    "pacing": {
+      "betweenSteps": 120
+    }
+  },
+  "steps": [
+    {
+      "id": "email",
+      "action": "fill",
+      "target": {
+        "strategy": "label",
+        "label": "Email"
+      },
+      "input": "user@example.com"
+    },
+    {
+      "id": "password",
+      "action": "fill",
+      "target": {
+        "strategy": "label",
+        "label": "Password"
+      },
+      "input": "correct horse battery staple"
+    },
+    {
+      "id": "submit",
+      "action": "click",
+      "target": {
+        "kind": "target",
+        "strict": true,
+        "locators": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Sign in"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign in"
+          }
+        ]
+      }
+    },
+    {
+      "id": "wait-dashboard",
+      "action": "waitFor",
+      "input": {
+        "kind": "text",
+        "value": "Dashboard"
+      },
+      "options": {
+        "timeout": 8000
+      }
+    }
+  ]
+}

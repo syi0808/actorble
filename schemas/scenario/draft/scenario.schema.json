@@ -1,0 +1,730 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actorble.dev/schemas/scenario/draft/scenario.schema.json",
+  "title": "Actorble Scenario Document Draft",
+  "description": "Browser-led draft schema for portable Actorble scenario documents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "steps"],
+  "properties": {
+    "schemaVersion": {
+      "const": "actorble.scenario.draft"
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "description": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "platform": {
+      "$ref": "#/$defs/platformExtensions"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "durationMs": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "platformExtensions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "pacing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "betweenSteps": {
+              "$ref": "#/$defs/durationMs"
+            }
+          }
+        }
+      }
+    },
+    "textMatcher": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "match": {
+              "type": "string",
+              "enum": ["exact", "contains", "regex"]
+            },
+            "caseSensitive": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "coordinateSpace": {
+      "type": "string",
+      "enum": ["viewport", "document", "screen", "surface", "element"]
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "coordinateSpace": {
+          "$ref": "#/$defs/coordinateSpace"
+        }
+      }
+    },
+    "locator": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/roleLocator"
+        },
+        {
+          "$ref": "#/$defs/textLocator"
+        },
+        {
+          "$ref": "#/$defs/labelLocator"
+        },
+        {
+          "$ref": "#/$defs/testIdLocator"
+        },
+        {
+          "$ref": "#/$defs/cssLocator"
+        },
+        {
+          "$ref": "#/$defs/pointLocator"
+        }
+      ]
+    },
+    "roleLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "role"],
+      "properties": {
+        "strategy": {
+          "const": "role"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "name": {
+          "$ref": "#/$defs/textMatcher"
+        },
+        "includeHidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "textLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "text"],
+      "properties": {
+        "strategy": {
+          "const": "text"
+        },
+        "text": {
+          "$ref": "#/$defs/textMatcher"
+        }
+      }
+    },
+    "labelLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "label"],
+      "properties": {
+        "strategy": {
+          "const": "label"
+        },
+        "label": {
+          "$ref": "#/$defs/textMatcher"
+        }
+      }
+    },
+    "testIdLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "value"],
+      "properties": {
+        "strategy": {
+          "const": "testId"
+        },
+        "value": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "attribute": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "cssLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "selector"],
+      "properties": {
+        "strategy": {
+          "const": "css"
+        },
+        "selector": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "pointLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "point"],
+      "properties": {
+        "strategy": {
+          "const": "point"
+        },
+        "point": {
+          "$ref": "#/$defs/point"
+        }
+      }
+    },
+    "target": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/locator"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["locators"],
+          "properties": {
+            "kind": {
+              "const": "target"
+            },
+            "description": {
+              "type": "string"
+            },
+            "strict": {
+              "type": "boolean"
+            },
+            "locators": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/locator"
+              }
+            },
+            "platform": {
+              "$ref": "#/$defs/platformExtensions"
+            }
+          }
+        }
+      ]
+    },
+    "motion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "linear"
+            },
+            "duration": {
+              "$ref": "#/$defs/durationMs"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "ease"
+            },
+            "easing": {
+              "type": "string",
+              "enum": ["ease-in", "ease-out", "ease-in-out"]
+            },
+            "duration": {
+              "$ref": "#/$defs/durationMs"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "enum": ["inertia", "spring"]
+            },
+            "duration": {
+              "$ref": "#/$defs/durationMs"
+            }
+          }
+        }
+      ]
+    },
+    "actionOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "duration": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "motion": {
+          "$ref": "#/$defs/motion"
+        },
+        "button": {
+          "type": "string",
+          "enum": ["primary", "secondary", "auxiliary", "back", "forward"]
+        },
+        "clickCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "force": {
+          "type": "boolean"
+        },
+        "pressDwell": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "focusVisible": {
+          "type": "boolean"
+        },
+        "delay": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "focusStrategy": {
+          "type": "string",
+          "enum": ["programmatic", "click", "none"]
+        },
+        "focusClick": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "duration": {
+              "$ref": "#/$defs/durationMs"
+            },
+            "motion": {
+              "$ref": "#/$defs/motion"
+            },
+            "button": {
+              "type": "string",
+              "enum": ["primary", "secondary", "auxiliary", "back", "forward"]
+            },
+            "pressDwell": {
+              "$ref": "#/$defs/durationMs"
+            }
+          }
+        },
+        "afterFocusDelay": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "clear": {
+          "type": "boolean"
+        },
+        "behavior": {
+          "type": "string",
+          "enum": ["instant", "smooth"]
+        }
+      }
+    },
+    "waitCondition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "target"],
+          "properties": {
+            "kind": {
+              "enum": ["visible", "hidden"]
+            },
+            "target": {
+              "$ref": "#/$defs/target"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "value": {
+              "$ref": "#/$defs/textMatcher"
+            }
+          }
+        }
+      ]
+    },
+    "step": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/targetActionStep"
+        },
+        {
+          "$ref": "#/$defs/clickCurrentStep"
+        },
+        {
+          "$ref": "#/$defs/typeStep"
+        },
+        {
+          "$ref": "#/$defs/targetTextStep"
+        },
+        {
+          "$ref": "#/$defs/pressStep"
+        },
+        {
+          "$ref": "#/$defs/scrollToTargetStep"
+        },
+        {
+          "$ref": "#/$defs/scrollToPositionStep"
+        },
+        {
+          "$ref": "#/$defs/dragStep"
+        },
+        {
+          "$ref": "#/$defs/waitForStep"
+        },
+        {
+          "$ref": "#/$defs/delayStep"
+        }
+      ]
+    },
+    "stepCommon": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "targetActionStep": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "target"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/id"
+            },
+            "note": {
+              "type": "string"
+            },
+            "action": {
+              "enum": ["click", "moveTo", "doubleClick", "focus"]
+            },
+            "target": {
+              "$ref": "#/$defs/target"
+            },
+            "options": {
+              "$ref": "#/$defs/actionOptions"
+            },
+            "platform": {
+              "$ref": "#/$defs/platformExtensions"
+            }
+          }
+        }
+      ]
+    },
+    "clickCurrentStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "clickCurrent"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "typeStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "input"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "type"
+        },
+        "input": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "targetTextStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target", "input"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "enum": ["typeInto", "fill"]
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "input": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "pressStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "input"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "press"
+        },
+        "input": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "scrollToTargetStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "scrollTo"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "scrollToPositionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "input"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "scrollTo"
+        },
+        "input": {
+          "$ref": "#/$defs/point"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "dragStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "from", "to"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "drag"
+        },
+        "from": {
+          "$ref": "#/$defs/target"
+        },
+        "to": {
+          "$ref": "#/$defs/target"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "waitForStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "input"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "waitFor"
+        },
+        "input": {
+          "$ref": "#/$defs/waitCondition"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "delayStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "duration"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "delay"
+        },
+        "duration": {
+          "$ref": "#/$defs/durationMs"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    }
+  }
+}

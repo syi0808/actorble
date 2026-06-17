@@ -22,6 +22,7 @@ The browser package currently uses the `@actorble/browser` package name.
 
 - [High-level architecture](docs/high-level-architecture.md)
 - [Browser architecture](docs/browser-architecture.md)
+- [Scenario spec](schemas/scenario/README.md)
 - [Browser implementation tasks](browser/docs/implementation_tasks.md)
 - [Browser package docs](docs/src/content/docs/docs/browser/index.md)
 
