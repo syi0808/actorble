@@ -110,7 +110,7 @@ src/recorder
 
 ### T1 Scenario Document Validation And Migration
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add extension-side scenario document validation against the draft
   schema and migration wiring. Keep schema ownership in `../schemas/scenario`.
 - Dependencies: T0.
