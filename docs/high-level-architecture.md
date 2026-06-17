@@ -151,6 +151,31 @@ class Stuntman {
 }
 ```
 
+### Option model
+
+Runtime options are part of the public contract and must be resolved at explicit
+runtime boundaries instead of being interpreted ad hoc inside individual engines.
+
+```txt
+configuration input
+→ centralized option defaults
+→ runtime/run-level option policy
+→ action-level defaults
+→ step/call-level overrides
+→ resolved internal options
+```
+
+Principles:
+
+```txt
+- Public option names should describe user intent, not implementation detail.
+- Visual feedback and execution mode should not be split into overlapping flags.
+- Motion policy should be explicit and can be disabled at runner level.
+- Step/call-level options always override runner-level action defaults.
+- Raw user options should not be passed deeply through engine internals.
+- Engines should consume resolved internal options or narrow execution context.
+```
+
 ---
 
 ## 4. Scenario Runner
@@ -1430,6 +1455,7 @@ class Stuntman {
   interactionStateStore
   timelineEngine
   waitEngine
+  optionResolver
 
   visualLayer
   platformAdapter

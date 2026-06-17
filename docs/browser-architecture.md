@@ -104,8 +104,8 @@ Public API
 
 ```ts
 const stuntman = new Stuntman({
-  mode: 'interactive',
-  debug: true,
+  feedback: 'debug',
+  motion: true,
 })
 
 await stuntman.click(role('button', { name: 'Create Project' }))
@@ -165,6 +165,85 @@ class Stuntman {
   off(event: DebugEventName, listener: Listener): void
 }
 ```
+
+### Browser option model
+
+Browser options are normalized by a dedicated option module before runtime
+execution reaches the lower-level engines.
+
+Decision history: `docs/adr/2026-06-17-browser-options-model.md`.
+
+```txt
+src/options/
+- owns browser option defaults
+- normalizes public options into internal option policy
+- resolves runner-level action defaults
+- resolves motion-enabled / motion-disabled behavior
+- materializes final action options by merging step/call overrides
+```
+
+The browser facade should avoid overlapping `mode` and `visual` flags. The
+current design direction is to replace them with an intent-oriented feedback
+surface:
+
+```ts
+type ActorbleFeedback =
+  | 'off'
+  | 'cursor'
+  | 'debug'
+  | {
+      cursor?: boolean
+      target?: boolean
+      click?: boolean
+      focus?: boolean
+      typing?: boolean
+      keystroke?: boolean
+      text?: 'hidden' | 'masked' | 'plain'
+    }
+```
+
+Motion is a separate runtime policy because visual feedback and movement timing
+are related but not identical concerns.
+
+```ts
+type RunOptions = OperationOptions & {
+  motion?: boolean
+  actionDefaults?: {
+    click?: Partial<ClickOptions>
+    moveTo?: Partial<MoveOptions>
+    typeInto?: Partial<TypeOptions>
+    press?: Partial<PressOptions>
+    drag?: Partial<DragOptions>
+  }
+}
+```
+
+Merge order:
+
+```txt
+1. centralized browser defaults
+2. actorble-level defaults
+3. runner-level motion policy
+4. runner-level actionDefaults[action]
+5. scenario step options or direct call options
+```
+
+Step/call options always win. Runner-level motion can disable pointer motion
+globally while still allowing action execution.
+
+Pointer motion profiles:
+
+```ts
+type PointerMotionProfile =
+  | { kind: 'ease'; timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'; duration?: DurationMs }
+  | { kind: 'inertia'; initialVelocity?: number; deceleration?: number }
+  | { kind: 'spring'; stiffness?: number; damping?: number; mass?: number }
+```
+
+`linear` is not a separate motion kind. It is represented as an `ease` timing
+function. `inertia` and `spring` do not accept `duration`; their implementation
+must be planned as follow-up tasks because they need physically meaningful
+parameters and settlement rules.
 
 ---
 
@@ -1647,6 +1726,13 @@ Timeline Engine
 - paused/running/stopped clock
 - cancellation
 
+Runtime Option Resolver
+- centralized defaults
+- public-to-internal option normalization
+- runner-level motion policy
+- action-level default merge
+- step/call-level override resolution
+
 Action Orchestrator
 - action lifecycle
 - transaction
@@ -1727,6 +1813,14 @@ Capability / Fidelity Reporter
 16. Diagnostics / Trace는 span 기반으로 설계한다.
 
 17. Capability / Fidelity 모델로 browser in-page runtime의 한계를 명시한다.
+
+18. Public option names should describe user intent instead of implementation detail.
+
+19. Browser option defaults and public-to-internal normalization belong to a dedicated option module.
+
+20. Runner-level action defaults are allowed, but step/call-level options always override them.
+
+21. Motion can be disabled at runner level without disabling action execution.
 ```
 
 ---
