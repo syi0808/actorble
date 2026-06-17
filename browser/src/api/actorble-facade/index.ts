@@ -10,6 +10,7 @@ import { BrowserSurfaceEngine } from '../../targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
+import { resolveBrowserVisualFeedbackOptions } from '../../options/index.js'
 import type { ActionOrchestrator } from '../../runtime/action-orchestrator/index.js'
 import type {
   CapabilityFidelityReporter,
@@ -383,19 +384,7 @@ function visualFeedbackForOptions(
     return undefined
   }
 
-  if (mode === 'headless') {
-    return { enabled: false, preset: 'quiet' }
-  }
-
-  if (visual === true) {
-    return { enabled: true, preset: 'quiet' }
-  }
-
-  if (typeof visual === 'object' && visual !== null) {
-    return { enabled: true, preset: 'quiet', ...visual }
-  }
-
-  return { enabled: false, preset: 'quiet' }
+  return resolveBrowserVisualFeedbackOptions(visual, mode)
 }
 
 function describeUnknownError(error: unknown): string {

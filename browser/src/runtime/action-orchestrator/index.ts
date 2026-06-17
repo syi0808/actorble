@@ -24,11 +24,14 @@ import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import { NoopVisualLayer } from '../../visual/visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
 import {
+  resolveActionOptions,
+  resolveBrowserVisualFeedbackOptions,
+} from '../../options/index.js'
+import {
   ActorbleError,
   actorbleError,
   cancellationError,
   element as elementLocator,
-  resolveVisualFeedbackOptions,
   timeoutError,
 } from '../../shared/index.js'
 import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
@@ -49,7 +52,6 @@ import type {
   OperationOptions,
   PressOptions,
   Point,
-  PointerMotionProfile,
   PointerButtonName,
   ScrollOptions,
   ScrollPosition,
@@ -215,12 +217,6 @@ type DragSignalContext = {
   active: boolean
 }
 
-const DEFAULT_PUBLIC_POINTER_MOTION: PointerMotionProfile = {
-  kind: 'ease',
-  easing: 'ease-in-out',
-  duration: 250,
-}
-const DEFAULT_PUBLIC_TYPING_DELAY = 60
 const emptyPointerHit: PointerHitSnapshot = {
   target: null,
   hoverChain: [],
@@ -314,8 +310,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#visual = options.visual ?? new NoopVisualLayer()
     this.#visualFeedback =
       options.visualFeedback === undefined
-        ? resolveVisualFeedbackOptions(undefined, { enabled: true, preset: 'debug' })
-        : resolveVisualFeedbackOptions({
+        ? resolveBrowserVisualFeedbackOptions({ enabled: true, preset: 'debug' })
+        : resolveBrowserVisualFeedbackOptions({
             enabled: true,
             preset: 'quiet',
             ...options.visualFeedback,
@@ -2457,24 +2453,41 @@ function resetPendingClickDispatch(dispatchState: ClickDispatchState): void {
 }
 
 function publicMoveOptions(options: MoveOptions | DragOptions): MoveOptions {
-  const movement = {
-    ...operationOptions(options),
-    ...(options.duration === undefined ? {} : { duration: options.duration }),
-    ...(options.motion === undefined ? {} : { motion: options.motion }),
-  }
-
-  return options.duration !== undefined || options.motion !== undefined
-    ? movement
-    : { ...movement, motion: DEFAULT_PUBLIC_POINTER_MOTION }
+  return resolveActionOptions('moveTo', {
+    options: {
+      ...operationOptions(options),
+      ...(options.duration === undefined ? {} : { duration: options.duration }),
+      ...(options.motion === undefined ? {} : { motion: options.motion }),
+    },
+  })
 }
 
 function publicClickGestureOptions(options: ClickOptions): ClickOptions {
-  return {
-    ...publicMoveOptions(options),
-    ...(options.button === undefined ? {} : { button: options.button }),
-    ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
-    ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
+  const gestureOptions = {
+    ...resolveActionOptions('click', {
+      options: {
+        ...operationOptions(options),
+        ...(options.duration === undefined ? {} : { duration: options.duration }),
+        ...(options.motion === undefined ? {} : { motion: options.motion }),
+        ...(options.button === undefined ? {} : { button: options.button }),
+        ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
+        ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
+      },
+    }),
   }
+
+  delete gestureOptions.force
+
+  return gestureOptions
+}
+
+function publicTypeOptions(options: TypeOptions): TypeOptions {
+  return resolveActionOptions('type', {
+    options: {
+      ...operationOptions(options),
+      ...(options.delay === undefined ? {} : { delay: options.delay }),
+    },
+  })
 }
 
 function createActionLayoutInvalidationTracker(
@@ -2759,10 +2772,7 @@ function typeOptions(
   options: TypeOptions,
   focusStrategy?: Extract<TypeOptions['focusStrategy'], 'none'>,
 ): TypeOptions {
-  const normalized: TypeOptions = {
-    ...operationOptions(options),
-    delay: options.delay ?? DEFAULT_PUBLIC_TYPING_DELAY,
-  }
+  const normalized = publicTypeOptions(options)
 
   return focusStrategy === undefined ? normalized : { ...normalized, focusStrategy }
 }

@@ -73,7 +73,7 @@ function createFakePointer() {
 }
 
 describe('BrowserGestureEngine', () => {
-  it('click composes move, down, press dwell, and up pointer operations in order', async () => {
+  it('click composes move, down, and up pointer operations in order', async () => {
     const { calls, pointer, timeline } = createFakePointer()
     const engine = new BrowserGestureEngine({ pointer, timeline })
 
@@ -84,7 +84,6 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([
       ['moveTo', { x: 40, y: 24 }],
       ['down', 'primary'],
-      ['delay', 80],
       ['up', 'primary'],
     ])
   })
@@ -109,7 +108,6 @@ describe('BrowserGestureEngine', () => {
       ['refreshPointBeforeDown', { x: 40, y: 24 }],
       ['moveTo', { x: 45, y: 29 }, { duration: 0 }],
       ['down', 'primary'],
-      ['delay', 80],
       ['up', 'primary'],
     ])
   })
@@ -155,7 +153,6 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([
       ['moveTo', { x: 5, y: 9 }],
       ['down', 'secondary'],
-      ['delay', 80],
       ['up', 'secondary'],
     ])
   })
@@ -249,7 +246,6 @@ describe('BrowserGestureEngine', () => {
         timeout: 1500,
       }],
       ['down', 'primary'],
-      ['delay', 80],
       ['up', 'primary'],
     ])
   })
@@ -322,7 +318,9 @@ describe('BrowserGestureEngine', () => {
       throw cancellationError('timeline.delay', 'scenario stopped')
     })
 
-    await expect(engine.click(createTarget(), { x: 3, y: 4 })).rejects.toMatchObject({
+    await expect(
+      engine.click(createTarget(), { x: 3, y: 4 }, { pressDwell: 80 }),
+    ).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: {
         operation: 'timeline.delay',

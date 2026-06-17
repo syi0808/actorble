@@ -159,7 +159,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-01 Dedicated Options Module
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `src/options/`를 추가해 browser option 기본값, public feedback
   normalization, resolved action option type, action default merge helper를 한
   경계에 둔다. 이 태스크는 runtime behavior 변경보다 option ownership을 먼저

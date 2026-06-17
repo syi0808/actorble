@@ -31,6 +31,7 @@ const componentDirectories = [
   'src/capability/capability-fidelity',
   'src/diagnostics/diagnostics-trace',
   'src/shared',
+  'src/options',
 ]
 
 describe('architecture scaffold', () => {

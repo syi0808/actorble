@@ -1,4 +1,5 @@
 export * from './shared/index.js'
+export * from './options/index.js'
 export * from './api/actorble-facade/index.js'
 export * from './runtime/scenario-runner/index.js'
 export * from './runtime/action-orchestrator/index.js'

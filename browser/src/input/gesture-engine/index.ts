@@ -46,8 +46,6 @@ export type GestureEngineOptions = Readonly<{
   timeline?: TimelineEngine
 }>
 
-const DEFAULT_CLICK_PRESS_DWELL = 80
-
 export interface GestureEngine {
   click(target: TargetHandle, point: Point, options?: GestureClickOptions): Promise<GestureResult>
   doubleClick(
@@ -256,11 +254,7 @@ function normalizeClickCount(clickCount: number | undefined): number {
 }
 
 function normalizePressDwell(pressDwell: number | undefined): number {
-  if (pressDwell === undefined) {
-    return DEFAULT_CLICK_PRESS_DWELL
-  }
-
-  if (!Number.isFinite(pressDwell) || pressDwell <= 0) {
+  if (pressDwell === undefined || !Number.isFinite(pressDwell) || pressDwell <= 0) {
     return 0
   }
 
