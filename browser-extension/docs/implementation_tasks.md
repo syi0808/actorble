@@ -191,7 +191,7 @@ src/recorder
 
 ### T5 Content Runtime Host
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add the content script host that owns page-facing runtime lifecycle:
   create an `Actorble` instance, run compiled scenarios, and stream status/trace
   back to extension UI.
