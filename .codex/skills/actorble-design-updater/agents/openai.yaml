@@ -1,0 +1,4 @@
+interface:
+  display_name: "Actorble Design Updater"
+  short_description: "Update Actorble design docs and ADRs"
+  default_prompt: "Use $actorble-design-updater to update Actorble architecture docs and record the ADR for the decision."
