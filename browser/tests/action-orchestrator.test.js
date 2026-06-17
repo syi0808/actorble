@@ -835,7 +835,9 @@ describe('BrowserActionOrchestrator', () => {
   it('doubleClick resolves, preflights, dispatches two click activations, and waits', async () => {
     const { calls, events, gesture, orchestrator, target, trace, wait } = createHarness()
 
-    await expect(orchestrator.doubleClick(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.doubleClick(css('#target-1'), resolveActionOptions('doubleClick')),
+    ).resolves.toBeUndefined()
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -1493,7 +1495,9 @@ describe('BrowserActionOrchestrator', () => {
       hitTestResults: [source.element, source.element, destination.element, destination.element],
     })
 
-    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.drag(css('#drag-source'), css('#drop-target'), resolveActionOptions('drag')),
+    ).resolves.toBeUndefined()
 
     expect(calls.slice(0, 15)).toEqual([
       'resolver.resolve',
@@ -2148,7 +2152,9 @@ describe('BrowserActionOrchestrator', () => {
       elementFromPoint: (point) => (point.x < 20 ? intermediate.element : target.element),
     })
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
+    ).resolves.toBeUndefined()
 
     expect(dom.elementFromPoint).toHaveBeenCalledWith(
       { x: 10, y: 15 },
@@ -2188,6 +2194,19 @@ describe('BrowserActionOrchestrator', () => {
         motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
         resolveEndpoint: expect.any(Function),
       }),
+    )
+  })
+
+  it('does not synthesize public movement defaults for unresolved moveTo options', async () => {
+    const { gesture, orchestrator } = createHarness()
+
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(gesture.hover).toHaveBeenCalledWith(
+      { x: 20, y: 30 },
+      {
+        resolveEndpoint: expect.any(Function),
+      },
     )
   })
 
@@ -2238,6 +2257,17 @@ describe('BrowserActionOrchestrator', () => {
     })
   })
 
+  it('does not synthesize public click motion or dwell defaults for unresolved click options', async () => {
+    const { gesture, orchestrator, target } = createHarness()
+
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+
+    expect(gesture.click).toHaveBeenCalledWith(target, { x: 20, y: 30 }, {
+      refreshPointBeforeDown: expect.any(Function),
+      resolveEndpoint: expect.any(Function),
+    })
+  })
+
   it('starts real pointer movement from the configured initial position', async () => {
     const timeline = createFrameTimeline()
     const { events, orchestrator } = createHarness({
@@ -2246,7 +2276,9 @@ describe('BrowserActionOrchestrator', () => {
       useRealGesture: true,
     })
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.click(css('#target-1'), resolveActionOptions('click')),
+    ).resolves.toBeUndefined()
 
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
@@ -2274,7 +2306,10 @@ describe('BrowserActionOrchestrator', () => {
     })
 
     await expect(
-      orchestrator.click(css('#target-1'), { pressDwell: 0 }),
+      orchestrator.click(css('#target-1'), {
+        ...resolveActionOptions('click'),
+        pressDwell: 0,
+      }),
     ).resolves.toBeUndefined()
 
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
@@ -2394,7 +2429,9 @@ describe('BrowserActionOrchestrator', () => {
     const pointerVisual = createPointerVisualTrackerDouble()
     const { orchestrator, target } = createHarness({ pointerVisual })
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
+    ).resolves.toBeUndefined()
 
     const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
     const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
@@ -2456,7 +2493,9 @@ describe('BrowserActionOrchestrator', () => {
       useRealGesture: true,
     })
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
+    ).resolves.toBeUndefined()
 
     const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
     const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
@@ -2706,6 +2745,7 @@ describe('BrowserActionOrchestrator', () => {
 
     const click = orchestrator.click(css('#target-1'), {
       duration: 0,
+      pressDwell: 80,
       signal: controller.signal,
     })
 
@@ -2745,6 +2785,7 @@ describe('BrowserActionOrchestrator', () => {
     try {
       click = orchestrator.click(css('#target-1'), {
         duration: 0,
+        pressDwell: 80,
         timeout: 25,
         signal: controller.signal,
       })
@@ -3459,6 +3500,14 @@ describe('BrowserActionOrchestrator', () => {
     })
   })
 
+  it('does not synthesize public type cadence for unresolved type options', async () => {
+    const { orchestrator, text } = createHarness()
+
+    await expect(orchestrator.type('abc')).resolves.toBeUndefined()
+
+    expect(text.type).toHaveBeenCalledWith('abc', {})
+  })
+
   it('types into the currently focused editable target through the public action path', async () => {
     const { input, orchestrator, timeline, trace } = createRealTextHarness()
     input.value = 'A'
@@ -3517,6 +3566,7 @@ describe('BrowserActionOrchestrator', () => {
     input.focus()
 
     const result = orchestrator.type('ab', {
+      ...resolveActionOptions('type'),
       signal: controller.signal,
     })
 
@@ -3555,6 +3605,7 @@ describe('BrowserActionOrchestrator', () => {
 
     try {
       const result = orchestrator.type('ab', {
+        ...resolveActionOptions('type'),
         timeout: 25,
       })
 
@@ -3725,10 +3776,20 @@ describe('BrowserActionOrchestrator', () => {
     })
   })
 
+  it('does not synthesize public typeInto cadence for unresolved typeInto options', async () => {
+    const { orchestrator, target, text } = createHarness()
+
+    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {})
+  })
+
   it('uses the default public typeInto cadence between grapheme inputs', async () => {
     const { input, orchestrator, timeline } = createRealTextHarness()
 
-    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'abc', resolveActionOptions('typeInto')),
+    ).resolves.toBeUndefined()
 
     expect(timeline.delay).toHaveBeenCalledTimes(2)
     expect(timeline.delay).toHaveBeenNthCalledWith(1, 60, {})
@@ -3744,6 +3805,7 @@ describe('BrowserActionOrchestrator', () => {
     })
 
     const result = orchestrator.typeInto(css('#target-1'), 'ab', {
+      ...resolveActionOptions('typeInto'),
       signal: controller.signal,
     })
 
@@ -3770,6 +3832,7 @@ describe('BrowserActionOrchestrator', () => {
 
     try {
       const result = orchestrator.typeInto(css('#target-1'), 'ab', {
+        ...resolveActionOptions('typeInto'),
         timeout: 25,
       })
 

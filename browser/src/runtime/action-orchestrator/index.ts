@@ -23,10 +23,7 @@ import { BrowserTextInputEngine } from '../../input/text-input-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import { NoopVisualLayer } from '../../visual/visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
-import {
-  resolveActionOptions,
-  resolveBrowserFeedbackOptions,
-} from '../../options/index.js'
+import { resolveBrowserFeedbackOptions } from '../../options/index.js'
 import {
   ActorbleError,
   actorbleError,
@@ -392,7 +389,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const moveTarget = handle
       await this.#withPointerPerformTimeout(
         'moveTo',
-        publicMoveOptions(options),
+        pointerMovementOptions(options),
         (performOptions) => {
           const pointTracker = this.#createTargetPointTracker('moveTo', moveTarget, point, span)
 
@@ -457,7 +454,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withPointerPerformTimeout(
         'click',
-        publicClickGestureOptions(options),
+        clickGestureOptions(options),
         (performOptions) => {
           const pointTracker = this.#createTargetPointTracker('click', clickTarget, point, span)
 
@@ -554,7 +551,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withPointerPerformTimeout(
         'clickCurrent',
-        publicClickGestureOptions(options),
+        clickGestureOptions(options),
         (performOptions) =>
           this.#withSignalTarget(clickTarget, commandId, () =>
             this.#gesture.click(clickTarget, currentPoint, {
@@ -645,7 +642,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const commandId = this.#createPointerCommandId()
       const result = await this.#withPointerPerformTimeout(
         'doubleClick',
-        publicClickGestureOptions(options),
+        clickGestureOptions(options),
         (performOptions) => {
           const pointTracker = this.#createTargetPointTracker('doubleClick', clickTarget, point, span)
 
@@ -832,7 +829,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         const commandId = this.#createPointerCommandId()
         const result = await this.#withPointerPerformTimeout(
           'typeInto',
-          publicClickGestureOptions(clickOptions),
+          clickGestureOptions(clickOptions),
           (performOptions) => {
             const pointTracker = this.#createTargetPointTracker('typeInto', typeTarget, point, span)
 
@@ -1148,7 +1145,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       let outputDestinationPoint = freshDestination.point
       const result = await this.#withPointerPerformTimeout(
         'drag',
-        publicMoveOptions(options),
+        pointerMovementOptions(options),
         (performOptions) => {
           const sourcePointTracker = this.#createTargetPointTracker(
             'drag',
@@ -2450,44 +2447,6 @@ function resetPendingClickDispatch(dispatchState: ClickDispatchState): void {
   dispatchState.upSeen = false
 }
 
-function publicMoveOptions(options: MoveOptions | DragOptions): MoveOptions {
-  return resolveActionOptions('moveTo', {
-    options: {
-      ...operationOptions(options),
-      ...(options.duration === undefined ? {} : { duration: options.duration }),
-      ...(options.motion === undefined ? {} : { motion: options.motion }),
-    },
-  })
-}
-
-function publicClickGestureOptions(options: ClickOptions): ClickOptions {
-  const gestureOptions = {
-    ...resolveActionOptions('click', {
-      options: {
-        ...operationOptions(options),
-        ...(options.duration === undefined ? {} : { duration: options.duration }),
-        ...(options.motion === undefined ? {} : { motion: options.motion }),
-        ...(options.button === undefined ? {} : { button: options.button }),
-        ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
-        ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
-      },
-    }),
-  }
-
-  delete gestureOptions.force
-
-  return gestureOptions
-}
-
-function publicTypeOptions(options: TypeOptions): TypeOptions {
-  return resolveActionOptions('type', {
-    options: {
-      ...operationOptions(options),
-      ...(options.delay === undefined ? {} : { delay: options.delay }),
-    },
-  })
-}
-
 function createActionLayoutInvalidationTracker(
   dom: DomPort,
   timeline: TimelineEngine,
@@ -2766,11 +2725,31 @@ function cancellationOptions(options: OperationOptions): CancellationOptions {
   return options.signal === undefined ? {} : { signal: options.signal }
 }
 
+function pointerMovementOptions(options: MoveOptions | DragOptions): MoveOptions {
+  return {
+    ...operationOptions(options),
+    ...(options.duration === undefined ? {} : { duration: options.duration }),
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
+  }
+}
+
+function clickGestureOptions(options: ClickOptions): ClickOptions {
+  return {
+    ...pointerMovementOptions(options),
+    ...(options.button === undefined ? {} : { button: options.button }),
+    ...(options.clickCount === undefined ? {} : { clickCount: options.clickCount }),
+    ...(options.pressDwell === undefined ? {} : { pressDwell: options.pressDwell }),
+  }
+}
+
 function typeOptions(
   options: TypeOptions,
   focusStrategy?: Extract<TypeOptions['focusStrategy'], 'none'>,
 ): TypeOptions {
-  const normalized = publicTypeOptions(options)
+  const normalized = {
+    ...operationOptions(options),
+    ...(options.delay === undefined ? {} : { delay: options.delay }),
+  }
 
   return focusStrategy === undefined ? normalized : { ...normalized, focusStrategy }
 }

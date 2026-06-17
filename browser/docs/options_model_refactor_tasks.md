@@ -249,7 +249,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-05 Runtime Consumption Of Resolved Options
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Action Orchestrator, Gesture Engine, Text Input Engine의 ad hoc default
   helper를 제거하고, 하위 layer가 resolved option 또는 좁은 context만 소비하도록
   정리한다.
