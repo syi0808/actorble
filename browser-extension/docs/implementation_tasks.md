@@ -128,7 +128,7 @@ src/recorder
 
 ### T2 Browser Runtime Compiler
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Compile portable scenario documents into `@actorble/browser`
   runtime scenarios. The compiler converts intent; it does not execute actions
   or recreate runtime semantics.

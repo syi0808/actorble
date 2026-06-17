@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json'
 import missingStepsFixture from '../../schemas/scenario/draft/fixtures/invalid/missing-steps.json'
-import { compileToBrowserRuntime } from '../src/scenario/compile-to-browser-runtime.js'
 import { exportScenarioToCode } from '../src/scenario/export-code.js'
 import { migrateScenarioDocument } from '../src/scenario/migrate.js'
 import {
@@ -133,21 +132,16 @@ describe('scenario skeleton contracts', () => {
     expect(migration.value).toBe(draftScenario)
   })
 
-  it('keeps compiler and code export as explicit stubs', () => {
-    const compilation = compileToBrowserRuntime(draftScenario)
+  it('keeps code export as an explicit stub', () => {
     const codeExport = exportScenarioToCode(draftScenario)
 
-    expect(compilation.ok).toBe(false)
     expect(codeExport.ok).toBe(false)
-
-    for (const result of [compilation, codeExport]) {
-      expect(result).toMatchObject({
-        issues: [
-          {
-            code: 'not_implemented',
-          },
-        ],
-      })
-    }
+    expect(codeExport).toMatchObject({
+      issues: [
+        {
+          code: 'not_implemented',
+        },
+      ],
+    })
   })
 })
