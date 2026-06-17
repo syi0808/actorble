@@ -206,7 +206,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-03 Actorble Defaults And Direct Call Resolution
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `createActorble()` 시점의 actorble-level defaults를 direct public
   action call에 적용한다. Scenario Runner가 없는 `click`, `moveTo`, `typeInto`
   같은 호출도 options module의 resolved option을 거쳐야 한다.

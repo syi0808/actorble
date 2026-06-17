@@ -168,6 +168,8 @@ export type ActorbleOptions = Readonly<{
   debug?: boolean
   pointer?: ActorblePointerOptions
   feedback?: ActorbleFeedback
+  motion?: boolean
+  actionDefaults?: BrowserActionDefaults
 }>
 
 export type ActorblePointerOptions = Readonly<{
@@ -412,6 +414,21 @@ export type DragOptions = OperationOptions &
   }>
 
 export type WaitOptions = OperationOptions
+
+export type BrowserActionDefaults = Readonly<{
+  moveTo?: Readonly<Partial<MoveOptions>>
+  click?: Readonly<Partial<ClickOptions>>
+  clickCurrent?: Readonly<Partial<ClickCurrentOptions>>
+  doubleClick?: Readonly<Partial<ClickOptions>>
+  focus?: Readonly<Partial<FocusOptions>>
+  type?: Readonly<Partial<TypeOptions>>
+  typeInto?: Readonly<Partial<TypeOptions>>
+  fill?: Readonly<Partial<FillOptions>>
+  press?: Readonly<Partial<PressOptions>>
+  scrollTo?: Readonly<Partial<ScrollOptions>>
+  drag?: Readonly<Partial<DragOptions>>
+  waitFor?: Readonly<Partial<WaitOptions>>
+}>
 
 export type ScenarioPacingOptions = Readonly<{
   betweenSteps?: DurationMs

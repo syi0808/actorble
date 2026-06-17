@@ -10,7 +10,7 @@ import { BrowserSurfaceEngine } from '../../targeting/surface-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { BrowserVisualLayer } from '../../visual/visual-layer/index.js'
-import { resolveActorbleOptions } from '../../options/index.js'
+import { resolveActionOptions, resolveActorbleOptions } from '../../options/index.js'
 import type { ActionOrchestrator } from '../../runtime/action-orchestrator/index.js'
 import type {
   CapabilityFidelityReporter,
@@ -25,7 +25,10 @@ import type { DomPort } from '../../shared/index.js'
 import type { ScenarioRunner } from '../../runtime/scenario-runner/index.js'
 import type { TargetResolver } from '../../targeting/target-resolver/index.js'
 import type { VisualLayer } from '../../visual/visual-layer/index.js'
-import type { ResolvedBrowserFeedbackOptions } from '../../options/index.js'
+import type {
+  ResolvedActorbleOptions,
+  ResolvedBrowserFeedbackOptions,
+} from '../../options/index.js'
 import type {
   ActorbleListener,
   ActorbleOptions,
@@ -64,6 +67,7 @@ export type ActorbleFacadeOptions = ActorbleOptions &
   }>
 
 export class Actorble {
+  readonly #options: ResolvedActorbleOptions
   readonly #capabilities: CapabilityFidelityReporter
   readonly #geometry: GeometryEngine
   readonly #orchestrator: ActionOrchestrator
@@ -114,6 +118,7 @@ export class Actorble {
       })
 
     this.#trace = trace
+    this.#options = resolvedOptions
     this.#layoutInvalidation = layoutInvalidation
     this.#capabilities =
       options.capabilities ??
@@ -153,54 +158,92 @@ export class Actorble {
   }
 
   moveTo(target: TargetLike, options?: MoveOptions): Promise<void> {
-    return this.#orchestrator.moveTo(target, options)
+    return this.#orchestrator.moveTo(
+      target,
+      resolveActionOptions('moveTo', { actorble: this.#options, options }),
+    )
   }
 
   click(target: TargetLike, options?: ClickOptions): Promise<void> {
-    return this.#orchestrator.click(target, options)
+    return this.#orchestrator.click(
+      target,
+      resolveActionOptions('click', { actorble: this.#options, options }),
+    )
   }
 
   clickCurrent(options?: ClickCurrentOptions): Promise<void> {
-    return this.#orchestrator.clickCurrent(options)
+    return this.#orchestrator.clickCurrent(
+      resolveActionOptions('clickCurrent', { actorble: this.#options, options }),
+    )
   }
 
   doubleClick(target: TargetLike, options?: ClickOptions): Promise<void> {
-    return this.#orchestrator.doubleClick(target, options)
+    return this.#orchestrator.doubleClick(
+      target,
+      resolveActionOptions('doubleClick', { actorble: this.#options, options }),
+    )
   }
 
   focus(target: TargetLike, options?: FocusOptions): Promise<void> {
-    return this.#orchestrator.focus(target, options)
+    return this.#orchestrator.focus(
+      target,
+      resolveActionOptions('focus', { actorble: this.#options, options }),
+    )
   }
 
   type(text: string, options?: TypeOptions): Promise<void> {
-    return this.#orchestrator.type(text, options)
+    return this.#orchestrator.type(
+      text,
+      resolveActionOptions('type', { actorble: this.#options, options }),
+    )
   }
 
   typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void> {
-    return this.#orchestrator.typeInto(target, text, options)
+    return this.#orchestrator.typeInto(
+      target,
+      text,
+      resolveActionOptions('typeInto', { actorble: this.#options, options }),
+    )
   }
 
   fill(target: TargetLike, text: string, options?: FillOptions): Promise<void> {
-    return this.#orchestrator.fill(target, text, options)
+    return this.#orchestrator.fill(
+      target,
+      text,
+      resolveActionOptions('fill', { actorble: this.#options, options }),
+    )
   }
 
   press(keys: string, options?: PressOptions): Promise<void> {
-    return this.#orchestrator.press(keys, options)
+    return this.#orchestrator.press(
+      keys,
+      resolveActionOptions('press', { actorble: this.#options, options }),
+    )
   }
 
   scrollTo(
     targetOrPosition: TargetLike | ScrollPosition,
     options?: ScrollOptions,
   ): Promise<void> {
-    return this.#orchestrator.scrollTo(targetOrPosition, options)
+    return this.#orchestrator.scrollTo(
+      targetOrPosition,
+      resolveActionOptions('scrollTo', { actorble: this.#options, options }),
+    )
   }
 
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void> {
-    return this.#orchestrator.drag(from, to, options)
+    return this.#orchestrator.drag(
+      from,
+      to,
+      resolveActionOptions('drag', { actorble: this.#options, options }),
+    )
   }
 
   async waitFor(condition: WaitCondition, options?: WaitOptions): Promise<void> {
-    await this.#orchestrator.waitFor(condition, options)
+    await this.#orchestrator.waitFor(
+      condition,
+      resolveActionOptions('waitFor', { actorble: this.#options, options }),
+    )
   }
 
   run(scenario: Scenario, options?: RunOptions): Promise<void> {

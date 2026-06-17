@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Actorble, createActorble } from '../src/api/actorble-facade/index.js'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BROWSER_OPTION_DEFAULTS } from '../src/options/index.js'
 import { css } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {
@@ -162,22 +163,87 @@ describe('Actorble facade', () => {
 
     expect(resolver.resolve).toHaveBeenCalledWith(locator, { strict: true })
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, moveOptions)
-    expect(orchestrator.click).toHaveBeenCalledWith(locator, clickOptions)
-    expect(orchestrator.clickCurrent).toHaveBeenCalledWith(clickCurrentOptions)
-    expect(orchestrator.doubleClick).toHaveBeenCalledWith(locator, doubleClickOptions)
+    expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      ...clickOptions,
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+    })
+    expect(orchestrator.clickCurrent).toHaveBeenCalledWith({
+      ...clickCurrentOptions,
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+    })
+    expect(orchestrator.doubleClick).toHaveBeenCalledWith(locator, {
+      ...doubleClickOptions,
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+    })
     expect(orchestrator.focus).toHaveBeenCalledWith(locator, focusOptions)
     expect(orchestrator.type).toHaveBeenCalledWith('hello', typeOptions)
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', typeIntoOptions)
     expect(orchestrator.fill).toHaveBeenCalledWith(locator, 'filled', fillOptions)
     expect(orchestrator.press).toHaveBeenCalledWith('Shift+K', pressOptions)
     expect(orchestrator.scrollTo).toHaveBeenCalledWith(scrollPosition, scrollOptions)
-    expect(orchestrator.drag).toHaveBeenCalledWith(locator, otherLocator, dragOptions)
+    expect(orchestrator.drag).toHaveBeenCalledWith(locator, otherLocator, {
+      ...dragOptions,
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+    })
     expect(orchestrator.waitFor).toHaveBeenCalledWith(condition, waitOptions)
     expect(runner.run).toHaveBeenCalledWith(scenario, { timeout: 30 })
     expect(runner.pause).toHaveBeenCalledOnce()
     expect(runner.resume).toHaveBeenCalledOnce()
     expect(runner.stop).toHaveBeenCalledOnce()
     expect(actorble.getTrace()).toEqual(trace.getTrace())
+  })
+
+  it('applies actorble-level action defaults to direct public calls', async () => {
+    const { orchestrator, resolver, runner, trace } = createDependencies()
+    const actorble = new Actorble({
+      orchestrator,
+      resolver,
+      runner,
+      trace,
+      actionDefaults: {
+        click: { timeout: 100, pressDwell: 0 },
+        moveTo: { duration: 25 },
+        typeInto: { delay: 5 },
+      },
+    })
+    const locator = css('#target-1')
+
+    await expect(actorble.click(locator, { timeout: 10, pressDwell: 12 })).resolves.toBeUndefined()
+    await expect(actorble.moveTo(locator)).resolves.toBeUndefined()
+    await expect(actorble.typeInto(locator, 'hello')).resolves.toBeUndefined()
+
+    expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      timeout: 10,
+      pressDwell: 12,
+    })
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { duration: 25 })
+    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { delay: 5 })
+  })
+
+  it('applies actorble-level motion policy to direct pointer calls without overriding call movement', async () => {
+    const { orchestrator, resolver, runner, trace } = createDependencies()
+    const motion = { kind: 'ease', easing: 'ease-out', duration: 40 }
+    const actorble = new Actorble({
+      orchestrator,
+      resolver,
+      runner,
+      trace,
+      motion: false,
+    })
+    const locator = css('#target-1')
+
+    await expect(actorble.click(locator)).resolves.toBeUndefined()
+    await expect(actorble.moveTo(locator, { motion })).resolves.toBeUndefined()
+
+    expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      duration: 0,
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+    })
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { motion })
   })
 
   it('creates a default module graph that can resolve and click through the facade', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { resolveActionOptions } from '../src/options/index.js'
 import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
 import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
@@ -2174,10 +2175,12 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
-  it('applies the public ease movement default when moveTo omits movement options', async () => {
+  it('consumes resolved public ease movement options for moveTo', async () => {
     const { gesture, orchestrator } = createHarness()
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
+    ).resolves.toBeUndefined()
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
@@ -2201,14 +2204,16 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('routes the public click movement default before pointer down', async () => {
+  it('routes resolved public click movement options before pointer down', async () => {
     const timeline = createFrameTimeline()
     const { calls, events, orchestrator } = createHarness({
       timeline,
       useRealGesture: true,
     })
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.click(css('#target-1'), resolveActionOptions('click')),
+    ).resolves.toBeUndefined()
 
     expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
     expect(timeline.delay).toHaveBeenCalledWith(80, {})
@@ -3434,10 +3439,10 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.click).not.toHaveBeenCalled()
   })
 
-  it('applies the default public type cadence when delay is omitted', async () => {
+  it('consumes resolved public type cadence options', async () => {
     const { orchestrator, text } = createHarness()
 
-    await expect(orchestrator.type('abc')).resolves.toBeUndefined()
+    await expect(orchestrator.type('abc', resolveActionOptions('type'))).resolves.toBeUndefined()
 
     expect(text.type).toHaveBeenCalledWith('abc', {
       delay: 60,
@@ -3696,10 +3701,12 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('applies the default public typeInto cadence when delay is omitted', async () => {
+  it('consumes resolved public typeInto cadence options', async () => {
     const { orchestrator, target, text } = createHarness()
 
-    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+    await expect(
+      orchestrator.typeInto(css('#target-1'), 'abc', resolveActionOptions('typeInto')),
+    ).resolves.toBeUndefined()
 
     expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {
       delay: 60,

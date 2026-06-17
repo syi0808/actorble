@@ -1,6 +1,7 @@
 import type {
   ActorbleFeedback,
   ActorbleOptions,
+  BrowserActionDefaults,
   ClickCurrentOptions,
   ClickOptions,
   DragOptions,
@@ -15,6 +16,8 @@ import type {
   VisualTextVisibility,
   WaitOptions,
 } from '../shared/index.js'
+
+export type { BrowserActionDefaults } from '../shared/index.js'
 
 const DEFAULT_POINTER_MOTION = {
   kind: 'ease',
@@ -96,21 +99,6 @@ export type BrowserActionOptionMap = Readonly<{
 
 export type BrowserActionOptions<TAction extends BrowserActionName> =
   BrowserActionOptionMap[TAction]
-
-export type BrowserActionDefaults = Readonly<{
-  moveTo?: Readonly<Partial<MoveOptions>>
-  click?: Readonly<Partial<ClickOptions>>
-  clickCurrent?: Readonly<Partial<ClickCurrentOptions>>
-  doubleClick?: Readonly<Partial<ClickOptions>>
-  focus?: Readonly<Partial<FocusOptions>>
-  type?: Readonly<Partial<TypeOptions>>
-  typeInto?: Readonly<Partial<TypeOptions>>
-  fill?: Readonly<Partial<FillOptions>>
-  press?: Readonly<Partial<PressOptions>>
-  scrollTo?: Readonly<Partial<ScrollOptions>>
-  drag?: Readonly<Partial<DragOptions>>
-  waitFor?: Readonly<Partial<WaitOptions>>
-}>
 
 export type BrowserActorbleOptions = ActorbleOptions &
   Readonly<{
