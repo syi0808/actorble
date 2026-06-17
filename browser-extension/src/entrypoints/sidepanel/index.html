@@ -8,20 +8,53 @@
   </head>
   <body>
     <main>
-      <header>
+      <header class="app-header">
         <p class="eyebrow">Actorble</p>
-        <h1>Scenario Builder</h1>
+        <h1>Scenario Runner</h1>
       </header>
-      <section aria-label="Scenario list">
-        <h2>Scenarios</h2>
-        <p>No scenario document loaded.</p>
+      <section aria-labelledby="import-title">
+        <div class="section-heading">
+          <h2 id="import-title">Imported JSON</h2>
+          <span id="document-summary" class="summary">No scenario loaded</span>
+        </div>
+        <textarea
+          id="scenario-json"
+          spellcheck="false"
+          aria-label="Scenario JSON"
+        ></textarea>
+        <div class="toolbar">
+          <label class="file-button">
+            <input id="scenario-file" type="file" accept="application/json,.json" />
+            Import
+          </label>
+          <button id="validate-button" type="button">Validate</button>
+          <button id="run-button" type="button" class="primary">Run</button>
+        </div>
       </section>
-      <section aria-label="Trace">
-        <h2>Trace</h2>
-        <p>Run trace will stream here.</p>
+      <section aria-labelledby="validation-title">
+        <div class="section-heading">
+          <h2 id="validation-title">Validation</h2>
+          <span id="validation-summary" class="summary">Idle</span>
+        </div>
+        <ul id="issue-list" class="issue-list" aria-live="polite"></ul>
+      </section>
+      <section aria-labelledby="run-title">
+        <div class="section-heading">
+          <h2 id="run-title">Run</h2>
+          <span id="status-pill" class="status-pill" data-status="idle">Idle</span>
+        </div>
+        <dl class="run-fields">
+          <div>
+            <dt>Run</dt>
+            <dd id="run-id">None</dd>
+          </div>
+          <div>
+            <dt>Trace</dt>
+            <dd id="trace-feedback">No trace event</dd>
+          </div>
+        </dl>
       </section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
-

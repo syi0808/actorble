@@ -210,7 +210,7 @@ src/recorder
 
 ### T6 First Vertical Slice: Imported Scenario Run
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Build the smallest user-visible path that proves the architecture:
   import JSON in the extension UI, validate, compile, run on the active tab, and
   display status/trace feedback.
