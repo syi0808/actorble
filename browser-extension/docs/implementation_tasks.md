@@ -230,7 +230,7 @@ src/recorder
 
 ### T7 Scenario Storage And Import/Export
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Store scenario documents as extension-owned records. Do not store
   compiled runtime scenarios because compiled output is platform-specific and
   disposable.
