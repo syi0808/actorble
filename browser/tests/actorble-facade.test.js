@@ -207,7 +207,11 @@ describe('Actorble facade', () => {
     await expect(actorble.click(css('#save'))).resolves.toBeUndefined()
 
     expect(seen).toEqual(['pointerdown', 'pointerup', 'click'])
-    expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull()
+    const overlay = document.body.querySelector('[data-actorble-overlay-root]')
+    expect(overlay).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-cursor]')).not.toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-highlight]')).toBeNull()
+    expect(overlay.querySelector('[data-actorble-visual-click]')).toBeNull()
     expect(actorble.getTrace().spans).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'action.click', status: 'ok' }),
@@ -574,7 +578,7 @@ describe('Actorble facade', () => {
     })
   })
 
-  it('uses cursor feedback without changing click behavior', async () => {
+  it('uses cursor feedback by default without changing click behavior', async () => {
     const button = document.createElement('button')
     button.id = 'create'
     button.textContent = 'Create'
@@ -596,7 +600,7 @@ describe('Actorble facade', () => {
     button.addEventListener('pointerdown', () => seen.push('pointerdown'))
     button.addEventListener('pointerup', () => seen.push('pointerup'))
     button.addEventListener('click', () => seen.push('click'))
-    const actorble = createActorble({ feedback: 'cursor' })
+    const actorble = createActorble()
 
     await expect(actorble.click(css('#create'))).resolves.toBeUndefined()
 

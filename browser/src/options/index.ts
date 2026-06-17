@@ -23,8 +23,8 @@ const DEFAULT_POINTER_MOTION = {
 } as const satisfies PointerMotionProfile
 
 const DEFAULT_FEEDBACK = {
-  enabled: false,
-  cursor: false,
+  enabled: true,
+  cursor: true,
   targetHighlight: false,
   clickFeedback: false,
   focusOverlay: false,
@@ -210,7 +210,11 @@ export function resolveActionOptions<TAction extends BrowserActionName>(
 export function resolveBrowserFeedbackOptions(
   feedback: BrowserFeedbackInput | undefined = undefined,
 ): ResolvedBrowserFeedbackOptions {
-  if (feedback === undefined || feedback === 'off') {
+  if (feedback === undefined) {
+    return { ...DEFAULT_FEEDBACK }
+  }
+
+  if (feedback === 'off') {
     return { ...feedbackOffDefaults }
   }
 
@@ -319,7 +323,15 @@ function resolveFeedbackChannels(
   }
 }
 
-const feedbackOffDefaults = DEFAULT_FEEDBACK
+const feedbackOffDefaults = {
+  enabled: false,
+  cursor: false,
+  targetHighlight: false,
+  clickFeedback: false,
+  focusOverlay: false,
+  typingIndicator: false,
+  keystrokeOverlay: false,
+} as const satisfies ResolvedBrowserFeedbackOptions
 
 const quietFeedbackDefaults = {
   cursor: true,

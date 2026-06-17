@@ -53,9 +53,9 @@ describe('BrowserCapabilityFidelityReporter', () => {
       pointerInput: 'synthetic-dom-events',
       visualOverlay: {
         implementation: 'browser-overlay',
-        runtime: 'disabled',
-        interactivity: 'none',
-        hitTesting: 'not-applicable',
+        runtime: 'enabled',
+        interactivity: 'non-interactive',
+        hitTesting: 'ignored',
       },
     })
   })

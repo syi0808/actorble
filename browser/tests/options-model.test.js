@@ -20,8 +20,8 @@ describe('browser options model', () => {
     expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80)
 
     expect(resolveActorbleOptions().feedback).toEqual({
-      enabled: false,
-      cursor: false,
+      enabled: true,
+      cursor: true,
       targetHighlight: false,
       clickFeedback: false,
       focusOverlay: false,
