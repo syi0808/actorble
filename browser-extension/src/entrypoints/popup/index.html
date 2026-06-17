@@ -13,13 +13,35 @@
         <h1>Run Control</h1>
       </header>
       <section aria-label="Current tab status">
-        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status-dot" class="status-dot" data-tone="checking" aria-hidden="true"></span>
         <span id="status-message">Extension ready</span>
       </section>
+      <label class="field">
+        <span>Scenario</span>
+        <select id="scenario-select" aria-label="Saved scenario">
+          <option>Loading scenarios</option>
+        </select>
+      </label>
+      <dl class="run-fields" aria-label="Run status">
+        <div>
+          <dt>Last run</dt>
+          <dd id="last-run-status">No scenario selected</dd>
+        </div>
+        <div>
+          <dt>Current run</dt>
+          <dd id="current-run-status">No active run</dd>
+        </div>
+        <div>
+          <dt>Recording</dt>
+          <dd id="record-status">Not recording</dd>
+        </div>
+      </dl>
       <div class="actions" aria-label="Popup actions">
-        <button type="button" data-command="record">Record</button>
-        <button type="button" data-command="run">Run</button>
-        <button type="button" data-command="panel">Panel</button>
+        <button id="record-button" type="button">Record</button>
+        <button id="run-button" type="button" class="primary">Run</button>
+        <button id="pause-resume-button" type="button">Pause</button>
+        <button id="stop-button" type="button">Stop</button>
+        <button id="panel-button" type="button">Panel</button>
       </div>
     </main>
     <script type="module" src="./main.ts"></script>

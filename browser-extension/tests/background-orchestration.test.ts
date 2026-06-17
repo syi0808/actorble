@@ -166,6 +166,87 @@ describe('background orchestration', () => {
     })
   })
 
+  it('returns popup state for the active tab and latest matching sessions', async () => {
+    const activeTab = await createActiveTab()
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(createRunMessage(activeTab.id))
+    now += 10
+    await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+        },
+      }),
+    )
+
+    const state = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          frameId: 0,
+          scenarioId: 'scenario-1',
+        },
+      }),
+    )
+
+    expect(state).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'popup:state',
+        activeTab: {
+          ready: true,
+          tabId: activeTab.id,
+          frameId: 0,
+          url: 'http://localhost:3000/dashboard',
+        },
+        runSession: {
+          type: 'run',
+          runId: 'run-1',
+          scenarioId: 'scenario-1',
+          status: 'running',
+        },
+        recordSession: {
+          type: 'record',
+          runId: 'record-1',
+          scenarioId: 'scenario-1',
+          status: 'recording',
+        },
+      },
+    })
+  })
+
+  it('returns blocked popup readiness when the active tab cannot run content', async () => {
+    await createActiveTab('chrome://extensions')
+    const orchestrator = createTestOrchestrator()
+
+    const state = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {},
+      }),
+    )
+
+    expect(state).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'popup:state',
+        activeTab: {
+          ready: false,
+          issue: {
+            code: 'unsupported_page',
+            message: 'Actorble cannot run on chrome://extensions.',
+          },
+        },
+      },
+    })
+  })
+
   it('returns a clear routing error when the target tab is missing', async () => {
     const orchestrator = createTestOrchestrator()
 

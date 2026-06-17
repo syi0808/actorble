@@ -98,6 +98,7 @@ export function createContentRuntimeHost(
       case 'inspector:stop':
       case 'trace:event':
       case 'runtime:status':
+      case 'popup:get-state':
         return failure({
           code: 'unsupported_message',
           message: `${message.kind} is not handled by the content runtime host.`,

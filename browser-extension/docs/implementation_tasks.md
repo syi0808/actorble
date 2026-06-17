@@ -249,7 +249,7 @@ src/recorder
 
 ### T8 Popup Run Controls
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Implement popup as a short-lived control surface. It should not own
   full scenario authoring.
 - Dependencies: T3, T4, T7.

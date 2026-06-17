@@ -1,3 +1,11 @@
+import { browser } from 'wxt/browser'
+import { createWxtScenarioStorageRepository } from '../../storage/index.js'
+import {
+  createPopupRunControls,
+  createPopupRunControlsView,
+  type PopupRunControlsSnapshot,
+} from './run-controls.js'
+
 type ChromeSidePanelApi = Readonly<{
   open(options: Readonly<{ windowId?: number }>): Promise<void>
 }>
@@ -22,26 +30,141 @@ type ChromeExtensionApi = Readonly<{
   windows?: ChromeWindowsApi
 }>
 
-const commandButtons = document.querySelectorAll<HTMLButtonElement>('[data-command]')
-const statusMessage = document.querySelector<HTMLElement>('#status-message')
+const scenarioRepository = createWxtScenarioStorageRepository()
+const controls = createPopupRunControls({
+  listScenarios() {
+    return scenarioRepository.list()
+  },
+  sendMessage(message) {
+    return browser.runtime.sendMessage(message)
+  },
+})
 
-for (const button of commandButtons) {
-  button.addEventListener('click', () => {
-    button.dataset.pending = 'true'
+const statusDot = requiredElement<HTMLElement>('#status-dot')
+const statusMessage = requiredElement<HTMLElement>('#status-message')
+const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
+const lastRunStatus = requiredElement<HTMLElement>('#last-run-status')
+const currentRunStatus = requiredElement<HTMLElement>('#current-run-status')
+const recordStatus = requiredElement<HTMLElement>('#record-status')
+const runButton = requiredElement<HTMLButtonElement>('#run-button')
+const recordButton = requiredElement<HTMLButtonElement>('#record-button')
+const pauseResumeButton = requiredElement<HTMLButtonElement>('#pause-resume-button')
+const stopButton = requiredElement<HTMLButtonElement>('#stop-button')
+const panelButton = requiredElement<HTMLButtonElement>('#panel-button')
 
-    if (button.dataset.command === 'panel') {
-      void openSidePanel(button)
-      return
-    }
+scenarioSelect.addEventListener('change', () => {
+  controls.selectScenario(scenarioSelect.value)
+  void refreshPopup()
+})
 
-    window.setTimeout(() => {
-      delete button.dataset.pending
-    }, 160)
-  })
+runButton.addEventListener('click', () => {
+  void runAction(() => controls.runSelectedScenario())
+})
+
+recordButton.addEventListener('click', () => {
+  const snapshot = controls.getSnapshot()
+  void runAction(() => (
+    snapshot.currentRecord?.status === 'recording'
+      ? controls.stopRecording()
+      : controls.startRecording()
+  ))
+})
+
+pauseResumeButton.addEventListener('click', () => {
+  const snapshot = controls.getSnapshot()
+  void runAction(() => (
+    snapshot.currentRun?.status === 'paused'
+      ? controls.resumeCurrentRun()
+      : controls.pauseCurrentRun()
+  ))
+})
+
+stopButton.addEventListener('click', () => {
+  void runAction(() => controls.stopCurrentRun())
+})
+
+panelButton.addEventListener('click', () => {
+  void openSidePanel(panelButton)
+})
+
+browser.runtime.onMessage.addListener((message) => {
+  if (controls.ingestMessage(message)) {
+    render(controls.getSnapshot())
+  }
+})
+
+render(controls.getSnapshot())
+void refreshPopup()
+
+async function refreshPopup(): Promise<void> {
+  const refresh = controls.refresh()
+  render(controls.getSnapshot())
+  await refresh
+  render(controls.getSnapshot())
+}
+
+async function runAction(
+  action: () => Promise<unknown>,
+): Promise<void> {
+  const operation = action()
+  render(controls.getSnapshot())
+  await operation
+  render(controls.getSnapshot())
+}
+
+function render(snapshot: PopupRunControlsSnapshot): void {
+  const view = createPopupRunControlsView(snapshot)
+
+  statusDot.dataset.tone = view.statusTone
+  statusMessage.textContent = view.statusMessage
+  renderScenarioOptions(view.scenarioOptions, view.selectedScenarioId)
+
+  scenarioSelect.disabled = view.scenarioSelectDisabled
+  lastRunStatus.textContent = view.lastRunText
+  currentRunStatus.textContent = view.currentRunText
+  recordStatus.textContent = view.recordText
+  applyButtonView(runButton, view.buttons.run)
+  applyButtonView(recordButton, view.buttons.record)
+  applyButtonView(pauseResumeButton, view.buttons.pauseResume)
+  applyButtonView(stopButton, view.buttons.stop)
+}
+
+function renderScenarioOptions(
+  options: readonly Readonly<{ value: string; label: string }>[],
+  selectedScenarioId: string | undefined,
+): void {
+  scenarioSelect.replaceChildren()
+
+  if (options.length === 0) {
+    const option = document.createElement('option')
+    option.value = ''
+    option.textContent = 'No saved scenarios'
+    scenarioSelect.append(option)
+    return
+  }
+
+  for (const optionView of options) {
+    const option = document.createElement('option')
+    option.value = optionView.value
+    option.textContent = optionView.label
+    option.selected = optionView.value === selectedScenarioId
+    scenarioSelect.append(option)
+  }
+}
+
+function applyButtonView(
+  button: HTMLButtonElement,
+  view: Readonly<{ label: string; disabled: boolean; pending: boolean }>,
+): void {
+  button.textContent = view.label
+  button.disabled = view.disabled
+  button.dataset.pending = view.pending ? 'true' : 'false'
 }
 
 async function openSidePanel(button: HTMLButtonElement): Promise<void> {
-  setStatus('Opening panel')
+  button.dataset.pending = 'true'
+  button.disabled = true
+  statusMessage.textContent = 'Opening panel'
 
   try {
     const chromeApi = chromeExtension()
@@ -52,14 +175,15 @@ async function openSidePanel(button: HTMLButtonElement): Promise<void> {
     await chromeApi.sidePanel.open({
       windowId: chromeApi.windows?.WINDOW_ID_CURRENT ?? -2,
     })
-    setStatus('Panel opened')
+    statusMessage.textContent = 'Panel opened'
     window.close()
   } catch {
     await openSidePanelFallback()
-    setStatus('Panel opened in a tab')
+    statusMessage.textContent = 'Panel opened in a tab'
     window.close()
   } finally {
-    delete button.dataset.pending
+    button.dataset.pending = 'false'
+    button.disabled = false
   }
 }
 
@@ -88,8 +212,11 @@ function chromeExtension(): ChromeExtensionApi {
   return (globalThis as typeof globalThis & Readonly<{ chrome?: ChromeExtensionApi }>).chrome ?? {}
 }
 
-function setStatus(message: string): void {
-  if (statusMessage !== null) {
-    statusMessage.textContent = message
+function requiredElement<TElement extends HTMLElement>(selector: string): TElement {
+  const element = document.querySelector<TElement>(selector)
+  if (element === null) {
+    throw new Error(`Missing popup element: ${selector}`)
   }
+
+  return element
 }

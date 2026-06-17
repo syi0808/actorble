@@ -118,6 +118,13 @@ const validMessages = [
       message: 'Run started.',
     },
   },
+  {
+    kind: 'popup:get-state',
+    payload: {
+      frameId: 0,
+      scenarioId: 'scenario-1',
+    },
+  },
 ] satisfies readonly ActorbleExtensionMessage[]
 
 describe('messaging skeleton contracts', () => {
@@ -135,6 +142,7 @@ describe('messaging skeleton contracts', () => {
       'inspector:stop',
       'trace:event',
       'runtime:status',
+      'popup:get-state',
     ])
   })
 
@@ -223,6 +231,26 @@ describe('messaging skeleton contracts', () => {
         payload: {
           ...runCorrelation,
           status: 'unknown',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects popup state messages with invalid optional fields', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          frameId: '0',
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          scenarioId: 123,
         },
       }),
     ).toBe(false)

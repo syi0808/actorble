@@ -1,11 +1,12 @@
 import type {
   ActorbleExtensionMessage,
   ExtensionMessageKind,
+  PopupGetStateMessage,
   RequiredRunCorrelation,
   RequiredTabCorrelation,
 } from '../../messaging/index.js'
 import { isActorbleExtensionMessage } from '../../messaging/index.js'
-import { failure, ok, type ExtensionResult } from '../../shared/result.js'
+import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type { RuntimeRunStatus } from '../../trace/index.js'
 
 export type BackgroundTab = Readonly<{
@@ -82,8 +83,27 @@ export type BackgroundCommandReceipt = Readonly<{
   session?: BackgroundSessionSnapshot
 }>
 
+export type BackgroundPopupState = Readonly<{
+  kind: 'popup:state'
+  activeTab:
+    | Readonly<{
+        ready: true
+        tabId: number
+        frameId?: number
+        url: string
+      }>
+    | Readonly<{
+        ready: false
+        issue: ExtensionIssue
+      }>
+  runSession?: BackgroundRunSession
+  recordSession?: BackgroundRecordSession
+}>
+
+export type BackgroundMessageResult = BackgroundCommandReceipt | BackgroundPopupState
+
 export type BackgroundOrchestrator = Readonly<{
-  handleMessage(message: unknown): Promise<ExtensionResult<BackgroundCommandReceipt>>
+  handleMessage(message: unknown): Promise<ExtensionResult<BackgroundMessageResult>>
   resolveActiveTarget(frameId?: number): Promise<ExtensionResult<BackgroundTarget>>
   getRunSession(runId: string): BackgroundRunSession | null
   getRecordSession(correlation: Partial<RequiredTabCorrelation> & Readonly<{ runId?: string }>): BackgroundRecordSession | null
@@ -128,7 +148,7 @@ export function createBackgroundOrchestrator(
 
   async function handleMessage(
     message: unknown,
-  ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
+  ): Promise<ExtensionResult<BackgroundMessageResult>> {
     if (!isActorbleExtensionMessage(message)) {
       return failure({
         code: 'unsupported_message',
@@ -150,6 +170,8 @@ export function createBackgroundOrchestrator(
         return ingestRuntimeStatus(message)
       case 'trace:event':
         return ingestTraceEvent(message)
+      case 'popup:get-state':
+        return getPopupState(message)
       case 'scenario:validate':
       case 'scenario:compile':
         return failure({
@@ -158,6 +180,43 @@ export function createBackgroundOrchestrator(
           details: { kind: message.kind },
         })
     }
+  }
+
+  async function getPopupState(
+    message: PopupGetStateMessage,
+  ): Promise<ExtensionResult<BackgroundPopupState>> {
+    const target = await resolveActiveTarget(message.payload.frameId)
+
+    if (!target.ok) {
+      return ok({
+        kind: 'popup:state',
+        activeTab: {
+          ready: false,
+          issue: target.issues[0] ?? {
+            code: 'routing_error',
+            message: 'Active tab readiness could not be resolved.',
+          },
+        },
+      })
+    }
+
+    const sessionFilter = {
+      tabId: target.value.tabId,
+      frameId: target.value.frameId,
+      scenarioId: message.payload.scenarioId,
+    }
+
+    return ok({
+      kind: 'popup:state',
+      activeTab: {
+        ready: true,
+        tabId: target.value.tabId,
+        ...optionalFrameId(target.value.frameId),
+        url: target.value.url,
+      },
+      ...optionalRunSession(latestRunSession(sessionFilter)),
+      ...optionalRecordSession(latestRecordSession(sessionFilter)),
+    })
   }
 
   async function resolveActiveTarget(
@@ -384,6 +443,30 @@ export function createBackgroundOrchestrator(
     return recordSessions.get(recordSessionId(correlation as RequiredTabCorrelation)) ?? null
   }
 
+  function latestRunSession(
+    filter: RequiredTabCorrelation & Readonly<{ scenarioId?: string }>,
+  ): BackgroundRunSession | undefined {
+    return latestSession(
+      Array.from(runSessions.values()).filter((session) => (
+        session.tabId === filter.tabId &&
+        session.frameId === filter.frameId &&
+        (filter.scenarioId === undefined || session.scenarioId === filter.scenarioId)
+      )),
+    )
+  }
+
+  function latestRecordSession(
+    filter: RequiredTabCorrelation & Readonly<{ scenarioId?: string }>,
+  ): BackgroundRecordSession | undefined {
+    return latestSession(
+      Array.from(recordSessions.values()).filter((session) => (
+        session.tabId === filter.tabId &&
+        session.frameId === filter.frameId &&
+        (filter.scenarioId === undefined || session.scenarioId === filter.scenarioId)
+      )),
+    )
+  }
+
   return {
     handleMessage,
     resolveActiveTarget,
@@ -474,6 +557,30 @@ function frameOptions(frameId: number | undefined): Readonly<{ frameId?: number 
 
 function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
   return frameId === undefined ? {} : { frameId }
+}
+
+function optionalRunSession(
+  session: BackgroundRunSession | undefined,
+): Readonly<{ runSession?: BackgroundRunSession }> {
+  return session === undefined ? {} : { runSession: session }
+}
+
+function optionalRecordSession(
+  session: BackgroundRecordSession | undefined,
+): Readonly<{ recordSession?: BackgroundRecordSession }> {
+  return session === undefined ? {} : { recordSession: session }
+}
+
+function latestSession<TSession extends Readonly<{ updatedAt: number }>>(
+  sessions: readonly TSession[],
+): TSession | undefined {
+  return sessions.reduce<TSession | undefined>((latest, session) => {
+    if (latest === undefined || session.updatedAt > latest.updatedAt) {
+      return session
+    }
+
+    return latest
+  }, undefined)
 }
 
 function errorMessage(error: unknown): string {

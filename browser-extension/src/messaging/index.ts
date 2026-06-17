@@ -15,6 +15,7 @@ export const extensionMessageKinds = [
   'inspector:stop',
   'trace:event',
   'runtime:status',
+  'popup:get-state',
 ] as const
 
 export type ExtensionMessageKind = (typeof extensionMessageKinds)[number]
@@ -121,6 +122,14 @@ export type RuntimeStatusMessage = ExtensionMessage<
     }>
 >
 
+export type PopupGetStateMessage = ExtensionMessage<
+  'popup:get-state',
+  Readonly<{
+    frameId?: number
+    scenarioId?: string
+  }>
+>
+
 export type ActorbleExtensionMessage =
   | ScenarioValidateMessage
   | ScenarioCompileMessage
@@ -132,6 +141,7 @@ export type ActorbleExtensionMessage =
   | InspectorStopMessage
   | TraceEventMessage
   | RuntimeStatusMessage
+  | PopupGetStateMessage
 
 export type ActorbleExtensionMessageByKind<TKind extends ExtensionMessageKind> =
   Extract<ActorbleExtensionMessage, Readonly<{ kind: TKind }>>
@@ -219,6 +229,8 @@ function isPayloadForKind(
         isRuntimeRunStatus(payload.status) &&
         isOptionalString(payload.message)
       )
+    case 'popup:get-state':
+      return isOptionalFiniteNumber(payload.frameId) && isOptionalString(payload.scenarioId)
   }
 }
 
