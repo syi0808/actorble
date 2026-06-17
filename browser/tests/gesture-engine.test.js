@@ -236,13 +236,13 @@ describe('BrowserGestureEngine', () => {
     const engine = new BrowserGestureEngine({ pointer, timeline })
 
     await engine.click(createTarget(), { x: 12, y: 18 }, {
-      motion: { kind: 'spring', duration: 260 },
+      motion: { kind: 'ease', timing: 'ease-out', duration: 260 },
       timeout: 1500,
     })
 
     expect(calls).toEqual([
       ['moveTo', { x: 12, y: 18 }, {
-        motion: { kind: 'spring', duration: 260 },
+        motion: { kind: 'ease', timing: 'ease-out', duration: 260 },
         timeout: 1500,
       }],
       ['down', 'primary'],
@@ -382,7 +382,7 @@ describe('BrowserGestureEngine', () => {
         timeout: 1200,
         signal: controller.signal,
         duration: 420,
-        motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+        motion: { kind: 'ease', timing: 'ease-in-out', duration: 420 },
         force: true,
       },
     )
@@ -395,7 +395,7 @@ describe('BrowserGestureEngine', () => {
           timeout: 1200,
           signal: controller.signal,
           duration: 420,
-          motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+          motion: { kind: 'ease', timing: 'ease-in-out', duration: 420 },
         },
       ],
       ['down', 'primary'],
@@ -406,11 +406,36 @@ describe('BrowserGestureEngine', () => {
           timeout: 1200,
           signal: controller.signal,
           duration: 420,
-          motion: { kind: 'ease', easing: 'ease-in-out', duration: 420 },
+          motion: { kind: 'ease', timing: 'ease-in-out', duration: 420 },
         },
       ],
       ['up', 'primary'],
     ])
+  })
+
+  it('surfaces unsupported pointer motion profiles before pressing', async () => {
+    const signals = new BrowserPointerSignalBus()
+    const timeline = createTimeline()
+    const events = []
+
+    signals.subscribe((signal) => events.push(signal))
+
+    const engine = createGestureEngine({
+      pointer: new BrowserPointerEngine({ signals, timeline }),
+    })
+
+    await expect(
+      engine.click(createTarget(), { x: 12, y: 18 }, { motion: { kind: 'spring' } }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'pointer-engine',
+        profileKind: 'spring',
+        supportedKinds: ['ease'],
+      },
+    })
+
+    expect(events).toEqual([])
   })
 
   it('drag emits the expected synthetic pointer signal sequence', async () => {

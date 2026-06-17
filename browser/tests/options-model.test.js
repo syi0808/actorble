@@ -13,7 +13,7 @@ describe('browser options model', () => {
   it('centralizes default runtime policy', () => {
     expect(BROWSER_OPTION_DEFAULTS.pointerMotion).toEqual({
       kind: 'ease',
-      easing: 'ease-in-out',
+      timing: 'ease-in-out',
       duration: 250,
     })
     expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60)

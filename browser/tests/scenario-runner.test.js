@@ -365,7 +365,7 @@ describe('BrowserScenarioRunner', () => {
   })
 
   it('lets step options override run-level defaults and motion policy', async () => {
-    const explicitMotion = { kind: 'ease', easing: 'ease-out', duration: 30 }
+    const explicitMotion = { kind: 'ease', timing: 'ease-out', duration: 30 }
     const clickTarget = css('#save')
     const moveTarget = css('#card')
     const calls = []

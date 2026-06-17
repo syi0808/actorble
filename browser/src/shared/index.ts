@@ -332,25 +332,24 @@ export type ScrollMetrics = Readonly<{
   clientHeight: number
 }>
 
-export type PointerEasingName = 'ease-in' | 'ease-out' | 'ease-in-out'
+export type PointerMotionTiming = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
 
 export type PointerMotionProfile =
   | Readonly<{
-      kind: 'linear'
-      duration?: DurationMs
-    }>
-  | Readonly<{
       kind: 'ease'
-      easing?: PointerEasingName
+      timing?: PointerMotionTiming
       duration?: DurationMs
     }>
   | Readonly<{
       kind: 'inertia'
-      duration?: DurationMs
+      initialVelocity?: number
+      deceleration?: number
     }>
   | Readonly<{
       kind: 'spring'
-      duration?: DurationMs
+      stiffness?: number
+      damping?: number
+      mass?: number
     }>
 
 export type PointerMovementOptions = Readonly<{

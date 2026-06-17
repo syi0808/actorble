@@ -257,7 +257,7 @@ describe('BrowserPointerEngine', () => {
     try {
       await engine.moveTo(
         { x: frameCount, y: 0 },
-        { motion: { kind: 'linear', duration: frameCount } },
+        { motion: { kind: 'ease', timing: 'linear', duration: frameCount } },
       )
     } finally {
       tracker.restore()
@@ -267,11 +267,14 @@ describe('BrowserPointerEngine', () => {
     expect(tracker.pointArrayIterations).toBe(0)
   })
 
-  it('accepts a linear motion profile as a skeleton hook for duration movement', async () => {
+  it('emits deterministic frame positions for an explicit linear timing profile', async () => {
     const timeline = createTimeline(25)
     const { engine, events } = createEngine({ timeline })
 
-    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'linear', duration: 100 } })
+    await engine.moveTo(
+      { x: 100, y: 0 },
+      { motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+    )
 
     expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
     expect(events.map((event) => event.point)).toEqual([
@@ -287,13 +290,13 @@ describe('BrowserPointerEngine', () => {
     })
   })
 
-  it('emits deterministic eased frame positions for an explicit easing profile', async () => {
+  it('emits deterministic eased frame positions for an explicit timing profile', async () => {
     const timeline = createTimeline(25)
     const { engine, events } = createEngine({ timeline })
 
     await engine.moveTo(
       { x: 100, y: 0 },
-      { motion: { kind: 'ease', easing: 'ease-in-out', duration: 100 } },
+      { motion: { kind: 'ease', timing: 'ease-in-out', duration: 100 } },
     )
 
     expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
@@ -310,51 +313,76 @@ describe('BrowserPointerEngine', () => {
     })
   })
 
-  it('emits deterministic inertia frame positions that decelerate onto the target', async () => {
+  it('emits deterministic ease-in and ease-out frame positions', async () => {
     const timeline = createTimeline(25)
     const { engine, events } = createEngine({ timeline })
 
-    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'inertia', duration: 100 } })
-
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
-    expect(events.map((event) => event.point)).toEqual([
-      { x: 57.8125, y: 0 },
-      { x: 87.5, y: 0 },
-      { x: 98.4375, y: 0 },
+    await engine.moveTo(
       { x: 100, y: 0 },
+      { motion: { kind: 'ease', timing: 'ease-in', duration: 100 } },
+    )
+    await engine.moveTo(
+      { x: 200, y: 0 },
+      { motion: { kind: 'ease', timing: 'ease-out', duration: 100 } },
+    )
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(8)
+    expect(events.map((event) => event.point)).toEqual([
+      { x: 6.25, y: 0 },
+      { x: 25, y: 0 },
+      { x: 56.25, y: 0 },
+      { x: 100, y: 0 },
+      { x: 143.75, y: 0 },
+      { x: 175, y: 0 },
+      { x: 193.75, y: 0 },
+      { x: 200, y: 0 },
     ])
-    expect(engine.getState()).toMatchObject({
-      position: { x: 100, y: 0 },
-      motion: {
-        status: 'idle',
-        from: { x: 0, y: 0 },
-        to: { x: 100, y: 0 },
-      },
-    })
   })
 
-  it('settles spring-like motion on the exact target after deterministic overshoot', async () => {
+  it('rejects the removed linear motion profile kind', async () => {
     const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const { engine } = createEngine({ timeline })
 
-    await engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'spring', duration: 100 } })
-
-    const path = engine.getState().motion.path
-
-    expect(path).toHaveLength(4)
-    expect(path[0].x).toBeCloseTo(136.7879, 4)
-    expect(path[1].x).toBeCloseTo(86.4665, 4)
-    expect(path[2].x).toBeCloseTo(104.9787, 4)
-    expect(path[3]).toEqual({ x: 100, y: 0 })
-    expect(events.map((event) => event.point).at(-1)).toEqual({ x: 100, y: 0 })
-    expect(engine.getState()).toMatchObject({
-      position: { x: 100, y: 0 },
-      motion: {
-        status: 'idle',
-        from: { x: 0, y: 0 },
-        to: { x: 100, y: 0 },
+    await expect(
+      engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'linear', duration: 100 } }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'pointer-engine',
+        profileKind: 'linear',
+        supportedKinds: ['ease'],
       },
     })
+
+    expect(timeline.nextFrame).not.toHaveBeenCalled()
+  })
+
+  it('rejects inertia and spring profiles until physical motion is implemented', async () => {
+    const timeline = createTimeline(25)
+    const { engine } = createEngine({ timeline })
+
+    await expect(
+      engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'inertia', initialVelocity: 1200 } }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'pointer-engine',
+        profileKind: 'inertia',
+        supportedKinds: ['ease'],
+      },
+    })
+    await expect(
+      engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'spring', stiffness: 170 } }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: {
+        boundary: 'pointer-engine',
+        profileKind: 'spring',
+        supportedKinds: ['ease'],
+      },
+    })
+
+    expect(timeline.nextFrame).not.toHaveBeenCalled()
   })
 
   it('updates pressed buttons and primary button while emitting down and up signals', async () => {

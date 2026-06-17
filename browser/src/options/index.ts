@@ -21,7 +21,7 @@ export type { BrowserActionDefaults } from '../shared/index.js'
 
 const DEFAULT_POINTER_MOTION = {
   kind: 'ease',
-  easing: 'ease-in-out',
+  timing: 'ease-in-out',
   duration: 250,
 } as const satisfies PointerMotionProfile
 

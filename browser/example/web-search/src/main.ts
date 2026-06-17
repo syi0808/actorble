@@ -111,7 +111,7 @@ async function typeSearchQuery(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await actorble.moveTo(testId('search-query'), {
-    motion: { kind: 'ease', easing: 'ease-in-out', duration: 160 },
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 160 },
     timeout: 1500,
   })
   await actorble.typeInto(

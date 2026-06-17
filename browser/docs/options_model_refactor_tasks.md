@@ -272,7 +272,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-06 Pointer Motion Contract Cleanup
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: public `PointerMotionProfile`에서 `linear` kind와 `duration` 기반
   `inertia`/`spring` profile을 제거한다. 이 태스크는 contract cleanup과
   unsupported guard까지만 수행한다.

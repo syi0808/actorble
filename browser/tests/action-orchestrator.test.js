@@ -895,13 +895,13 @@ describe('BrowserActionOrchestrator', () => {
       target,
       { x: 20, y: 30 },
       expect.objectContaining({
-        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+        motion: { kind: 'ease', timing: 'ease-in-out', duration: 250 },
       }),
     )
   })
 
   it('doubleClick forwards explicit public pointer timing options without force', async () => {
-    const motion = { kind: 'ease', easing: 'ease-in-out', duration: 420 }
+    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 420 }
     const { gesture, orchestrator } = createHarness()
 
     await expect(
@@ -1520,7 +1520,7 @@ describe('BrowserActionOrchestrator', () => {
       { x: 12, y: 22 },
       { x: 112, y: 122 },
       expect.objectContaining({
-        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+        motion: { kind: 'ease', timing: 'ease-in-out', duration: 250 },
         resolveFromEndpoint: expect.any(Function),
         resolveToEndpoint: expect.any(Function),
       }),
@@ -1592,7 +1592,7 @@ describe('BrowserActionOrchestrator', () => {
   it('drag forwards public pointer movement timing options to the gesture engine', async () => {
     const source = targetHandle('drag-source')
     const destination = targetHandle('drop-target')
-    const motion = { kind: 'ease', easing: 'ease-in-out', duration: 520 }
+    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 520 }
     const { gesture, orchestrator } = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -2191,7 +2191,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
       expect.objectContaining({
-        motion: { kind: 'ease', easing: 'ease-in-out', duration: 250 },
+        motion: { kind: 'ease', timing: 'ease-in-out', duration: 250 },
         resolveEndpoint: expect.any(Function),
       }),
     )
@@ -2355,9 +2355,9 @@ describe('BrowserActionOrchestrator', () => {
     })
   })
 
-  it('preserves explicit spring movement as click opt-in behavior', async () => {
+  it('preserves explicit inertia movement as unsupported pointer opt-in behavior', async () => {
     const { gesture, orchestrator, target } = createHarness()
-    const motion = { kind: 'spring', duration: 260 }
+    const motion = { kind: 'inertia', initialVelocity: 1200 }
 
     await expect(
       orchestrator.click(css('#target-1'), { motion, timeout: 1500 }),

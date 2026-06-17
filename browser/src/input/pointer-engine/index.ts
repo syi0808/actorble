@@ -3,8 +3,9 @@ import type {
   MoveOptions,
   Point,
   PointerButtonName,
-  PointerEasingName,
+  PointerMotionTiming,
 } from '../../shared/index.js'
+import { actorbleError } from '../../shared/index.js'
 import { BrowserPointerSignalBus } from '../pointer-signals/index.js'
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import type { PointerSignalBus } from '../pointer-signals/index.js'
@@ -61,9 +62,9 @@ export type PointerEngineOptions = Readonly<{
 }>
 
 type NormalizedMotionProfile = Readonly<{
-  kind: 'linear' | 'ease' | 'inertia' | 'spring'
+  kind: 'ease'
   duration: number
-  easing?: PointerEasingName
+  timing: PointerMotionTiming
 }>
 
 type InternalPointerState = {
@@ -340,22 +341,54 @@ function normalizeDuration(duration: number): number {
 
 function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
   const motion = options.motion
-  const duration = normalizeDuration(motion?.duration ?? options.duration ?? 0)
 
   if (!motion) {
-    return { kind: 'linear', duration }
+    return {
+      kind: 'ease',
+      duration: normalizeDuration(options.duration ?? 0),
+      timing: 'linear',
+    }
   }
 
-  switch (motion.kind) {
+  const profileKind = readMotionProfileKind(motion)
+
+  switch (profileKind) {
+    case 'ease': {
+      const easeMotion = motion as Extract<NonNullable<MoveOptions['motion']>, { kind: 'ease' }>
+
+      return {
+        kind: 'ease',
+        duration: normalizeDuration(easeMotion.duration ?? options.duration ?? 0),
+        timing: easeMotion.timing ?? 'ease-in-out',
+      }
+    }
     case 'linear':
-      return { kind: 'linear', duration }
-    case 'ease':
-      return { kind: 'ease', duration, easing: motion.easing ?? 'ease-in-out' }
     case 'inertia':
-      return { kind: 'inertia', duration }
     case 'spring':
-      return { kind: 'spring', duration }
+      throw unsupportedMotionProfile(profileKind)
+    default:
+      throw unsupportedMotionProfile(profileKind)
   }
+}
+
+function readMotionProfileKind(motion: NonNullable<MoveOptions['motion']>): string {
+  const kind = (motion as { kind?: unknown }).kind
+
+  return typeof kind === 'string' ? kind : 'unknown'
+}
+
+function unsupportedMotionProfile(profileKind: string): never {
+  throw actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Pointer motion profile "${profileKind}" is not supported by the browser pointer engine.`,
+    {
+      details: {
+        boundary: 'pointer-engine',
+        profileKind,
+        supportedKinds: ['ease'],
+      },
+    },
+  )
 }
 
 async function resolveDynamicEndpoint(
@@ -386,19 +419,15 @@ function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number)
   const clampedProgress = clampProgress(progress)
 
   switch (motion.kind) {
-    case 'linear':
-      return clampedProgress
     case 'ease':
-      return sampleEasingProgress(motion.easing ?? 'ease-in-out', clampedProgress)
-    case 'inertia':
-      return sampleInertiaProgress(clampedProgress)
-    case 'spring':
-      return sampleSpringProgress(clampedProgress)
+      return sampleTimingProgress(motion.timing, clampedProgress)
   }
 }
 
-function sampleEasingProgress(easing: PointerEasingName, progress: number): number {
-  switch (easing) {
+function sampleTimingProgress(timing: PointerMotionTiming, progress: number): number {
+  switch (timing) {
+    case 'linear':
+      return progress
     case 'ease-in':
       return progress * progress
     case 'ease-out':
@@ -408,18 +437,6 @@ function sampleEasingProgress(easing: PointerEasingName, progress: number): numb
         ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2
   }
-}
-
-function sampleInertiaProgress(progress: number): number {
-  return 1 - Math.pow(1 - progress, 3)
-}
-
-function sampleSpringProgress(progress: number): number {
-  if (progress >= 1) {
-    return 1
-  }
-
-  return 1 - Math.exp(-4 * progress) * Math.cos(progress * Math.PI * 4)
 }
 
 function clampProgress(progress: number): number {

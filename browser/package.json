@@ -19,7 +19,7 @@
     "example:preview": "vite preview --config example/vite.config.ts --host 127.0.0.1",
     "example:smoke": "node scripts/example-smoke.mjs",
     "example:typecheck": "tsc -p example/tsconfig.json --noEmit",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -33,7 +33,7 @@ export type TaskExampleOptions = Readonly<{
 }>
 
 const humanFocusClick = {
-  motion: { kind: 'ease', easing: 'ease-in-out', duration: 180 },
+  motion: { kind: 'ease', timing: 'ease-in-out', duration: 180 },
   pressDwell: 80,
 } as const
 

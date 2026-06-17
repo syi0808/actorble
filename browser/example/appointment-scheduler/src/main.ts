@@ -15,8 +15,8 @@ const humanPressDelay = 140
 const humanPressDwell = 170
 const humanMoveDuration = 420
 const humanDragDuration = 520
-const humanMoveMotion = { kind: 'ease', easing: 'ease-in-out', duration: humanMoveDuration } as const
-const humanDragMotion = { kind: 'ease', easing: 'ease-in-out', duration: humanDragDuration } as const
+const humanMoveMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanMoveDuration } as const
+const humanDragMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanDragDuration } as const
 let bindDynamicAppointmentEvents: ((target: HTMLElement) => void) | undefined
 
 const stageHtml = `

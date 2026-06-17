@@ -259,7 +259,7 @@ describe('Actorble facade', () => {
 
   it('applies actorble-level motion policy to direct pointer calls without overriding call movement', async () => {
     const { orchestrator, resolver, runner, trace } = createDependencies()
-    const motion = { kind: 'ease', easing: 'ease-out', duration: 40 }
+    const motion = { kind: 'ease', timing: 'ease-out', duration: 40 }
     const actorble = new Actorble({
       orchestrator,
       resolver,
