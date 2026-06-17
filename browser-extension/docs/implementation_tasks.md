@@ -173,7 +173,7 @@ src/recorder
 
 ### T4 Background Orchestration Shell
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Wire the background service worker as the extension-level
   coordinator for tab/frame routing, command handling, storage access, content
   readiness, session metadata, and permission checks.
