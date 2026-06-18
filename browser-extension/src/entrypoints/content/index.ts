@@ -3,8 +3,13 @@ import { browser } from 'wxt/browser'
 import { isExtensionMessageOfKind } from '../../messaging/index.js'
 import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
 import { createContentLocatorPreviewHost } from './locator-preview-host.js'
+import { createContentReadinessHost } from './readiness.js'
 import { createContentRecorderHost, createDomRecorderEventCapturePort } from './recorder-host.js'
 import { createContentRuntimeHost } from './runtime-host.js'
+
+type RuntimeFrameIdApi = Readonly<{
+  getFrameId?(target: unknown): number
+}>
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -29,8 +34,23 @@ export default defineContentScript({
     const recorderHost = createContentRecorderHost({
       capture: createDomRecorderEventCapturePort(),
     })
+    const runtimeFrameId = browser.runtime as RuntimeFrameIdApi
+    const readinessHost = createContentReadinessHost({
+      sendMessage(message) {
+        return browser.runtime.sendMessage(message)
+      },
+      getFrameId(target) {
+        return runtimeFrameId.getFrameId?.(target) ?? -1
+      },
+      frameTarget: globalThis,
+      url: globalThis.location.href,
+    })
 
     browser.runtime.onMessage.addListener((message) => {
+      if (isExtensionMessageOfKind(message, 'content:ready')) {
+        return readinessHost.handleMessage(message)
+      }
+
       if (
         isExtensionMessageOfKind(message, 'inspector:start') ||
         isExtensionMessageOfKind(message, 'inspector:stop')
@@ -51,5 +71,7 @@ export default defineContentScript({
 
       return runtimeHost.handleMessage(message)
     })
+
+    void readinessHost.emitReady()
   },
 })

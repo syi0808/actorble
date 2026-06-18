@@ -101,7 +101,6 @@ describe('sidepanel imported scenario run flow', () => {
       ok: true,
       value: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'browser-login-flow',
         runId: 'run-1',
         status: 'running',
@@ -112,7 +111,6 @@ describe('sidepanel imported scenario run flow', () => {
       kind: 'scenario:run',
       payload: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'browser-login-flow',
         runId: 'run-1',
         compilation: {
@@ -192,36 +190,33 @@ describe('sidepanel imported scenario run flow', () => {
     const ignored = runner.ingestMessage(
       createExtensionMessage({
         kind: 'runtime:status',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'browser-login-flow',
-          runId: 'other-run',
-          status: 'failed',
+      payload: {
+        tabId: 7,
+        scenarioId: 'browser-login-flow',
+        runId: 'other-run',
+        status: 'failed',
         },
       }),
     )
     const acceptedStatus = runner.ingestMessage(
       createExtensionMessage({
         kind: 'runtime:status',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'browser-login-flow',
-          runId: 'run-1',
-          status: 'completed',
+      payload: {
+        tabId: 7,
+        scenarioId: 'browser-login-flow',
+        runId: 'run-1',
+        status: 'completed',
         },
       }),
     )
     const acceptedTrace = runner.ingestMessage(
       createExtensionMessage({
         kind: 'trace:event',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'browser-login-flow',
-          runId: 'run-1',
-          event: {
+      payload: {
+        tabId: 7,
+        scenarioId: 'browser-login-flow',
+        runId: 'run-1',
+        event: {
             runId: 'run-1',
             scenarioId: 'browser-login-flow',
             timestamp: 100,
@@ -249,6 +244,48 @@ describe('sidepanel imported scenario run flow', () => {
         summary: 'Completed run-1 with 1 event.',
       },
     })
+  })
+
+  it('uses resolved frame correlation from the background run receipt', async () => {
+    const { runner, sent } = createTestRunner({
+      sendResponse: ok({
+        kind: 'scenario:run',
+        tabId: 7,
+        frameId: 0,
+        scenarioId: 'browser-login-flow',
+        runId: 'run-1',
+        contentReady: true,
+      }),
+    })
+
+    const result = await runner.run(JSON.stringify(browserLoginFlow))
+    const accepted = runner.ingestMessage(
+      createExtensionMessage({
+        kind: 'runtime:status',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'browser-login-flow',
+          runId: 'run-1',
+          status: 'completed',
+        },
+      }),
+    )
+
+    expect(sent[0]).toMatchObject({
+      kind: 'scenario:run',
+      payload: {
+        tabId: 7,
+      },
+    })
+    expect(sent[0].payload).not.toHaveProperty('frameId')
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        frameId: 0,
+      },
+    })
+    expect(accepted).toBe(true)
   })
 
   it('formats issue paths for compact UI rendering', () => {
@@ -283,7 +320,6 @@ function createTestRunner(options: TestRunnerOptions = {}) {
     },
     {
       createRunId: () => 'run-1',
-      frameId: 0,
       targetTabId: options.targetTabId,
     },
   )

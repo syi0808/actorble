@@ -142,8 +142,6 @@ export type PopupRunControls = Readonly<{
   getSnapshot(): PopupRunControlsSnapshot
 }>
 
-const DEFAULT_FRAME_ID = 0
-
 let nextRunSequence = 1
 let nextRecordSequence = 1
 
@@ -151,7 +149,7 @@ export function createPopupRunControls(
   client: PopupRunControlsClient,
   options: PopupRunControlsOptions = {},
 ): PopupRunControls {
-  const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const frameId = options.frameId
   const createRunId = options.createRunId ?? defaultRunId
   const createRecordId = options.createRecordId ?? defaultRecordId
   let snapshot = emptySnapshot()
@@ -359,7 +357,7 @@ export function createPopupRunControls(
         createExtensionMessage({
           kind: 'popup:get-state',
           payload: {
-            frameId,
+            ...optionalFrameId(frameId),
             ...optionalScenarioId(snapshot.selectedScenarioId),
           },
         }),

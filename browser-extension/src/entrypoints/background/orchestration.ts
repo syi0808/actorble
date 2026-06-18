@@ -1,5 +1,7 @@
 import type {
   ActorbleExtensionMessage,
+  ActorbleExtensionMessageByKind,
+  ContentReadyCapabilities,
   ExtensionMessageKind,
   InspectorCancellationReason,
   InspectorSessionCorrelation,
@@ -8,7 +10,7 @@ import type {
   RequiredRunCorrelation,
   RequiredTabCorrelation,
 } from '../../messaging/index.js'
-import { isActorbleExtensionMessage } from '../../messaging/index.js'
+import { createExtensionMessage, isActorbleExtensionMessage } from '../../messaging/index.js'
 import type { LocatorPreviewResult } from '../../inspector/locator-preview.js'
 import { normalizeRecordedEvents } from '../../recorder/event-to-step.js'
 import type { RawRecordedEvent } from '../../recorder/event-capture.js'
@@ -26,6 +28,13 @@ export type BackgroundTarget = Readonly<{
   tabId: number
   frameId?: number
   url: string
+  capabilities?: ContentReadyCapabilities
+}>
+
+export type BackgroundMessageSender = Readonly<{
+  tab?: BackgroundTab
+  frameId?: number
+  url?: string
 }>
 
 export type BackgroundBrowserHost = Readonly<{
@@ -137,7 +146,10 @@ export type BackgroundMessageResult =
   | LocatorPreviewResult
 
 export type BackgroundOrchestrator = Readonly<{
-  handleMessage(message: unknown): Promise<ExtensionResult<BackgroundMessageResult>>
+  handleMessage(
+    message: unknown,
+    sender?: BackgroundMessageSender,
+  ): Promise<ExtensionResult<BackgroundMessageResult>>
   resolveActiveTarget(frameId?: number): Promise<ExtensionResult<BackgroundTarget>>
   getRunSession(runId: string): BackgroundRunSession | null
   getRecordSession(correlation: Partial<RequiredTabCorrelation> & Readonly<{ runId?: string }>): BackgroundRecordSession | null
@@ -186,6 +198,10 @@ type LocatorPreviewMessage = Extract<
   Readonly<{ kind: 'locator:preview' }>
 >
 
+type ContentReadyMessage = ActorbleExtensionMessageByKind<'content:ready'>
+
+type ContentReadyMetadata = ContentReadyMessage['payload']
+
 type RuntimeStatusMessage = Extract<
   ActorbleExtensionMessage,
   Readonly<{ kind: 'runtime:status' }>
@@ -215,9 +231,11 @@ export function createBackgroundOrchestrator(
   const recordSessions = new Map<string, BackgroundRecordSession>()
   const inspectorSessions = new Map<string, BackgroundInspectorSession>()
   const recordedDrafts = new Map<string, RecordedScenarioDraftHandoff>()
+  const contentFrames = new Map<number, Map<number, ContentReadyMetadata>>()
 
   async function handleMessage(
     message: unknown,
+    sender?: BackgroundMessageSender,
   ): Promise<ExtensionResult<BackgroundMessageResult>> {
     if (!isActorbleExtensionMessage(message)) {
       return failure({
@@ -245,6 +263,8 @@ export function createBackgroundOrchestrator(
         return ingestRuntimeStatus(message)
       case 'trace:event':
         return ingestTraceEvent(message)
+      case 'content:ready':
+        return ingestContentReady(message, sender)
       case 'inspector:selected':
         return ingestInspectorSelected(message)
       case 'inspector:cancelled':
@@ -325,18 +345,19 @@ export function createBackgroundOrchestrator(
   async function routeToContent(
     message: RoutableMessage,
   ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
-    const conflict = conflictForRoutableMessage(message)
-    if (conflict !== null) {
-      return failure(conflict)
-    }
-
     const target = await resolveTargetTab(message.payload)
     if (!target.ok) {
       return target
     }
+    const routedMessage = withResolvedFrame(message, target.value.frameId)
+
+    const conflict = conflictForRoutableMessage(routedMessage)
+    if (conflict !== null) {
+      return failure(conflict)
+    }
 
     try {
-      await host.sendTabMessage(target.value.tabId, message, frameOptions(target.value.frameId))
+      await host.sendTabMessage(target.value.tabId, routedMessage, frameOptions(target.value.frameId))
     } catch (error) {
       return failure({
         code: 'content_not_ready',
@@ -349,29 +370,34 @@ export function createBackgroundOrchestrator(
       })
     }
 
-    const session = updateSessionForRoutedMessage(message)
-    return ok(receiptFor(message.kind, message.payload, true, session))
+    const session = updateSessionForRoutedMessage(routedMessage)
+    return ok(receiptFor(routedMessage.kind, routedMessage.payload, true, session))
   }
 
   async function routeRecordCommand(
     message: RecordCommandMessage,
   ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
-    const conflict = conflictForRecordCommand(message)
-    if (conflict !== null) {
-      if (message.kind === 'record:start') {
-        upsertRecordSession(message.payload, 'failed', { message: conflict.message })
-      }
-      return failure(conflict)
-    }
-
     const target = await resolveTargetTab(message.payload)
     if (!target.ok) {
       return target
     }
+    const routedMessage = withResolvedFrame(message, target.value.frameId)
+
+    const conflict = conflictForRecordCommand(routedMessage)
+    if (conflict !== null) {
+      if (routedMessage.kind === 'record:start') {
+        upsertRecordSession(routedMessage.payload, 'failed', { message: conflict.message })
+      }
+      return failure(conflict)
+    }
 
     let response: unknown
     try {
-      response = await host.sendTabMessage(target.value.tabId, message, frameOptions(target.value.frameId))
+      response = await host.sendTabMessage(
+        target.value.tabId,
+        routedMessage,
+        frameOptions(target.value.frameId),
+      )
     } catch (error) {
       return failure({
         code: 'content_not_ready',
@@ -392,59 +418,59 @@ export function createBackgroundOrchestrator(
         details: {
           tabId: target.value.tabId,
           frameId: target.value.frameId,
-          kind: message.kind,
+          kind: routedMessage.kind,
         },
       } satisfies ExtensionIssue
-      upsertRecordSession(message.payload, 'failed', { message: issue.message })
+      upsertRecordSession(routedMessage.payload, 'failed', { message: issue.message })
       return failure(issue)
     }
 
     if (!contentResult.ok) {
       const [issue] = contentResult.issues
-      upsertRecordSession(message.payload, 'failed', {
+      upsertRecordSession(routedMessage.payload, 'failed', {
         message: issue?.message ?? 'Recorder command failed.',
       })
       return contentResult
     }
 
-    if (contentResult.value.kind !== message.kind) {
+    if (contentResult.value.kind !== routedMessage.kind) {
       const issue = {
         code: 'unsupported_message',
         message: 'Content recorder response kind does not match the command.',
         details: {
-          expected: message.kind,
+          expected: routedMessage.kind,
           actual: contentResult.value.kind,
         },
       } satisfies ExtensionIssue
-      upsertRecordSession(message.payload, 'failed', { message: issue.message })
+      upsertRecordSession(routedMessage.payload, 'failed', { message: issue.message })
       return failure(issue)
     }
 
     let recordedDraft: RecordedScenarioDraftHandoff | undefined
     let session: BackgroundRecordSession
-    if (message.kind === 'record:stop') {
+    if (routedMessage.kind === 'record:stop') {
       const draft = createRecordedDraft(contentResult.value)
       if (!draft.ok) {
         const [issue] = draft.issues
-        upsertRecordSession(message.payload, 'failed', {
+        upsertRecordSession(routedMessage.payload, 'failed', {
           message: issue?.message ?? 'Recorded draft could not be created.',
         })
         return draft
       }
 
       recordedDraft = draft.value
-      session = upsertRecordSession(message.payload, 'stopped', {
+      session = upsertRecordSession(routedMessage.payload, 'stopped', {
         draftId: recordedDraft.draftId,
       })
     } else {
-      session = upsertRecordSession(message.payload, 'recording')
+      session = upsertRecordSession(routedMessage.payload, 'recording')
     }
 
     return ok({
       ...receiptFor(
-        message.kind,
+        routedMessage.kind,
         {
-          ...message.payload,
+          ...routedMessage.payload,
           sessionId: contentResult.value.sessionId,
         },
         true,
@@ -473,10 +499,15 @@ export function createBackgroundOrchestrator(
     if (!target.ok) {
       return target
     }
+    const routedMessage = withResolvedFrame(message, target.value.frameId)
 
     let response: unknown
     try {
-      response = await host.sendTabMessage(target.value.tabId, message, frameOptions(target.value.frameId))
+      response = await host.sendTabMessage(
+        target.value.tabId,
+        routedMessage,
+        frameOptions(target.value.frameId),
+      )
     } catch (error) {
       return failure({
         code: 'content_not_ready',
@@ -568,11 +599,104 @@ export function createBackgroundOrchestrator(
       }
     }
 
+    const readiness = await resolveContentReadiness(tab.id, frameId)
+    if (!readiness.ok) {
+      return failure(readiness.issues)
+    }
+
     return ok({
       tabId: tab.id,
-      ...optionalFrameId(frameId),
+      ...optionalFrameId(readiness.value.frameId),
       url: tab.url,
+      ...(readiness.value.capabilities === undefined ? {} : { capabilities: readiness.value.capabilities }),
     })
+  }
+
+  async function resolveContentReadiness(
+    tabId: number,
+    frameId?: number,
+  ): Promise<ExtensionResult<ContentReadyMetadata>> {
+    const cached = selectContentFrame(tabId, frameId)
+    if (cached !== null) {
+      return ok(cached)
+    }
+
+    const probeFrameId = frameId ?? 0
+    const request = createExtensionMessage({
+      kind: 'content:ready',
+      payload: {
+        tabId,
+        frameId: probeFrameId,
+      },
+    })
+
+    let response: unknown
+    try {
+      response = await host.sendTabMessage(tabId, request, frameOptions(probeFrameId))
+    } catch (error) {
+      return failure({
+        code: 'content_not_ready',
+        message: `Content script is not ready for tab ${tabId}.`,
+        details: {
+          tabId,
+          frameId: probeFrameId,
+          error: errorMessage(error),
+        },
+      })
+    }
+
+    const result = readExtensionResult<ContentReadyMetadata>(response)
+    if (result === null) {
+      return failure({
+        code: 'content_not_ready',
+        message: `Content script is not ready for tab ${tabId}.`,
+        details: {
+          tabId,
+          frameId: probeFrameId,
+          response,
+        },
+      })
+    }
+
+    if (!result.ok) {
+      return result
+    }
+
+    return ok(rememberContentFrame({
+      ...result.value,
+      tabId,
+      frameId: result.value.frameId ?? probeFrameId,
+    }))
+  }
+
+  function ingestContentReady(
+    message: ContentReadyMessage,
+    sender?: BackgroundMessageSender,
+  ): ExtensionResult<BackgroundCommandReceipt> {
+    const tabId = message.payload.tabId ?? sender?.tab?.id
+    if (tabId === undefined) {
+      return failure({
+        code: 'routing_error',
+        message: 'Content readiness could not be correlated to a tab.',
+      })
+    }
+
+    const frameId = message.payload.frameId ?? sender?.frameId
+    const metadata = rememberContentFrame({
+      ...message.payload,
+      tabId,
+      ...(frameId === undefined ? {} : { frameId }),
+      ...(message.payload.url === undefined && sender?.url !== undefined ? { url: sender.url } : {}),
+    })
+
+    return ok(receiptFor(
+      message.kind,
+      {
+        tabId,
+        ...optionalFrameId(metadata.frameId),
+      },
+      true,
+    ))
   }
 
   function ingestRuntimeStatus(
@@ -733,6 +857,37 @@ export function createBackgroundOrchestrator(
 
   function getInspectorSession(sessionId: string): BackgroundInspectorSession | null {
     return inspectorSessions.get(sessionId) ?? null
+  }
+
+  function selectContentFrame(
+    tabId: number,
+    frameId?: number,
+  ): ContentReadyMetadata | null {
+    const frames = contentFrames.get(tabId)
+    if (frames === undefined) {
+      return null
+    }
+
+    return frames.get(frameId ?? 0) ?? null
+  }
+
+  function rememberContentFrame(
+    metadata: ContentReadyMetadata & Readonly<{ tabId: number }>,
+  ): ContentReadyMetadata {
+    const normalized = {
+      ...metadata,
+      tabId: metadata.tabId,
+      ...optionalFrameId(metadata.frameId),
+    } satisfies ContentReadyMetadata
+
+    if (normalized.frameId === undefined) {
+      return normalized
+    }
+
+    const frames = contentFrames.get(metadata.tabId) ?? new Map<number, ContentReadyMetadata>()
+    frames.set(normalized.frameId, normalized)
+    contentFrames.set(metadata.tabId, frames)
+    return normalized
   }
 
   function latestRunSession(
@@ -975,6 +1130,22 @@ function parseSupportedPageUrl(rawUrl: string): URL | null {
 
 function recordSessionId(correlation: RequiredTabCorrelation & Readonly<{ runId?: string }>): string {
   return correlation.runId ?? `${correlation.tabId}:${correlation.frameId ?? 0}`
+}
+
+function withResolvedFrame<
+  TMessage extends RoutableMessage | RecordCommandMessage | LocatorPreviewMessage,
+>(message: TMessage, frameId: number | undefined): TMessage {
+  if (frameId === undefined || message.payload.frameId === frameId) {
+    return message
+  }
+
+  return {
+    ...message,
+    payload: {
+      ...message.payload,
+      frameId,
+    },
+  } as TMessage
 }
 
 function frameOptions(frameId: number | undefined): Readonly<{ frameId?: number }> {

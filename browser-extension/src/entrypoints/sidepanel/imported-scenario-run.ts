@@ -71,8 +71,6 @@ export type ImportedScenarioRunner = Readonly<{
   getSnapshot(): ImportedScenarioRunSnapshot
 }>
 
-const DEFAULT_FRAME_ID = 0
-
 let nextRunSequence = 1
 
 export function validateImportedScenarioText(
@@ -104,7 +102,7 @@ export function createImportedScenarioRunner(
   options: ImportedScenarioRunnerOptions = {},
 ): ImportedScenarioRunner {
   const createRunId = options.createRunId ?? defaultRunId
-  const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const frameId = options.frameId
   const targetTabId = options.targetTabId
   const now = options.now ?? Date.now
   const traceStore = createTraceDisplayStore({
@@ -166,7 +164,7 @@ export function createImportedScenarioRunner(
     const runId = createRunId()
     const correlation = {
       tabId: activeTab.value.id,
-      frameId,
+      ...optionalFrameId(frameId),
       scenarioId,
       runId,
     } satisfies RequiredRunCorrelation
@@ -209,8 +207,9 @@ export function createImportedScenarioRunner(
       return failure(responseResult.issues)
     }
 
-    currentRun = correlation
-    traceStore.startRun(statusSnapshotFrom(correlation, 'running', now()))
+    const resolvedCorrelation = correlationFromReceipt(correlation, responseResult?.value)
+    currentRun = resolvedCorrelation
+    traceStore.startRun(statusSnapshotFrom(resolvedCorrelation, 'running', now()))
     snapshot = {
       pending: false,
       status: 'running',
@@ -218,13 +217,13 @@ export function createImportedScenarioRunner(
       document: preparation.value.document,
       scenarioId,
       runId,
-      tabId: activeTab.value.id,
-      frameId,
+      tabId: resolvedCorrelation.tabId,
+      ...optionalFrameId(resolvedCorrelation.frameId),
       ...traceFields(),
     }
 
     return ok({
-      ...correlation,
+      ...resolvedCorrelation,
       status: 'running',
     })
   }
@@ -434,6 +433,26 @@ function matchesCurrentRun(
     payload.scenarioId === currentRun.scenarioId &&
     payload.runId === currentRun.runId
   )
+}
+
+function correlationFromReceipt(
+  fallback: RequiredRunCorrelation,
+  value: unknown,
+): RequiredRunCorrelation {
+  if (!isRecord(value)) {
+    return fallback
+  }
+
+  return {
+    tabId: typeof value.tabId === 'number' ? value.tabId : fallback.tabId,
+    ...(typeof value.frameId === 'number' ? { frameId: value.frameId } : optionalFrameId(fallback.frameId)),
+    scenarioId: typeof value.scenarioId === 'string' ? value.scenarioId : fallback.scenarioId,
+    runId: typeof value.runId === 'string' ? value.runId : fallback.runId,
+  }
+}
+
+function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
+  return frameId === undefined ? {} : { frameId }
 }
 
 function readExtensionResult(value: unknown): ExtensionResult<unknown> | null {

@@ -219,8 +219,6 @@ export type SidepanelScenarioEditor = Readonly<{
   getSnapshot(): SidepanelScenarioEditorSnapshot
 }>
 
-const DEFAULT_FRAME_ID = 0
-
 let nextRunSequence = 1
 let nextDryRunSequence = 1
 let nextRecordSequence = 1
@@ -232,7 +230,7 @@ export function createSidepanelScenarioEditor(
   const createRunId = options.createRunId ?? defaultRunId
   const createDryRunId = options.createDryRunId ?? defaultDryRunId
   const createRecordId = options.createRecordId ?? defaultRecordId
-  const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const frameId = options.frameId
   const targetTabId = options.targetTabId
   const now = options.now ?? Date.now
   const traceStore = createTraceDisplayStore({
@@ -673,7 +671,7 @@ export function createSidepanelScenarioEditor(
         kind: 'record:start',
         payload: {
           tabId: target.value.id,
-          frameId,
+          ...(frameId === undefined ? {} : { frameId }),
           ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
           runId: createRecordId(),
         },
@@ -733,7 +731,7 @@ export function createSidepanelScenarioEditor(
       kind: 'record:draft:get',
       payload: {
         ...(draftId === undefined ? {} : { draftId }),
-        ...(target?.ok ? { tabId: target.value.id, frameId } : {}),
+        ...(target?.ok ? { tabId: target.value.id, ...(frameId === undefined ? {} : { frameId }) } : {}),
         ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
       },
     })
@@ -971,7 +969,7 @@ export function createSidepanelScenarioEditor(
     const scenarioId = snapshot.selectedScenarioId ?? validation.value.id ?? 'draft-scenario'
     const correlation = {
       tabId: target.value.id,
-      frameId,
+      ...(frameId === undefined ? {} : { frameId }),
       scenarioId,
       runId,
     } satisfies RequiredRunCorrelation
@@ -997,11 +995,12 @@ export function createSidepanelScenarioEditor(
       return failure(responseResult.issues)
     }
 
+    const resolvedCorrelation = correlationFromReceipt(correlation, responseResult?.value)
     const receipt = {
-      ...correlation,
+      ...resolvedCorrelation,
       status: 'running',
     } satisfies SidepanelScenarioRunReceipt
-    traceStore.startRun(statusSnapshotFrom(correlation, 'running', now()))
+    traceStore.startRun(statusSnapshotFrom(resolvedCorrelation, 'running', now()))
     snapshot = {
       ...snapshot,
       pendingAction: null,
@@ -1639,6 +1638,26 @@ function matchesCurrentRun(
     payload.scenarioId === currentRun.scenarioId &&
     payload.runId === currentRun.runId
   )
+}
+
+function correlationFromReceipt(
+  fallback: RequiredRunCorrelation,
+  value: unknown,
+): RequiredRunCorrelation {
+  if (!isRecord(value)) {
+    return fallback
+  }
+
+  return {
+    tabId: typeof value.tabId === 'number' ? value.tabId : fallback.tabId,
+    ...(typeof value.frameId === 'number' ? { frameId: value.frameId } : optionalFrameId(fallback.frameId)),
+    scenarioId: typeof value.scenarioId === 'string' ? value.scenarioId : fallback.scenarioId,
+    runId: typeof value.runId === 'string' ? value.runId : fallback.runId,
+  }
+}
+
+function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
+  return frameId === undefined ? {} : { frameId }
 }
 
 function statusSnapshotFrom(

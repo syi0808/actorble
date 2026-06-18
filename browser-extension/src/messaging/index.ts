@@ -23,6 +23,7 @@ export const extensionMessageKinds = [
   'locator:preview',
   'trace:event',
   'runtime:status',
+  'content:ready',
   'popup:get-state',
 ] as const
 
@@ -45,6 +46,14 @@ export type RequiredRunCorrelation = RequiredTabCorrelation &
     scenarioId: string
     runId: string
   }>
+
+export type ContentReadyCapabilities = Readonly<{
+  runtime: boolean
+  recorder: boolean
+  inspector: boolean
+  locatorPreview: boolean
+  frameCorrelation: boolean
+}>
 
 export type InspectorSessionCorrelation = RequiredTabCorrelation &
   Readonly<{
@@ -203,6 +212,17 @@ export type RuntimeStatusMessage = ExtensionMessage<
     }>
 >
 
+export type ContentReadyMessage = ExtensionMessage<
+  'content:ready',
+  Readonly<{
+    tabId?: number
+    frameId?: number
+    url?: string
+    topFrame?: boolean
+    capabilities?: ContentReadyCapabilities
+  }>
+>
+
 export type PopupGetStateMessage = ExtensionMessage<
   'popup:get-state',
   Readonly<{
@@ -226,6 +246,7 @@ export type ActorbleExtensionMessage =
   | LocatorPreviewMessage
   | TraceEventMessage
   | RuntimeStatusMessage
+  | ContentReadyMessage
   | PopupGetStateMessage
 
 export type ActorbleExtensionMessageByKind<TKind extends ExtensionMessageKind> =
@@ -353,6 +374,14 @@ function isPayloadForKind(
         isOptionalString(payload.message) &&
         isOptionalRuntimeDebugSnapshot(payload.debugSnapshot)
       )
+    case 'content:ready':
+      return (
+        isOptionalFiniteNumber(payload.tabId) &&
+        isOptionalFiniteNumber(payload.frameId) &&
+        isOptionalString(payload.url) &&
+        isOptionalBoolean(payload.topFrame) &&
+        isOptionalContentReadyCapabilities(payload.capabilities)
+      )
     case 'popup:get-state':
       return isOptionalFiniteNumber(payload.frameId) && isOptionalString(payload.scenarioId)
   }
@@ -415,6 +444,26 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isCompilation(value: unknown): value is BrowserRuntimeCompilation {
   return isRecord(value) && isRecord(value.scenario)
+}
+
+function isOptionalContentReadyCapabilities(
+  value: unknown,
+): value is ContentReadyCapabilities | undefined {
+  if (value === undefined) {
+    return true
+  }
+
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.runtime === 'boolean' &&
+    typeof value.recorder === 'boolean' &&
+    typeof value.inspector === 'boolean' &&
+    typeof value.locatorPreview === 'boolean' &&
+    typeof value.frameCorrelation === 'boolean'
+  )
 }
 
 function isRuntimeRunStatus(value: unknown): value is RuntimeRunStatus {

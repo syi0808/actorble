@@ -272,7 +272,6 @@ describe('sidepanel scenario editor', () => {
       ok: true,
       value: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'newest-scenario',
         runId: 'dry-run-1',
         status: 'running',
@@ -283,7 +282,6 @@ describe('sidepanel scenario editor', () => {
       kind: 'scenario:run',
       payload: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'newest-scenario',
         runId: 'dry-run-1',
         compilation: {
@@ -302,6 +300,56 @@ describe('sidepanel scenario editor', () => {
       throw new Error(`Expected scenario:run, received ${runMessage.kind}`)
     }
     expect(runMessage.payload.compilation.scenario.steps).toHaveLength(1)
+  })
+
+  it('uses resolved frame correlation from the background run receipt', async () => {
+    const { editor, sent } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'scenario:run') {
+          return ok({
+            kind: 'scenario:run',
+            tabId: message.payload.tabId,
+            frameId: 0,
+            scenarioId: message.payload.scenarioId,
+            runId: message.payload.runId,
+            contentReady: true,
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const result = await editor.runSelectedScenario()
+    const acceptedStatus = editor.ingestMessage(
+      createExtensionMessage({
+        kind: 'runtime:status',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'run-1',
+          status: 'completed',
+        },
+      }),
+    )
+
+    expect(sent[0]).toMatchObject({
+      kind: 'scenario:run',
+      payload: {
+        tabId: 7,
+        scenarioId: 'newest-scenario',
+      },
+    })
+    expect(sent[0].payload).not.toHaveProperty('frameId')
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        frameId: 0,
+      },
+    })
+    expect(acceptedStatus).toBe(true)
   })
 
   it('starts and stops recording, then reviews the returned draft as an unsaved scenario', async () => {
@@ -348,21 +396,19 @@ describe('sidepanel scenario editor', () => {
     expect(sent).toEqual([
       createExtensionMessage({
         kind: 'record:start',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'newest-scenario',
-          runId: 'record-sidepanel-1',
-        },
+          payload: {
+            tabId: 7,
+            scenarioId: 'newest-scenario',
+            runId: 'record-sidepanel-1',
+          },
       }),
       createExtensionMessage({
         kind: 'record:stop',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'newest-scenario',
-          runId: 'record-sidepanel-1',
-        },
+          payload: {
+            tabId: 7,
+            scenarioId: 'newest-scenario',
+            runId: 'record-sidepanel-1',
+          },
       }),
     ])
     expect(snapshot).toMatchObject({
@@ -431,7 +477,6 @@ describe('sidepanel scenario editor', () => {
         kind: 'record:draft:get',
         payload: {
           tabId: 7,
-          frameId: 0,
           scenarioId: 'newest-scenario',
         },
       }),
@@ -498,7 +543,6 @@ describe('sidepanel scenario editor', () => {
         kind: 'trace:event',
         payload: {
           tabId: 7,
-          frameId: 0,
           scenarioId: 'newest-scenario',
           runId: 'other-run',
           event: {
@@ -516,7 +560,6 @@ describe('sidepanel scenario editor', () => {
         kind: 'trace:event',
         payload: {
           tabId: 7,
-          frameId: 0,
           scenarioId: 'newest-scenario',
           runId: 'run-1',
           event: {
@@ -538,7 +581,6 @@ describe('sidepanel scenario editor', () => {
         kind: 'runtime:status',
         payload: {
           tabId: 7,
-          frameId: 0,
           scenarioId: 'newest-scenario',
           runId: 'run-1',
           status: 'failed',
@@ -674,7 +716,6 @@ function createTestEditor(options: TestEditorOptions = {}) {
     createRunId: options.createRunId ?? (() => 'run-1'),
     createDryRunId: options.createDryRunId ?? (() => 'dry-run-1'),
     createRecordId: options.createRecordId ?? (() => 'record-1'),
-    frameId: 0,
   })
 
   return { editor, sent, updates, saves, imports, exports }

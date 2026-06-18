@@ -20,7 +20,6 @@ describe('inspector target picker', () => {
       ok: true,
       value: {
         tabId: 7,
-        frameId: 0,
         sessionId: 'inspect-1',
         scenarioId: 'scenario-1',
         startedAt: 1_800_000_000_000,
@@ -28,13 +27,12 @@ describe('inspector target picker', () => {
     })
     expect(sent).toEqual([
       createExtensionMessage({
-        kind: 'inspector:start',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          sessionId: 'inspect-1',
-          scenarioId: 'scenario-1',
-        },
+      kind: 'inspector:start',
+      payload: {
+        tabId: 7,
+        sessionId: 'inspect-1',
+        scenarioId: 'scenario-1',
+      },
       }),
     ])
     expect(createTargetPickerView(picker.getSnapshot())).toMatchObject({
@@ -63,7 +61,6 @@ describe('inspector target picker', () => {
         kind: 'inspector:stop',
         payload: {
           tabId: 7,
-          frameId: 0,
           sessionId: 'inspect-1',
           scenarioId: 'scenario-1',
         },
@@ -132,7 +129,6 @@ describe('inspector target picker', () => {
         kind: 'inspector:cancelled',
         payload: {
           tabId: 7,
-          frameId: 0,
           sessionId: 'inspect-1',
           scenarioId: 'scenario-1',
           reason: 'navigation',
@@ -147,6 +143,40 @@ describe('inspector target picker', () => {
       session: undefined,
       message: 'Page navigation ended inspection.',
     })
+  })
+
+  it('matches selected targets against frame correlation returned by background', async () => {
+    const { picker, sent } = createTestPicker({
+      sendResponse: ok({
+        kind: 'inspector:start',
+        tabId: 7,
+        frameId: 0,
+        sessionId: 'inspect-1',
+        scenarioId: 'scenario-1',
+        contentReady: true,
+      }),
+    })
+
+    const started = await picker.start('scenario-1')
+    const accepted = picker.ingestMessage(selectedMessage({ frameId: 0 }))
+
+    expect(sent[0]).toEqual(
+      createExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          scenarioId: 'scenario-1',
+        },
+      }),
+    )
+    expect(started).toMatchObject({
+      ok: true,
+      value: {
+        frameId: 0,
+      },
+    })
+    expect(accepted).toBe(true)
   })
 })
 
@@ -167,7 +197,6 @@ function createTestPicker(options: TestPickerOptions = {}) {
   }
   const picker = createTargetPicker(client, {
     createSessionId: () => 'inspect-1',
-    frameId: 0,
     now: () => 1_800_000_000_000,
   })
 
@@ -175,13 +204,13 @@ function createTestPicker(options: TestPickerOptions = {}) {
 }
 
 function selectedMessage(
-  overrides: Partial<{ sessionId: string }> = {},
+  overrides: Partial<{ sessionId: string; frameId: number }> = {},
 ): ActorbleExtensionMessage {
   return createExtensionMessage({
     kind: 'inspector:selected',
     payload: {
       tabId: 7,
-      frameId: 0,
+      ...(overrides.frameId === undefined ? {} : { frameId: overrides.frameId }),
       sessionId: overrides.sessionId ?? 'inspect-1',
       scenarioId: 'scenario-1',
       target: {

@@ -22,7 +22,7 @@ const newestScenario = scenarioRecord('newest-scenario', 'Newest scenario', '202
 
 describe('popup run controls', () => {
   it('loads saved scenarios, defaults to the newest record, and renders tab readiness', async () => {
-    const { controls } = createTestControls()
+    const { controls, sent } = createTestControls()
 
     await controls.refresh()
 
@@ -37,6 +37,14 @@ describe('popup run controls', () => {
     expect(view.lastRunText).toBe('Completed at 2026-06-17T00:02:00.000Z')
     expect(view.buttons.run.disabled).toBe(false)
     expect(view.buttons.pauseResume.disabled).toBe(true)
+    expect(sent[0]).toEqual(
+      createExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          scenarioId: 'newest-scenario',
+        },
+      }),
+    )
   })
 
   it('dispatches the selected scenario run with compiled payload and correlation metadata', async () => {
@@ -296,9 +304,14 @@ function commandReceiptFor(message: ActorbleExtensionMessage) {
     case 'scenario:compile':
     case 'inspector:start':
     case 'inspector:stop':
+    case 'inspector:selected':
+    case 'inspector:cancelled':
+    case 'locator:preview':
     case 'trace:event':
     case 'runtime:status':
+    case 'content:ready':
     case 'popup:get-state':
+    case 'record:draft:get':
       throw new Error(`Unexpected popup test command: ${message.kind}`)
   }
 }

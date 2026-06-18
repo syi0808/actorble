@@ -117,9 +117,7 @@ describe('inspector locator preview', () => {
 
   it('delegates preview checks through the extension messaging boundary', async () => {
     const sent: ActorbleExtensionMessage[] = []
-    const previewer = createLocatorPreviewer(createPreviewClient(sent), {
-      frameId: 0,
-    })
+    const previewer = createLocatorPreviewer(createPreviewClient(sent))
 
     const result = await previewer.previewTarget(pickedTarget, 'scenario-1')
 
@@ -127,7 +125,6 @@ describe('inspector locator preview', () => {
       ok: true,
       value: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'scenario-1',
         candidates: [
           {
@@ -143,7 +140,6 @@ describe('inspector locator preview', () => {
       kind: 'locator:preview',
       payload: {
         tabId: 7,
-        frameId: 0,
         scenarioId: 'scenario-1',
       },
     })
@@ -152,7 +148,6 @@ describe('inspector locator preview', () => {
         kind: 'locator:preview',
         payload: {
           tabId: 7,
-          frameId: 0,
           scenarioId: 'scenario-1',
           candidates: createLocatorCandidates(pickedTarget),
         },
@@ -178,7 +173,6 @@ function createPreviewClient(sent: ActorbleExtensionMessage[]): LocatorPreviewCl
       sent.push(message)
       return ok({
         tabId: 7,
-        frameId: 0,
         scenarioId: 'scenario-1',
         candidates: [
           {

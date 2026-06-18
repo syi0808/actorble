@@ -25,26 +25,66 @@ beforeEach(() => {
 describe('background orchestration', () => {
   it('resolves the active tab as a routable target', async () => {
     const activeTab = await createActiveTab('http://localhost:3000/login')
+    mockReadyContentScript()
     const orchestrator = createTestOrchestrator()
 
     const result = await orchestrator.resolveActiveTarget()
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       value: {
         tabId: activeTab.id,
+        frameId: 0,
         url: 'http://localhost:3000/login',
       },
     })
   })
 
+  it('correlates emitted content readiness by sender tab and frame metadata', async () => {
+    const activeTab = await createActiveTab('http://localhost:3000/login')
+    const sendMessage = mockReadyContentScript()
+    const orchestrator = createTestOrchestrator()
+
+    const ready = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'content:ready',
+        payload: {
+          url: 'http://localhost:3000/login',
+        },
+      }),
+      {
+        tab: activeTab,
+        frameId: 0,
+        url: 'http://localhost:3000/login',
+      },
+    )
+    const target = await orchestrator.resolveActiveTarget()
+
+    expect(ready).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'content:ready',
+        tabId: activeTab.id,
+        frameId: 0,
+        contentReady: true,
+      },
+    })
+    expect(target).toMatchObject({
+      ok: true,
+      value: {
+        tabId: activeTab.id,
+        frameId: 0,
+      },
+    })
+    expect(sendMessage).not.toHaveBeenCalled()
+  })
+
   it('routes run messages to the target frame and tracks run metadata', async () => {
     const activeTab = await createActiveTab()
-    const sendMessage = vi
-      .spyOn(fakeBrowser.tabs, 'sendMessage')
-      .mockResolvedValue({ received: true })
+    const sendMessage = mockReadyContentScript()
     const orchestrator = createTestOrchestrator()
-    const message = createRunMessage(activeTab.id)
+    const message = createRunMessage(activeTab.id, undefined)
+    const routedMessage = createRunMessage(activeTab.id, 0)
 
     const result = await orchestrator.handleMessage(message)
 
@@ -59,7 +99,19 @@ describe('background orchestration', () => {
         contentReady: true,
       },
     })
-    expect(sendMessage).toHaveBeenCalledWith(activeTab.id, message, { frameId: 0 })
+    expect(sendMessage).toHaveBeenNthCalledWith(
+      1,
+      activeTab.id,
+      createExtensionMessage({
+        kind: 'content:ready',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+        },
+      }),
+      { frameId: 0 },
+    )
+    expect(sendMessage).toHaveBeenNthCalledWith(2, activeTab.id, routedMessage, { frameId: 0 })
     expect(orchestrator.getRunSession('run-1')).toMatchObject({
       runId: 'run-1',
       scenarioId: 'scenario-1',
@@ -73,7 +125,7 @@ describe('background orchestration', () => {
 
   it('updates run sessions from runtime status messages', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    mockReadyContentScript()
     const orchestrator = createTestOrchestrator()
     await orchestrator.handleMessage(createRunMessage(activeTab.id))
     now += 50
@@ -114,7 +166,7 @@ describe('background orchestration', () => {
 
   it('tracks record session metadata by correlation id', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+    mockReadyContentScript(async (_tabId, message) => {
       const extensionMessage = message as ActorbleExtensionMessage
       if (extensionMessage.kind === 'record:start') {
         return okContentRecordReceipt(extensionMessage, 'recording')
@@ -180,7 +232,7 @@ describe('background orchestration', () => {
 
   it('normalizes stopped recorder events and returns a cached draft to the panel', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+    mockReadyContentScript(async (_tabId, message) => {
       const extensionMessage = message as ActorbleExtensionMessage
       if (extensionMessage.kind === 'record:start') {
         return okContentRecordReceipt(extensionMessage, 'recording')
@@ -271,7 +323,7 @@ describe('background orchestration', () => {
 
   it('rejects run, inspector, and recorder commands that would conflict on the same tab', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+    mockReadyContentScript(async (_tabId, message) => {
       const extensionMessage = message as ActorbleExtensionMessage
       if (extensionMessage.kind === 'record:start') {
         return okContentRecordReceipt(extensionMessage, 'recording')
@@ -350,9 +402,7 @@ describe('background orchestration', () => {
 
   it('routes inspector sessions and ingests selected target metadata', async () => {
     const activeTab = await createActiveTab()
-    const sendMessage = vi
-      .spyOn(fakeBrowser.tabs, 'sendMessage')
-      .mockResolvedValue({ received: true })
+    const sendMessage = mockReadyContentScript()
     const orchestrator = createTestOrchestrator()
     const start = createExtensionMessage({
       kind: 'inspector:start',
@@ -456,9 +506,14 @@ describe('background orchestration', () => {
         },
       ],
     } as const
-    const sendMessage = vi
-      .spyOn(fakeBrowser.tabs, 'sendMessage')
-      .mockResolvedValue({ ok: true, value: previewResult })
+    const sendMessage = mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'locator:preview') {
+        return { ok: true, value: previewResult }
+      }
+
+      return { received: true }
+    })
     const orchestrator = createTestOrchestrator()
     const message = createExtensionMessage({
       kind: 'locator:preview',
@@ -481,7 +536,7 @@ describe('background orchestration', () => {
 
   it('ingests inspector cancellation reasons', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    mockReadyContentScript()
     const orchestrator = createTestOrchestrator()
 
     await orchestrator.handleMessage(
@@ -526,7 +581,7 @@ describe('background orchestration', () => {
 
   it('returns popup state for the active tab and latest matching sessions', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+    mockReadyContentScript(async (_tabId, message) => {
       const extensionMessage = message as ActorbleExtensionMessage
       if (extensionMessage.kind === 'record:start') {
         return okContentRecordReceipt(extensionMessage, 'recording')
@@ -708,6 +763,38 @@ function createTestOrchestrator() {
   })
 }
 
+function mockReadyContentScript(
+  responder: (
+    tabId: number,
+    message: unknown,
+    options?: Readonly<{ frameId?: number }>,
+  ) => Promise<unknown> | unknown = () => ({ received: true }),
+) {
+  return vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (tabId, message, options) => {
+    const extensionMessage = message as ActorbleExtensionMessage
+    if (extensionMessage.kind === 'content:ready') {
+      return {
+        ok: true,
+        value: {
+          tabId: extensionMessage.payload.tabId ?? tabId,
+          frameId: extensionMessage.payload.frameId ?? options?.frameId,
+          url: 'http://localhost:3000/dashboard',
+          topFrame: (extensionMessage.payload.frameId ?? options?.frameId) === 0,
+          capabilities: {
+            runtime: true,
+            recorder: true,
+            inspector: true,
+            locatorPreview: true,
+            frameCorrelation: true,
+          },
+        },
+      }
+    }
+
+    return responder(tabId, message, options)
+  })
+}
+
 async function createActiveTab(url = 'http://localhost:3000/dashboard') {
   const tab = await fakeBrowser.tabs.create({ url })
   if (tab.id === undefined) {
@@ -727,12 +814,12 @@ async function createActiveTab(url = 'http://localhost:3000/dashboard') {
   return activeTab
 }
 
-function createRunMessage(tabId: number) {
+function createRunMessage(tabId: number, frameId?: number) {
   return createExtensionMessage({
     kind: 'scenario:run',
     payload: {
       tabId,
-      frameId: 0,
+      ...(frameId === undefined ? {} : { frameId }),
       scenarioId: 'scenario-1',
       runId: 'run-1',
       compilation,

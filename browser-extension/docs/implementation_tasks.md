@@ -441,7 +441,7 @@ src/recorder
 
 ### T18 Content Readiness And Frame Correlation
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Replace implicit `frameId: 0` routing with explicit content
   readiness and known-frame correlation. This removes a common cause of
   record/run/inspect commands silently targeting the wrong frame.

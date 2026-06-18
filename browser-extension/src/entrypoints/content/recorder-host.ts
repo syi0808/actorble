@@ -78,6 +78,7 @@ export function createContentRecorderHost(
       case 'locator:preview':
       case 'trace:event':
       case 'runtime:status':
+      case 'content:ready':
       case 'popup:get-state':
         return failure({
           code: 'unsupported_message',

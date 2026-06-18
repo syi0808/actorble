@@ -230,6 +230,22 @@ const validMessages = [
     },
   },
   {
+    kind: 'content:ready',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      url: 'http://localhost:3000/login',
+      topFrame: true,
+      capabilities: {
+        runtime: true,
+        recorder: true,
+        inspector: true,
+        locatorPreview: true,
+        frameCorrelation: true,
+      },
+    },
+  },
+  {
     kind: 'popup:get-state',
     payload: {
       frameId: 0,
@@ -257,6 +273,7 @@ describe('messaging skeleton contracts', () => {
       'locator:preview',
       'trace:event',
       'runtime:status',
+      'content:ready',
       'popup:get-state',
     ])
   })
@@ -481,6 +498,34 @@ describe('messaging skeleton contracts', () => {
         kind: 'popup:get-state',
         payload: {
           scenarioId: 123,
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects invalid content readiness metadata', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'content:ready',
+        payload: {
+          tabId: 7,
+          frameId: '0',
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'content:ready',
+        payload: {
+          tabId: 7,
+          capabilities: {
+            runtime: true,
+            recorder: true,
+            inspector: true,
+            locatorPreview: true,
+            frameCorrelation: 'yes',
+          },
         },
       }),
     ).toBe(false)

@@ -80,7 +80,6 @@ export type TargetPicker = Readonly<{
   getSnapshot(): TargetPickerSnapshot
 }>
 
-const DEFAULT_FRAME_ID = 0
 const TEXT_SUMMARY_LIMIT = 80
 
 let nextInspectionSequence = 1
@@ -90,7 +89,7 @@ export function createTargetPicker(
   options: TargetPickerOptions = {},
 ): TargetPicker {
   const createSessionId = options.createSessionId ?? defaultSessionId
-  const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const frameId = options.frameId
   const targetTabId = options.targetTabId
   const now = options.now ?? Date.now
   let snapshot = idleSnapshot()
@@ -124,7 +123,7 @@ export function createTargetPicker(
 
     const session = {
       tabId: target.value.id,
-      frameId,
+      ...(frameId === undefined ? {} : { frameId }),
       sessionId: createSessionId(),
       ...(scenarioId === undefined ? {} : { scenarioId }),
       startedAt: now(),
@@ -145,13 +144,14 @@ export function createTargetPicker(
       return failure(delivery.issues)
     }
 
+    const resolvedSession = sessionFromReceipt(session, delivery.value)
     snapshot = {
       status: 'inspecting',
-      session,
+      session: resolvedSession,
       issues: [],
       message: undefined,
     }
-    return ok(session)
+    return ok(resolvedSession)
   }
 
   async function stop(): Promise<ExtensionResult<TargetPickerSession>> {
@@ -186,6 +186,7 @@ export function createTargetPicker(
       return failure(delivery.issues)
     }
 
+    const resolvedSession = sessionFromReceipt(session, delivery.value)
     snapshot = {
       status: 'cancelled',
       session: undefined,
@@ -193,7 +194,7 @@ export function createTargetPicker(
       issues: [],
       message: 'Inspection stopped.',
     }
-    return ok(session)
+    return ok(resolvedSession)
   }
 
   function ingestMessage(message: unknown): boolean {
@@ -260,8 +261,8 @@ export function createTargetPicker(
     }
 
     const responseResult = readExtensionResult(response)
-    if (responseResult !== null && !responseResult.ok) {
-      return failure(responseResult.issues)
+    if (responseResult !== null) {
+      return responseResult.ok ? ok(responseResult.value) : failure(responseResult.issues)
     }
 
     return ok(response)
@@ -426,6 +427,36 @@ function sessionPayload(session: TargetPickerSession): InspectorSessionCorrelati
     ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
     ...(session.runId === undefined ? {} : { runId: session.runId }),
   }
+}
+
+function sessionFromReceipt(
+  fallback: TargetPickerSession,
+  value: unknown,
+): TargetPickerSession {
+  if (!isRecord(value)) {
+    return fallback
+  }
+
+  return {
+    tabId: typeof value.tabId === 'number' ? value.tabId : fallback.tabId,
+    ...(typeof value.frameId === 'number' ? { frameId: value.frameId } : optionalFrameId(fallback.frameId)),
+    sessionId: typeof value.sessionId === 'string' ? value.sessionId : fallback.sessionId,
+    ...(typeof value.scenarioId === 'string' ? { scenarioId: value.scenarioId } : optionalScenarioId(fallback.scenarioId)),
+    ...(typeof value.runId === 'string' ? { runId: value.runId } : optionalRunId(fallback.runId)),
+    startedAt: fallback.startedAt,
+  }
+}
+
+function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
+  return frameId === undefined ? {} : { frameId }
+}
+
+function optionalScenarioId(scenarioId: string | undefined): Readonly<{ scenarioId?: string }> {
+  return scenarioId === undefined ? {} : { scenarioId }
+}
+
+function optionalRunId(runId: string | undefined): Readonly<{ runId?: string }> {
+  return runId === undefined ? {} : { runId }
 }
 
 function idleSnapshot(): TargetPickerSnapshot {

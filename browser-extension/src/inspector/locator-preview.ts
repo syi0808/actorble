@@ -90,7 +90,6 @@ export type LocatorPreviewCandidateView = Readonly<{
   selectable: boolean
 }>
 
-const DEFAULT_FRAME_ID = 0
 const TEXT_LIMIT = 80
 
 export function createLocatorCandidates(
@@ -203,7 +202,7 @@ export function createLocatorPreviewer(
   client: LocatorPreviewClient,
   options: LocatorPreviewOptions = {},
 ): LocatorPreviewer {
-  const frameId = options.frameId ?? DEFAULT_FRAME_ID
+  const frameId = options.frameId
   const targetTabId = options.targetTabId
   let snapshot = idleSnapshot()
 
@@ -247,7 +246,7 @@ export function createLocatorPreviewer(
       kind: 'locator:preview',
       payload: {
         tabId: resolvedTab.value.id,
-        frameId,
+        ...(frameId === undefined ? {} : { frameId }),
         ...(scenarioId === undefined ? {} : { scenarioId }),
         candidates,
       },

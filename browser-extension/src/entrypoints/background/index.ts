@@ -9,5 +9,7 @@ export default defineBackground(() => {
     createWxtBackgroundBrowserHost(browser),
   )
 
-  browser.runtime.onMessage.addListener((message) => orchestrator.handleMessage(message))
+  browser.runtime.onMessage.addListener((message, sender) => (
+    orchestrator.handleMessage(message, sender)
+  ))
 })
