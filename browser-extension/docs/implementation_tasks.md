@@ -483,7 +483,7 @@ src/recorder
 
 ### T20 Side Panel Workflow Builder UI
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Replace the scattered side panel sections with a workflow builder
   composed around the authoring session. The UI should make the common path:
   add action, set target/input/options, validate, dry-run, and save.

@@ -216,6 +216,29 @@ export function createScenario(
   ))
 }
 
+export function openDraftDocument(
+  state: ScenarioAuthoringSessionState,
+  document: BuilderDraftDocument,
+  options: Readonly<{ dirty?: boolean }> = {},
+): ScenarioAuthoringSessionState {
+  const draft = cloneJson(document)
+  const selectedStep = draft.steps[0]
+  const selectedStepId = selectedStep === undefined ? undefined : stepIdFor(selectedStep, 0)
+
+  return withDraftDocument(
+    {
+      ...state,
+      selectedScenarioId: undefined,
+      selectedTargetSlot: undefined,
+      currentRun: undefined,
+      currentRecord: undefined,
+    },
+    draft,
+    selectedStepId,
+    options.dirty ?? true,
+  )
+}
+
 export function markScenarioSaved(
   state: ScenarioAuthoringSessionState,
   source: BuilderScenarioSource,
@@ -451,12 +474,12 @@ export function updateStepFields(
   const nextStep = { ...step } as Record<string, unknown>
   applyNullable(nextStep, 'id', update.id)
   applyNullable(nextStep, 'note', update.note)
-  applyProvided(nextStep, 'input', update.input)
-  applyProvided(nextStep, 'duration', update.duration)
+  applyDeletable(nextStep, 'input', update.input)
+  applyDeletable(nextStep, 'duration', update.duration)
   applyNullable(nextStep, 'reason', update.reason)
-  applyProvided(nextStep, 'target', update.target)
-  applyProvided(nextStep, 'from', update.from)
-  applyProvided(nextStep, 'to', update.to)
+  applyDeletable(nextStep, 'target', update.target)
+  applyDeletable(nextStep, 'from', update.from)
+  applyDeletable(nextStep, 'to', update.to)
   applyNullable(nextStep, 'options', update.options)
   applyNullable(nextStep, 'platform', update.platform)
 
@@ -871,14 +894,21 @@ function applyNullable(
   target[key] = value
 }
 
-function applyProvided(
+function applyDeletable(
   target: Record<string, unknown>,
   key: string,
   value: unknown,
 ): void {
-  if (value !== undefined) {
-    target[key] = value
+  if (value === undefined) {
+    return
   }
+
+  if (value === null) {
+    delete target[key]
+    return
+  }
+
+  target[key] = value
 }
 
 function slotReferencesStep(

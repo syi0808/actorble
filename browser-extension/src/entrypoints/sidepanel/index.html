@@ -11,6 +11,7 @@
       <header class="app-header">
         <p class="eyebrow">Actorble</p>
         <h1>Scenario Builder</h1>
+        <span id="workflow-status" class="summary">Loading</span>
       </header>
 
       <section aria-labelledby="library-title">
@@ -25,6 +26,7 @@
           </select>
         </label>
         <div class="toolbar">
+          <button id="create-scenario-button" type="button">New</button>
           <label class="file-button">
             <input id="scenario-file" type="file" accept="application/json,.json" />
             Import
@@ -73,6 +75,15 @@
           <span id="step-summary" class="summary">No step selected</span>
         </div>
         <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
+        <div class="step-command-grid">
+          <select id="step-action-family" aria-label="Action family"></select>
+          <button id="add-step-button" type="button">Add</button>
+          <button id="insert-step-button" type="button">Insert</button>
+          <button id="duplicate-step-button" type="button">Duplicate</button>
+          <button id="move-step-up-button" type="button">Up</button>
+          <button id="move-step-down-button" type="button">Down</button>
+          <button id="delete-step-button" type="button">Delete</button>
+        </div>
       </section>
 
       <section aria-labelledby="step-editor-title">
@@ -83,7 +94,7 @@
         <div class="field-grid">
           <label class="field">
             <span>Action</span>
-            <input id="step-action" type="text" readonly />
+            <select id="step-action" aria-label="Selected step action"></select>
           </label>
           <label class="field">
             <span>Duration</span>
@@ -98,24 +109,35 @@
           <span>Text input</span>
           <input id="step-input" type="text" autocomplete="off" />
         </label>
-        <label class="field">
-          <span>Target JSON</span>
-          <textarea id="step-target-json" spellcheck="false"></textarea>
-        </label>
-        <div class="field-grid">
-          <label class="field">
-            <span>From JSON</span>
-            <textarea id="step-from-json" spellcheck="false"></textarea>
-          </label>
-          <label class="field">
-            <span>To JSON</span>
-            <textarea id="step-to-json" spellcheck="false"></textarea>
-          </label>
+        <div>
+          <span class="field-label">Target slots</span>
+          <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
         </div>
-        <label class="field">
-          <span>Object input JSON</span>
-          <textarea id="step-input-json" spellcheck="false"></textarea>
-        </label>
+        <details class="advanced-repair">
+          <summary>Repair JSON</summary>
+          <label class="field">
+            <span>Target JSON</span>
+            <textarea id="step-target-json" spellcheck="false"></textarea>
+          </label>
+          <div class="field-grid">
+            <label class="field">
+              <span>From JSON</span>
+              <textarea id="step-from-json" spellcheck="false"></textarea>
+            </label>
+            <label class="field">
+              <span>To JSON</span>
+              <textarea id="step-to-json" spellcheck="false"></textarea>
+            </label>
+          </div>
+          <label class="field">
+            <span>Object input JSON</span>
+            <textarea id="step-input-json" spellcheck="false"></textarea>
+          </label>
+          <label class="field">
+            <span>Options JSON</span>
+            <textarea id="step-options-json" spellcheck="false"></textarea>
+          </label>
+        </details>
       </section>
 
       <section aria-labelledby="target-picker-title">

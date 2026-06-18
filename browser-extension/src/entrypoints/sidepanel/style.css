@@ -29,10 +29,13 @@ main {
 
 .app-header {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: end;
 }
 
 .eyebrow {
+  grid-column: 1 / -1;
   margin: 0 0 4px;
   color: var(--accent);
   font-size: 12px;
@@ -208,12 +211,14 @@ button[data-pending="true"] {
 }
 
 .field,
-.field-grid {
+.field-grid,
+.step-command-grid {
   display: grid;
   gap: 6px;
 }
 
-.field span {
+.field span,
+.field-label {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -229,6 +234,14 @@ button[data-pending="true"] {
   font:
     13px / 1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
+}
+
+.step-command-grid {
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(58px, auto));
+}
+
+.step-command-grid button {
+  padding-inline: 8px;
 }
 
 .step-list {
@@ -345,6 +358,83 @@ button[data-pending="true"] {
 .step-status {
   color: var(--muted);
   text-transform: capitalize;
+}
+
+.target-slot-list {
+  display: grid;
+  gap: 6px;
+  min-height: 30px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.target-slot-list:empty::before {
+  color: var(--muted);
+  content: "No target slots";
+  font-size: 13px;
+}
+
+.target-slot-list button {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.4fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px;
+  text-align: left;
+}
+
+.target-slot-list button[data-selected="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+}
+
+.target-slot-list button[data-validation="invalid"] {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+}
+
+.target-slot-title,
+.target-slot-status {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.target-slot-detail {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-slot-status {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.advanced-repair {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.advanced-repair summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.advanced-repair[open] {
+  gap: 10px;
+}
+
+.advanced-repair[open] > summary {
+  margin-bottom: 10px;
 }
 
 .issue-list li {

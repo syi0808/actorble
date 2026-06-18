@@ -1,4 +1,34 @@
 import {
+  addStep as addBuilderStep,
+  assignLocatorToSelectedTargetSlot,
+  clearTargetSlot,
+  createScenario as createBuilderScenario,
+  createScenarioAuthoringSession,
+  deleteStep as deleteBuilderStep,
+  duplicateStep as duplicateBuilderStep,
+  getValidatedScenarioDocument,
+  insertStep as insertBuilderStep,
+  markScenarioSaved,
+  openDraftDocument,
+  reorderStep as reorderBuilderStep,
+  selectScenario as selectBuilderScenario,
+  selectStep as selectBuilderStep,
+  selectTargetSlot as selectBuilderTargetSlot,
+  setRecordState,
+  setRunState,
+  updateDocumentFields as updateBuilderDocumentFields,
+  updateStepActionFamily as updateBuilderStepActionFamily,
+  updateStepFields as updateBuilderStepFields,
+  type BuilderDraftDocument,
+  type BuilderDraftStep,
+  type BuilderScenarioSource,
+  type BuilderStepActionFamily,
+  type BuilderStepFieldUpdate,
+  type BuilderTargetSlot,
+  type CreateScenarioInput,
+  type ScenarioAuthoringSessionState,
+} from '../../builder/index.js'
+import {
   createExtensionMessage,
   isActorbleExtensionMessage,
   type ActorbleExtensionMessage,
@@ -21,7 +51,6 @@ import type {
   ScenarioDocument,
   ScenarioLocator,
   ScenarioStep,
-  ScenarioTargetGroup,
 } from '../../scenario/types.js'
 import { validateScenarioDocument } from '../../scenario/validate.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
@@ -91,7 +120,10 @@ export type SidepanelScenarioEditorSnapshot = Readonly<{
   scenarios: readonly ScenarioRecord[]
   selectedScenarioId?: string
   selectedStepIndex: number
-  draftDocument?: ScenarioDocument
+  selectedStepId?: string
+  selectedTargetSlot?: BuilderTargetSlot
+  draftDocument?: BuilderDraftDocument
+  dirty: boolean
   pendingAction: SidepanelPendingAction | null
   issues: readonly ExtensionIssue[]
   currentRun?: SidepanelScenarioRunReceipt
@@ -119,6 +151,8 @@ export type SidepanelScenarioEditorOptions = Readonly<{
   createRunId?: () => string
   createDryRunId?: () => string
   createRecordId?: () => string
+  createScenarioId?: () => string
+  createStepId?: (family: BuilderStepActionFamily) => string
   frameId?: number
   targetTabId?: number
   now?: () => number
@@ -135,6 +169,7 @@ export type SidepanelStepFieldUpdate = Readonly<{
   note?: string
   input?: string
   duration?: string | number
+  optionsJson?: string
   targetJson?: string
   fromJson?: string
   toJson?: string
@@ -162,20 +197,46 @@ export type SidepanelButtonView = Readonly<{
   pending: boolean
 }>
 
+export type SidepanelWorkflowView = Readonly<{
+  status: 'empty' | 'saved' | 'draft' | 'running' | 'recording'
+  dirty: boolean
+  selectedStepId?: string
+  selectedTargetSlotId?: string
+  summary: string
+}>
+
+export type SidepanelActionFamilyOptionView = Readonly<{
+  value: BuilderStepActionFamily
+  label: string
+}>
+
+export type SidepanelTargetSlotRowView = Readonly<{
+  id: string
+  label: string
+  summary: string
+  selected: boolean
+  validationStatus: 'valid' | 'invalid'
+}>
+
 export type SidepanelScenarioEditorView = Readonly<{
+  workflow: SidepanelWorkflowView
   scenarioOptions: readonly Readonly<{ value: string; label: string }>[]
   selectedScenarioId?: string
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
   documentFields: Readonly<{
     name: string
     description: string
   }>
   stepRows: readonly SidepanelStepRowView[]
+  targetSlotRows: readonly SidepanelTargetSlotRowView[]
   selectedStepFields: Readonly<{
     id: string
     action: string
+    actionFamily: BuilderStepActionFamily | ''
     note: string
     input: string
     duration: string
+    optionsJson: string
     targetJson: string
     fromJson: string
     toJson: string
@@ -186,6 +247,13 @@ export type SidepanelScenarioEditorView = Readonly<{
   runSummary: string
   traceView: TraceRunDisplayView | undefined
   buttons: Readonly<{
+    create: SidepanelButtonView
+    addStep: SidepanelButtonView
+    insertStep: SidepanelButtonView
+    duplicateStep: SidepanelButtonView
+    deleteStep: SidepanelButtonView
+    moveStepUp: SidepanelButtonView
+    moveStepDown: SidepanelButtonView
     validate: SidepanelButtonView
     save: SidepanelButtonView
     import: SidepanelButtonView
@@ -198,8 +266,18 @@ export type SidepanelScenarioEditorView = Readonly<{
 
 export type SidepanelScenarioEditor = Readonly<{
   refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>>
+  createScenario(input?: CreateScenarioInput): ExtensionResult<SidepanelScenarioEditorSnapshot>
   selectScenario(id: string): void
   selectStep(index: number): void
+  selectTargetSlot(slotId: string): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  addStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  insertStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  updateSelectedStepActionFamily(
+    family: BuilderStepActionFamily,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot>
   updateDocumentFields(update: SidepanelDocumentFieldUpdate): void
   updateSelectedStepFields(
     update: SidepanelStepFieldUpdate,
@@ -230,6 +308,8 @@ export function createSidepanelScenarioEditor(
   const createRunId = options.createRunId ?? defaultRunId
   const createDryRunId = options.createDryRunId ?? defaultDryRunId
   const createRecordId = options.createRecordId ?? defaultRecordId
+  const createScenarioId = options.createScenarioId
+  const createStepId = options.createStepId
   const frameId = options.frameId
   const targetTabId = options.targetTabId
   const now = options.now ?? Date.now
@@ -237,86 +317,185 @@ export function createSidepanelScenarioEditor(
     historyLimit: options.traceHistoryLimit,
     runLimit: options.traceRunLimit,
   })
+  let records: readonly ScenarioRecord[] = []
+  let session = createScenarioAuthoringSession({
+    scenarios: [],
+    ...(createScenarioId === undefined ? {} : { createScenarioId }),
+    ...(createStepId === undefined ? {} : { createStepId }),
+  })
+  let externalIssues: readonly ExtensionIssue[] = []
   let snapshot = emptySnapshot(traceStore.getState())
 
   async function refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>> {
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'refresh',
-      issues: [],
-    }
+    })
 
     const loaded = await loadScenarios(snapshot.selectedScenarioId)
-    snapshot = {
-      ...snapshot,
-      pendingAction: null,
-    }
+    syncSnapshotFromSession({ pendingAction: null })
 
     return loaded.ok ? ok(snapshot) : failure(loaded.issues)
   }
 
+  function createScenario(
+    input: CreateScenarioInput = {},
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    return applySessionState(createBuilderScenario(session, input), {
+      message: undefined,
+    })
+  }
+
   function selectScenario(id: string): void {
-    const scenario = snapshot.scenarios.find((record) => record.id === id)
-    if (scenario === undefined) {
-      snapshot = {
-        ...snapshot,
-        selectedScenarioId: id,
-        selectedStepIndex: 0,
-        draftDocument: undefined,
-        issues: [
-          {
-            code: 'storage_error',
-            message: `Scenario record "${id}" is not loaded.`,
-          },
-        ],
-      }
+    const selected = selectBuilderScenario(session, id)
+    if (!selected.ok) {
+      setExternalIssues(selected.issues, { message: undefined })
       return
     }
 
-    applySelectedScenario(scenario)
+    session = withDefaultTargetSlot(selected.value)
+    externalIssues = []
+    syncSnapshotFromSession({ message: undefined })
   }
 
   function selectStep(index: number): void {
-    const steps = snapshot.draftDocument?.steps ?? []
-    snapshot = {
-      ...snapshot,
-      selectedStepIndex: clampStepIndex(index, steps.length),
-    }
-  }
-
-  function updateDocumentFields(update: SidepanelDocumentFieldUpdate): void {
-    if (snapshot.draftDocument === undefined) {
+    const document = session.draftDocument
+    const selected = document?.steps[clampStepIndex(index, document.steps.length)]
+    if (selected === undefined) {
+      setExternalIssues([{
+        code: 'invalid_document',
+        message: 'Select a step before editing.',
+        path: ['steps'],
+      }], { message: undefined })
       return
     }
 
-    const document = { ...snapshot.draftDocument } as Record<string, unknown>
-    if (update.name !== undefined) {
-      applyStringField(document, 'name', update.name, { deleteWhenBlank: true })
-    }
-    if (update.description !== undefined) {
-      applyStringField(document, 'description', update.description, { deleteWhenBlank: true })
+    applySessionState(selectBuilderStep(session, stepIdFor(selected, index)), {
+      message: undefined,
+    })
+  }
+
+  function selectTargetSlot(
+    slotId: string,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const slot = targetSlotFromViewId(session, slotId)
+    if (slot === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: `Target slot "${slotId}" is not available for the selected step.`,
+      })
     }
 
-    snapshot = {
-      ...snapshot,
-      draftDocument: document as unknown as ScenarioDocument,
-      issues: [],
+    return applySessionState(selectBuilderTargetSlot(session, slot), {
       message: undefined,
+    })
+  }
+
+  function addStep(
+    family: BuilderStepActionFamily,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    return applySessionState(addBuilderStep(session, family), { message: undefined })
+  }
+
+  function insertStep(
+    family: BuilderStepActionFamily,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    return applySessionState(
+      insertBuilderStep(session, snapshot.selectedStepIndex + 1, family),
+      { message: undefined },
+    )
+  }
+
+  function duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const stepId = session.selectedStepId
+    if (stepId === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before duplicating.',
+        path: ['steps'],
+      })
     }
+
+    return applySessionState(duplicateBuilderStep(session, stepId), { message: undefined })
+  }
+
+  function deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const stepId = session.selectedStepId
+    if (stepId === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before deleting.',
+        path: ['steps'],
+      })
+    }
+
+    return applySessionState(deleteBuilderStep(session, stepId), { message: undefined })
+  }
+
+  function moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const stepId = session.selectedStepId
+    if (stepId === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before moving.',
+        path: ['steps'],
+      })
+    }
+
+    return applySessionState(
+      reorderBuilderStep(session, stepId, snapshot.selectedStepIndex + delta),
+      { message: undefined },
+    )
+  }
+
+  function updateSelectedStepActionFamily(
+    family: BuilderStepActionFamily,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const stepId = session.selectedStepId
+    if (stepId === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before changing the action.',
+        path: ['steps'],
+      })
+    }
+
+    return applySessionState(updateBuilderStepActionFamily(session, stepId, family), {
+      message: undefined,
+    })
+  }
+
+  function updateDocumentFields(update: SidepanelDocumentFieldUpdate): void {
+    if (session.draftDocument === undefined) {
+      return
+    }
+
+    const updated = updateBuilderDocumentFields(session, {
+      ...(update.name === undefined ? {} : { name: nullableString(update.name) }),
+      ...(update.description === undefined ? {} : { description: nullableString(update.description) }),
+    })
+    applySessionState(updated, { message: undefined })
   }
 
   function updateSelectedStepFields(
     update: SidepanelStepFieldUpdate,
   ): ExtensionResult<ScenarioDocument> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before editing a step.',
       })
     }
 
-    const index = snapshot.selectedStepIndex
-    const step = snapshot.draftDocument.steps[index]
+    const stepId = session.selectedStepId
+    const index = selectedStepIndexForSession(session)
+    const step = session.draftDocument.steps[index]
+    if (stepId === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before editing.',
+        path: ['steps'],
+      })
+    }
     if (step === undefined) {
       return setIssue({
         code: 'invalid_document',
@@ -325,142 +504,95 @@ export function createSidepanelScenarioEditor(
       })
     }
 
-    const editedStep = editStep(step, index, update)
-    if (!editedStep.ok) {
-      snapshot = {
-        ...snapshot,
-        issues: editedStep.issues,
-        message: undefined,
-      }
-      return failure(editedStep.issues)
+    const fieldUpdate = stepFieldUpdateFromInput(step, index, update)
+    if (!fieldUpdate.ok) {
+      setExternalIssues(fieldUpdate.issues, { message: undefined })
+      return failure(fieldUpdate.issues)
     }
 
-    const steps = snapshot.draftDocument.steps.map((item, itemIndex) => (
-      itemIndex === index ? editedStep.value : item
-    ))
-    const document = {
-      ...snapshot.draftDocument,
-      steps,
-    } satisfies ScenarioDocument
-    const validation = validateScenarioDocument(document)
-
-    snapshot = {
-      ...snapshot,
-      draftDocument: document,
-      issues: validation.ok ? [] : validation.issues,
-      message: undefined,
+    const updated = updateBuilderStepFields(session, stepId, fieldUpdate.value)
+    if (!updated.ok) {
+      setExternalIssues(updated.issues, { message: undefined })
+      return failure(updated.issues)
     }
 
-    return validation.ok ? ok(document) : validation
+    session = withDefaultTargetSlot(updated.value)
+    externalIssues = []
+    syncSnapshotFromSession({ message: undefined })
+
+    return scenarioDocumentResultFromSession()
   }
 
   function applyLocatorToSelectedStep(
     locator: ScenarioLocator,
   ): ExtensionResult<ScenarioDocument> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before applying a locator.',
       })
     }
 
-    const index = snapshot.selectedStepIndex
-    const step = snapshot.draftDocument.steps[index]
-    if (step === undefined) {
-      return setIssue({
-        code: 'invalid_document',
-        message: 'Select a step before applying a locator.',
-        path: ['steps'],
-      })
+    const slotReady = ensureSelectedTargetSlot(session)
+    session = slotReady
+    const assigned = assignLocatorToSelectedTargetSlot(session, locator)
+    if (!assigned.ok) {
+      setExternalIssues(assigned.issues, { message: undefined })
+      return failure(assigned.issues)
     }
 
-    if (readStepProperty(step, 'target') === undefined) {
-      return setIssue({
-        code: 'invalid_document',
-        message: 'The selected step does not have a writable target field.',
-        path: ['steps', index, 'target'],
-      })
-    }
+    session = withDefaultTargetSlot(assigned.value)
+    externalIssues = []
+    syncSnapshotFromSession({ message: 'Locator applied' })
 
-    const target = {
-      kind: 'target',
-      strict: true,
-      locators: [locator],
-    } satisfies ScenarioTargetGroup
-    const steps = snapshot.draftDocument.steps.map((item, itemIndex) => (
-      itemIndex === index
-        ? {
-            ...step,
-            target,
-          } as ScenarioStep
-        : item
-    ))
-    const document = {
-      ...snapshot.draftDocument,
-      steps,
-    } satisfies ScenarioDocument
-    const validation = validateScenarioDocument(document)
-
-    snapshot = {
-      ...snapshot,
-      draftDocument: document,
-      issues: validation.ok ? [] : validation.issues,
-      message: validation.ok ? 'Locator applied' : undefined,
-    }
-
-    return validation.ok ? ok(document) : validation
+    return scenarioDocumentResultFromSession()
   }
 
   function validateDraft(): ExtensionResult<ScenarioDocument> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before validating.',
       })
     }
 
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'validate',
-      issues: [],
       message: undefined,
-    }
-    const validation = validateScenarioDocument(snapshot.draftDocument)
-    snapshot = {
-      ...snapshot,
+    })
+    const validation = getValidatedScenarioDocument(session)
+    externalIssues = validation.ok ? [] : validation.issues
+    syncSnapshotFromSession({
       pendingAction: null,
-      issues: validation.ok ? [] : validation.issues,
-    }
+      message: undefined,
+    })
 
     return validation
   }
 
   async function saveDraft(): Promise<ExtensionResult<ScenarioRecord>> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before saving.',
       })
     }
 
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'save',
-      issues: [],
       message: undefined,
-    }
+    })
 
-    const validation = validateScenarioDocument(snapshot.draftDocument)
+    const validation = getValidatedScenarioDocument(session)
     if (!validation.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = validation.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: validation.issues,
-      }
+      })
       return validation
     }
 
-    const selectedId = snapshot.selectedScenarioId
+    const selectedId = session.selectedScenarioId
     const name = validation.value.name ?? selectedRecord(snapshot)?.name
     const result =
       selectedId === undefined
@@ -474,73 +606,64 @@ export function createSidepanelScenarioEditor(
           })
 
     if (!result.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = result.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: result.issues,
-      }
+      })
       return result
     }
 
     replaceScenario(result.value)
-    snapshot = {
-      ...snapshot,
-      selectedScenarioId: result.value.id,
-      draftDocument: result.value.document,
-      selectedStepIndex: clampStepIndex(snapshot.selectedStepIndex, result.value.document.steps.length),
+    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)))
+    externalIssues = []
+    syncSnapshotFromSession({
       pendingAction: null,
-      issues: [],
       message: 'Saved',
-    }
+    })
 
     return result
   }
 
   async function importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>> {
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'import',
-      issues: [],
       message: undefined,
-    }
+    })
 
     const imported = await client.importScenarioJson(jsonText)
     if (!imported.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = imported.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: imported.issues,
-      }
+      })
       return imported
     }
 
     const loaded = await loadScenarios(imported.value.id)
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: null,
       message: 'Imported',
-    }
+    })
 
     return loaded.ok ? imported : failure(loaded.issues)
   }
 
   async function exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>> {
-    const selectedId = snapshot.selectedScenarioId
-    if (selectedId === undefined) {
-      if (snapshot.draftDocument === undefined) {
+    const selectedId = session.selectedScenarioId
+    if (selectedId === undefined || session.dirty) {
+      if (session.draftDocument === undefined) {
         return setIssue({
           code: 'storage_error',
           message: 'Select a scenario before exporting.',
         })
       }
 
-      const validation = validateScenarioDocument(snapshot.draftDocument)
-      snapshot = {
-        ...snapshot,
+      const validation = getValidatedScenarioDocument(session)
+      externalIssues = validation.ok ? [] : validation.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: validation.ok ? [] : validation.issues,
         message: validation.ok ? 'Exported' : undefined,
-      }
+      })
 
       if (!validation.ok) {
         return validation
@@ -555,74 +678,76 @@ export function createSidepanelScenarioEditor(
       })
     }
 
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'export',
-      issues: [],
       message: undefined,
-    }
+    })
 
     const exported = await client.exportScenarioJson(selectedId)
-    snapshot = {
-      ...snapshot,
+    externalIssues = exported.ok ? [] : exported.issues
+    syncSnapshotFromSession({
       pendingAction: null,
-      issues: exported.ok ? [] : exported.issues,
       message: exported.ok ? 'Exported' : undefined,
-    }
+    })
 
     return exported
   }
 
   function exportSelectedCode(): ExtensionResult<ScenarioCodeExport> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before exporting TypeScript.',
       })
     }
 
-    const validation = validateScenarioDocument(snapshot.draftDocument)
+    const validation = getValidatedScenarioDocument(session)
     if (!validation.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = validation.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: validation.issues,
         message: undefined,
-      }
+      })
       return failure(validation.issues)
     }
 
     const exported = exportScenarioToCode(validation.value)
-    snapshot = {
-      ...snapshot,
+    externalIssues = exported.ok ? [] : exported.issues
+    syncSnapshotFromSession({
       pendingAction: null,
-      issues: exported.ok ? [] : exported.issues,
       message: exported.ok ? 'Exported TypeScript' : undefined,
-    }
+    })
 
     return exported
   }
 
   async function runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before running.',
       })
     }
 
-    return dispatchScenarioRun(snapshot.draftDocument, createRunId(), 'run')
+    const validation = getValidatedScenarioDocument(session)
+    if (!validation.ok) {
+      externalIssues = validation.issues
+      syncSnapshotFromSession({ pendingAction: null, message: undefined })
+      return validation
+    }
+
+    return dispatchScenarioRun(validation.value, createRunId(), 'run')
   }
 
   async function dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
-    if (snapshot.draftDocument === undefined) {
+    if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before running a step.',
       })
     }
 
-    const step = snapshot.draftDocument.steps[snapshot.selectedStepIndex]
+    const step = session.draftDocument.steps[selectedStepIndexForSession(session)]
     if (step === undefined) {
       return setIssue({
         code: 'invalid_document',
@@ -633,8 +758,8 @@ export function createSidepanelScenarioEditor(
 
     return dispatchScenarioRun(
       {
-        ...snapshot.draftDocument,
-        steps: [step],
+        ...session.draftDocument,
+        steps: [step as ScenarioStep],
       },
       createDryRunId(),
       'dry-run',
@@ -658,11 +783,10 @@ export function createSidepanelScenarioEditor(
 
     const target = await resolveRunTargetTab(client, targetTabId)
     if (!target.ok) {
-      snapshot = {
-        ...snapshot,
-        issues: target.issues,
+      externalIssues = target.issues
+      syncSnapshotFromSession({
         message: undefined,
-      }
+      })
       return target
     }
 
@@ -708,22 +832,19 @@ export function createSidepanelScenarioEditor(
   async function loadRecordedDraft(
     draftId?: string,
   ): Promise<ExtensionResult<RecordedScenarioDraftHandoff | null>> {
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction: 'record:draft',
-      issues: [],
       message: undefined,
-    }
+    })
 
     const target = draftId === undefined
       ? await resolveRunTargetTab(client, targetTabId)
       : undefined
     if (target !== undefined && !target.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = target.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: target.issues,
-      }
+      })
       return target
     }
 
@@ -755,11 +876,10 @@ export function createSidepanelScenarioEditor(
     }
 
     if (!responseResult.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = responseResult.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: responseResult.issues,
-      }
+      })
       return responseResult as ExtensionResult<RecordedScenarioDraftHandoff | null>
     }
 
@@ -770,11 +890,10 @@ export function createSidepanelScenarioEditor(
         return failure(applied.issues)
       }
     } else {
-      snapshot = {
-        ...snapshot,
+      externalIssues = []
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: [],
-      }
+      })
     }
 
     return ok(draft)
@@ -792,8 +911,23 @@ export function createSidepanelScenarioEditor(
         now(),
         message.payload.message,
       ))
-      snapshot = {
-        ...snapshot,
+      const currentRun = {
+        tabId: message.payload.tabId,
+        frameId: message.payload.frameId,
+        scenarioId: message.payload.scenarioId,
+        runId: message.payload.runId,
+        status: message.payload.status,
+      } satisfies SidepanelScenarioRunReceipt
+      const builderStatus = builderRunStatus(currentRun.status)
+      session = builderStatus === undefined
+        ? setRunState(session, undefined)
+        : setRunState(session, {
+            runId: currentRun.runId,
+            scenarioId: currentRun.scenarioId,
+            status: builderStatus,
+            ...(message.payload.message === undefined ? {} : { message: message.payload.message }),
+          })
+      syncSnapshotFromSession({
         currentRun: {
           tabId: message.payload.tabId,
           frameId: message.payload.frameId,
@@ -803,16 +937,15 @@ export function createSidepanelScenarioEditor(
         },
         message: message.payload.message,
         ...traceFields(),
-      }
+      })
       return true
     }
 
     if (message.kind === 'trace:event' && matchesCurrentRun(snapshot.currentRun, message.payload)) {
       traceStore.ingestEvent(message.payload.event)
-      snapshot = {
-        ...snapshot,
+      syncSnapshotFromSession({
         ...traceFields(),
-      }
+      })
       return true
     }
 
@@ -828,38 +961,23 @@ export function createSidepanelScenarioEditor(
   ): Promise<ExtensionResult<readonly ScenarioRecord[]>> {
     const scenarios = await client.listScenarios()
     if (!scenarios.ok) {
-      snapshot = {
-        ...snapshot,
-        scenarios: [],
-        selectedScenarioId: undefined,
-        selectedStepIndex: 0,
-        draftDocument: undefined,
-        issues: scenarios.issues,
-      }
+      records = []
+      session = createEmptySession(createScenarioId, createStepId)
+      externalIssues = scenarios.issues
+      syncSnapshotFromSession()
       return scenarios
     }
 
-    snapshot = {
-      ...snapshot,
-      scenarios: scenarios.value,
-    }
-
+    records = scenarios.value
     const selectedId = selectDefaultScenarioId(scenarios.value, preferredSelection)
-    if (selectedId === undefined) {
-      snapshot = {
-        ...snapshot,
-        selectedScenarioId: undefined,
-        selectedStepIndex: 0,
-        draftDocument: undefined,
-        issues: [],
-      }
-      return scenarios
-    }
-
-    const selected = scenarios.value.find((scenario) => scenario.id === selectedId)
-    if (selected !== undefined) {
-      applySelectedScenario(selected)
-    }
+    session = withDefaultTargetSlot(createScenarioAuthoringSession({
+      scenarios: scenarios.value.map(sourceFromRecord),
+      ...(selectedId === undefined ? {} : { selectedScenarioId: selectedId }),
+      ...(createScenarioId === undefined ? {} : { createScenarioId }),
+      ...(createStepId === undefined ? {} : { createStepId }),
+    }))
+    externalIssues = []
+    syncSnapshotFromSession()
 
     return scenarios
   }
@@ -869,12 +987,10 @@ export function createSidepanelScenarioEditor(
     pendingAction: 'record:start' | 'record:stop',
     label: string,
   ): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction,
-      issues: [],
       message: undefined,
-    }
+    })
 
     let response: unknown
     try {
@@ -895,11 +1011,10 @@ export function createSidepanelScenarioEditor(
     }
 
     if (!responseResult.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = responseResult.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: responseResult.issues,
-      }
+      })
       return responseResult as ExtensionResult<SidepanelRecordCommandReceipt>
     }
 
@@ -912,12 +1027,11 @@ export function createSidepanelScenarioEditor(
         return failure(applied.issues)
       }
     } else {
-      snapshot = {
-        ...snapshot,
+      externalIssues = []
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: [],
         message: receipt.kind === 'record:start' ? 'Recording' : snapshot.message,
-      }
+      })
     }
 
     return ok(receipt)
@@ -928,45 +1042,40 @@ export function createSidepanelScenarioEditor(
     runId: string,
     pendingAction: 'run' | 'dry-run',
   ): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
-    snapshot = {
-      ...snapshot,
+    syncSnapshotFromSession({
       pendingAction,
-      issues: [],
       message: undefined,
       currentTrace: undefined,
-    }
+    })
 
     const validation = validateScenarioDocument(document)
     if (!validation.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = validation.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: validation.issues,
-      }
+      })
       return validation
     }
 
     const compilation = compileToBrowserRuntime(validation.value)
     if (!compilation.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = compilation.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: compilation.issues,
-      }
+      })
       return compilation
     }
 
     const target = await resolveRunTargetTab(client, targetTabId)
     if (!target.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = target.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: target.issues,
-      }
+      })
       return target
     }
 
-    const scenarioId = snapshot.selectedScenarioId ?? validation.value.id ?? 'draft-scenario'
+    const scenarioId = session.selectedScenarioId ?? validation.value.id ?? 'draft-scenario'
     const correlation = {
       tabId: target.value.id,
       ...(frameId === undefined ? {} : { frameId }),
@@ -987,11 +1096,10 @@ export function createSidepanelScenarioEditor(
 
     const responseResult = readExtensionResult(response)
     if (responseResult !== null && !responseResult.ok) {
-      snapshot = {
-        ...snapshot,
+      externalIssues = responseResult.issues
+      syncSnapshotFromSession({
         pendingAction: null,
-        issues: responseResult.issues,
-      }
+      })
       return failure(responseResult.issues)
     }
 
@@ -1001,42 +1109,30 @@ export function createSidepanelScenarioEditor(
       status: 'running',
     } satisfies SidepanelScenarioRunReceipt
     traceStore.startRun(statusSnapshotFrom(resolvedCorrelation, 'running', now()))
-    snapshot = {
-      ...snapshot,
+    session = setRunState(session, {
+      runId: receipt.runId,
+      scenarioId: receipt.scenarioId,
+      status: receipt.status,
+    })
+    externalIssues = []
+    syncSnapshotFromSession({
       pendingAction: null,
-      issues: [],
       currentRun: receipt,
       ...traceFields(),
-    }
+    })
     return ok(receipt)
   }
 
   function setIssue<TValue>(issue: ExtensionIssue): ExtensionResult<TValue> {
-    snapshot = {
-      ...snapshot,
+    setExternalIssues([issue], {
       pendingAction: null,
-      issues: [issue],
       message: undefined,
-    }
+    })
     return failure(issue)
   }
 
-  function applySelectedScenario(record: ScenarioRecord): void {
-    const validation = validateScenarioDocument(record.document)
-    const selectedStepIndex = clampStepIndex(snapshot.selectedStepIndex, record.document.steps.length)
-
-    snapshot = {
-      ...snapshot,
-      selectedScenarioId: record.id,
-      selectedStepIndex,
-      draftDocument: record.document,
-      issues: validation.ok ? [] : validation.issues,
-      message: undefined,
-    }
-  }
-
   function applyRecordReceipt(receipt: SidepanelRecordCommandReceipt): void {
-    const session = receipt.session ?? {
+    const record = receipt.session ?? {
       type: 'record',
       sessionId: receipt.runId ?? `${receipt.tabId}:${receipt.frameId ?? 0}`,
       tabId: receipt.tabId,
@@ -1048,10 +1144,7 @@ export function createSidepanelScenarioEditor(
       updatedAt: now(),
     } satisfies SidepanelRecordSession
 
-    snapshot = {
-      ...snapshot,
-      currentRecord: session,
-    }
+    setRecordStateInSession(record)
   }
 
   function applyRecordedDraft(
@@ -1071,33 +1164,33 @@ export function createSidepanelScenarioEditor(
       updatedAt: draft.createdAt,
     } satisfies SidepanelRecordSession
 
-    snapshot = {
-      ...snapshot,
-      selectedScenarioId: undefined,
-      selectedStepIndex: 0,
-      draftDocument: validation.ok ? validation.value : document,
-      currentRecord: {
-        ...currentRecord,
-        status: validation.ok ? 'stopped' : 'failed',
-        draftId: draft.draftId,
-        updatedAt: draft.createdAt,
-      },
+    const nextRecord = {
+      ...currentRecord,
+      status: validation.ok ? 'stopped' : 'failed',
+      draftId: draft.draftId,
+      updatedAt: draft.createdAt,
+    } satisfies SidepanelRecordSession
+
+    session = withDefaultTargetSlot(openDraftDocument(
+      setRecordState(session, recordStateForSession(nextRecord)),
+      (validation.ok ? validation.value : document) as BuilderDraftDocument,
+      { dirty: true },
+    ))
+    externalIssues = validation.ok ? [] : validation.issues
+    syncSnapshotFromSession({
+      currentRecord: nextRecord,
       pendingAction: null,
-      issues: validation.ok ? [] : validation.issues,
       message: validation.ok ? 'Recorded draft ready' : undefined,
-    }
+    })
 
     return validation
   }
 
   function replaceScenario(record: ScenarioRecord): void {
-    const exists = snapshot.scenarios.some((scenario) => scenario.id === record.id)
-    snapshot = {
-      ...snapshot,
-      scenarios: exists
-        ? snapshot.scenarios.map((scenario) => (scenario.id === record.id ? record : scenario))
-        : [record, ...snapshot.scenarios],
-    }
+    const exists = records.some((scenario) => scenario.id === record.id)
+    records = exists
+      ? records.map((scenario) => (scenario.id === record.id ? record : scenario))
+      : [record, ...records]
   }
 
   function traceFields(): Pick<SidepanelScenarioEditorSnapshot, 'trace' | 'currentTrace'> {
@@ -1107,10 +1200,111 @@ export function createSidepanelScenarioEditor(
     }
   }
 
+  function applySessionState(
+    result: ExtensionResult<ScenarioAuthoringSessionState>,
+    patch: Partial<SidepanelScenarioEditorSnapshot> = {},
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    if (!result.ok) {
+      setExternalIssues(result.issues, patch)
+      return failure(result.issues)
+    }
+
+    session = withDefaultTargetSlot(result.value)
+    externalIssues = []
+    syncSnapshotFromSession(patch)
+    return ok(snapshot)
+  }
+
+  function setExternalIssues(
+    issues: readonly ExtensionIssue[],
+    patch: Partial<SidepanelScenarioEditorSnapshot> = {},
+  ): void {
+    externalIssues = issues
+    syncSnapshotFromSession(patch)
+  }
+
+  function syncSnapshotFromSession(
+    patch: Partial<SidepanelScenarioEditorSnapshot> = {},
+  ): void {
+    const selectedStepIndex = selectedStepIndexForSession(session)
+    snapshot = {
+      ...snapshot,
+      scenarios: records,
+      selectedScenarioId: session.selectedScenarioId,
+      selectedStepIndex,
+      selectedStepId: session.selectedStepId,
+      selectedTargetSlot: session.selectedTargetSlot,
+      draftDocument: session.draftDocument,
+      dirty: session.dirty,
+      issues: externalIssues.length === 0 ? session.issues : externalIssues,
+      trace: traceStore.getState(),
+      currentTrace: traceStore.getCurrentView(),
+      ...patch,
+    }
+  }
+
+  function scenarioDocumentResultFromSession(): ExtensionResult<ScenarioDocument> {
+    const validation = getValidatedScenarioDocument(session)
+    if (!validation.ok) {
+      externalIssues = validation.issues
+      syncSnapshotFromSession()
+      return validation
+    }
+
+    externalIssues = []
+    syncSnapshotFromSession()
+    return validation
+  }
+
+  function withDefaultTargetSlot(
+    state: ScenarioAuthoringSessionState,
+  ): ScenarioAuthoringSessionState {
+    return ensureSelectedTargetSlot(state)
+  }
+
+  function ensureSelectedTargetSlot(
+    state: ScenarioAuthoringSessionState,
+  ): ScenarioAuthoringSessionState {
+    const step = selectedBuilderStep(state)
+    if (step === undefined || state.selectedStepId === undefined) {
+      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state)
+    }
+
+    const slots = targetSlotsForStep(step, state.selectedStepId)
+    if (slots.length === 0) {
+      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state)
+    }
+
+    if (
+      state.selectedTargetSlot !== undefined &&
+      slots.some((slot) => slotsEqual(slot, state.selectedTargetSlot))
+    ) {
+      return state
+    }
+
+    const selected = selectBuilderTargetSlot(state, slots[0])
+    return selected.ok ? selected.value : state
+  }
+
+  function setRecordStateInSession(record: SidepanelRecordSession): void {
+    session = setRecordState(session, recordStateForSession(record))
+    syncSnapshotFromSession({
+      currentRecord: record,
+    })
+  }
+
   return {
     refresh,
+    createScenario,
     selectScenario,
     selectStep,
+    selectTargetSlot,
+    addStep,
+    insertStep,
+    duplicateSelectedStep,
+    deleteSelectedStep,
+    moveSelectedStep,
+    updateSelectedStepActionFamily,
     updateDocumentFields,
     updateSelectedStepFields,
     applyLocatorToSelectedStep,
@@ -1137,18 +1331,23 @@ export function createSidepanelScenarioEditorView(
   const step = selectedStep(snapshot)
   const recordActive = snapshot.currentRecord?.status === 'recording'
   const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
+  const hasStep = step !== undefined
+  const selectedStepIndex = snapshot.selectedStepIndex
 
   return {
+    workflow: workflowView(snapshot),
     scenarioOptions: snapshot.scenarios.map((scenario) => ({
       value: scenario.id,
       label: scenario.name,
     })),
     selectedScenarioId: snapshot.selectedScenarioId,
+    actionFamilyOptions: actionFamilyOptions(),
     documentFields: {
       name: snapshot.draftDocument?.name ?? '',
       description: snapshot.draftDocument?.description ?? '',
     },
     stepRows: stepRows(snapshot),
+    targetSlotRows: targetSlotRows(snapshot),
     selectedStepFields: selectedStepFields(step),
     issueViews: snapshot.issues.map((issue) => ({
       path: formatIssuePath(issue.path ?? []),
@@ -1158,6 +1357,42 @@ export function createSidepanelScenarioEditorView(
     runSummary: runSummary(snapshot),
     traceView: snapshot.currentTrace,
     buttons: {
+      create: {
+        label: 'New',
+        disabled: anyPending,
+        pending: false,
+      },
+      addStep: {
+        label: 'Add step',
+        disabled: anyPending || !hasDocument,
+        pending: false,
+      },
+      insertStep: {
+        label: 'Insert',
+        disabled: anyPending || !hasStep,
+        pending: false,
+      },
+      duplicateStep: {
+        label: 'Duplicate',
+        disabled: anyPending || !hasStep,
+        pending: false,
+      },
+      deleteStep: {
+        label: 'Delete',
+        disabled: anyPending || !hasStep,
+        pending: false,
+      },
+      moveStepUp: {
+        label: 'Up',
+        disabled: anyPending || !hasStep || selectedStepIndex <= 0,
+        pending: false,
+      },
+      moveStepDown: {
+        label: 'Down',
+        disabled: anyPending || !hasStep ||
+          selectedStepIndex >= (snapshot.draftDocument?.steps.length ?? 0) - 1,
+        pending: false,
+      },
       validate: {
         label: 'Validate',
         disabled: anyPending || !hasDocument,
@@ -1199,20 +1434,20 @@ export function createSidepanelScenarioEditorView(
   }
 }
 
-function editStep(
-  step: ScenarioStep,
+function stepFieldUpdateFromInput(
+  step: BuilderDraftStep,
   index: number,
   update: SidepanelStepFieldUpdate,
-): ExtensionResult<ScenarioStep> {
-  const next = {
-    ...step,
-  } as Record<string, unknown>
+): ExtensionResult<BuilderStepFieldUpdate> {
+  const next: Record<string, unknown> = {}
 
   if (update.note !== undefined) {
-    applyStringField(next, 'note', update.note, { deleteWhenBlank: true })
+    next.note = nullableString(update.note)
   }
 
   if (update.input !== undefined && typeof next.input === 'string') {
+    next.input = update.input
+  } else if (update.input !== undefined && typeof readStepProperty(step, 'input') === 'string') {
     next.input = update.input
   }
 
@@ -1232,6 +1467,7 @@ function editStep(
     ['fromJson', 'from'],
     ['toJson', 'to'],
     ['inputJson', 'input'],
+    ['optionsJson', 'options'],
   ] as const
 
   for (const [inputKey, stepKey] of jsonFields) {
@@ -1246,37 +1482,39 @@ function editStep(
     }
 
     if (parsed.value === undefined) {
-      delete next[stepKey]
+      next[stepKey] = null
     } else {
       next[stepKey] = parsed.value
     }
   }
 
-  return ok(next as ScenarioStep)
+  return ok(next as BuilderStepFieldUpdate)
 }
 
 function stepRows(snapshot: SidepanelScenarioEditorSnapshot): readonly SidepanelStepRowView[] {
   return (snapshot.draftDocument?.steps ?? []).map((step, index) => ({
     index,
-    id: step.id ?? `step-${index + 1}`,
+    id: stepIdForView(step, index),
     action: step.action,
     targetSummary: targetSummaryForStep(step),
     inputSummary: inputSummaryForStep(step),
     validationStatus: hasIssueAtStep(snapshot.issues, index) ? 'invalid' : 'valid',
-    selected: index === snapshot.selectedStepIndex,
+    selected: stepIdFor(step, index) === snapshot.selectedStepId,
   }))
 }
 
 function selectedStepFields(
-  step: ScenarioStep | undefined,
+  step: BuilderDraftStep | undefined,
 ): SidepanelScenarioEditorView['selectedStepFields'] {
   if (step === undefined) {
     return {
       id: '',
       action: '',
+      actionFamily: '',
       note: '',
       input: '',
       duration: '',
+      optionsJson: '',
       targetJson: '',
       fromJson: '',
       toJson: '',
@@ -1287,6 +1525,7 @@ function selectedStepFields(
   return {
     id: step.id ?? '',
     action: step.action,
+    actionFamily: actionFamilyForStep(step),
     note: step.note ?? '',
     input: typeof readStepProperty(step, 'input') === 'string'
       ? String(readStepProperty(step, 'input'))
@@ -1294,12 +1533,260 @@ function selectedStepFields(
     duration: typeof readStepProperty(step, 'duration') === 'number'
       ? String(readStepProperty(step, 'duration'))
       : '',
+    optionsJson: jsonTextFor(readStepProperty(step, 'options')),
     targetJson: jsonTextFor(readStepProperty(step, 'target')),
     fromJson: jsonTextFor(readStepProperty(step, 'from')),
     toJson: jsonTextFor(readStepProperty(step, 'to')),
     inputJson: typeof readStepProperty(step, 'input') === 'object'
       ? jsonTextFor(readStepProperty(step, 'input'))
       : '',
+  }
+}
+
+function workflowView(snapshot: SidepanelScenarioEditorSnapshot): SidepanelWorkflowView {
+  const status = workflowStatus(snapshot)
+  const stepCount = snapshot.draftDocument?.steps.length ?? 0
+  const summary = snapshot.draftDocument === undefined
+    ? `${snapshot.scenarios.length} saved`
+    : `${stepCount} step${stepCount === 1 ? '' : 's'} · ${
+        snapshot.dirty ? 'unsaved' : 'saved'
+      }`
+
+  return {
+    status,
+    dirty: snapshot.dirty,
+    selectedStepId: snapshot.selectedStepId,
+    selectedTargetSlotId: snapshot.selectedTargetSlot === undefined
+      ? undefined
+      : targetSlotViewId(snapshot.selectedTargetSlot),
+    summary,
+  }
+}
+
+function workflowStatus(
+  snapshot: SidepanelScenarioEditorSnapshot,
+): SidepanelWorkflowView['status'] {
+  if (snapshot.pendingAction === 'run' || snapshot.pendingAction === 'dry-run') {
+    return 'running'
+  }
+
+  if (snapshot.currentRecord?.status === 'recording') {
+    return 'recording'
+  }
+
+  if (snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)) {
+    return 'running'
+  }
+
+  if (snapshot.draftDocument === undefined) {
+    return 'empty'
+  }
+
+  return snapshot.dirty || snapshot.selectedScenarioId === undefined ? 'draft' : 'saved'
+}
+
+function actionFamilyOptions(): readonly SidepanelActionFamilyOptionView[] {
+  return actionFamilies.map((value) => ({
+    value,
+    label: actionFamilyLabel(value),
+  }))
+}
+
+function targetSlotRows(
+  snapshot: SidepanelScenarioEditorSnapshot,
+): readonly SidepanelTargetSlotRowView[] {
+  const step = selectedStep(snapshot)
+  if (step === undefined || snapshot.selectedStepId === undefined) {
+    return []
+  }
+
+  return targetSlotsForStep(step, snapshot.selectedStepId).map((slot) => ({
+    id: targetSlotViewId(slot),
+    label: targetSlotLabel(slot),
+    summary: targetSlotSummary(step, slot),
+    selected: slotsEqual(slot, snapshot.selectedTargetSlot),
+    validationStatus: hasIssueAtTargetSlot(snapshot.issues, snapshot.selectedStepIndex, slot)
+      ? 'invalid'
+      : 'valid',
+  }))
+}
+
+const actionFamilies = [
+  'click',
+  'moveTo',
+  'doubleClick',
+  'focus',
+  'clickCurrent',
+  'type',
+  'typeInto',
+  'fill',
+  'press',
+  'scrollToTarget',
+  'scrollToPosition',
+  'drag',
+  'waitForVisible',
+  'waitForHidden',
+  'waitForText',
+  'delay',
+] as const satisfies readonly BuilderStepActionFamily[]
+
+function actionFamilyLabel(family: BuilderStepActionFamily): string {
+  switch (family) {
+    case 'clickCurrent':
+      return 'Click current'
+    case 'typeInto':
+      return 'Type into'
+    case 'scrollToTarget':
+      return 'Scroll to target'
+    case 'scrollToPosition':
+      return 'Scroll position'
+    case 'waitForVisible':
+      return 'Wait visible'
+    case 'waitForHidden':
+      return 'Wait hidden'
+    case 'waitForText':
+      return 'Wait text'
+    default:
+      return capitalize(family)
+  }
+}
+
+function actionFamilyForStep(step: BuilderDraftStep): BuilderStepActionFamily {
+  switch (step.action) {
+    case 'scrollTo':
+      return readStepProperty(step, 'target') === undefined
+        ? 'scrollToPosition'
+        : 'scrollToTarget'
+    case 'waitFor': {
+      const input = readStepProperty(step, 'input')
+      if (isRecord(input) && input.kind === 'hidden') {
+        return 'waitForHidden'
+      }
+      if (isRecord(input) && input.kind === 'text') {
+        return 'waitForText'
+      }
+      return 'waitForVisible'
+    }
+    default:
+      return step.action
+  }
+}
+
+function targetSlotsForStep(
+  step: BuilderDraftStep,
+  stepId: string,
+): readonly BuilderTargetSlot[] {
+  switch (step.action) {
+    case 'click':
+    case 'moveTo':
+    case 'doubleClick':
+    case 'focus':
+    case 'typeInto':
+    case 'fill':
+      return [{ kind: 'step-target', stepId }]
+    case 'drag':
+      return [
+        { kind: 'drag-from', stepId },
+        { kind: 'drag-to', stepId },
+      ]
+    case 'scrollTo':
+      return readStepProperty(step, 'target') === undefined
+        ? []
+        : [{ kind: 'scrollTo-target', stepId }]
+    case 'waitFor': {
+      const input = readStepProperty(step, 'input')
+      return isRecord(input) && (input.kind === 'visible' || input.kind === 'hidden')
+        ? [{ kind: 'waitFor-target', stepId }]
+        : []
+    }
+    default:
+      return []
+  }
+}
+
+function targetSlotLabel(slot: BuilderTargetSlot): string {
+  switch (slot.kind) {
+    case 'step-target':
+      return 'Target'
+    case 'drag-from':
+      return 'Drag from'
+    case 'drag-to':
+      return 'Drag to'
+    case 'waitFor-target':
+      return 'Wait target'
+    case 'scrollTo-target':
+      return 'Scroll target'
+  }
+}
+
+function targetSlotSummary(step: BuilderDraftStep, slot: BuilderTargetSlot): string {
+  switch (slot.kind) {
+    case 'step-target':
+    case 'scrollTo-target':
+      return targetSummary(readStepProperty(step, 'target'))
+    case 'drag-from':
+      return targetSummary(readStepProperty(step, 'from'))
+    case 'drag-to':
+      return targetSummary(readStepProperty(step, 'to'))
+    case 'waitFor-target': {
+      const input = readStepProperty(step, 'input')
+      return isRecord(input) ? targetSummary(input.target) : 'current'
+    }
+  }
+}
+
+function targetSlotViewId(slot: BuilderTargetSlot): string {
+  return `${slot.kind}:${stepIdForViewId(slot.stepId)}`
+}
+
+function stepIdForViewId(stepId: string): string {
+  return stepId.startsWith('index:') ? stepId.slice('index:'.length) : stepId
+}
+
+function targetSlotFromViewId(
+  state: ScenarioAuthoringSessionState,
+  slotId: string,
+): BuilderTargetSlot | undefined {
+  const step = selectedBuilderStep(state)
+  if (step === undefined || state.selectedStepId === undefined) {
+    return undefined
+  }
+
+  return targetSlotsForStep(step, state.selectedStepId)
+    .find((slot) => targetSlotViewId(slot) === slotId)
+}
+
+function slotsEqual(
+  left: BuilderTargetSlot,
+  right: BuilderTargetSlot | undefined,
+): boolean {
+  return right !== undefined && left.kind === right.kind && left.stepId === right.stepId
+}
+
+function hasIssueAtTargetSlot(
+  issues: readonly ExtensionIssue[],
+  stepIndex: number,
+  slot: BuilderTargetSlot,
+): boolean {
+  const slotPath = targetSlotPath(slot)
+  return issues.some((issue) => (
+    issue.path?.[0] === 'steps' &&
+    issue.path[1] === stepIndex &&
+    slotPath.every((part, index) => issue.path?.[index + 2] === part)
+  ))
+}
+
+function targetSlotPath(slot: BuilderTargetSlot): readonly string[] {
+  switch (slot.kind) {
+    case 'step-target':
+    case 'scrollTo-target':
+      return ['target']
+    case 'drag-from':
+      return ['from']
+    case 'drag-to':
+      return ['to']
+    case 'waitFor-target':
+      return ['input', 'target']
   }
 }
 
@@ -1325,7 +1812,7 @@ function runSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   return snapshot.message ?? 'No active run'
 }
 
-function targetSummaryForStep(step: ScenarioStep): string {
+function targetSummaryForStep(step: BuilderDraftStep): string {
   const target = readStepProperty(step, 'target')
   if (target !== undefined) {
     return targetSummary(target)
@@ -1345,7 +1832,7 @@ function targetSummaryForStep(step: ScenarioStep): string {
   return 'Current context'
 }
 
-function inputSummaryForStep(step: ScenarioStep): string {
+function inputSummaryForStep(step: BuilderDraftStep): string {
   const input = readStepProperty(step, 'input')
   if (typeof input === 'string') {
     return input
@@ -1445,6 +1932,72 @@ function parseJsonField(
   }
 }
 
+function sourceFromRecord(record: ScenarioRecord): BuilderScenarioSource {
+  return {
+    id: record.id,
+    name: record.name,
+    document: record.document,
+  }
+}
+
+function createEmptySession(
+  createScenarioId?: () => string,
+  createStepId?: (family: BuilderStepActionFamily) => string,
+): ScenarioAuthoringSessionState {
+  return createScenarioAuthoringSession({
+    scenarios: [],
+    ...(createScenarioId === undefined ? {} : { createScenarioId }),
+    ...(createStepId === undefined ? {} : { createStepId }),
+  })
+}
+
+function selectedStepIndexForSession(state: ScenarioAuthoringSessionState): number {
+  const document = state.draftDocument
+  if (document === undefined || state.selectedStepId === undefined) {
+    return 0
+  }
+
+  const index = document.steps.findIndex((step, stepIndex) => (
+    stepIdFor(step, stepIndex) === state.selectedStepId
+  ))
+
+  return index < 0 ? 0 : index
+}
+
+function selectedBuilderStep(
+  state: ScenarioAuthoringSessionState,
+): BuilderDraftStep | undefined {
+  return state.draftDocument?.steps[selectedStepIndexForSession(state)]
+}
+
+function stepIdFor(step: BuilderDraftStep, index: number): string {
+  return step.id ?? `index:${index}`
+}
+
+function stepIdForView(step: BuilderDraftStep, index: number): string {
+  return step.id ?? String(index)
+}
+
+function nullableString(value: string): string | null {
+  return value.trim().length === 0 ? null : value
+}
+
+function recordStateForSession(record: SidepanelRecordSession) {
+  return {
+    sessionId: record.sessionId,
+    status: record.status,
+    ...(record.scenarioId === undefined ? {} : { scenarioId: record.scenarioId }),
+    ...(record.draftId === undefined ? {} : { draftId: record.draftId }),
+    ...(record.message === undefined ? {} : { message: record.message }),
+  }
+}
+
+function builderRunStatus(
+  status: RuntimeRunStatus,
+): 'running' | 'paused' | 'completed' | 'failed' | 'stopped' | undefined {
+  return status === 'idle' ? undefined : status
+}
+
 async function resolveActiveTab(
   client: Pick<SidepanelScenarioEditorClient, 'getActiveTab'>,
 ): Promise<ExtensionResult<SidepanelActiveTab & Readonly<{ id: number }>>> {
@@ -1536,6 +2089,7 @@ function emptySnapshot(trace: TraceDisplayState): SidepanelScenarioEditorSnapsho
   return {
     scenarios: [],
     selectedStepIndex: 0,
+    dirty: false,
     pendingAction: null,
     issues: [],
     trace,
@@ -1563,7 +2117,7 @@ function selectedRecord(
   return snapshot.scenarios.find((scenario) => scenario.id === snapshot.selectedScenarioId)
 }
 
-function selectedStep(snapshot: SidepanelScenarioEditorSnapshot): ScenarioStep | undefined {
+function selectedStep(snapshot: SidepanelScenarioEditorSnapshot): BuilderDraftStep | undefined {
   return snapshot.draftDocument?.steps[snapshot.selectedStepIndex]
 }
 
@@ -1575,25 +2129,11 @@ function clampStepIndex(index: number, stepCount: number): number {
   return Math.max(0, Math.min(index, stepCount - 1))
 }
 
-function applyStringField(
-  record: Record<string, unknown>,
-  key: string,
-  value: string,
-  options: Readonly<{ deleteWhenBlank: boolean }>,
-): void {
-  if (value.trim().length === 0 && options.deleteWhenBlank) {
-    delete record[key]
-    return
-  }
-
-  record[key] = value
-}
-
 function hasIssueAtStep(issues: readonly ExtensionIssue[], index: number): boolean {
   return issues.some((issue) => issue.path?.[0] === 'steps' && issue.path[1] === index)
 }
 
-function readStepProperty(step: ScenarioStep, key: string): unknown {
+function readStepProperty(step: BuilderDraftStep, key: string): unknown {
   return (step as unknown as Readonly<Record<string, unknown>>)[key]
 }
 

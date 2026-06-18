@@ -16,8 +16,11 @@ import {
   createSidepanelScenarioEditor,
   createSidepanelScenarioEditorView,
   type SidepanelButtonView,
+  type SidepanelActionFamilyOptionView,
   type SidepanelScenarioEditorSnapshot,
+  type SidepanelTargetSlotRowView,
 } from './scenario-editor.js'
+import type { BuilderStepActionFamily } from '../../builder/index.js'
 
 const scenarioRepository = createWxtScenarioStorageRepository()
 const targetTabId = targetTabIdFromLocation(window.location)
@@ -91,7 +94,9 @@ const locatorPreviewer = createLocatorPreviewer({
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
 const exportFormat = requiredElement<HTMLSelectElement>('#export-format')
+const workflowStatus = requiredElement<HTMLElement>('#workflow-status')
 const scenarioSummary = requiredElement<HTMLElement>('#scenario-summary')
+const createScenarioButton = requiredElement<HTMLButtonElement>('#create-scenario-button')
 const scenarioName = requiredElement<HTMLInputElement>('#scenario-name')
 const scenarioDescription = requiredElement<HTMLTextAreaElement>('#scenario-description')
 const validateButton = requiredElement<HTMLButtonElement>('#validate-button')
@@ -102,14 +107,23 @@ const recordButton = requiredElement<HTMLButtonElement>('#record-button')
 const recordStatus = requiredElement<HTMLElement>('#record-status')
 const stepList = requiredElement<HTMLUListElement>('#step-list')
 const stepSummary = requiredElement<HTMLElement>('#step-summary')
-const stepAction = requiredElement<HTMLInputElement>('#step-action')
+const stepActionFamily = requiredElement<HTMLSelectElement>('#step-action-family')
+const addStepButton = requiredElement<HTMLButtonElement>('#add-step-button')
+const insertStepButton = requiredElement<HTMLButtonElement>('#insert-step-button')
+const duplicateStepButton = requiredElement<HTMLButtonElement>('#duplicate-step-button')
+const moveStepUpButton = requiredElement<HTMLButtonElement>('#move-step-up-button')
+const moveStepDownButton = requiredElement<HTMLButtonElement>('#move-step-down-button')
+const deleteStepButton = requiredElement<HTMLButtonElement>('#delete-step-button')
+const stepAction = requiredElement<HTMLSelectElement>('#step-action')
 const stepNote = requiredElement<HTMLInputElement>('#step-note')
 const stepInput = requiredElement<HTMLInputElement>('#step-input')
 const stepDuration = requiredElement<HTMLInputElement>('#step-duration')
+const targetSlotList = requiredElement<HTMLUListElement>('#target-slot-list')
 const stepTargetJson = requiredElement<HTMLTextAreaElement>('#step-target-json')
 const stepFromJson = requiredElement<HTMLTextAreaElement>('#step-from-json')
 const stepToJson = requiredElement<HTMLTextAreaElement>('#step-to-json')
 const stepInputJson = requiredElement<HTMLTextAreaElement>('#step-input-json')
+const stepOptionsJson = requiredElement<HTMLTextAreaElement>('#step-options-json')
 const dryRunButton = requiredElement<HTMLButtonElement>('#dry-run-button')
 const targetPickerStatus = requiredElement<HTMLElement>('#target-picker-status')
 const targetPickerSelected = requiredElement<HTMLElement>('#target-picker-selected')
@@ -133,6 +147,14 @@ for (const section of document.querySelectorAll<HTMLElement>('section')) {
 
 scenarioSelect.addEventListener('change', () => {
   editor.selectScenario(scenarioSelect.value)
+  render(editor.getSnapshot())
+})
+
+createScenarioButton.addEventListener('click', () => {
+  editor.createScenario({
+    name: 'Untitled scenario',
+    initialStepFamily: selectedActionFamily(),
+  })
   render(editor.getSnapshot())
 })
 
@@ -188,6 +210,46 @@ stepList.addEventListener('click', (event) => {
   render(editor.getSnapshot())
 })
 
+stepActionFamily.addEventListener('change', () => {
+  editor.updateSelectedStepActionFamily(selectedActionFamily())
+  render(editor.getSnapshot())
+})
+
+addStepButton.addEventListener('click', () => {
+  editor.addStep(selectedActionFamily())
+  render(editor.getSnapshot())
+})
+
+insertStepButton.addEventListener('click', () => {
+  editor.insertStep(selectedActionFamily())
+  render(editor.getSnapshot())
+})
+
+duplicateStepButton.addEventListener('click', () => {
+  editor.duplicateSelectedStep()
+  render(editor.getSnapshot())
+})
+
+moveStepUpButton.addEventListener('click', () => {
+  editor.moveSelectedStep(-1)
+  render(editor.getSnapshot())
+})
+
+moveStepDownButton.addEventListener('click', () => {
+  editor.moveSelectedStep(1)
+  render(editor.getSnapshot())
+})
+
+deleteStepButton.addEventListener('click', () => {
+  editor.deleteSelectedStep()
+  render(editor.getSnapshot())
+})
+
+stepAction.addEventListener('change', () => {
+  editor.updateSelectedStepActionFamily(stepAction.value as BuilderStepActionFamily)
+  render(editor.getSnapshot())
+})
+
 stepNote.addEventListener('input', () => {
   editor.updateSelectedStepFields({ note: stepNote.value })
   render(editor.getSnapshot())
@@ -220,6 +282,23 @@ stepToJson.addEventListener('change', () => {
 
 stepInputJson.addEventListener('change', () => {
   editor.updateSelectedStepFields({ inputJson: stepInputJson.value })
+  render(editor.getSnapshot())
+})
+
+stepOptionsJson.addEventListener('change', () => {
+  editor.updateSelectedStepFields({ optionsJson: stepOptionsJson.value })
+  render(editor.getSnapshot())
+})
+
+targetSlotList.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-target-slot-id]',
+  )
+  if (button == null) {
+    return
+  }
+
+  editor.selectTargetSlot(button.dataset.targetSlotId ?? '')
   render(editor.getSnapshot())
 })
 
@@ -335,13 +414,16 @@ async function exportSelectedScenario(): Promise<void> {
 function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   const view = createSidepanelScenarioEditorView(snapshot)
 
+  workflowStatus.textContent = view.workflow.summary
   renderScenarioOptions(view.scenarioOptions, view.selectedScenarioId)
+  renderActionFamilyOptions(view.actionFamilyOptions, view.selectedStepFields.actionFamily)
   scenarioSummary.textContent = documentSummary(snapshot)
   setInputValue(scenarioName, view.documentFields.name)
   setInputValue(scenarioDescription, view.documentFields.description)
   renderStepList(view.stepRows)
+  renderTargetSlotList(view.targetSlotRows)
   stepSummary.textContent = selectedStepSummary(snapshot)
-  setInputValue(stepAction, view.selectedStepFields.action)
+  setSelectValue(stepAction, view.selectedStepFields.actionFamily)
   setInputValue(stepNote, view.selectedStepFields.note)
   setInputValue(stepInput, view.selectedStepFields.input)
   setInputValue(stepDuration, view.selectedStepFields.duration)
@@ -349,6 +431,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(stepFromJson, view.selectedStepFields.fromJson)
   setInputValue(stepToJson, view.selectedStepFields.toJson)
   setInputValue(stepInputJson, view.selectedStepFields.inputJson)
+  setInputValue(stepOptionsJson, view.selectedStepFields.optionsJson)
   validationSummary.textContent = view.validationSummary
   renderIssues(view.issueViews)
   renderStatus(snapshot)
@@ -356,12 +439,19 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
-  renderTargetPicker()
+  renderTargetPicker(view)
   renderLocatorPreview()
 
   scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
   scenarioFile.disabled = view.buttons.import.disabled
   exportFormat.disabled = view.buttons.export.disabled
+  applyButtonView(createScenarioButton, view.buttons.create)
+  applyButtonView(addStepButton, view.buttons.addStep)
+  applyButtonView(insertStepButton, view.buttons.insertStep)
+  applyButtonView(duplicateStepButton, view.buttons.duplicateStep)
+  applyButtonView(moveStepUpButton, view.buttons.moveStepUp)
+  applyButtonView(moveStepDownButton, view.buttons.moveStepDown)
+  applyButtonView(deleteStepButton, view.buttons.deleteStep)
   applyButtonView(validateButton, view.buttons.validate)
   applyButtonView(saveButton, view.buttons.save)
   applyButtonView(exportButton, view.buttons.export)
@@ -370,13 +460,19 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   applyButtonView(dryRunButton, view.buttons.dryRun)
 }
 
-function renderTargetPicker(): void {
+function renderTargetPicker(
+  editorView: ReturnType<typeof createSidepanelScenarioEditorView>,
+): void {
   const view = createTargetPickerView(targetPicker.getSnapshot())
   targetPickerStatus.textContent = view.statusSummary
   targetPickerSelected.textContent = view.selectedSummary
   targetPickerIssues.textContent = view.issueSummary
   applyButtonView(targetPickerStartButton, view.buttons.start)
   applyButtonView(targetPickerStopButton, view.buttons.stop)
+  targetPickerStartButton.disabled =
+    targetPickerStartButton.disabled ||
+    editorView.workflow.selectedTargetSlotId === undefined ||
+    editorView.workflow.status === 'empty'
 }
 
 function renderLocatorPreview(): void {
@@ -437,6 +533,31 @@ function renderScenarioOptions(
   }
 }
 
+function renderActionFamilyOptions(
+  options: readonly SidepanelActionFamilyOptionView[],
+  selectedFamily: string,
+): void {
+  const previous = stepActionFamily.value
+  stepActionFamily.replaceChildren()
+  stepAction.replaceChildren()
+
+  for (const optionView of options) {
+    const toolbarOption = document.createElement('option')
+    toolbarOption.value = optionView.value
+    toolbarOption.textContent = optionView.label
+    toolbarOption.selected = optionView.value === (previous || selectedFamily)
+    stepActionFamily.append(toolbarOption)
+
+    const editorOption = document.createElement('option')
+    editorOption.value = optionView.value
+    editorOption.textContent = optionView.label
+    editorOption.selected = optionView.value === selectedFamily
+    stepAction.append(editorOption)
+  }
+
+  stepAction.disabled = selectedFamily.length === 0
+}
+
 function renderStepList(rows: ReturnType<typeof createSidepanelScenarioEditorView>['stepRows']): void {
   stepList.replaceChildren()
 
@@ -460,6 +581,32 @@ function renderStepList(rows: ReturnType<typeof createSidepanelScenarioEditorVie
     button.append(title, detail, status)
     item.append(button)
     stepList.append(item)
+  }
+}
+
+function renderTargetSlotList(rows: readonly SidepanelTargetSlotRowView[]): void {
+  targetSlotList.replaceChildren()
+
+  for (const row of rows) {
+    const item = document.createElement('li')
+    const button = document.createElement('button')
+    const title = document.createElement('span')
+    const detail = document.createElement('span')
+    const status = document.createElement('span')
+
+    button.type = 'button'
+    button.dataset.targetSlotId = row.id
+    button.dataset.selected = row.selected ? 'true' : 'false'
+    button.dataset.validation = row.validationStatus
+    title.className = 'target-slot-title'
+    title.textContent = row.label
+    detail.className = 'target-slot-detail'
+    detail.textContent = row.summary
+    status.className = 'target-slot-status'
+    status.textContent = row.validationStatus
+    button.append(title, detail, status)
+    item.append(button)
+    targetSlotList.append(item)
   }
 }
 
@@ -591,6 +738,18 @@ function setInputValue(
   }
 
   element.value = value
+}
+
+function setSelectValue(element: HTMLSelectElement, value: string): void {
+  if (document.activeElement === element || element.value === value) {
+    return
+  }
+
+  element.value = value
+}
+
+function selectedActionFamily(): BuilderStepActionFamily {
+  return (stepActionFamily.value || 'click') as BuilderStepActionFamily
 }
 
 function downloadFile(filename: string, content: string, mimeType: string): void {

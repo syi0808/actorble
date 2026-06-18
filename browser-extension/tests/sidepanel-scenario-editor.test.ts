@@ -36,6 +36,27 @@ const olderScenario = scenarioRecord(
 )
 
 describe('sidepanel scenario editor', () => {
+  it('renders an empty workflow builder session', async () => {
+    const { editor } = createTestEditor({ scenarios: [] })
+
+    await editor.refresh()
+
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(view.workflow).toMatchObject({
+      status: 'empty',
+      dirty: false,
+      selectedStepId: undefined,
+    })
+    expect(view.scenarioOptions).toEqual([])
+    expect(view.stepRows).toEqual([])
+    expect(view.targetSlotRows).toEqual([])
+    expect(view.validationSummary).toBe('No scenario selected')
+    expect(view.buttons.create.disabled).toBe(false)
+    expect(view.buttons.addStep.disabled).toBe(true)
+    expect(view.buttons.run.disabled).toBe(true)
+    expect(view.buttons.dryRun.disabled).toBe(true)
+  })
+
   it('loads saved scenarios, selects the newest record, and renders step summaries', async () => {
     const { editor } = createTestEditor()
 
@@ -56,14 +77,60 @@ describe('sidepanel scenario editor', () => {
       name: 'Browser login flow',
       description: '',
     })
+    expect(view.workflow).toMatchObject({
+      status: 'saved',
+      dirty: false,
+      selectedStepId: 'email',
+    })
     expect(view.stepRows[0]).toMatchObject({
       index: 0,
+      id: 'email',
       action: 'fill',
       selected: true,
       validationStatus: 'valid',
     })
     expect(view.stepRows[0].targetSummary).toContain('label')
     expect(view.stepRows[0].inputSummary).toContain('user@example.com')
+    expect(view.targetSlotRows).toEqual([
+      expect.objectContaining({
+        id: 'step-target:email',
+        label: 'Target',
+        selected: true,
+      }),
+    ])
+    expect(view.actionFamilyOptions.some((option) => option.value === 'fill')).toBe(true)
+    expect(view.selectedStepFields.actionFamily).toBe('fill')
+  })
+
+  it('renders an unsaved dirty draft created through the workflow builder', async () => {
+    const { editor } = createTestEditor()
+    await editor.refresh()
+
+    const created = editor.createScenario({
+      id: 'draft-document',
+      name: 'Draft document',
+      initialStepFamily: 'click',
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(view.workflow).toMatchObject({
+      status: 'draft',
+      dirty: true,
+      selectedStepId: 'step-1',
+    })
+    expect(view.documentFields.name).toBe('Draft document')
+    expect(view.stepRows).toEqual([
+      expect.objectContaining({
+        id: 'step-1',
+        action: 'click',
+        selected: true,
+        validationStatus: 'invalid',
+      }),
+    ])
+    expect(view.validationSummary).toBe('1 issue')
+    expect(view.buttons.save.disabled).toBe(false)
+    expect(view.buttons.addStep.disabled).toBe(false)
   })
 
   it('surfaces validation errors on the matching step row', async () => {
@@ -101,6 +168,34 @@ describe('sidepanel scenario editor', () => {
     expect(view.stepRows[0]).toMatchObject({
       validationStatus: 'invalid',
     })
+    expect(view.targetSlotRows[0]).toMatchObject({
+      id: 'step-target:0',
+      selected: true,
+      validationStatus: 'valid',
+    })
+  })
+
+  it('renders pending run state from the workflow session', async () => {
+    const { editor } = createTestEditor({
+      sendResponse() {
+        return new Promise<ExtensionResult<unknown>>((resolve) => {
+          setTimeout(() => resolve(ok({ contentReady: true })), 0)
+        })
+      },
+    })
+    await editor.refresh()
+
+    const operation = editor.runSelectedScenario()
+    const pendingView = createSidepanelScenarioEditorView(editor.getSnapshot())
+
+    expect(pendingView.workflow.status).toBe('running')
+    expect(pendingView.buttons.run).toMatchObject({
+      disabled: true,
+      pending: true,
+    })
+    expect(pendingView.buttons.save.disabled).toBe(true)
+
+    await operation
   })
 
   it('saves structured edits while preserving unedited document properties', async () => {
@@ -620,7 +715,10 @@ type TestEditorOptions = Readonly<{
   createRunId?: () => string
   createDryRunId?: () => string
   createRecordId?: () => string
-  sendResponse?: ExtensionResult<unknown> | ((message: ActorbleExtensionMessage) => ExtensionResult<unknown>)
+  sendResponse?:
+    | ExtensionResult<unknown>
+    | Promise<ExtensionResult<unknown>>
+    | ((message: ActorbleExtensionMessage) => ExtensionResult<unknown> | Promise<ExtensionResult<unknown>>)
   importResponse?: ExtensionResult<ScenarioRecord>
   exportResponse?: ExtensionResult<ScenarioJsonExport>
 }>
