@@ -23,7 +23,7 @@ The package is ESM and exports from `browser/src/index.ts` in development and `b
 ```ts
 import { createActorble, css } from '@actorble/browser'
 
-const actorble = createActorble({ visual: true })
+const actorble = createActorble({ feedback: 'cursor' })
 
 await actorble.click(css('#create-project'))
 await actorble.typeInto(css('#project-name'), 'Orbit')

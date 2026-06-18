@@ -21,7 +21,12 @@ const extraOverlaySelectors = [
   '[data-actorble-visual-typing]',
   '[data-actorble-visual-keystroke]',
 ]
-const searchVisualModes = ['quiet', 'debug', 'off']
+const searchFeedbackModes = ['cursor', 'debug', 'off']
+const feedbackModeTestIds = {
+  cursor: 'feedback-mode-cursor',
+  debug: 'feedback-mode-debug',
+  off: 'feedback-mode-off',
+}
 
 let browser
 let page
@@ -44,7 +49,7 @@ try {
   await page.goto(new URL('github-explorer/', baseUrl).toString())
   await expectPageTitle(page, 'GitHub explorer')
   await openUtilityPanel(page, 'task-utility-panel')
-  await expectChecked(page, '[data-testid="visual-mode-quiet"]', true)
+  await expectChecked(page, '[data-testid="feedback-mode-cursor"]', true)
   await expectFidelityRuntime(page, 'enabled')
   await runCurrentScenario(page, 'GitHub scenario complete')
   await expectState(page, '#github-outcome', 'issue-open')
@@ -52,7 +57,7 @@ try {
   await expectTraceIncludes(page, ['action.click', 'action.waitFor'])
   await closeUtilityPanel(page, 'task-utility-panel')
   await expectOverlayHitTesting(page, '[data-testid="github-issue-example"]', 'github issue row')
-  await expectQuietOverlay(page)
+  await expectCursorOverlay(page)
 
   await page.goto(new URL('form-filling/', baseUrl).toString())
   await expectPageTitle(page, 'Form filling')
@@ -68,8 +73,8 @@ try {
   await expectChecked(page, '[data-testid="request-copy"]', true)
   await expectEventLogIncludes(page, ['submitRequest.click', 'copyCheckbox.click'])
 
-  for (const mode of searchVisualModes) {
-    await runSearchVisualModeSmoke(page, baseUrl, mode)
+  for (const mode of searchFeedbackModes) {
+    await runSearchFeedbackModeSmoke(page, baseUrl, mode)
   }
 
   await page.goto(new URL('appointment-scheduler/', baseUrl).toString())
@@ -112,16 +117,18 @@ async function runTypeFirst(page) {
   await page.locator('#run-type-first').click()
 }
 
-async function setVisualMode(page, mode) {
-  await page.locator(`[data-testid="visual-mode-${mode}"]`).check()
-  await expectChecked(page, `[data-testid="visual-mode-${mode}"]`, true)
+async function setFeedbackMode(page, mode) {
+  const testId = feedbackModeTestIds[mode]
+
+  await page.locator(`[data-testid="${testId}"]`).check()
+  await expectChecked(page, `[data-testid="${testId}"]`, true)
 }
 
-async function runSearchVisualModeSmoke(page, baseUrl, mode) {
+async function runSearchFeedbackModeSmoke(page, baseUrl, mode) {
   await page.goto(new URL('web-search/', baseUrl).toString())
   await expectPageTitle(page, 'Web search')
   await openUtilityPanel(page, 'task-utility-panel')
-  await setVisualMode(page, mode)
+  await setFeedbackMode(page, mode)
   await expectFidelityRuntime(page, mode === 'off' ? 'disabled' : 'enabled')
 
   if (mode === 'debug') {
@@ -135,7 +142,7 @@ async function runSearchVisualModeSmoke(page, baseUrl, mode) {
   }
 
   await expectSearchScenarioComplete(page)
-  await expectVisualModeOverlay(page, mode)
+  await expectFeedbackModeOverlay(page, mode)
 }
 
 async function openUtilityPanel(page, panelId) {
@@ -310,17 +317,17 @@ async function expectSchedulerScenarioComplete(page) {
   ])
 }
 
-async function expectVisualModeOverlay(page, mode) {
+async function expectFeedbackModeOverlay(page, mode) {
   await closeUtilityPanel(page, 'task-utility-panel')
 
   switch (mode) {
-    case 'quiet':
+    case 'cursor':
       await expectOverlayHitTesting(
         page,
         '[data-testid="search-result-docs"]',
-        'quiet search result',
+        'cursor feedback search result',
       )
-      await expectQuietOverlay(page)
+      await expectCursorOverlay(page)
       break
     case 'debug':
       await expectOverlayHitTesting(
@@ -334,7 +341,7 @@ async function expectVisualModeOverlay(page, mode) {
       await expectNoOverlayRoot(page)
       break
     default:
-      throw new Error(`Unsupported visual smoke mode: ${mode}`)
+      throw new Error(`Unsupported feedback smoke mode: ${mode}`)
   }
 }
 
@@ -372,12 +379,12 @@ async function expectOverlayHitTesting(page, targetSelector, label) {
   assertEqual(hitTest, expected, `${label} hit-test target`)
 }
 
-async function expectQuietOverlay(page) {
+async function expectCursorOverlay(page) {
   const overlay = page.locator('[data-actorble-overlay-root]')
-  await expectCount(overlay.locator('[data-actorble-visual-cursor]'), 1, 'quiet cursor')
+  await expectCount(overlay.locator('[data-actorble-visual-cursor]'), 1, 'cursor feedback cursor')
 
   for (const selector of extraOverlaySelectors) {
-    await expectCount(overlay.locator(selector), 0, `quiet ${selector}`)
+    await expectCount(overlay.locator(selector), 0, `cursor feedback ${selector}`)
   }
 }
 

@@ -358,6 +358,7 @@ const github = 'https://github.com/syi0808/actorble'
 
 <script>
   import {
+    BrowserVisualLayer,
     createActorble,
     testId,
     type Actorble,
@@ -491,19 +492,12 @@ const github = 'https://github.com/syi0808/actorble'
 
     function createDemoActorble(initialPosition: Point = getDemoStartPoint()): Actorble {
       return createActorble({
-        mode: 'interactive',
+        feedback: 'cursor',
         pointer: { initialPosition },
-        visual: {
-          preset: 'quiet',
+        visualLayer: new BrowserVisualLayer({
           cursorScale: 2.6,
-          cursor: true,
-          targetHighlight: false,
-          clickFeedback: false,
-          focusOverlay: false,
-          typingIndicator: false,
-          keystrokeOverlay: false,
           textVisibility: 'hidden',
-        },
+        }),
       })
     }
 
@@ -731,7 +725,7 @@ const github = 'https://github.com/syi0808/actorble'
     function createClickOptions(duration: number) {
       return {
         ...revealNearest(),
-        motion: { kind: 'ease' as const, easing: 'ease-in-out' as const, duration },
+        motion: { kind: 'ease' as const, timing: 'ease-in-out' as const, duration },
         pressDwell: 240,
         timeout: 6800,
       }

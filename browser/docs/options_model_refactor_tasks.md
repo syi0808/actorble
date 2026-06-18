@@ -330,7 +330,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-09 Docs, Examples, And Smoke Alignment
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: browser docs, examples, smoke 검증을 새 `feedback` option과 revised
   motion profile contract에 맞춘다.
 - Dependencies: BOPT-02, BOPT-04, BOPT-06, BOPT-07, BOPT-08, `example/*`,

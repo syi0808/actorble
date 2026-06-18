@@ -1,4 +1,4 @@
-import { createActorble, type ActorbleFeedback, type TypeOptions } from '../../src/index.js'
+import { createActorble, type TypeOptions } from '../../src/index.js'
 import {
   byId,
   renderRows,
@@ -11,7 +11,7 @@ import {
 } from './example-utils.js'
 
 export type DemoActorble = ReturnType<typeof createActorble>
-export type VisualMode = 'quiet' | 'debug' | 'off'
+export type FeedbackMode = 'cursor' | 'debug' | 'off'
 
 export type TaskExampleContext = Readonly<{
   actorble(): DemoActorble
@@ -48,8 +48,8 @@ export function clickFocusTyping(delay: number, timeout: number): TypeOptions {
 }
 
 export function mountTaskExample(options: TaskExampleOptions): void {
-  let visualMode: VisualMode = 'quiet'
-  let actorble: DemoActorble = createDemoActorble(visualMode)
+  let feedbackMode: FeedbackMode = 'cursor'
+  let actorble: DemoActorble = createDemoActorble(feedbackMode)
   const domEvents: string[] = []
   const app = byId<HTMLDivElement>('app')
 
@@ -104,25 +104,25 @@ export function mountTaskExample(options: TaskExampleOptions): void {
           {
             id: 'task-settings',
             eyebrow: 'Settings',
-            title: 'Visual detail',
+            title: 'Feedback',
             body: `
-              <fieldset class="segmented-control" aria-label="Visual detail">
+              <fieldset class="segmented-control" aria-label="Feedback">
                 <label>
                   <input
-                    id="visual-mode-quiet"
-                    data-testid="visual-mode-quiet"
-                    name="visual-mode"
+                    id="feedback-mode-cursor"
+                    data-testid="feedback-mode-cursor"
+                    name="feedback-mode"
                     type="radio"
-                    value="quiet"
+                    value="cursor"
                     checked
                   />
-                  <span>Quiet</span>
+                  <span>Cursor</span>
                 </label>
                 <label>
                   <input
-                    id="visual-mode-debug"
-                    data-testid="visual-mode-debug"
-                    name="visual-mode"
+                    id="feedback-mode-debug"
+                    data-testid="feedback-mode-debug"
+                    name="feedback-mode"
                     type="radio"
                     value="debug"
                   />
@@ -130,9 +130,9 @@ export function mountTaskExample(options: TaskExampleOptions): void {
                 </label>
                 <label>
                   <input
-                    id="visual-mode-off"
-                    data-testid="visual-mode-off"
-                    name="visual-mode"
+                    id="feedback-mode-off"
+                    data-testid="feedback-mode-off"
+                    name="feedback-mode"
                     type="radio"
                     value="off"
                   />
@@ -174,8 +174,8 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   const eventLog = byId<HTMLOListElement>('event-log')
   const traceOutput = byId<HTMLDivElement>('trace-output')
   const fidelityOutput = byId<HTMLDivElement>('fidelity-output')
-  const visualModeInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[name="visual-mode"]'),
+  const feedbackModeInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="feedback-mode"]'),
   )
   const context: TaskExampleContext = {
     actorble: () => actorble,
@@ -230,18 +230,18 @@ export function mountTaskExample(options: TaskExampleOptions): void {
     )
   })
 
-  for (const input of visualModeInputs) {
+  for (const input of feedbackModeInputs) {
     input.addEventListener('change', () => {
       if (!input.checked) {
         return
       }
 
-      visualMode = input.value as VisualMode
+      feedbackMode = input.value as FeedbackMode
       actorble.destroy()
-      actorble = createDemoActorble(visualMode)
+      actorble = createDemoActorble(feedbackMode)
       renderTrace(actorble.getTrace(), traceOutput)
       renderFidelity()
-      setStatus(runStatus, visualModeStatus(visualMode))
+      setStatus(runStatus, feedbackModeStatus(feedbackMode))
     })
   }
 
@@ -325,44 +325,27 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   }
 }
 
-function createDemoActorble(
-  mode: VisualMode,
-): DemoActorble {
+const feedbackPresetOptions = {
+  cursor: { feedback: 'cursor' },
+  debug: { feedback: 'debug' },
+  off: { feedback: 'off' },
+} as const
+
+function createDemoActorble(feedbackMode: FeedbackMode): DemoActorble {
   return createActorble({
     debug: true,
-    feedback: feedbackForMode(mode),
+    ...feedbackPresetOptions[feedbackMode],
   })
 }
 
-function feedbackForMode(
-  mode: VisualMode,
-): ActorbleFeedback {
+function feedbackModeStatus(mode: FeedbackMode): string {
   switch (mode) {
+    case 'cursor':
+      return 'Cursor feedback'
     case 'debug':
-      return {
-        cursor: true,
-        target: true,
-        click: true,
-        focus: true,
-        typing: true,
-        keystroke: true,
-        text: 'masked',
-      }
+      return 'Debug feedback'
     case 'off':
-      return 'off'
-    case 'quiet':
-      return 'cursor'
-  }
-}
-
-function visualModeStatus(mode: VisualMode): string {
-  switch (mode) {
-    case 'debug':
-      return 'Debug visual'
-    case 'off':
-      return 'Visual off'
-    case 'quiet':
-      return 'Quiet visual'
+      return 'Feedback off'
   }
 }
 

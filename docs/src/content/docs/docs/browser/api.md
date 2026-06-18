@@ -24,7 +24,7 @@ Creates the browser facade and wires the default browser modules for target reso
 ```ts
 import { createActorble, css } from '@actorble/browser'
 
-const actorble = createActorble({ visual: true })
+const actorble = createActorble({ feedback: 'cursor' })
 
 await actorble.click(css('#save'))
 actorble.destroy()
@@ -32,19 +32,20 @@ actorble.destroy()
 
 ### Options
 
-`createActorble()` and `new Actorble()` accept the same options object. Most users only need `root`, `mode`, and `visual`.
+`createActorble()` and `new Actorble()` accept the same options object. Most users only need `root` and `feedback`.
 
 ```ts
 type CommonActorbleOptions = Pick<
   ActorbleFacadeOptions,
-  'root' | 'mode' | 'debug' | 'visual'
+  'root' | 'debug' | 'feedback' | 'motion' | 'actionDefaults'
 >
 
 type CommonActorbleOptionsShape = {
   root?: Document | ShadowRoot | Element
-  mode?: 'interactive' | 'headless'
   debug?: boolean
-  visual?: boolean | VisualFeedbackOptions | VisualLayer
+  feedback?: ActorbleFeedback
+  motion?: boolean
+  actionDefaults?: BrowserActionDefaults
 }
 ```
 
@@ -58,54 +59,41 @@ Limits DOM access to a document or shadow root. Passing an element uses its owne
 const actorble = createActorble({ root: document })
 ```
 
-### mode
-
-- Type: `'interactive' | 'headless'`
-
-`headless` disables the built-in visual layer. Omit it for normal interactive browser use.
-
-```ts
-const actorble = createActorble({ mode: 'headless' })
-```
-
 ### debug
 
 - Type: `boolean`
 
 Reserved on the shared options shape. It is not wired to facade behavior yet.
 
-### visual
+### feedback
 
-- Type: `boolean | VisualFeedbackOptions | VisualLayer`
+- Type: `ActorbleFeedback`
 
-`visual: true` creates the built-in browser overlay with the quiet preset. Passing an object enables the overlay unless `enabled` is `false`. Passing a custom `VisualLayer` lets advanced integrations own visual behavior.
+`feedback: 'cursor'` creates the built-in non-interactive browser overlay with cursor feedback only. `feedback: 'debug'` enables target, click, focus, typing, and keystroke feedback. `feedback: 'off'` disables the overlay runtime. Object feedback enables only the channels you set.
 
 ```ts
 const actorble = createActorble({
-  visual: {
-    enabled: true,
-    preset: 'quiet',
-    targetHighlight: true,
-  },
+  feedback: 'debug',
 })
 ```
 
 ```ts
-type VisualFeedbackOptions = {
-  enabled?: boolean
-  preset?: 'quiet' | 'debug'
-  cursor?: boolean
-  cursorScale?: number
-  targetHighlight?: boolean
-  clickFeedback?: boolean
-  focusOverlay?: boolean
-  typingIndicator?: boolean
-  keystrokeOverlay?: boolean
-  textVisibility?: 'hidden' | 'masked' | 'plain'
-}
+type ActorbleFeedback =
+  | 'off'
+  | 'cursor'
+  | 'debug'
+  | {
+      cursor?: boolean
+      target?: boolean
+      click?: boolean
+      focus?: boolean
+      typing?: boolean
+      keystroke?: boolean
+      text?: 'hidden' | 'masked' | 'plain'
+    }
 ```
 
-`quiet` shows the cursor by default. `debug` enables cursor, target highlight, click, focus, typing, and keystroke feedback by default.
+Custom visual layer injection is an advanced composition hook exposed as `visualLayer`; it is separate from the public feedback preset.
 
 Dependency injection options such as `resolver`, `orchestrator`, `trace`, and `dom` are advanced composition hooks. See [Advanced API](../advanced-api/) for the interfaces those injected modules must satisfy.
 
@@ -507,10 +495,22 @@ type PointerMovementOptions = {
 
 ```ts
 type PointerMotionProfile =
-  | { kind: 'linear'; duration?: DurationMs }
-  | { kind: 'ease'; easing?: 'ease-in' | 'ease-out' | 'ease-in-out'; duration?: DurationMs }
-  | { kind: 'inertia'; duration?: DurationMs }
-  | { kind: 'spring'; duration?: DurationMs }
+  | {
+      kind: 'ease'
+      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
+      duration?: DurationMs
+    }
+  | {
+      kind: 'inertia'
+      initialVelocity?: number
+      deceleration?: number
+    }
+  | {
+      kind: 'spring'
+      stiffness?: number
+      damping?: number
+      mass?: number
+    }
 ```
 
 ### ClickOptions

@@ -22,7 +22,7 @@ actorble.destroy()
 ```ts
 import { createActorble, css } from '@actorble/browser'
 
-const actorble = createActorble({ visual: true })
+const actorble = createActorble({ feedback: 'cursor' })
 
 await actorble.typeInto(css('#message'), 'Hello from Actorble')
 
@@ -35,7 +35,7 @@ actorble.destroy()
 ```ts
 import { createActorble, css } from '@actorble/browser'
 
-const actorble = createActorble({ visual: true })
+const actorble = createActorble({ feedback: 'debug' })
 
 await actorble.run({
   steps: [
