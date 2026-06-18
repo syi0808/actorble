@@ -1,5 +1,5 @@
 import type { BrowserRuntimeCompilation } from '../scenario/compile-to-browser-runtime.js'
-import type { ScenarioDocument } from '../scenario/types.js'
+import type { ScenarioDocument, ScenarioLocator } from '../scenario/types.js'
 import type { TraceDisplayEvent, RuntimeRunStatus } from '../trace/index.js'
 
 export const extensionMessageKinds = [
@@ -15,6 +15,7 @@ export const extensionMessageKinds = [
   'inspector:stop',
   'inspector:selected',
   'inspector:cancelled',
+  'locator:preview',
   'trace:event',
   'runtime:status',
   'popup:get-state',
@@ -151,6 +152,23 @@ export type InspectorCancelledMessage = ExtensionMessage<
     }>
 >
 
+export type LocatorPreviewCandidateMessage = Readonly<{
+  id: string
+  rank: number
+  strategy: ScenarioLocator['strategy']
+  label: string
+  locator: ScenarioLocator
+}>
+
+export type LocatorPreviewMessage = ExtensionMessage<
+  'locator:preview',
+  RequiredTabCorrelation &
+    Readonly<{
+      scenarioId?: string
+      candidates: readonly LocatorPreviewCandidateMessage[]
+    }>
+>
+
 export type TraceEventMessage = ExtensionMessage<
   'trace:event',
   RequiredRunCorrelation &
@@ -187,6 +205,7 @@ export type ActorbleExtensionMessage =
   | InspectorStopMessage
   | InspectorSelectedMessage
   | InspectorCancelledMessage
+  | LocatorPreviewMessage
   | TraceEventMessage
   | RuntimeStatusMessage
   | PopupGetStateMessage
@@ -284,6 +303,14 @@ function isPayloadForKind(
         hasInspectorSessionCorrelation(payload) &&
         isInspectorCancellationReason(payload.reason) &&
         isOptionalString(payload.message)
+      )
+    case 'locator:preview':
+      return (
+        hasRequiredTabCorrelation(payload) &&
+        isOptionalString(payload.scenarioId) &&
+        Array.isArray(payload.candidates) &&
+        payload.candidates.length > 0 &&
+        payload.candidates.every(isLocatorPreviewCandidate)
       )
     case 'trace:event':
       return hasRequiredRunCorrelation(payload) && isTraceDisplayEvent(payload.event)
@@ -408,6 +435,111 @@ function isInspectorTargetMetadata(value: unknown): value is InspectorTargetMeta
     isOptionalString(value.href) &&
     isOptionalString(value.text)
   )
+}
+
+function isLocatorPreviewCandidate(value: unknown): value is LocatorPreviewCandidateMessage {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    isFiniteNumber(value.rank) &&
+    typeof value.strategy === 'string' &&
+    isScenarioLocatorStrategy(value.strategy) &&
+    typeof value.label === 'string' &&
+    value.label.length > 0 &&
+    isScenarioLocator(value.locator) &&
+    value.locator.strategy === value.strategy
+  )
+}
+
+function isScenarioLocator(value: unknown): value is ScenarioLocator {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  switch (value.strategy) {
+    case 'css':
+      return typeof value.selector === 'string' && value.selector.length > 0
+    case 'role':
+      return (
+        typeof value.role === 'string' &&
+        value.role.length > 0 &&
+        isOptionalScenarioTextMatcher(value.name) &&
+        isOptionalBoolean(value.includeHidden)
+      )
+    case 'text':
+      return isScenarioTextMatcher(value.text)
+    case 'label':
+      return isScenarioTextMatcher(value.label)
+    case 'testId':
+      return (
+        typeof value.value === 'string' &&
+        value.value.length > 0 &&
+        (value.attribute === undefined ||
+          (typeof value.attribute === 'string' && value.attribute.length > 0))
+      )
+    case 'point':
+      return isScenarioPoint(value.point)
+    default:
+      return false
+  }
+}
+
+function isScenarioLocatorStrategy(value: string): value is ScenarioLocator['strategy'] {
+  return value === 'css' ||
+    value === 'role' ||
+    value === 'text' ||
+    value === 'label' ||
+    value === 'testId' ||
+    value === 'point'
+}
+
+function isOptionalScenarioTextMatcher(value: unknown): boolean {
+  return value === undefined || isScenarioTextMatcher(value)
+}
+
+function isScenarioTextMatcher(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value.length > 0
+  }
+
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.value === 'string' &&
+    value.value.length > 0 &&
+    (value.match === undefined ||
+      value.match === 'exact' ||
+      value.match === 'contains' ||
+      value.match === 'regex') &&
+    isOptionalBoolean(value.caseSensitive)
+  )
+}
+
+function isScenarioPoint(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.y) &&
+    (value.coordinateSpace === undefined ||
+      value.coordinateSpace === 'viewport' ||
+      value.coordinateSpace === 'document' ||
+      value.coordinateSpace === 'screen' ||
+      value.coordinateSpace === 'surface' ||
+      value.coordinateSpace === 'element')
+  )
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === 'boolean'
 }
 
 function isOptionalStringArray(value: unknown): boolean {

@@ -322,7 +322,7 @@ src/recorder
 
 ### T12 Locator Preview
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Preview locator candidates from selected targets so users can choose
   stable target definitions before writing them into scenario documents.
 - Dependencies: T2, T11.

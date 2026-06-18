@@ -4,6 +4,7 @@ import {
   createBackgroundOrchestrator,
   createWxtBackgroundBrowserHost,
 } from '../src/entrypoints/background/orchestration.js'
+import { createLocatorCandidates } from '../src/inspector/locator-preview.js'
 import { createExtensionMessage } from '../src/messaging/index.js'
 
 const compilation = {
@@ -246,6 +247,55 @@ describe('background orchestration', () => {
         id: 'submit',
       },
     })
+  })
+
+  it('routes locator preview requests to content and returns the preview result', async () => {
+    const activeTab = await createActiveTab()
+    const candidates = createLocatorCandidates({
+      tagName: 'button',
+      role: 'button',
+      ariaLabel: 'Sign in',
+      rect: {
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 32,
+      },
+    })
+    const previewResult = {
+      tabId: activeTab.id,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      candidates: [
+        {
+          ...candidates[0],
+          matchCount: 1,
+          strict: true,
+          status: 'unique',
+        },
+      ],
+    } as const
+    const sendMessage = vi
+      .spyOn(fakeBrowser.tabs, 'sendMessage')
+      .mockResolvedValue({ ok: true, value: previewResult })
+    const orchestrator = createTestOrchestrator()
+    const message = createExtensionMessage({
+      kind: 'locator:preview',
+      payload: {
+        tabId: activeTab.id,
+        frameId: 0,
+        scenarioId: 'scenario-1',
+        candidates,
+      },
+    })
+
+    const result = await orchestrator.handleMessage(message)
+
+    expect(result).toEqual({
+      ok: true,
+      value: previewResult,
+    })
+    expect(sendMessage).toHaveBeenCalledWith(activeTab.id, message, { frameId: 0 })
   })
 
   it('ingests inspector cancellation reasons', async () => {

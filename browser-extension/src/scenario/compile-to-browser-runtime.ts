@@ -36,6 +36,18 @@ export type BrowserRuntimeCompilation = Readonly<{
 
 export type BrowserRuntimeCompileResult = ExtensionResult<BrowserRuntimeCompilation>
 
+export type BrowserRuntimeLocatorCompileResult = ExtensionResult<BrowserRuntimeLocator>
+
+export function compileScenarioLocatorToBrowserRuntime(
+  locator: ScenarioLocator,
+  path: ExtensionIssuePath = [],
+): BrowserRuntimeLocatorCompileResult {
+  const issues: ExtensionIssue[] = []
+  const compiled = compileLocator(locator, path, issues)
+
+  return compiled === null || issues.length > 0 ? failure(issues) : ok(compiled)
+}
+
 export function compileToBrowserRuntime(
   document: ScenarioDocument,
 ): BrowserRuntimeCompileResult {

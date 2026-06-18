@@ -139,6 +139,30 @@ const validMessages = [
     },
   },
   {
+    kind: 'locator:preview',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      candidates: [
+        {
+          id: 'role-1',
+          rank: 1,
+          strategy: 'role',
+          label: 'role: button "Sign in"',
+          locator: {
+            strategy: 'role',
+            role: 'button',
+            name: {
+              value: 'Sign in',
+              match: 'exact',
+            },
+          },
+        },
+      ],
+    },
+  },
+  {
     kind: 'trace:event',
     payload: {
       ...runCorrelation,
@@ -177,6 +201,7 @@ describe('messaging skeleton contracts', () => {
       'inspector:stop',
       'inspector:selected',
       'inspector:cancelled',
+      'locator:preview',
       'trace:event',
       'runtime:status',
       'popup:get-state',
@@ -237,6 +262,7 @@ describe('messaging skeleton contracts', () => {
     ['inspector:stop', { frameId: 0 }],
     ['inspector:selected', { tabId: 7, sessionId: 'inspect-1' }],
     ['inspector:cancelled', { tabId: 7, reason: 'user' }],
+    ['locator:preview', { frameId: 0, candidates: [] }],
   ])('rejects %s messages with missing tab correlation', (kind, payload) => {
     expect(isActorbleExtensionMessage({ kind, payload })).toBe(false)
   })
@@ -301,6 +327,38 @@ describe('messaging skeleton contracts', () => {
           tabId: 7,
           sessionId: 'inspect-1',
           reason: 'unknown',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects invalid locator preview payloads', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'locator:preview',
+        payload: {
+          tabId: 7,
+          candidates: [],
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'locator:preview',
+        payload: {
+          tabId: 7,
+          candidates: [
+            {
+              id: 'bad-1',
+              rank: 1,
+              strategy: 'css',
+              label: 'css',
+              locator: {
+                strategy: 'css',
+              },
+            },
+          ],
         },
       }),
     ).toBe(false)

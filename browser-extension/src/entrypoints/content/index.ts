@@ -2,6 +2,7 @@ import { createActorble } from '@actorble/browser'
 import { browser } from 'wxt/browser'
 import { isExtensionMessageOfKind } from '../../messaging/index.js'
 import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
+import { createContentLocatorPreviewHost } from './locator-preview-host.js'
 import { createContentRuntimeHost } from './runtime-host.js'
 
 export default defineContentScript({
@@ -21,6 +22,9 @@ export default defineContentScript({
         return browser.runtime.sendMessage(message)
       },
     })
+    const locatorPreviewHost = createContentLocatorPreviewHost({
+      createActorble,
+    })
 
     browser.runtime.onMessage.addListener((message) => {
       if (
@@ -28,6 +32,10 @@ export default defineContentScript({
         isExtensionMessageOfKind(message, 'inspector:stop')
       ) {
         return inspectorHost.handleMessage(message)
+      }
+
+      if (isExtensionMessageOfKind(message, 'locator:preview')) {
+        return locatorPreviewHost.handleMessage(message)
       }
 
       return runtimeHost.handleMessage(message)

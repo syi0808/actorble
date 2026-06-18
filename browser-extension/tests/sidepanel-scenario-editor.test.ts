@@ -146,6 +146,36 @@ describe('sidepanel scenario editor', () => {
     expect(updates[0].update.document?.defaults).toEqual(newestScenario.document.defaults)
   })
 
+  it('writes a selected locator into the current step as a strict target and validates it', async () => {
+    const { editor } = createTestEditor()
+    await editor.refresh()
+    editor.selectStep(0)
+
+    const result = editor.applyLocatorToSelectedStep({
+      strategy: 'testId',
+      value: 'email-input',
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      issues: [],
+      message: 'Locator applied',
+    })
+    expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
+      action: 'fill',
+      target: {
+        kind: 'target',
+        strict: true,
+        locators: [
+          {
+            strategy: 'testId',
+            value: 'email-input',
+          },
+        ],
+      },
+    })
+  })
+
   it('imports and exports scenarios through the storage repository', async () => {
     const imported = scenarioRecord(
       'imported-scenario',

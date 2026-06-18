@@ -67,7 +67,7 @@ describe('content runtime host', () => {
     expect(actorble.destroy).toHaveBeenCalledOnce()
   })
 
-  it('creates page runtimes with interactive visual feedback enabled', async () => {
+  it('creates page runtimes with debug feedback enabled', async () => {
     const actorble = createMockActorble()
     const createActorble = vi.fn(() => actorble as unknown as ContentActorbleFacade)
     const host = createContentRuntimeHost({
@@ -80,8 +80,8 @@ describe('content runtime host', () => {
 
     expect(createActorble).toHaveBeenCalledWith(
       expect.objectContaining({
-        mode: 'interactive',
-        visual: true,
+        feedback: 'debug',
+        motion: true,
         trace: expect.any(Object),
       }),
     )

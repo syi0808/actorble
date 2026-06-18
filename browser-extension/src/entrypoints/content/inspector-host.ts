@@ -87,6 +87,7 @@ export function createContentInspectorHost<TElement = unknown>(
       case 'record:stop':
       case 'inspector:selected':
       case 'inspector:cancelled':
+      case 'locator:preview':
       case 'trace:event':
       case 'runtime:status':
       case 'popup:get-state':

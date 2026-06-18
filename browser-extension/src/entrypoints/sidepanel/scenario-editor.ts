@@ -9,7 +9,12 @@ import {
   compileToBrowserRuntime,
   type BrowserRuntimeCompilation,
 } from '../../scenario/compile-to-browser-runtime.js'
-import type { ScenarioDocument, ScenarioStep } from '../../scenario/types.js'
+import type {
+  ScenarioDocument,
+  ScenarioLocator,
+  ScenarioStep,
+  ScenarioTargetGroup,
+} from '../../scenario/types.js'
 import { validateScenarioDocument } from '../../scenario/validate.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type {
@@ -160,6 +165,7 @@ export type SidepanelScenarioEditor = Readonly<{
   updateSelectedStepFields(
     update: SidepanelStepFieldUpdate,
   ): ExtensionResult<ScenarioDocument>
+  applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument>
   validateDraft(): ExtensionResult<ScenarioDocument>
   saveDraft(): Promise<ExtensionResult<ScenarioRecord>>
   importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>
@@ -300,6 +306,63 @@ export function createSidepanelScenarioEditor(
       draftDocument: document,
       issues: validation.ok ? [] : validation.issues,
       message: undefined,
+    }
+
+    return validation.ok ? ok(document) : validation
+  }
+
+  function applyLocatorToSelectedStep(
+    locator: ScenarioLocator,
+  ): ExtensionResult<ScenarioDocument> {
+    if (snapshot.draftDocument === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a scenario before applying a locator.',
+      })
+    }
+
+    const index = snapshot.selectedStepIndex
+    const step = snapshot.draftDocument.steps[index]
+    if (step === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a step before applying a locator.',
+        path: ['steps'],
+      })
+    }
+
+    if (readStepProperty(step, 'target') === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'The selected step does not have a writable target field.',
+        path: ['steps', index, 'target'],
+      })
+    }
+
+    const target = {
+      kind: 'target',
+      strict: true,
+      locators: [locator],
+    } satisfies ScenarioTargetGroup
+    const steps = snapshot.draftDocument.steps.map((item, itemIndex) => (
+      itemIndex === index
+        ? {
+            ...step,
+            target,
+          } as ScenarioStep
+        : item
+    ))
+    const document = {
+      ...snapshot.draftDocument,
+      steps,
+    } satisfies ScenarioDocument
+    const validation = validateScenarioDocument(document)
+
+    snapshot = {
+      ...snapshot,
+      draftDocument: document,
+      issues: validation.ok ? [] : validation.issues,
+      message: validation.ok ? 'Locator applied' : undefined,
     }
 
     return validation.ok ? ok(document) : validation
@@ -701,6 +764,7 @@ export function createSidepanelScenarioEditor(
     selectStep,
     updateDocumentFields,
     updateSelectedStepFields,
+    applyLocatorToSelectedStep,
     validateDraft,
     saveDraft,
     importJson,

@@ -276,6 +276,66 @@ button[data-pending="true"] {
   white-space: nowrap;
 }
 
+.locator-preview-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.locator-preview-list:empty::before {
+  color: var(--muted);
+  content: "No locator candidates";
+  font-size: 13px;
+}
+
+.locator-preview-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.locator-preview-list li[data-status="unique"] {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.locator-preview-list li[data-status="ambiguous"],
+.locator-preview-list li[data-status="zero-match"] {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+}
+
+.locator-preview-list li[data-status="error"] {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+}
+
+.locator-preview-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.locator-preview-label {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locator-preview-match {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .step-status {
   color: var(--muted);
   text-transform: capitalize;
@@ -330,14 +390,16 @@ button[data-pending="true"] {
 }
 
 .run-fields,
-.target-picker-fields {
+.target-picker-fields,
+.locator-preview-fields {
   display: grid;
   gap: 10px;
   margin: 0;
 }
 
 .run-fields div,
-.target-picker-fields div {
+.target-picker-fields div,
+.locator-preview-fields div {
   display: grid;
   gap: 3px;
 }
@@ -383,6 +445,10 @@ dd {
   select,
   textarea {
     color: var(--text);
+    background: #171d24;
+  }
+
+  .locator-preview-list li {
     background: #171d24;
   }
 

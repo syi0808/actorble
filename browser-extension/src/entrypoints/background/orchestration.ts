@@ -9,6 +9,7 @@ import type {
   RequiredTabCorrelation,
 } from '../../messaging/index.js'
 import { isActorbleExtensionMessage } from '../../messaging/index.js'
+import type { LocatorPreviewResult } from '../../inspector/locator-preview.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type { RuntimeRunStatus } from '../../trace/index.js'
 
@@ -122,7 +123,10 @@ export type BackgroundPopupState = Readonly<{
   recordSession?: BackgroundRecordSession
 }>
 
-export type BackgroundMessageResult = BackgroundCommandReceipt | BackgroundPopupState
+export type BackgroundMessageResult =
+  | BackgroundCommandReceipt
+  | BackgroundPopupState
+  | LocatorPreviewResult
 
 export type BackgroundOrchestrator = Readonly<{
   handleMessage(message: unknown): Promise<ExtensionResult<BackgroundMessageResult>>
@@ -149,6 +153,11 @@ type RoutableMessage = Extract<
       | 'inspector:start'
       | 'inspector:stop'
   }>
+>
+
+type LocatorPreviewMessage = Extract<
+  ActorbleExtensionMessage,
+  Readonly<{ kind: 'locator:preview' }>
 >
 
 type RuntimeStatusMessage = Extract<
@@ -200,6 +209,8 @@ export function createBackgroundOrchestrator(
       case 'inspector:start':
       case 'inspector:stop':
         return routeToContent(message)
+      case 'locator:preview':
+        return routeLocatorPreview(message)
       case 'runtime:status':
         return ingestRuntimeStatus(message)
       case 'trace:event':
@@ -305,6 +316,44 @@ export function createBackgroundOrchestrator(
 
     const session = updateSessionForRoutedMessage(message)
     return ok(receiptFor(message.kind, message.payload, true, session))
+  }
+
+  async function routeLocatorPreview(
+    message: LocatorPreviewMessage,
+  ): Promise<ExtensionResult<LocatorPreviewResult>> {
+    const target = await resolveTargetTab(message.payload)
+    if (!target.ok) {
+      return target
+    }
+
+    let response: unknown
+    try {
+      response = await host.sendTabMessage(target.value.tabId, message, frameOptions(target.value.frameId))
+    } catch (error) {
+      return failure({
+        code: 'content_not_ready',
+        message: `Content script is not ready for tab ${target.value.tabId}.`,
+        details: {
+          tabId: target.value.tabId,
+          frameId: target.value.frameId,
+          error: errorMessage(error),
+        },
+      })
+    }
+
+    const result = readExtensionResult<LocatorPreviewResult>(response)
+    if (result === null) {
+      return failure({
+        code: 'unsupported_message',
+        message: 'Content locator preview returned an unsupported response.',
+        details: {
+          tabId: target.value.tabId,
+          frameId: target.value.frameId,
+        },
+      })
+    }
+
+    return result
   }
 
   async function resolveTargetTab(
@@ -676,6 +725,28 @@ function latestSession<TSession extends Readonly<{ updatedAt: number }>>(
 
     return latest
   }, undefined)
+}
+
+function readExtensionResult<TValue>(value: unknown): ExtensionResult<TValue> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+
+  const result = value as Readonly<{
+    ok?: unknown
+    value?: unknown
+    issues?: unknown
+  }>
+
+  if (result.ok === true && result.value !== undefined) {
+    return value as ExtensionResult<TValue>
+  }
+
+  if (result.ok === false && Array.isArray(result.issues)) {
+    return value as ExtensionResult<TValue>
+  }
+
+  return null
 }
 
 function errorMessage(error: unknown): string {

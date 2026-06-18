@@ -1,5 +1,12 @@
 import { browser } from 'wxt/browser'
 import {
+  createLocatorPreviewCandidateViews,
+  createLocatorPreviewer,
+  type LocatorPreviewCandidateView,
+  type LocatorPreviewSnapshot,
+  type LocatorPreviewStatus,
+} from '../../inspector/locator-preview.js'
+import {
   createTargetPicker,
   createTargetPickerView,
 } from '../../inspector/target-picker.js'
@@ -63,6 +70,23 @@ const targetPicker = createTargetPicker({
 }, {
   targetTabId,
 })
+const locatorPreviewer = createLocatorPreviewer({
+  async getActiveTab() {
+    const [activeTab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    })
+    return activeTab ?? null
+  },
+  async getTab(tabId) {
+    return await browser.tabs.get(tabId)
+  },
+  sendMessage(message) {
+    return browser.runtime.sendMessage(message)
+  },
+}, {
+  targetTabId,
+})
 
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
@@ -89,6 +113,9 @@ const targetPickerSelected = requiredElement<HTMLElement>('#target-picker-select
 const targetPickerIssues = requiredElement<HTMLElement>('#target-picker-issues')
 const targetPickerStartButton = requiredElement<HTMLButtonElement>('#target-picker-start-button')
 const targetPickerStopButton = requiredElement<HTMLButtonElement>('#target-picker-stop-button')
+const locatorPreviewStatus = requiredElement<HTMLElement>('#locator-preview-status')
+const locatorPreviewList = requiredElement<HTMLUListElement>('#locator-preview-list')
+const locatorPreviewIssues = requiredElement<HTMLElement>('#locator-preview-issues')
 const validationSummary = requiredElement<HTMLElement>('#validation-summary')
 const issueList = requiredElement<HTMLUListElement>('#issue-list')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
@@ -189,11 +216,29 @@ dryRunButton.addEventListener('click', () => {
 })
 
 targetPickerStartButton.addEventListener('click', () => {
+  locatorPreviewer.clear()
   void runTargetPickerAction(() => targetPicker.start(editor.getSnapshot().selectedScenarioId))
 })
 
 targetPickerStopButton.addEventListener('click', () => {
   void runTargetPickerAction(() => targetPicker.stop())
+})
+
+locatorPreviewList.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-locator-preview-index]',
+  )
+  if (button == null) {
+    return
+  }
+
+  const candidate = locatorPreviewer.getSnapshot().candidates[Number(button.dataset.locatorPreviewIndex)]
+  if (candidate === undefined || candidate.status !== 'unique') {
+    return
+  }
+
+  editor.applyLocatorToSelectedStep(candidate.locator)
+  render(editor.getSnapshot())
 })
 
 browser.runtime.onMessage.addListener((message) => {
@@ -202,6 +247,15 @@ browser.runtime.onMessage.addListener((message) => {
 
   if (editorHandled || pickerHandled) {
     render(editor.getSnapshot())
+  }
+
+  if (pickerHandled) {
+    const selected = targetPicker.getSnapshot().selected
+    if (selected !== undefined) {
+      void runLocatorPreviewAction(() => (
+        locatorPreviewer.previewTarget(selected.target, editor.getSnapshot().selectedScenarioId)
+      ))
+    }
   }
 })
 
@@ -216,6 +270,13 @@ async function runAction(action: () => Promise<unknown>): Promise<void> {
 }
 
 async function runTargetPickerAction(action: () => Promise<unknown>): Promise<void> {
+  const operation = action()
+  render(editor.getSnapshot())
+  await operation
+  render(editor.getSnapshot())
+}
+
+async function runLocatorPreviewAction(action: () => Promise<unknown>): Promise<void> {
   const operation = action()
   render(editor.getSnapshot())
   await operation
@@ -271,6 +332,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
   renderTargetPicker()
+  renderLocatorPreview()
 
   scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
   scenarioFile.disabled = view.buttons.import.disabled
@@ -288,6 +350,41 @@ function renderTargetPicker(): void {
   targetPickerIssues.textContent = view.issueSummary
   applyButtonView(targetPickerStartButton, view.buttons.start)
   applyButtonView(targetPickerStopButton, view.buttons.stop)
+}
+
+function renderLocatorPreview(): void {
+  const snapshot = locatorPreviewer.getSnapshot()
+  locatorPreviewStatus.textContent = locatorPreviewStatusSummary(snapshot)
+  locatorPreviewIssues.textContent = issueSummary(snapshot.issues)
+  renderLocatorPreviewCandidates(createLocatorPreviewCandidateViews(snapshot.candidates))
+}
+
+function renderLocatorPreviewCandidates(
+  candidates: readonly LocatorPreviewCandidateView[],
+): void {
+  locatorPreviewList.replaceChildren()
+
+  for (const candidate of candidates) {
+    const item = document.createElement('li')
+    const content = document.createElement('div')
+    const label = document.createElement('span')
+    const match = document.createElement('span')
+    const button = document.createElement('button')
+
+    item.dataset.status = candidate.status
+    content.className = 'locator-preview-main'
+    label.className = 'locator-preview-label'
+    label.textContent = candidate.label
+    match.className = 'locator-preview-match'
+    match.textContent = candidate.matchSummary
+    button.type = 'button'
+    button.textContent = 'Use'
+    button.disabled = !candidate.selectable
+    button.dataset.locatorPreviewIndex = String(candidate.index)
+    content.append(label, match)
+    item.append(content, button)
+    locatorPreviewList.append(item)
+  }
 }
 
 function renderScenarioOptions(
@@ -387,6 +484,36 @@ function failureSummary(traceView: TraceRunDisplayView | undefined): string {
     failure.stepId === undefined ? undefined : `step ${failure.stepId}`,
     failure.eventName,
   ].filter((part) => part !== undefined && part.length > 0).join(' · ')
+}
+
+function locatorPreviewStatusSummary(snapshot: LocatorPreviewSnapshot): string {
+  if (snapshot.status === 'ready') {
+    const count = snapshot.candidates.length
+    return `${count} candidate${count === 1 ? '' : 's'}`
+  }
+
+  return locatorPreviewStatusLabel(snapshot.status)
+}
+
+function locatorPreviewStatusLabel(status: LocatorPreviewStatus): string {
+  switch (status) {
+    case 'idle':
+      return 'No preview'
+    case 'previewing':
+      return 'Previewing'
+    case 'ready':
+      return 'Ready'
+    case 'failed':
+      return 'Preview failed'
+  }
+}
+
+function issueSummary(
+  issues: readonly Readonly<{ message: string }>[],
+): string {
+  return issues.length === 0
+    ? 'None'
+    : issues.map((issue) => issue.message).join(' · ')
 }
 
 function applyButtonView(button: HTMLButtonElement, view: SidepanelButtonView): void {

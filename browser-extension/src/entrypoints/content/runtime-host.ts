@@ -98,6 +98,7 @@ export function createContentRuntimeHost(
       case 'inspector:stop':
       case 'inspector:selected':
       case 'inspector:cancelled':
+      case 'locator:preview':
       case 'trace:event':
       case 'runtime:status':
       case 'popup:get-state':
@@ -130,8 +131,8 @@ export function createContentRuntimeHost(
     try {
       actorble = options.createActorble({
         trace,
-        mode: 'interactive',
-        visual: true,
+        feedback: 'debug',
+        motion: true,
       })
     } catch (error) {
       return runtimeFailure('Actorble runtime could not be created.', {
