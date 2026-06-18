@@ -1,6 +1,10 @@
 import type { BrowserRuntimeCompilation } from '../scenario/compile-to-browser-runtime.js'
 import type { ScenarioDocument, ScenarioLocator } from '../scenario/types.js'
-import type { TraceDisplayEvent, RuntimeRunStatus } from '../trace/index.js'
+import type {
+  RuntimeDebugSnapshot,
+  TraceDisplayEvent,
+  RuntimeRunStatus,
+} from '../trace/index.js'
 
 export const extensionMessageKinds = [
   'scenario:validate',
@@ -195,6 +199,7 @@ export type RuntimeStatusMessage = ExtensionMessage<
     Readonly<{
       status: RuntimeRunStatus
       message?: string
+      debugSnapshot?: RuntimeDebugSnapshot
     }>
 >
 
@@ -277,6 +282,13 @@ const traceEventLevels = [
   'error',
 ] as const satisfies readonly NonNullable<TraceDisplayEvent['level']>[]
 
+const runtimeTraceSpanStatuses = [
+  'running',
+  'ok',
+  'error',
+  'cancelled',
+] as const
+
 const inspectorCancellationReasons = [
   'user',
   'stopped',
@@ -338,7 +350,8 @@ function isPayloadForKind(
       return (
         hasRequiredRunCorrelation(payload) &&
         isRuntimeRunStatus(payload.status) &&
-        isOptionalString(payload.message)
+        isOptionalString(payload.message) &&
+        isOptionalRuntimeDebugSnapshot(payload.debugSnapshot)
       )
     case 'popup:get-state':
       return isOptionalFiniteNumber(payload.frameId) && isOptionalString(payload.scenarioId)
@@ -388,6 +401,10 @@ function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string'
 }
 
+function isOptionalRecord(value: unknown): boolean {
+  return value === undefined || isRecord(value)
+}
+
 function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || isFiniteNumber(value)
 }
@@ -421,6 +438,106 @@ function isTraceDisplayEvent(value: unknown): value is TraceDisplayEvent {
     isOptionalTraceEventLevel(value.level) &&
     isOptionalString(value.message) &&
     (value.details === undefined || isRecord(value.details))
+  )
+}
+
+function isOptionalRuntimeDebugSnapshot(value: unknown): value is RuntimeDebugSnapshot | undefined {
+  return value === undefined || isRuntimeDebugSnapshot(value)
+}
+
+function isRuntimeDebugSnapshot(value: unknown): value is RuntimeDebugSnapshot {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    isFiniteNumber(value.capturedAt) &&
+    isOptionalRecord(value.capabilities) &&
+    isOptionalRecord(value.fidelity) &&
+    isRuntimeTraceSnapshot(value.trace)
+  )
+}
+
+function isRuntimeTraceSnapshot(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.spans) &&
+    value.spans.every(isRuntimeTraceSpanSnapshot) &&
+    Array.isArray(value.events) &&
+    value.events.every(isRuntimeTraceEventSnapshot) &&
+    Array.isArray(value.snapshots) &&
+    value.snapshots.every(isRuntimeTraceDataSnapshot) &&
+    Array.isArray(value.warnings) &&
+    value.warnings.every(isRuntimeTraceWarningSnapshot)
+  )
+}
+
+function isRuntimeTraceSpanSnapshot(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    isOptionalString(value.parentId) &&
+    isRuntimeTraceSpanStatus(value.status) &&
+    isFiniteNumber(value.startedAt) &&
+    isOptionalFiniteNumber(value.endedAt) &&
+    isOptionalRecord(value.attributes) &&
+    isOptionalRuntimeTraceErrorSnapshot(value.error)
+  )
+}
+
+function isRuntimeTraceEventSnapshot(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.name === 'string' &&
+    isFiniteNumber(value.at) &&
+    isOptionalString(value.spanId)
+  )
+}
+
+function isRuntimeTraceDataSnapshot(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    isFiniteNumber(value.at) &&
+    hasOwn(value, 'data')
+  )
+}
+
+function isRuntimeTraceWarningSnapshot(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.message === 'string' &&
+    isFiniteNumber(value.at) &&
+    isOptionalRecord(value.details)
+  )
+}
+
+function isOptionalRuntimeTraceErrorSnapshot(value: unknown): boolean {
+  return value === undefined || (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    typeof value.message === 'string' &&
+    isOptionalString(value.code) &&
+    isOptionalRecord(value.details)
+  )
+}
+
+function isRuntimeTraceSpanStatus(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    runtimeTraceSpanStatuses.includes(
+      value as (typeof runtimeTraceSpanStatuses)[number],
+    )
   )
 }
 

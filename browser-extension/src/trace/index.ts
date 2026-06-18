@@ -20,10 +20,66 @@ export type TraceDisplayEvent = Readonly<{
 export type RuntimeStatusSnapshot = Readonly<{
   runId: string
   scenarioId?: string
+  tabId?: number
+  frameId?: number
   status: RuntimeRunStatus
   currentStepId?: string
   updatedAt: number
   message?: string
+  debugSnapshot?: RuntimeDebugSnapshot
+}>
+
+export type RuntimeTraceSpanStatus = 'running' | 'ok' | 'error' | 'cancelled'
+
+export type RuntimeTraceErrorSnapshot = Readonly<{
+  name: string
+  message: string
+  code?: string
+  details?: Readonly<Record<string, unknown>>
+}>
+
+export type RuntimeTraceSpanSnapshot = Readonly<{
+  id: string
+  name: string
+  parentId?: string
+  status: RuntimeTraceSpanStatus
+  startedAt: number
+  endedAt?: number
+  attributes?: Readonly<Record<string, unknown>>
+  error?: RuntimeTraceErrorSnapshot
+}>
+
+export type RuntimeTraceEventSnapshot = Readonly<{
+  name: string
+  at: number
+  spanId?: string
+  data?: unknown
+}>
+
+export type RuntimeTraceDataSnapshot = Readonly<{
+  name: string
+  at: number
+  data: unknown
+}>
+
+export type RuntimeTraceWarningSnapshot = Readonly<{
+  message: string
+  at: number
+  details?: Readonly<Record<string, unknown>>
+}>
+
+export type RuntimeTraceSnapshot = Readonly<{
+  spans: readonly RuntimeTraceSpanSnapshot[]
+  events: readonly RuntimeTraceEventSnapshot[]
+  snapshots: readonly RuntimeTraceDataSnapshot[]
+  warnings: readonly RuntimeTraceWarningSnapshot[]
+}>
+
+export type RuntimeDebugSnapshot = Readonly<{
+  capturedAt: number
+  capabilities?: Readonly<Record<string, unknown>>
+  fidelity?: Readonly<Record<string, unknown>>
+  trace: RuntimeTraceSnapshot
 }>
 
 export type TraceRunGroup = Readonly<{
@@ -65,6 +121,56 @@ export type TraceDisplayStore = Readonly<{
   getRun(runId: string): TraceRunDisplayView | undefined
   getCurrentView(): TraceRunDisplayView | undefined
   getState(): TraceDisplayState
+}>
+
+export type DevtoolsCapabilityRow = Readonly<{
+  source: 'capability' | 'fidelity'
+  label: string
+  value: string
+}>
+
+export type DevtoolsLocatorDiagnosticView = Readonly<{
+  name: string
+  at: number
+  ambiguity: string
+  candidateCount: number
+  locator?: string
+}>
+
+export type DevtoolsFrameSurfaceRow = Readonly<{
+  label: string
+  value: string
+}>
+
+export type DevtoolsTraceSummary = Readonly<{
+  spans: number
+  events: number
+  snapshots: number
+  warnings: number
+}>
+
+export type DevtoolsTracePanelRunView = TraceRunDisplayView &
+  Readonly<{
+    selected: boolean
+    debugSnapshot?: RuntimeDebugSnapshot
+    traceSummary: DevtoolsTraceSummary
+    locatorDiagnostics: readonly DevtoolsLocatorDiagnosticView[]
+    capabilityRows: readonly DevtoolsCapabilityRow[]
+    frameSurfaceRows: readonly DevtoolsFrameSurfaceRow[]
+  }>
+
+export type DevtoolsTracePanelSnapshot = Readonly<{
+  selectedRunId?: string
+  runs: readonly DevtoolsTracePanelRunView[]
+  selectedRun?: DevtoolsTracePanelRunView
+  summary: string
+}>
+
+export type DevtoolsTracePanelStore = Readonly<{
+  ingestStatus(status: RuntimeStatusSnapshot): DevtoolsTracePanelSnapshot
+  ingestEvent(event: TraceDisplayEvent): DevtoolsTracePanelSnapshot
+  selectRun(runId: string): boolean
+  getSnapshot(): DevtoolsTracePanelSnapshot
 }>
 
 export const DEFAULT_TRACE_HISTORY_LIMIT = 200
@@ -215,6 +321,59 @@ export function createTraceDisplayStore(
   }
 }
 
+export function createDevtoolsTracePanelStore(
+  options: TraceDisplayStoreOptions = {},
+): DevtoolsTracePanelStore {
+  const traceStore = createTraceDisplayStore(options)
+  let selectedRunId: string | undefined
+
+  function ingestStatus(status: RuntimeStatusSnapshot): DevtoolsTracePanelSnapshot {
+    traceStore.ingestStatus(status)
+    selectedRunId ??= status.runId
+    return getSnapshot()
+  }
+
+  function ingestEvent(event: TraceDisplayEvent): DevtoolsTracePanelSnapshot {
+    traceStore.ingestEvent(event)
+    selectedRunId ??= event.runId
+    return getSnapshot()
+  }
+
+  function selectRun(runId: string): boolean {
+    if (traceStore.getRun(runId) === undefined) {
+      return false
+    }
+
+    selectedRunId = runId
+    return true
+  }
+
+  function getSnapshot(): DevtoolsTracePanelSnapshot {
+    const state = traceStore.getState()
+    const resolvedSelectedRunId =
+      selectedRunId ?? state.currentRunId ?? state.runs.at(-1)?.runId
+    const runs = state.runs.map((run) => devtoolsRunView(
+      run,
+      run.runId === resolvedSelectedRunId,
+    ))
+    const selectedRun = runs.find((run) => run.selected)
+
+    return {
+      ...(selectedRun === undefined ? {} : { selectedRunId: selectedRun.runId }),
+      runs,
+      ...(selectedRun === undefined ? {} : { selectedRun }),
+      summary: selectedRun?.summary ?? 'No runtime trace data',
+    }
+  }
+
+  return {
+    ingestStatus,
+    ingestEvent,
+    selectRun,
+    getSnapshot,
+  }
+}
+
 function viewFor(run: MutableTraceRunGroup): TraceRunDisplayView {
   const latestEvent = run.events.at(-1)
   const scenarioId = run.status.scenarioId ?? run.scenarioId ?? latestEvent?.scenarioId
@@ -234,6 +393,180 @@ function viewFor(run: MutableTraceRunGroup): TraceRunDisplayView {
     ...(failure === undefined ? {} : { failure }),
     summary: summaryFor(status, run.eventCount, latestEvent, failure),
   }
+}
+
+function devtoolsRunView(
+  run: TraceRunDisplayView,
+  selected: boolean,
+): DevtoolsTracePanelRunView {
+  const debugSnapshot = run.status.debugSnapshot
+
+  return {
+    ...run,
+    selected,
+    ...(debugSnapshot === undefined ? {} : { debugSnapshot }),
+    traceSummary: traceSummaryFor(debugSnapshot),
+    locatorDiagnostics: locatorDiagnosticsFor(debugSnapshot),
+    capabilityRows: capabilityRowsFor(debugSnapshot),
+    frameSurfaceRows: frameSurfaceRowsFor(run, debugSnapshot),
+  }
+}
+
+function traceSummaryFor(
+  debugSnapshot: RuntimeDebugSnapshot | undefined,
+): DevtoolsTraceSummary {
+  const trace = debugSnapshot?.trace
+
+  return {
+    spans: trace?.spans.length ?? 0,
+    events: trace?.events.length ?? 0,
+    snapshots: trace?.snapshots.length ?? 0,
+    warnings: trace?.warnings.length ?? 0,
+  }
+}
+
+function locatorDiagnosticsFor(
+  debugSnapshot: RuntimeDebugSnapshot | undefined,
+): readonly DevtoolsLocatorDiagnosticView[] {
+  return (debugSnapshot?.trace.snapshots ?? [])
+    .filter((snapshot) => snapshot.name === 'target.resolve.candidates')
+    .map((snapshot) => {
+      const data = recordValue(snapshot.data)
+      const candidates = Array.isArray(data?.candidates) ? data.candidates : []
+      const ambiguity = stringValue(data?.ambiguity) ?? 'unknown'
+      const locator = data?.locator === undefined ? undefined : displayValue(data.locator)
+
+      return {
+        name: snapshot.name,
+        at: snapshot.at,
+        ambiguity,
+        candidateCount: candidates.length,
+        ...(locator === undefined ? {} : { locator }),
+      }
+    })
+}
+
+function capabilityRowsFor(
+  debugSnapshot: RuntimeDebugSnapshot | undefined,
+): readonly DevtoolsCapabilityRow[] {
+  return [
+    ...capabilityRowsFrom('capability', debugSnapshot?.capabilities),
+    ...capabilityRowsFrom('fidelity', debugSnapshot?.fidelity),
+  ]
+}
+
+function capabilityRowsFrom(
+  source: DevtoolsCapabilityRow['source'],
+  record: Readonly<Record<string, unknown>> | undefined,
+): readonly DevtoolsCapabilityRow[] {
+  if (record === undefined) {
+    return []
+  }
+
+  return Object.entries(record).map(([label, value]) => ({
+    source,
+    label,
+    value: displayValue(value),
+  }))
+}
+
+function frameSurfaceRowsFor(
+  run: TraceRunDisplayView,
+  debugSnapshot: RuntimeDebugSnapshot | undefined,
+): readonly DevtoolsFrameSurfaceRow[] {
+  const rows: DevtoolsFrameSurfaceRow[] = []
+
+  if (run.status.tabId !== undefined) {
+    rows.push({ label: 'Tab', value: String(run.status.tabId) })
+  }
+
+  if (run.status.frameId !== undefined) {
+    rows.push({ label: 'Frame', value: String(run.status.frameId) })
+  }
+
+  const surfaceRows = [
+    ...run.events.map(surfaceRowFromDisplayEvent),
+    ...(debugSnapshot?.trace.events.map(surfaceRowFromRuntimeEvent) ?? []),
+  ].filter((row): row is DevtoolsFrameSurfaceRow => row !== undefined)
+
+  for (const row of surfaceRows) {
+    if (!rows.some((existing) => existing.label === row.label && existing.value === row.value)) {
+      rows.push(row)
+    }
+  }
+
+  return rows
+}
+
+function surfaceRowFromDisplayEvent(
+  event: TraceDisplayEvent,
+): DevtoolsFrameSurfaceRow | undefined {
+  if (!event.name.startsWith('surface:')) {
+    return undefined
+  }
+
+  return {
+    label: event.name,
+    value: surfaceEventValue(recordValue(event.details?.data)),
+  }
+}
+
+function surfaceRowFromRuntimeEvent(
+  event: RuntimeTraceEventSnapshot,
+): DevtoolsFrameSurfaceRow | undefined {
+  if (!event.name.startsWith('surface:')) {
+    return undefined
+  }
+
+  return {
+    label: event.name,
+    value: surfaceEventValue(recordValue(event.data)),
+  }
+}
+
+function surfaceEventValue(data: Readonly<Record<string, unknown>> | undefined): string {
+  if (data === undefined) {
+    return 'observed'
+  }
+
+  const parts = [
+    stringValue(data.action),
+    stringValue(data.inputKind),
+    stringValue(data.targetId),
+    data.position === undefined ? undefined : displayValue(data.position),
+  ].filter((part): part is string => part !== undefined && part.length > 0)
+
+  return parts.length === 0 ? displayValue(data) : parts.join(' ')
+}
+
+function recordValue(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Readonly<Record<string, unknown>>
+    : undefined
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function displayValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map(displayValue).join(', ')
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    return String(value)
+  }
+
+  if (value === undefined) {
+    return ''
+  }
+
+  return JSON.stringify(value)
 }
 
 function failureFor(

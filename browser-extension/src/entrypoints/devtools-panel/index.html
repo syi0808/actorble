@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Actorble Trace</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="trace-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Actorble</p>
+          <h1>Trace Workbench</h1>
+        </div>
+        <span id="connection-state" class="status-pill" data-status="running">Listening</span>
+      </header>
+
+      <aside class="run-rail" aria-labelledby="runs-title">
+        <div class="section-heading">
+          <h2 id="runs-title">Runs</h2>
+          <span id="run-count" class="summary">0</span>
+        </div>
+        <ul id="run-list" class="run-list" aria-label="Runtime runs"></ul>
+      </aside>
+
+      <section class="workbench" aria-labelledby="selected-run-title">
+        <div class="selected-header">
+          <div>
+            <h2 id="selected-run-title">Selected Run</h2>
+            <p id="run-summary">No runtime trace data</p>
+          </div>
+          <span id="run-status" class="status-pill" data-status="idle">Idle</span>
+        </div>
+
+        <dl class="metric-strip" aria-label="Trace counts">
+          <div>
+            <dt>Spans</dt>
+            <dd id="span-count">0</dd>
+          </div>
+          <div>
+            <dt>Events</dt>
+            <dd id="event-count">0</dd>
+          </div>
+          <div>
+            <dt>Snapshots</dt>
+            <dd id="snapshot-count">0</dd>
+          </div>
+          <div>
+            <dt>Warnings</dt>
+            <dd id="warning-count">0</dd>
+          </div>
+        </dl>
+
+        <div class="diagnostic-grid">
+          <section class="diagnostic-section" aria-labelledby="capability-title">
+            <div class="section-heading">
+              <h2 id="capability-title">Capabilities</h2>
+            </div>
+            <dl id="capability-list" class="key-value-list"></dl>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="surface-title">
+            <div class="section-heading">
+              <h2 id="surface-title">Frame And Surface</h2>
+            </div>
+            <dl id="surface-list" class="key-value-list"></dl>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="locator-title">
+            <div class="section-heading">
+              <h2 id="locator-title">Locator Diagnostics</h2>
+            </div>
+            <ul id="locator-list" class="detail-list"></ul>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="span-title">
+            <div class="section-heading">
+              <h2 id="span-title">Spans</h2>
+            </div>
+            <ul id="span-list" class="detail-list"></ul>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="event-title">
+            <div class="section-heading">
+              <h2 id="event-title">Events</h2>
+            </div>
+            <ul id="event-list" class="detail-list"></ul>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="snapshot-title">
+            <div class="section-heading">
+              <h2 id="snapshot-title">Snapshots</h2>
+            </div>
+            <ul id="snapshot-list" class="detail-list"></ul>
+          </section>
+
+          <section class="diagnostic-section" aria-labelledby="warning-title">
+            <div class="section-heading">
+              <h2 id="warning-title">Warnings</h2>
+            </div>
+            <ul id="warning-list" class="detail-list"></ul>
+          </section>
+
+          <section class="diagnostic-section raw-trace" aria-labelledby="raw-title">
+            <div class="section-heading">
+              <h2 id="raw-title">Raw Debug Snapshot</h2>
+            </div>
+            <pre id="trace-json">No debug snapshot</pre>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

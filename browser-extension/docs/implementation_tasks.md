@@ -414,7 +414,7 @@ src/recorder
 
 ### T17 Optional DevTools Trace Panel
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add an optional advanced debugging panel after the first usable
   extension is stable. This task is not part of the minimum usable extension.
 - Dependencies: T10, T12.

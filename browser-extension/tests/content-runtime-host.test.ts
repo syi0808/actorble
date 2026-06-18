@@ -60,7 +60,7 @@ describe('content runtime host', () => {
         signal: expect.any(AbortSignal),
       }),
     )
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       runtimeStatusMessage('completed'),
     ])
@@ -104,7 +104,7 @@ describe('content runtime host', () => {
     await host.handleMessage(createRunMessage())
     await flushAsyncRun()
 
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       runtimeStatusMessage('failed', 'Target not found'),
     ])
@@ -134,7 +134,7 @@ describe('content runtime host', () => {
     expect(actorble.pause).toHaveBeenCalledOnce()
     expect(actorble.resume).toHaveBeenCalledOnce()
     expect(actorble.stop).toHaveBeenCalledOnce()
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       runtimeStatusMessage('paused'),
       runtimeStatusMessage('running'),
@@ -171,7 +171,7 @@ describe('content runtime host', () => {
     await host.handleMessage(createRunMessage())
     await flushAsyncRun()
 
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       traceEventMessage('scenario:start', 100, {
         data: { scenarioId: 'scenario-1' },
@@ -217,7 +217,7 @@ describe('content runtime host', () => {
     })
     expect(actorble.run).toHaveBeenCalledOnce()
     expect(actorble.pause).not.toHaveBeenCalled()
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       runtimeStatusMessage('completed'),
     ])
@@ -250,12 +250,115 @@ describe('content runtime host', () => {
     expect(createActorble).toHaveBeenCalledTimes(2)
     expect(firstActorble.destroy).toHaveBeenCalledOnce()
     expect(secondActorble.destroy).toHaveBeenCalledOnce()
-    expect(sent).toEqual([
+    expect(sent).toMatchObject([
       runtimeStatusMessage('running'),
       runtimeStatusMessage('completed'),
       runtimeStatusMessage('running', undefined, { runId: 'run-2' }),
       runtimeStatusMessage('completed', undefined, { runId: 'run-2' }),
     ])
+  })
+
+  it('attaches capabilities, fidelity, and full trace snapshots to runtime statuses', async () => {
+    const sent: ActorbleExtensionMessage[] = []
+    const actorble = createMockActorble({
+      getCapabilities: vi.fn(() => ({
+        pointerInput: 'synthetic',
+        trustedEvents: false,
+      })),
+      getFidelity: vi.fn(() => ({
+        pointerInput: 'synthetic-dom-events',
+        limits: ['Synthetic events are not browser-trusted user input.'],
+      })),
+      getTrace: vi.fn(() => ({
+        spans: [
+          {
+            id: 'span-1',
+            name: 'target.resolve',
+            status: 'error',
+            startedAt: 100,
+            endedAt: 110,
+            error: new Error('Target not found'),
+          },
+        ],
+        events: [
+          {
+            name: 'surface:scrolled',
+            at: 105,
+            spanId: 'span-1',
+            data: {
+              action: 'scrollTo',
+            },
+          },
+        ],
+        snapshots: [
+          {
+            name: 'target.resolve.candidates',
+            at: 104,
+            data: {
+              candidates: [],
+            },
+          },
+        ],
+        warnings: [],
+      })),
+    })
+    const host = createContentRuntimeHost({
+      createActorble: vi.fn(() => actorble as unknown as ContentActorbleFacade),
+      now: () => 150,
+      sendMessage: async (message) => {
+        sent.push(message)
+      },
+    })
+
+    await host.handleMessage(createRunMessage())
+    await flushAsyncRun()
+
+    expect(sent[0]).toMatchObject({
+      kind: 'runtime:status',
+      payload: {
+        status: 'running',
+        debugSnapshot: {
+          capturedAt: expect.any(Number),
+          capabilities: {
+            pointerInput: 'synthetic',
+          },
+          fidelity: {
+            pointerInput: 'synthetic-dom-events',
+          },
+          trace: {
+            spans: [
+              {
+                id: 'span-1',
+                error: {
+                  name: 'Error',
+                  message: 'Target not found',
+                },
+              },
+            ],
+            snapshots: [
+              {
+                name: 'target.resolve.candidates',
+              },
+            ],
+          },
+        },
+      },
+    })
+    expect(sent.at(-1)).toMatchObject({
+      kind: 'runtime:status',
+      payload: {
+        status: 'completed',
+        debugSnapshot: {
+          trace: {
+            events: [
+              {
+                name: 'surface:scrolled',
+              },
+            ],
+          },
+        },
+      },
+    })
   })
 })
 
@@ -265,6 +368,9 @@ type MockActorble = Readonly<{
   resume: ReturnType<typeof vi.fn>
   stop: ReturnType<typeof vi.fn>
   destroy: ReturnType<typeof vi.fn>
+  getCapabilities: ReturnType<typeof vi.fn>
+  getFidelity: ReturnType<typeof vi.fn>
+  getTrace: ReturnType<typeof vi.fn>
 }>
 
 function createMockActorble(overrides: Partial<MockActorble> = {}) {
@@ -274,6 +380,14 @@ function createMockActorble(overrides: Partial<MockActorble> = {}) {
     resume: vi.fn(),
     stop: vi.fn(),
     destroy: vi.fn(),
+    getCapabilities: vi.fn(() => ({})),
+    getFidelity: vi.fn(() => ({})),
+    getTrace: vi.fn(() => ({
+      spans: [],
+      events: [],
+      snapshots: [],
+      warnings: [],
+    })),
     ...overrides,
   } as MockActorble
 }

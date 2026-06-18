@@ -42,6 +42,49 @@ const traceEvent = {
   },
 } as const
 
+const debugSnapshot = {
+  capturedAt: 120,
+  capabilities: {
+    pointerInput: 'synthetic',
+    trustedEvents: false,
+  },
+  fidelity: {
+    pointerInput: 'synthetic-dom-events',
+    limits: ['Synthetic events are not browser-trusted user input.'],
+  },
+  trace: {
+    spans: [
+      {
+        id: 'span-1',
+        name: 'scenario.run',
+        status: 'running',
+        startedAt: 100,
+      },
+    ],
+    events: [
+      {
+        name: 'surface:scrolled',
+        at: 110,
+        spanId: 'span-1',
+        data: {
+          action: 'scrollTo',
+        },
+      },
+    ],
+    snapshots: [
+      {
+        name: 'target.resolve.candidates',
+        at: 108,
+        data: {
+          ambiguity: 'none',
+          candidates: [],
+        },
+      },
+    ],
+    warnings: [],
+  },
+} as const
+
 const validMessages = [
   {
     kind: 'scenario:validate',
@@ -183,6 +226,7 @@ const validMessages = [
       ...runCorrelation,
       status: 'running',
       message: 'Run started.',
+      debugSnapshot,
     },
   },
   {
@@ -389,6 +433,34 @@ describe('messaging skeleton contracts', () => {
         payload: {
           ...runCorrelation,
           status: 'unknown',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects invalid runtime debug snapshots', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'runtime:status',
+        payload: {
+          ...runCorrelation,
+          status: 'running',
+          debugSnapshot: {
+            capturedAt: 100,
+            trace: {
+              spans: [
+                {
+                  id: 'span-1',
+                  name: 'scenario.run',
+                  status: 'unknown',
+                  startedAt: 100,
+                },
+              ],
+              events: [],
+              snapshots: [],
+              warnings: [],
+            },
+          },
         },
       }),
     ).toBe(false)

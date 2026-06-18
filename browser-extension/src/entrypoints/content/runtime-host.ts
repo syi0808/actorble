@@ -22,11 +22,24 @@ import {
 } from '../../messaging/index.js'
 import { failure, ok, type ExtensionResult } from '../../shared/result.js'
 import type { BrowserRuntimeRunOptions } from '../../scenario/compile-to-browser-runtime.js'
-import type { RuntimeRunStatus, TraceDisplayEvent } from '../../trace/index.js'
+import type {
+  RuntimeDebugSnapshot,
+  RuntimeRunStatus,
+  RuntimeTraceErrorSnapshot,
+  RuntimeTraceSpanSnapshot,
+  TraceDisplayEvent,
+} from '../../trace/index.js'
 
 export type ContentActorbleFacade = Pick<
   Actorble,
-  'run' | 'pause' | 'resume' | 'stop' | 'destroy'
+  | 'run'
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'destroy'
+  | 'getCapabilities'
+  | 'getFidelity'
+  | 'getTrace'
 >
 
 export type ContentRuntimeMessage = Extract<
@@ -232,6 +245,8 @@ export function createContentRuntimeHost(
     status: RuntimeRunStatus,
     message?: string,
   ): Promise<void> {
+    const debugSnapshot = runtimeDebugSnapshotFor(run.actorble)
+
     await options.sendMessage(
       createExtensionMessage({
         kind: 'runtime:status',
@@ -239,6 +254,7 @@ export function createContentRuntimeHost(
           ...run.correlation,
           status,
           ...(message === undefined ? {} : { message }),
+          ...(debugSnapshot === undefined ? {} : { debugSnapshot }),
         },
       }),
     )
@@ -279,6 +295,134 @@ export function createContentRuntimeHost(
     handleMessage,
     dispose,
   }
+}
+
+function runtimeDebugSnapshotFor(
+  actorble: ContentActorbleFacade,
+): RuntimeDebugSnapshot | undefined {
+  try {
+    const trace = actorble.getTrace()
+
+    return {
+      capturedAt: Date.now(),
+      capabilities: sanitizeRecord(actorble.getCapabilities()),
+      fidelity: sanitizeRecord(actorble.getFidelity()),
+      trace: {
+        spans: trace.spans.map(runtimeTraceSpanSnapshotFrom),
+        events: trace.events.map((event) => ({
+          name: event.name,
+          at: event.at,
+          ...(event.spanId === undefined ? {} : { spanId: event.spanId }),
+          ...(event.data === undefined ? {} : { data: sanitizeUnknown(event.data) }),
+        })),
+        snapshots: trace.snapshots.map((snapshot) => ({
+          name: snapshot.name,
+          at: snapshot.at,
+          data: sanitizeUnknown(snapshot.data),
+        })),
+        warnings: trace.warnings.map((warning) => ({
+          message: warning.message,
+          at: warning.at,
+          ...(warning.details === undefined ? {} : {
+            details: sanitizeRecord(warning.details),
+          }),
+        })),
+      },
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function runtimeTraceSpanSnapshotFrom(
+  span: Trace['spans'][number],
+): RuntimeTraceSpanSnapshot {
+  const error = runtimeTraceErrorSnapshotFrom(span.error)
+
+  return {
+    id: span.id,
+    name: span.name,
+    ...(span.parentId === undefined ? {} : { parentId: span.parentId }),
+    status: span.status,
+    startedAt: span.startedAt,
+    ...(span.endedAt === undefined ? {} : { endedAt: span.endedAt }),
+    ...(span.attributes === undefined ? {} : {
+      attributes: sanitizeRecord(span.attributes),
+    }),
+    ...(error === undefined ? {} : { error }),
+  }
+}
+
+function runtimeTraceErrorSnapshotFrom(
+  error: Trace['spans'][number]['error'],
+): RuntimeTraceErrorSnapshot | undefined {
+  if (error === undefined) {
+    return undefined
+  }
+
+  return {
+    name: error.name,
+    message: error.message,
+    ...(error.code === undefined ? {} : { code: error.code }),
+    ...(error.details === undefined ? {} : { details: sanitizeRecord(error.details) }),
+  }
+}
+
+function sanitizeRecord(
+  value: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const sanitized = sanitizeUnknown(value)
+  return isRecord(sanitized) ? sanitized : {}
+}
+
+function sanitizeUnknown(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeUnknown(item, seen))
+  }
+
+  if (typeof value === 'object') {
+    if (seen.has(value)) {
+      return '[Circular]'
+    }
+
+    seen.add(value)
+
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+      }
+    }
+
+    const record: Record<string, unknown> = {}
+    for (const [key, nested] of Object.entries(value)) {
+      const sanitized = sanitizeUnknown(nested, seen)
+      if (sanitized !== undefined) {
+        record[key] = sanitized
+      }
+    }
+
+    return record
+  }
+
+  return String(value)
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 type ForwardingDiagnosticsTraceOptions = Readonly<{
