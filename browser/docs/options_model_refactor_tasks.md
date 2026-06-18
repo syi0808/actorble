@@ -312,7 +312,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-08 Spring Motion Implementation
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `stiffness`, `damping`, `mass` 기반 deterministic spring motion을
   구현한다. 이 태스크는 spring settlement rule을 runtime behavior로 확정한다.
 - Dependencies: BOPT-06, `pointer-engine`, `timeline-engine`.

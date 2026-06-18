@@ -30,6 +30,12 @@ const DEFAULT_INERTIA_MOTION = {
   deceleration: 4800,
 } as const
 
+const DEFAULT_SPRING_MOTION = {
+  stiffness: 170,
+  damping: 26,
+  mass: 1,
+} as const
+
 const DEFAULT_FEEDBACK = {
   enabled: true,
   cursor: true,
@@ -43,6 +49,7 @@ const DEFAULT_FEEDBACK = {
 export const BROWSER_OPTION_DEFAULTS = {
   pointerMotion: DEFAULT_POINTER_MOTION,
   inertiaMotion: DEFAULT_INERTIA_MOTION,
+  springMotion: DEFAULT_SPRING_MOTION,
   typingDelay: 60,
   clickPressDwell: 80,
   feedback: DEFAULT_FEEDBACK,
@@ -429,19 +436,31 @@ function normalizeResolvedActionOptions(
 
   const motion = options.motion
 
-  if (!isInertiaMotionProfile(motion)) {
-    return options
+  if (isInertiaMotionProfile(motion)) {
+    return {
+      ...options,
+      motion: {
+        kind: 'inertia',
+        initialVelocity:
+          motion.initialVelocity ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
+        deceleration: motion.deceleration ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
+      },
+    }
   }
 
-  return {
-    ...options,
-    motion: {
-      kind: 'inertia',
-      initialVelocity:
-        motion.initialVelocity ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
-      deceleration: motion.deceleration ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
-    },
+  if (isSpringMotionProfile(motion)) {
+    return {
+      ...options,
+      motion: {
+        kind: 'spring',
+        stiffness: motion.stiffness ?? BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
+        damping: motion.damping ?? BROWSER_OPTION_DEFAULTS.springMotion.damping,
+        mass: motion.mass ?? BROWSER_OPTION_DEFAULTS.springMotion.mass,
+      },
+    }
   }
+
+  return options
 }
 
 function isInertiaMotionProfile(
@@ -451,6 +470,16 @@ function isInertiaMotionProfile(
     typeof motion === 'object' &&
     motion !== null &&
     (motion as { kind?: unknown }).kind === 'inertia'
+  )
+}
+
+function isSpringMotionProfile(
+  motion: unknown,
+): motion is Extract<PointerMotionProfile, { kind: 'spring' }> {
+  return (
+    typeof motion === 'object' &&
+    motion !== null &&
+    (motion as { kind?: unknown }).kind === 'spring'
   )
 }
 

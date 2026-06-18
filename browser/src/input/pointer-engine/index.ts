@@ -71,6 +71,23 @@ type NormalizedMotionProfile =
       kind: 'inertia'
       duration: number
     }>
+  | Readonly<{
+      kind: 'spring'
+      stiffness: number
+      damping: number
+      mass: number
+    }>
+
+type SpringVelocity = {
+  x: number
+  y: number
+}
+
+const SPRING_FRAME_FALLBACK_MS = 16
+const SPRING_INTEGRATION_STEP_MS = 16
+const SPRING_SETTLE_DISTANCE_PX = 0.01
+const SPRING_SETTLE_VELOCITY_PX_PER_SECOND = 1
+const SPRING_MAX_FRAMES = 1_000
 
 type InternalPointerState = {
   id: string
@@ -124,26 +141,31 @@ export class BrowserPointerEngine implements PointerEngine {
     const from = clonePoint(this.#state.position)
     const motion = normalizeMotionProfile(options)
     const motionRunId = ++this.#motionRunId
-    let segmentFrom = clonePoint(from)
-    let segmentStartedAt = this.#timeline.now()
-    let segmentDuration = motion.duration
+    const isMoving = motion.kind === 'spring' || motion.duration > 0
 
     this.#state = {
       ...this.#state,
       motion: {
-        status: motion.duration > 0 ? 'moving' : 'idle',
+        status: isMoving ? 'moving' : 'idle',
         from,
         to: target,
         path: [],
       },
     }
 
-    if (motion.duration === 0 || samePoint(from, target)) {
+    if (samePoint(from, target) || (motion.kind !== 'spring' && motion.duration === 0)) {
       this.#applyMovement(target)
       this.#finishMovement(from, target)
       return this.getState()
     }
 
+    if (motion.kind === 'spring') {
+      return this.#moveWithSpring(from, target, motion, motionRunId, options)
+    }
+
+    let segmentFrom = clonePoint(from)
+    let segmentStartedAt = this.#timeline.now()
+    let segmentDuration = motion.duration
     const deadline = segmentStartedAt + motion.duration
 
     try {
@@ -181,6 +203,67 @@ export class BrowserPointerEngine implements PointerEngine {
           this.#setMotionTarget(target)
         }
       }
+    } catch (error) {
+      if (this.#isActiveMotion(motionRunId)) {
+        this.#cancelMotion()
+      }
+
+      throw error
+    }
+  }
+
+  async #moveWithSpring(
+    from: Point,
+    initialTarget: Point,
+    motion: Extract<NormalizedMotionProfile, { kind: 'spring' }>,
+    motionRunId: number,
+    options: PointerMoveOptions,
+  ): Promise<PointerState> {
+    let target = clonePoint(initialTarget)
+    let position = clonePoint(this.#state.position)
+    const velocity: SpringVelocity = { x: 0, y: 0 }
+    let previousTimestamp = this.#timeline.now()
+    let frameCount = 0
+
+    try {
+      while (frameCount < SPRING_MAX_FRAMES) {
+        await this.#timeline.nextFrame(options)
+
+        if (!this.#isActiveMotion(motionRunId)) {
+          return this.getState()
+        }
+
+        const now = this.#timeline.now()
+        const elapsed = normalizeSpringFrameDuration(now - previousTimestamp)
+        previousTimestamp = now
+        position = stepSpring(position, target, velocity, motion, elapsed)
+
+        this.#applyMovement(roundPoint(position))
+        frameCount += 1
+
+        const refreshedTarget = options.resolveEndpoint
+          ? await resolveDynamicEndpoint(options, target)
+          : null
+
+        if (!this.#isActiveMotion(motionRunId)) {
+          return this.getState()
+        }
+
+        if (refreshedTarget && !samePoint(target, refreshedTarget)) {
+          target = refreshedTarget
+          this.#setMotionTarget(target)
+        }
+
+        if (isSpringSettled(position, target, velocity)) {
+          this.#applyMovement(target)
+          this.#finishMovement(from, target)
+          return this.getState()
+        }
+      }
+
+      this.#applyMovement(target)
+      this.#finishMovement(from, target)
+      return this.getState()
     } catch (error) {
       if (this.#isActiveMotion(motionRunId)) {
         this.#cancelMotion()
@@ -381,8 +464,20 @@ function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
         ),
       }
     }
+    case 'spring': {
+      const springMotion = motion as Extract<
+        NonNullable<MoveOptions['motion']>,
+        { kind: 'spring' }
+      >
+
+      return {
+        kind: 'spring',
+        stiffness: normalizeSpringParameter(springMotion.stiffness, 'stiffness'),
+        damping: normalizeSpringParameter(springMotion.damping, 'damping'),
+        mass: normalizeSpringParameter(springMotion.mass, 'mass'),
+      }
+    }
     case 'linear':
-    case 'spring':
       throw unsupportedMotionProfile(profileKind)
     default:
       throw unsupportedMotionProfile(profileKind)
@@ -407,6 +502,24 @@ function normalizeInertiaDuration(
   return normalizeDuration((initialVelocity / deceleration) * 1000)
 }
 
+function normalizeSpringParameter(value: number | undefined, field: string): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    throw actorbleError(
+      'PLATFORM_UNSUPPORTED',
+      `Pointer spring motion requires a positive finite ${field} parameter.`,
+      {
+        details: {
+          boundary: 'pointer-engine',
+          profileKind: 'spring',
+          field,
+        },
+      },
+    )
+  }
+
+  return value
+}
+
 function readMotionProfileKind(motion: NonNullable<MoveOptions['motion']>): string {
   const kind = (motion as { kind?: unknown }).kind
 
@@ -421,7 +534,7 @@ function unsupportedMotionProfile(profileKind: string): never {
       details: {
         boundary: 'pointer-engine',
         profileKind,
-        supportedKinds: ['ease', 'inertia'],
+        supportedKinds: ['ease', 'inertia', 'spring'],
       },
     },
   )
@@ -451,6 +564,64 @@ function interpolate(from: number, to: number, progress: number): number {
   return from + (to - from) * progress
 }
 
+function normalizeSpringFrameDuration(duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return SPRING_FRAME_FALLBACK_MS
+  }
+
+  return duration
+}
+
+function stepSpring(
+  position: Point,
+  target: Point,
+  velocity: SpringVelocity,
+  motion: Extract<NormalizedMotionProfile, { kind: 'spring' }>,
+  elapsedMs: number,
+): Point {
+  const stepCount = Math.max(1, Math.ceil(elapsedMs / SPRING_INTEGRATION_STEP_MS))
+  const stepSeconds = elapsedMs / stepCount / 1000
+  let next = { x: position.x, y: position.y }
+
+  for (let index = 0; index < stepCount; index += 1) {
+    const accelerationX =
+      ((target.x - next.x) * motion.stiffness - velocity.x * motion.damping) / motion.mass
+    const accelerationY =
+      ((target.y - next.y) * motion.stiffness - velocity.y * motion.damping) / motion.mass
+
+    velocity.x += accelerationX * stepSeconds
+    velocity.y += accelerationY * stepSeconds
+    next = {
+      x: next.x + velocity.x * stepSeconds,
+      y: next.y + velocity.y * stepSeconds,
+    }
+  }
+
+  return next
+}
+
+function isSpringSettled(position: Point, target: Point, velocity: SpringVelocity): boolean {
+  return (
+    distanceBetween(position, target) <= SPRING_SETTLE_DISTANCE_PX &&
+    vectorMagnitude(velocity) <= SPRING_SETTLE_VELOCITY_PX_PER_SECOND
+  )
+}
+
+function distanceBetween(from: Point, to: Point): number {
+  return Math.hypot(to.x - from.x, to.y - from.y)
+}
+
+function vectorMagnitude(vector: SpringVelocity): number {
+  return Math.hypot(vector.x, vector.y)
+}
+
+function roundPoint(point: Point): Point {
+  return {
+    x: roundMotionProgress(point.x),
+    y: roundMotionProgress(point.y),
+  }
+}
+
 function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number): number {
   const clampedProgress = clampProgress(progress)
 
@@ -459,6 +630,8 @@ function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number)
       return sampleTimingProgress(motion.timing, clampedProgress)
     case 'inertia':
       return sampleInertiaProgress(clampedProgress)
+    case 'spring':
+      return clampedProgress
   }
 }
 

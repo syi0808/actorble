@@ -425,13 +425,13 @@ describe('BrowserGestureEngine', () => {
     })
 
     await expect(
-      engine.click(createTarget(), { x: 12, y: 18 }, { motion: { kind: 'spring' } }),
+      engine.click(createTarget(), { x: 12, y: 18 }, { motion: { kind: 'linear' } }),
     ).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: {
         boundary: 'pointer-engine',
-        profileKind: 'spring',
-        supportedKinds: ['ease', 'inertia'],
+        profileKind: 'linear',
+        supportedKinds: ['ease', 'inertia', 'spring'],
       },
     })
 

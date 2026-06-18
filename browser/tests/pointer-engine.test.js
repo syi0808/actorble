@@ -350,7 +350,7 @@ describe('BrowserPointerEngine', () => {
       details: {
         boundary: 'pointer-engine',
         profileKind: 'linear',
-        supportedKinds: ['ease', 'inertia'],
+        supportedKinds: ['ease', 'inertia', 'spring'],
       },
     })
 
@@ -438,22 +438,67 @@ describe('BrowserPointerEngine', () => {
     expect(events).toEqual(eventsAtCancellation)
   })
 
-  it('rejects spring profiles until physical motion is implemented', async () => {
-    const timeline = createTimeline(25)
-    const { engine } = createEngine({ timeline })
+  it('emits deterministic spring overshoot frames and settles at the endpoint', async () => {
+    const timeline = createTimeline(16)
+    const { engine, events } = createEngine({ timeline })
 
     await expect(
-      engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'spring', stiffness: 170 } }),
-    ).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'pointer-engine',
-        profileKind: 'spring',
-        supportedKinds: ['ease', 'inertia'],
+      engine.moveTo(
+        { x: 100, y: 0 },
+        { motion: { kind: 'spring', stiffness: 170, damping: 8, mass: 1 } },
+      ),
+    ).resolves.toMatchObject({
+      position: { x: 100, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 100, y: 0 },
       },
     })
 
-    expect(timeline.nextFrame).not.toHaveBeenCalled()
+    const path = engine.getState().motion.path
+
+    expect(path.at(-1)).toEqual({ x: 100, y: 0 })
+    expect(path.some((point) => point.x > 100)).toBe(true)
+    expect(path).toHaveLength(events.filter((event) => event.type === 'pointer:moved').length)
+    expect(events.map((event) => event.point)).toEqual(path)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(path.length - 1)
+    expect(path.length).toBeLessThan(120)
+  })
+
+  it('cancels spring motion and emits no later movement frames', async () => {
+    const controlledTimeline = createControlledTimeline()
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+
+    await engine.down('primary')
+    const movement = engine.moveTo(
+      { x: 100, y: 0 },
+      { motion: { kind: 'spring', stiffness: 170, damping: 8, mass: 1 } },
+    )
+
+    await Promise.resolve()
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await flushResolvedFrame(controlledTimeline, 16)
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await engine.cancel()
+    const eventsAtCancellation = [...events]
+
+    expect(engine.getState()).toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+
+    await flushResolvedFrame(controlledTimeline, 16)
+
+    await expect(movement).resolves.toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(events).toEqual(eventsAtCancellation)
   })
 
   it('updates pressed buttons and primary button while emitting down and up signals', async () => {

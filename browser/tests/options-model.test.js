@@ -20,6 +20,11 @@ describe('browser options model', () => {
       initialVelocity: 1200,
       deceleration: 4800,
     })
+    expect(BROWSER_OPTION_DEFAULTS.springMotion).toEqual({
+      stiffness: 170,
+      damping: 26,
+      mass: 1,
+    })
     expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60)
     expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80)
 
@@ -114,6 +119,38 @@ describe('browser options model', () => {
         kind: 'inertia',
         initialVelocity: 900,
         deceleration: BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
+      },
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
+    })
+  })
+
+  it('materializes default spring motion parameters at the option boundary', () => {
+    expect(
+      resolveActionOptions('moveTo', {
+        options: {
+          motion: { kind: 'spring' },
+        },
+      }),
+    ).toEqual({
+      motion: {
+        kind: 'spring',
+        stiffness: BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
+        damping: BROWSER_OPTION_DEFAULTS.springMotion.damping,
+        mass: BROWSER_OPTION_DEFAULTS.springMotion.mass,
+      },
+    })
+    expect(
+      resolveActionOptions('click', {
+        options: {
+          motion: { kind: 'spring', damping: 10 },
+        },
+      }),
+    ).toEqual({
+      motion: {
+        kind: 'spring',
+        stiffness: BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
+        damping: 10,
+        mass: BROWSER_OPTION_DEFAULTS.springMotion.mass,
       },
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
