@@ -7,8 +7,8 @@ export default defineConfig({
     name: 'Actorble',
     short_name: 'Actorble',
     description: 'Browser extension GUI shell for Actorble scenarios.',
-    permissions: ['storage', 'activeTab', 'scripting'],
-    host_permissions: [],
+    permissions: ['storage'],
+    host_permissions: ['http://*/*', 'https://*/*'],
     ...(browser === 'firefox'
       ? {
           browser_specific_settings: {

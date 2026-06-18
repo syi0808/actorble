@@ -48,5 +48,13 @@ describe('browser extension scaffold', () => {
 
     expect(config).toContain("srcDir: 'src'")
     expect(config).toContain('manifestVersion: 3')
+    expect(config).toContain("permissions: ['storage']")
+    expect(config).toContain("host_permissions: ['http://*/*', 'https://*/*']")
+  })
+
+  it('injects the content script into all supported websites', async () => {
+    const contentScript = await readFile('src/entrypoints/content/index.ts', 'utf8')
+
+    expect(contentScript).toContain("matches: ['http://*/*', 'https://*/*']")
   })
 })

@@ -7,7 +7,7 @@ import { createContentRecorderHost, createDomRecorderEventCapturePort } from './
 import { createContentRuntimeHost } from './runtime-host.js'
 
 export default defineContentScript({
-  matches: ['http://localhost/*', 'http://127.0.0.1/*'],
+  matches: ['http://*/*', 'https://*/*'],
   allFrames: true,
   runAt: 'document_idle',
   main() {
