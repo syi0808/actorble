@@ -254,6 +254,190 @@ describe('sidepanel scenario editor', () => {
     expect(runMessage.payload.compilation.scenario.steps).toHaveLength(1)
   })
 
+  it('starts and stops recording, then reviews the returned draft as an unsaved scenario', async () => {
+    const { editor, sent, saves, exports } = createTestEditor({
+      createRecordId: () => 'record-sidepanel-1',
+      sendResponse(message) {
+        if (message.kind === 'record:start') {
+          return ok(commandReceiptForRecord(message, 'recording'))
+        }
+
+        if (message.kind === 'record:stop') {
+          return ok({
+            ...commandReceiptForRecord(message, 'stopped'),
+            recordedDraft: recordedDraft(message.payload.runId ?? 'record-sidepanel-1'),
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const start = await editor.startRecording()
+    const stop = await editor.stopRecording()
+    const snapshot = editor.getSnapshot()
+    const view = createSidepanelScenarioEditorView(snapshot)
+    const exported = await editor.exportSelected()
+    const saved = await editor.saveDraft()
+
+    expect(start).toMatchObject({
+      ok: true,
+      value: {
+        runId: 'record-sidepanel-1',
+        status: 'recording',
+      },
+    })
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        runId: 'record-sidepanel-1',
+        status: 'stopped',
+      },
+    })
+    expect(sent).toEqual([
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'record-sidepanel-1',
+        },
+      }),
+      createExtensionMessage({
+        kind: 'record:stop',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'record-sidepanel-1',
+        },
+      }),
+    ])
+    expect(snapshot).toMatchObject({
+      selectedScenarioId: undefined,
+      issues: [],
+      message: 'Recorded draft ready',
+      draftDocument: {
+        id: 'recorded-record-sidepanel-1',
+        name: 'Recorded scenario record-sidepanel-1',
+        steps: [
+          {
+            id: 'recorded-step-1',
+            action: 'fill',
+            input: 'user@example.com',
+          },
+        ],
+      },
+    })
+    expect(view.buttons.export.disabled).toBe(false)
+    expect(exported).toMatchObject({
+      ok: true,
+      value: {
+        id: 'recorded-record-sidepanel-1',
+        filename: 'recorded-record-sidepanel-1.json',
+      },
+    })
+    expect(saved).toMatchObject({
+      ok: true,
+      value: {
+        id: 'recorded-record-sidepanel-1',
+        name: 'Recorded scenario record-sidepanel-1',
+      },
+    })
+    expect(exports).toEqual([])
+    expect(saves).toHaveLength(1)
+    expect(saves[0]).toMatchObject({
+      name: 'Recorded scenario record-sidepanel-1',
+      document: {
+        id: 'recorded-record-sidepanel-1',
+      },
+    })
+  })
+
+  it('loads the latest cached recorder draft from the background handoff', async () => {
+    const { editor, sent } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok(recordedDraft('record-popup-1'))
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const loaded = await editor.loadRecordedDraft()
+
+    expect(loaded).toMatchObject({
+      ok: true,
+      value: {
+        draftId: 'record-popup-1',
+      },
+    })
+    expect(sent).toEqual([
+      createExtensionMessage({
+        kind: 'record:draft:get',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+        },
+      }),
+    ])
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedScenarioId: undefined,
+      draftDocument: {
+        id: 'recorded-record-popup-1',
+        steps: [
+          {
+            action: 'fill',
+          },
+        ],
+      },
+    })
+  })
+
+  it('surfaces recorder draft validation failures from stop responses', async () => {
+    const { editor } = createTestEditor({
+      createRecordId: () => 'record-sidepanel-1',
+      sendResponse(message) {
+        if (message.kind === 'record:start') {
+          return ok(commandReceiptForRecord(message, 'recording'))
+        }
+
+        if (message.kind === 'record:stop') {
+          return failure({
+            code: 'invalid_document',
+            message: 'Recorded draft is invalid.',
+            path: ['steps', 0, 'input'],
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+    await editor.startRecording()
+
+    const result = await editor.stopRecording()
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'invalid_document',
+          message: 'Recorded draft is invalid.',
+          path: ['steps', 0, 'input'],
+        },
+      ],
+    })
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).validationSummary).toBe(
+      '1 issue',
+    )
+  })
+
   it('renders failure trace details for the active run only', async () => {
     const { editor } = createTestEditor()
     await editor.refresh()
@@ -343,7 +527,8 @@ type TestEditorOptions = Readonly<{
   scenarios?: readonly ScenarioRecord[]
   createRunId?: () => string
   createDryRunId?: () => string
-  sendResponse?: ExtensionResult<unknown>
+  createRecordId?: () => string
+  sendResponse?: ExtensionResult<unknown> | ((message: ActorbleExtensionMessage) => ExtensionResult<unknown>)
   importResponse?: ExtensionResult<ScenarioRecord>
   exportResponse?: ExtensionResult<ScenarioJsonExport>
 }>
@@ -427,6 +612,10 @@ function createTestEditor(options: TestEditorOptions = {}) {
     },
     async sendMessage(message) {
       sent.push(message)
+      if (typeof options.sendResponse === 'function') {
+        return options.sendResponse(message)
+      }
+
       return options.sendResponse ?? ok({ contentReady: true })
     },
   }
@@ -434,6 +623,7 @@ function createTestEditor(options: TestEditorOptions = {}) {
   const editor = createSidepanelScenarioEditor(client, {
     createRunId: options.createRunId ?? (() => 'run-1'),
     createDryRunId: options.createDryRunId ?? (() => 'dry-run-1'),
+    createRecordId: options.createRecordId ?? (() => 'record-1'),
     frameId: 0,
   })
 
@@ -475,5 +665,64 @@ function scenarioDocument(id: string, name: string): ScenarioDocument {
         reason: 'Let the page settle.',
       },
     ],
+  }
+}
+
+function commandReceiptForRecord(
+  message: Extract<ActorbleExtensionMessage, { kind: 'record:start' | 'record:stop' }>,
+  status: 'recording' | 'stopped',
+) {
+  return {
+    kind: message.kind,
+    tabId: message.payload.tabId,
+    frameId: message.payload.frameId,
+    scenarioId: message.payload.scenarioId,
+    runId: message.payload.runId,
+    contentReady: true,
+    status,
+    session: {
+      type: 'record',
+      sessionId: message.payload.runId ?? '7:0',
+      tabId: message.payload.tabId,
+      frameId: message.payload.frameId,
+      scenarioId: message.payload.scenarioId,
+      runId: message.payload.runId,
+      status,
+      startedAt: 100,
+      updatedAt: 110,
+    },
+  }
+}
+
+function recordedDraft(draftId: string) {
+  return {
+    draftId,
+    sessionId: draftId,
+    tabId: 7,
+    frameId: 0,
+    scenarioId: 'newest-scenario',
+    runId: draftId,
+    sourceEventCount: 1,
+    createdAt: 1_700_000_000_000,
+    document: {
+      schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
+      steps: [
+        {
+          id: 'recorded-step-1',
+          action: 'fill',
+          target: {
+            kind: 'target',
+            strict: true,
+            locators: [
+              {
+                strategy: 'label',
+                label: 'Email',
+              },
+            ],
+          },
+          input: 'user@example.com',
+        },
+      ],
+    } satisfies ScenarioDocument,
   }
 }

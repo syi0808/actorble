@@ -81,9 +81,45 @@ describe('popup run controls', () => {
     })
   })
 
-  it('dispatches record and active run control commands from popup state', async () => {
+  it('dispatches record commands from popup state', async () => {
     const { controls, sent } = createTestControls({
       createRecordId: () => 'record-popup-1',
+    })
+    await controls.refresh()
+
+    await controls.startRecording()
+    await controls.stopRecording()
+
+    expect(sent.slice(1)).toEqual([
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'record-popup-1',
+        },
+      }),
+      createExtensionMessage({
+        kind: 'record:stop',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'record-popup-1',
+        },
+      }),
+    ])
+    expect(controls.getSnapshot()).toMatchObject({
+      currentRecord: {
+        runId: 'record-popup-1',
+        status: 'stopped',
+      },
+    })
+  })
+
+  it('dispatches active run control commands from popup state', async () => {
+    const { controls, sent } = createTestControls({
       initialState: popupState({
         runSession: {
           type: 'run',
@@ -99,21 +135,11 @@ describe('popup run controls', () => {
     })
     await controls.refresh()
 
-    await controls.startRecording()
     await controls.pauseCurrentRun()
     await controls.resumeCurrentRun()
     await controls.stopCurrentRun()
 
     expect(sent.slice(1)).toEqual([
-      createExtensionMessage({
-        kind: 'record:start',
-        payload: {
-          tabId: 7,
-          frameId: 0,
-          scenarioId: 'newest-scenario',
-          runId: 'record-popup-1',
-        },
-      }),
       createExtensionMessage({
         kind: 'scenario:pause',
         payload: {
@@ -142,6 +168,48 @@ describe('popup run controls', () => {
         },
       }),
     ])
+  })
+
+  it('disables conflicting run and record controls in the popup view', async () => {
+    const { controls } = createTestControls({
+      initialState: popupState({
+        recordSession: {
+          type: 'record',
+          sessionId: 'record-popup-1',
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'record-popup-1',
+          status: 'recording',
+          startedAt: 100,
+          updatedAt: 100,
+        },
+      }),
+    })
+    await controls.refresh()
+
+    const recordingView = createPopupRunControlsView(controls.getSnapshot())
+    expect(recordingView.buttons.run.disabled).toBe(true)
+    expect(recordingView.buttons.record.disabled).toBe(false)
+
+    const { controls: runningControls } = createTestControls({
+      initialState: popupState({
+        runSession: {
+          type: 'run',
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'newest-scenario',
+          runId: 'run-current',
+          status: 'running',
+          startedAt: 100,
+          updatedAt: 100,
+        },
+      }),
+    })
+    await runningControls.refresh()
+
+    const runningView = createPopupRunControlsView(runningControls.getSnapshot())
+    expect(runningView.buttons.record.disabled).toBe(true)
   })
 
   it('surfaces concise command failures and clears pending state', async () => {

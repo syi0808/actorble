@@ -85,6 +85,7 @@ export function createContentInspectorHost<TElement = unknown>(
       case 'scenario:stop':
       case 'record:start':
       case 'record:stop':
+      case 'record:draft:get':
       case 'inspector:selected':
       case 'inspector:cancelled':
       case 'locator:preview':

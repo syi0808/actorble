@@ -70,6 +70,7 @@ export function createContentRecorderHost(
       case 'scenario:pause':
       case 'scenario:resume':
       case 'scenario:stop':
+      case 'record:draft:get':
       case 'inspector:start':
       case 'inspector:stop':
       case 'inspector:selected':

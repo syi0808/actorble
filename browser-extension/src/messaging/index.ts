@@ -11,6 +11,7 @@ export const extensionMessageKinds = [
   'scenario:stop',
   'record:start',
   'record:stop',
+  'record:draft:get',
   'inspector:start',
   'inspector:stop',
   'inspector:selected',
@@ -125,6 +126,17 @@ export type RecordStopMessage = ExtensionMessage<
     }>
 >
 
+export type RecordDraftGetMessage = ExtensionMessage<
+  'record:draft:get',
+  Readonly<{
+    draftId?: string
+    tabId?: number
+    frameId?: number
+    scenarioId?: string
+    runId?: string
+  }>
+>
+
 export type InspectorStartMessage = ExtensionMessage<
   'inspector:start',
   InspectorSessionCorrelation
@@ -201,6 +213,7 @@ export type ActorbleExtensionMessage =
   | ScenarioControlMessage
   | RecordStartMessage
   | RecordStopMessage
+  | RecordDraftGetMessage
   | InspectorStartMessage
   | InspectorStopMessage
   | InspectorSelectedMessage
@@ -293,6 +306,13 @@ function isPayloadForKind(
     case 'record:start':
     case 'record:stop':
       return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload)
+    case 'record:draft:get':
+      return (
+        isOptionalString(payload.draftId) &&
+        isOptionalFiniteNumber(payload.tabId) &&
+        isOptionalFiniteNumber(payload.frameId) &&
+        hasOptionalSessionCorrelation(payload)
+      )
     case 'inspector:start':
     case 'inspector:stop':
       return hasInspectorSessionCorrelation(payload)

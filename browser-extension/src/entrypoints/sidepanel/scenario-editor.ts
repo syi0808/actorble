@@ -9,6 +9,10 @@ import {
   compileToBrowserRuntime,
   type BrowserRuntimeCompilation,
 } from '../../scenario/compile-to-browser-runtime.js'
+import {
+  documentWithRecordedDraftDefaults,
+  type RecordedScenarioDraftHandoff,
+} from '../../recorder/workflow.js'
 import type {
   ScenarioDocument,
   ScenarioLocator,
@@ -45,11 +49,39 @@ export type SidepanelPendingAction =
   | 'export'
   | 'run'
   | 'dry-run'
+  | 'record:start'
+  | 'record:stop'
+  | 'record:draft'
 
 export type SidepanelScenarioRunReceipt = RequiredRunCorrelation &
   Readonly<{
     status: RuntimeRunStatus
   }>
+
+export type SidepanelRecordSession = Readonly<{
+  type: 'record'
+  sessionId: string
+  tabId: number
+  frameId?: number
+  scenarioId?: string
+  runId?: string
+  status: 'recording' | 'stopped' | 'failed'
+  startedAt: number
+  updatedAt: number
+  draftId?: string
+  message?: string
+}>
+
+export type SidepanelRecordCommandReceipt = Readonly<{
+  kind: 'record:start' | 'record:stop'
+  tabId: number
+  frameId?: number
+  scenarioId?: string
+  runId?: string
+  status?: SidepanelRecordSession['status']
+  session?: SidepanelRecordSession
+  recordedDraft?: RecordedScenarioDraftHandoff
+}>
 
 export type SidepanelScenarioEditorSnapshot = Readonly<{
   scenarios: readonly ScenarioRecord[]
@@ -59,6 +91,7 @@ export type SidepanelScenarioEditorSnapshot = Readonly<{
   pendingAction: SidepanelPendingAction | null
   issues: readonly ExtensionIssue[]
   currentRun?: SidepanelScenarioRunReceipt
+  currentRecord?: SidepanelRecordSession
   trace: TraceDisplayState
   currentTrace: TraceRunDisplayView | undefined
   message?: string
@@ -81,6 +114,7 @@ export type SidepanelScenarioEditorClient = Readonly<{
 export type SidepanelScenarioEditorOptions = Readonly<{
   createRunId?: () => string
   createDryRunId?: () => string
+  createRecordId?: () => string
   frameId?: number
   targetTabId?: number
   now?: () => number
@@ -154,6 +188,7 @@ export type SidepanelScenarioEditorView = Readonly<{
     export: SidepanelButtonView
     run: SidepanelButtonView
     dryRun: SidepanelButtonView
+    record: SidepanelButtonView
   }>
 }>
 
@@ -172,6 +207,9 @@ export type SidepanelScenarioEditor = Readonly<{
   exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>>
   runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
   dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
+  startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
+  stopRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
+  loadRecordedDraft(draftId?: string): Promise<ExtensionResult<RecordedScenarioDraftHandoff | null>>
   ingestMessage(message: unknown): boolean
   getSnapshot(): SidepanelScenarioEditorSnapshot
 }>
@@ -180,6 +218,7 @@ const DEFAULT_FRAME_ID = 0
 
 let nextRunSequence = 1
 let nextDryRunSequence = 1
+let nextRecordSequence = 1
 
 export function createSidepanelScenarioEditor(
   client: SidepanelScenarioEditorClient,
@@ -187,6 +226,7 @@ export function createSidepanelScenarioEditor(
 ): SidepanelScenarioEditor {
   const createRunId = options.createRunId ?? defaultRunId
   const createDryRunId = options.createDryRunId ?? defaultDryRunId
+  const createRecordId = options.createRecordId ?? defaultRecordId
   const frameId = options.frameId ?? DEFAULT_FRAME_ID
   const targetTabId = options.targetTabId
   const now = options.now ?? Date.now
@@ -484,9 +524,31 @@ export function createSidepanelScenarioEditor(
   async function exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>> {
     const selectedId = snapshot.selectedScenarioId
     if (selectedId === undefined) {
-      return setIssue({
-        code: 'storage_error',
-        message: 'Select a scenario before exporting.',
+      if (snapshot.draftDocument === undefined) {
+        return setIssue({
+          code: 'storage_error',
+          message: 'Select a scenario before exporting.',
+        })
+      }
+
+      const validation = validateScenarioDocument(snapshot.draftDocument)
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: validation.ok ? [] : validation.issues,
+        message: validation.ok ? 'Exported' : undefined,
+      }
+
+      if (!validation.ok) {
+        return validation
+      }
+
+      const id = validation.value.id ?? 'draft-scenario'
+      return ok({
+        id,
+        filename: `${filenameBase(id)}.json`,
+        jsonText: `${JSON.stringify(validation.value, null, 2)}\n`,
+        document: validation.value,
       })
     }
 
@@ -544,6 +606,145 @@ export function createSidepanelScenarioEditor(
       createDryRunId(),
       'dry-run',
     )
+  }
+
+  async function startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
+    if (snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'Stop the active run before recording.',
+      })
+    }
+
+    if (snapshot.currentRecord?.status === 'recording') {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'A recorder session is already active.',
+      })
+    }
+
+    const target = await resolveRunTargetTab(client, targetTabId)
+    if (!target.ok) {
+      snapshot = {
+        ...snapshot,
+        issues: target.issues,
+        message: undefined,
+      }
+      return target
+    }
+
+    return dispatchRecordCommand(
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: target.value.id,
+          frameId,
+          ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
+          runId: createRecordId(),
+        },
+      }),
+      'record:start',
+      'Record start command',
+    )
+  }
+
+  async function stopRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
+    const record = snapshot.currentRecord
+    if (record === undefined || record.status !== 'recording') {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'No active recording is available to stop.',
+      })
+    }
+
+    return dispatchRecordCommand(
+      createExtensionMessage({
+        kind: 'record:stop',
+        payload: {
+          tabId: record.tabId,
+          ...(record.frameId === undefined ? {} : { frameId: record.frameId }),
+          ...(record.scenarioId === undefined ? {} : { scenarioId: record.scenarioId }),
+          ...(record.runId === undefined ? {} : { runId: record.runId }),
+        },
+      }),
+      'record:stop',
+      'Record stop command',
+    )
+  }
+
+  async function loadRecordedDraft(
+    draftId?: string,
+  ): Promise<ExtensionResult<RecordedScenarioDraftHandoff | null>> {
+    snapshot = {
+      ...snapshot,
+      pendingAction: 'record:draft',
+      issues: [],
+      message: undefined,
+    }
+
+    const target = draftId === undefined
+      ? await resolveRunTargetTab(client, targetTabId)
+      : undefined
+    if (target !== undefined && !target.ok) {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: target.issues,
+      }
+      return target
+    }
+
+    const message = createExtensionMessage({
+      kind: 'record:draft:get',
+      payload: {
+        ...(draftId === undefined ? {} : { draftId }),
+        ...(target?.ok ? { tabId: target.value.id, frameId } : {}),
+        ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
+      },
+    })
+
+    let response: unknown
+    try {
+      response = await client.sendMessage(message)
+    } catch (error) {
+      return setIssue({
+        code: 'recorder_error',
+        message: `Recorded draft could not be loaded: ${describeUnknownError(error)}`,
+      })
+    }
+
+    const responseResult = readExtensionResult(response)
+    if (responseResult === null) {
+      return setIssue({
+        code: 'unsupported_message',
+        message: 'Recorded draft response was not understood.',
+      })
+    }
+
+    if (!responseResult.ok) {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: responseResult.issues,
+      }
+      return responseResult as ExtensionResult<RecordedScenarioDraftHandoff | null>
+    }
+
+    const draft = responseResult.value as RecordedScenarioDraftHandoff | null
+    if (draft !== null) {
+      const applied = applyRecordedDraft(draft)
+      if (!applied.ok) {
+        return failure(applied.issues)
+      }
+    } else {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: [],
+      }
+    }
+
+    return ok(draft)
   }
 
   function ingestMessage(message: unknown): boolean {
@@ -628,6 +829,65 @@ export function createSidepanelScenarioEditor(
     }
 
     return scenarios
+  }
+
+  async function dispatchRecordCommand(
+    message: Extract<ActorbleExtensionMessage, Readonly<{ kind: 'record:start' | 'record:stop' }>>,
+    pendingAction: 'record:start' | 'record:stop',
+    label: string,
+  ): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
+    snapshot = {
+      ...snapshot,
+      pendingAction,
+      issues: [],
+      message: undefined,
+    }
+
+    let response: unknown
+    try {
+      response = await client.sendMessage(message)
+    } catch (error) {
+      return setIssue({
+        code: 'content_not_ready',
+        message: `${label} could not be delivered: ${describeUnknownError(error)}`,
+      })
+    }
+
+    const responseResult = readExtensionResult(response)
+    if (responseResult === null) {
+      return setIssue({
+        code: 'unsupported_message',
+        message: `${label} returned an unsupported response.`,
+      })
+    }
+
+    if (!responseResult.ok) {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: responseResult.issues,
+      }
+      return responseResult as ExtensionResult<SidepanelRecordCommandReceipt>
+    }
+
+    const receipt = responseResult.value as SidepanelRecordCommandReceipt
+    applyRecordReceipt(receipt)
+
+    if (receipt.recordedDraft !== undefined) {
+      const applied = applyRecordedDraft(receipt.recordedDraft)
+      if (!applied.ok) {
+        return failure(applied.issues)
+      }
+    } else {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: [],
+        message: receipt.kind === 'record:start' ? 'Recording' : snapshot.message,
+      }
+    }
+
+    return ok(receipt)
   }
 
   async function dispatchScenarioRun(
@@ -741,6 +1001,61 @@ export function createSidepanelScenarioEditor(
     }
   }
 
+  function applyRecordReceipt(receipt: SidepanelRecordCommandReceipt): void {
+    const session = receipt.session ?? {
+      type: 'record',
+      sessionId: receipt.runId ?? `${receipt.tabId}:${receipt.frameId ?? 0}`,
+      tabId: receipt.tabId,
+      ...(receipt.frameId === undefined ? {} : { frameId: receipt.frameId }),
+      ...(receipt.scenarioId === undefined ? {} : { scenarioId: receipt.scenarioId }),
+      ...(receipt.runId === undefined ? {} : { runId: receipt.runId }),
+      status: receipt.status ?? (receipt.kind === 'record:start' ? 'recording' : 'stopped'),
+      startedAt: now(),
+      updatedAt: now(),
+    } satisfies SidepanelRecordSession
+
+    snapshot = {
+      ...snapshot,
+      currentRecord: session,
+    }
+  }
+
+  function applyRecordedDraft(
+    draft: RecordedScenarioDraftHandoff,
+  ): ExtensionResult<ScenarioDocument> {
+    const document = documentWithRecordedDraftDefaults(draft)
+    const validation = validateScenarioDocument(document)
+    const currentRecord = snapshot.currentRecord ?? {
+      type: 'record',
+      sessionId: draft.sessionId,
+      tabId: draft.tabId,
+      ...(draft.frameId === undefined ? {} : { frameId: draft.frameId }),
+      ...(draft.scenarioId === undefined ? {} : { scenarioId: draft.scenarioId }),
+      ...(draft.runId === undefined ? {} : { runId: draft.runId }),
+      status: 'stopped',
+      startedAt: draft.createdAt,
+      updatedAt: draft.createdAt,
+    } satisfies SidepanelRecordSession
+
+    snapshot = {
+      ...snapshot,
+      selectedScenarioId: undefined,
+      selectedStepIndex: 0,
+      draftDocument: validation.ok ? validation.value : document,
+      currentRecord: {
+        ...currentRecord,
+        status: validation.ok ? 'stopped' : 'failed',
+        draftId: draft.draftId,
+        updatedAt: draft.createdAt,
+      },
+      pendingAction: null,
+      issues: validation.ok ? [] : validation.issues,
+      message: validation.ok ? 'Recorded draft ready' : undefined,
+    }
+
+    return validation
+  }
+
   function replaceScenario(record: ScenarioRecord): void {
     const exists = snapshot.scenarios.some((scenario) => scenario.id === record.id)
     snapshot = {
@@ -771,6 +1086,9 @@ export function createSidepanelScenarioEditor(
     exportSelected,
     runSelectedScenario,
     dryRunSelectedStep,
+    startRecording,
+    stopRecording,
+    loadRecordedDraft,
     ingestMessage,
     getSnapshot,
   }
@@ -782,6 +1100,8 @@ export function createSidepanelScenarioEditorView(
   const anyPending = snapshot.pendingAction !== null
   const hasDocument = snapshot.draftDocument !== undefined
   const step = selectedStep(snapshot)
+  const recordActive = snapshot.currentRecord?.status === 'recording'
+  const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
 
   return {
     scenarioOptions: snapshot.scenarios.map((scenario) => ({
@@ -820,7 +1140,7 @@ export function createSidepanelScenarioEditorView(
       },
       export: {
         label: 'Export',
-        disabled: anyPending || snapshot.selectedScenarioId === undefined,
+        disabled: anyPending || !hasDocument,
         pending: snapshot.pendingAction === 'export',
       },
       run: {
@@ -832,6 +1152,13 @@ export function createSidepanelScenarioEditorView(
         label: 'Dry run',
         disabled: anyPending || step === undefined,
         pending: snapshot.pendingAction === 'dry-run',
+      },
+      record: {
+        label: recordActive ? 'Stop recording' : 'Record',
+        disabled: anyPending || (!recordActive && runActive),
+        pending:
+          snapshot.pendingAction === 'record:start' ||
+          snapshot.pendingAction === 'record:stop',
       },
     },
   }
@@ -1037,6 +1364,15 @@ function pointSummary(value: unknown): string | undefined {
 
 function compactJson(value: unknown): string {
   return JSON.stringify(value)
+}
+
+function filenameBase(value: string): string {
+  const baseName = value
+    .trim()
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return baseName.length === 0 ? 'scenario' : baseName
 }
 
 function jsonTextFor(value: unknown): string {
@@ -1284,6 +1620,10 @@ function statusSnapshotFrom(
   }
 }
 
+function isActiveRunStatus(status: RuntimeRunStatus): boolean {
+  return status === 'running' || status === 'paused'
+}
+
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -1298,6 +1638,10 @@ function defaultRunId(): string {
 
 function defaultDryRunId(): string {
   return `dry-run-${Date.now()}-${nextDryRunSequence++}`
+}
+
+function defaultRecordId(): string {
+  return `record-${Date.now()}-${nextRecordSequence++}`
 }
 
 function capitalize(value: string): string {

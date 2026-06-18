@@ -90,6 +90,14 @@ const validMessages = [
     },
   },
   {
+    kind: 'record:draft:get',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      runId: 'record-1',
+    },
+  },
+  {
     kind: 'inspector:start',
     payload: {
       tabId: 7,
@@ -197,6 +205,7 @@ describe('messaging skeleton contracts', () => {
       'scenario:stop',
       'record:start',
       'record:stop',
+      'record:draft:get',
       'inspector:start',
       'inspector:stop',
       'inspector:selected',
@@ -295,6 +304,15 @@ describe('messaging skeleton contracts', () => {
         payload: {
           tabId: 7,
           sessionId: 123,
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:draft:get',
+        payload: {
+          tabId: '7',
         },
       }),
     ).toBe(false)

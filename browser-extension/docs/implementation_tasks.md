@@ -379,7 +379,7 @@ src/recorder
 
 ### T15 Recorder Workflow Integration
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Connect recorder controls, content capture, event normalization, and
   side panel review into one draft authoring workflow.
 - Dependencies: T8, T9, T13, T14.

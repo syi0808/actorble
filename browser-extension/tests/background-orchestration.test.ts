@@ -5,7 +5,7 @@ import {
   createWxtBackgroundBrowserHost,
 } from '../src/entrypoints/background/orchestration.js'
 import { createLocatorCandidates } from '../src/inspector/locator-preview.js'
-import { createExtensionMessage } from '../src/messaging/index.js'
+import { createExtensionMessage, type ActorbleExtensionMessage } from '../src/messaging/index.js'
 
 const compilation = {
   scenario: {
@@ -114,7 +114,18 @@ describe('background orchestration', () => {
 
   it('tracks record session metadata by correlation id', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped', [recordedTextEvent()])
+      }
+
+      return { received: true }
+    })
     const orchestrator = createTestOrchestrator()
     const start = createExtensionMessage({
       kind: 'record:start',
@@ -164,6 +175,176 @@ describe('background orchestration', () => {
     expect(orchestrator.getRecordSession({ runId: 'record-1' })).toMatchObject({
       runId: 'record-1',
       status: 'stopped',
+    })
+  })
+
+  it('normalizes stopped recorder events and returns a cached draft to the panel', async () => {
+    const activeTab = await createActiveTab()
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped', [recordedTextEvent()])
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+        },
+      }),
+    )
+    now += 25
+    const stop = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:stop',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+        },
+      }),
+    )
+    const handoff = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:draft:get',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          runId: 'record-1',
+        },
+      }),
+    )
+
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'record:stop',
+        recordedDraft: {
+          draftId: 'record-1',
+          sessionId: 'record-1',
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+          sourceEventCount: 1,
+          createdAt: 1_700_000_000_025,
+          document: {
+            steps: [
+              {
+                id: 'recorded-step-1',
+                action: 'fill',
+                input: 'user@example.com',
+              },
+            ],
+          },
+        },
+      },
+    })
+    expect(handoff).toMatchObject({
+      ok: true,
+      value: {
+        draftId: 'record-1',
+        sourceEventCount: 1,
+        document: {
+          steps: [
+            {
+              action: 'fill',
+            },
+          ],
+        },
+      },
+    })
+  })
+
+  it('rejects run, inspector, and recorder commands that would conflict on the same tab', async () => {
+    const activeTab = await createActiveTab()
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      return { received: true }
+    })
+    const runningOrchestrator = createTestOrchestrator()
+
+    await runningOrchestrator.handleMessage(createRunMessage(activeTab.id))
+    const recordWhileRunning = await runningOrchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+        },
+      }),
+    )
+
+    const recordingOrchestrator = createTestOrchestrator()
+    await recordingOrchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'record:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-2',
+        },
+      }),
+    )
+    const runWhileRecording = await recordingOrchestrator.handleMessage(createRunMessage(activeTab.id))
+    const inspectorWhileRecording = await recordingOrchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          sessionId: 'inspect-1',
+        },
+      }),
+    )
+
+    expect(recordWhileRunning).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'recorder_error',
+          message: 'Recording cannot start while a scenario run is active.',
+        },
+      ],
+    })
+    expect(runWhileRecording).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'runtime_error',
+          message: 'Scenario run cannot start while recording is active.',
+        },
+      ],
+    })
+    expect(inspectorWhileRecording).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'inspector_error',
+          message: 'Target inspection cannot start while recording is active.',
+        },
+      ],
     })
   })
 
@@ -345,11 +526,31 @@ describe('background orchestration', () => {
 
   it('returns popup state for the active tab and latest matching sessions', async () => {
     const activeTab = await createActiveTab()
-    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      return { received: true }
+    })
     const orchestrator = createTestOrchestrator()
 
     await orchestrator.handleMessage(createRunMessage(activeTab.id))
-    now += 10
+    now += 5
+    await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'runtime:status',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'run-1',
+          status: 'stopped',
+        },
+      }),
+    )
+    now += 5
     await orchestrator.handleMessage(
       createExtensionMessage({
         kind: 'record:start',
@@ -386,7 +587,7 @@ describe('background orchestration', () => {
           type: 'run',
           runId: 'run-1',
           scenarioId: 'scenario-1',
-          status: 'running',
+          status: 'stopped',
         },
         recordSession: {
           type: 'record',
@@ -537,4 +738,53 @@ function createRunMessage(tabId: number) {
       compilation,
     },
   })
+}
+
+function okContentRecordReceipt(
+  message: ReturnType<typeof createExtensionMessage>,
+  status: 'recording' | 'stopped',
+  events?: readonly unknown[],
+) {
+  if (message.kind !== 'record:start' && message.kind !== 'record:stop') {
+    throw new Error(`Expected recorder message, received ${message.kind}`)
+  }
+
+  const sessionId = message.payload.runId ?? `${message.payload.tabId}:${message.payload.frameId ?? 0}`
+
+  return {
+    ok: true,
+    value: {
+      kind: message.kind,
+      tabId: message.payload.tabId,
+      frameId: message.payload.frameId,
+      scenarioId: message.payload.scenarioId,
+      runId: message.payload.runId,
+      sessionId,
+      status,
+      ...(events === undefined ? {} : { events }),
+    },
+  }
+}
+
+function recordedTextEvent() {
+  return {
+    kind: 'text',
+    target: {
+      tagName: 'input',
+      id: 'email',
+      inputType: 'email',
+      labelText: 'Email',
+      name: 'email',
+      rect: {
+        x: 10,
+        y: 80,
+        width: 240,
+        height: 32,
+      },
+    },
+    source: 'input',
+    value: 'user@example.com',
+    sensitive: false,
+    timestamp: 1_700_000_000_020,
+  }
 }

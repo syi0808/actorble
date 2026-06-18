@@ -97,6 +97,8 @@ const validateButton = requiredElement<HTMLButtonElement>('#validate-button')
 const saveButton = requiredElement<HTMLButtonElement>('#save-button')
 const exportButton = requiredElement<HTMLButtonElement>('#export-button')
 const runButton = requiredElement<HTMLButtonElement>('#run-button')
+const recordButton = requiredElement<HTMLButtonElement>('#record-button')
+const recordStatus = requiredElement<HTMLElement>('#record-status')
 const stepList = requiredElement<HTMLUListElement>('#step-list')
 const stepSummary = requiredElement<HTMLElement>('#step-summary')
 const stepAction = requiredElement<HTMLInputElement>('#step-action')
@@ -162,6 +164,15 @@ exportButton.addEventListener('click', () => {
 
 runButton.addEventListener('click', () => {
   void runAction(() => editor.runSelectedScenario())
+})
+
+recordButton.addEventListener('click', () => {
+  const snapshot = editor.getSnapshot()
+  void runAction(() => (
+    snapshot.currentRecord?.status === 'recording'
+      ? editor.stopRecording()
+      : editor.startRecording()
+  ))
 })
 
 stepList.addEventListener('click', (event) => {
@@ -260,7 +271,10 @@ browser.runtime.onMessage.addListener((message) => {
 })
 
 render(editor.getSnapshot())
-void runAction(() => editor.refresh())
+void runAction(async () => {
+  await editor.refresh()
+  await editor.loadRecordedDraft()
+})
 
 async function runAction(action: () => Promise<unknown>): Promise<void> {
   const operation = action()
@@ -328,6 +342,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   validationSummary.textContent = view.validationSummary
   renderIssues(view.issueViews)
   renderStatus(snapshot)
+  recordStatus.textContent = recordSummary(snapshot)
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
@@ -340,6 +355,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   applyButtonView(saveButton, view.buttons.save)
   applyButtonView(exportButton, view.buttons.export)
   applyButtonView(runButton, view.buttons.run)
+  applyButtonView(recordButton, view.buttons.record)
   applyButtonView(dryRunButton, view.buttons.dryRun)
 }
 
@@ -484,6 +500,23 @@ function failureSummary(traceView: TraceRunDisplayView | undefined): string {
     failure.stepId === undefined ? undefined : `step ${failure.stepId}`,
     failure.eventName,
   ].filter((part) => part !== undefined && part.length > 0).join(' · ')
+}
+
+function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
+  const record = snapshot.currentRecord
+  if (record === undefined) {
+    return 'Not recording'
+  }
+
+  if (record.status === 'recording') {
+    return 'Recording'
+  }
+
+  if (record.status === 'failed') {
+    return record.message === undefined ? 'Recording failed' : `Recording failed: ${record.message}`
+  }
+
+  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
 }
 
 function locatorPreviewStatusSummary(snapshot: LocatorPreviewSnapshot): string {

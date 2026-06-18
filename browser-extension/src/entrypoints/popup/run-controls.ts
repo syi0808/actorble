@@ -6,6 +6,7 @@ import {
   type RequiredRunCorrelation,
 } from '../../messaging/index.js'
 import { compileToBrowserRuntime } from '../../scenario/compile-to-browser-runtime.js'
+import type { RecordedScenarioDraftHandoff } from '../../recorder/workflow.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type { ScenarioRecord } from '../../storage/index.js'
 import type { RuntimeRunStatus } from '../../trace/index.js'
@@ -26,9 +27,11 @@ export type PopupRecordSession = Readonly<{
   frameId?: number
   scenarioId?: string
   runId?: string
-  status: 'recording' | 'stopped'
+  status: 'recording' | 'stopped' | 'failed'
   startedAt: number
   updatedAt: number
+  draftId?: string
+  message?: string
 }>
 
 export type PopupBackgroundState = Readonly<{
@@ -123,6 +126,7 @@ export type PopupCommandReceipt = Readonly<{
   contentReady: boolean
   session?: PopupRunSession | PopupRecordSession
   status?: RuntimeRunStatus | PopupRecordSession['status']
+  recordedDraft?: RecordedScenarioDraftHandoff
 }>
 
 export type PopupRunControls = Readonly<{
@@ -563,9 +567,10 @@ export function createPopupRunControlsView(
   const tabReady = snapshot.activeTab.status === 'ready'
   const selected = selectedScenario(snapshot)
   const recordActive = snapshot.currentRecord?.status === 'recording'
+  const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
   const canPause = snapshot.currentRun?.status === 'running'
   const canResume = snapshot.currentRun?.status === 'paused'
-  const canStop = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
+  const canStop = runActive
 
   return {
     statusMessage: statusMessage(snapshot),
@@ -582,12 +587,12 @@ export function createPopupRunControlsView(
     buttons: {
       run: {
         label: 'Run',
-        disabled: anyPending || !tabReady || selected === undefined,
+        disabled: anyPending || !tabReady || selected === undefined || recordActive,
         pending: snapshot.pendingAction === 'run',
       },
       record: {
         label: recordActive ? 'Stop recording' : 'Record',
-        disabled: anyPending || !tabReady,
+        disabled: anyPending || !tabReady || (!recordActive && runActive),
         pending:
           snapshot.pendingAction === 'record:start' ||
           snapshot.pendingAction === 'record:stop',
@@ -718,7 +723,15 @@ function recordText(record: PopupRecordSession | undefined): string {
     return 'Not recording'
   }
 
-  return record.status === 'recording' ? 'Recording' : 'Recording stopped'
+  if (record.status === 'recording') {
+    return 'Recording'
+  }
+
+  if (record.status === 'failed') {
+    return record.message === undefined ? 'Recording failed' : `Recording failed: ${record.message}`
+  }
+
+  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
 }
 
 function matchesRun(currentRun: PopupRunSession, payload: RequiredRunCorrelation): boolean {

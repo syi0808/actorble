@@ -63,11 +63,20 @@ runButton.addEventListener('click', () => {
 
 recordButton.addEventListener('click', () => {
   const snapshot = controls.getSnapshot()
-  void runAction(() => (
-    snapshot.currentRecord?.status === 'recording'
-      ? controls.stopRecording()
-      : controls.startRecording()
-  ))
+  void (async () => {
+    const result = await runAction(() => (
+      snapshot.currentRecord?.status === 'recording'
+        ? controls.stopRecording()
+        : controls.startRecording()
+    ))
+
+    if (
+      snapshot.currentRecord?.status === 'recording' &&
+      isRecordStopDraftResult(result)
+    ) {
+      await openSidePanel(panelButton)
+    }
+  })()
 })
 
 pauseResumeButton.addEventListener('click', () => {
@@ -105,11 +114,32 @@ async function refreshPopup(): Promise<void> {
 
 async function runAction(
   action: () => Promise<unknown>,
-): Promise<void> {
+): Promise<unknown> {
   const operation = action()
   render(controls.getSnapshot())
-  await operation
+  const result = await operation
   render(controls.getSnapshot())
+  return result
+}
+
+function isRecordStopDraftResult(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+
+  const result = value as Readonly<{
+    ok?: unknown
+    value?: Readonly<{
+      kind?: unknown
+      recordedDraft?: unknown
+    }>
+  }>
+
+  return (
+    result.ok === true &&
+    result.value?.kind === 'record:stop' &&
+    result.value.recordedDraft !== undefined
+  )
 }
 
 function render(snapshot: PopupRunControlsSnapshot): void {

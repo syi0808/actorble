@@ -94,6 +94,7 @@ export function createContentRuntimeHost(
       case 'scenario:compile':
       case 'record:start':
       case 'record:stop':
+      case 'record:draft:get':
       case 'inspector:start':
       case 'inspector:stop':
       case 'inspector:selected':
