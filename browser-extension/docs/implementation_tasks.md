@@ -340,7 +340,7 @@ src/recorder
 
 ### T13 Recorder Event Capture
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Capture browser page events during recording inside the content
   script boundary and prepare raw events for normalization.
 - Dependencies: T3, T4, T5.

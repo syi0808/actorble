@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser'
 import { isExtensionMessageOfKind } from '../../messaging/index.js'
 import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
 import { createContentLocatorPreviewHost } from './locator-preview-host.js'
+import { createContentRecorderHost, createDomRecorderEventCapturePort } from './recorder-host.js'
 import { createContentRuntimeHost } from './runtime-host.js'
 
 export default defineContentScript({
@@ -25,6 +26,9 @@ export default defineContentScript({
     const locatorPreviewHost = createContentLocatorPreviewHost({
       createActorble,
     })
+    const recorderHost = createContentRecorderHost({
+      capture: createDomRecorderEventCapturePort(),
+    })
 
     browser.runtime.onMessage.addListener((message) => {
       if (
@@ -36,6 +40,13 @@ export default defineContentScript({
 
       if (isExtensionMessageOfKind(message, 'locator:preview')) {
         return locatorPreviewHost.handleMessage(message)
+      }
+
+      if (
+        isExtensionMessageOfKind(message, 'record:start') ||
+        isExtensionMessageOfKind(message, 'record:stop')
+      ) {
+        return recorderHost.handleMessage(message)
       }
 
       return runtimeHost.handleMessage(message)
