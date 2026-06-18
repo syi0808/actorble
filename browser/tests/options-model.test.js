@@ -16,6 +16,10 @@ describe('browser options model', () => {
       timing: 'ease-in-out',
       duration: 250,
     })
+    expect(BROWSER_OPTION_DEFAULTS.inertiaMotion).toEqual({
+      initialVelocity: 1200,
+      deceleration: 4800,
+    })
     expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60)
     expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80)
 
@@ -82,6 +86,36 @@ describe('browser options model', () => {
     })
     expect(resolveActionOptions('typeInto')).toEqual({
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
+    })
+  })
+
+  it('materializes default inertia motion parameters at the option boundary', () => {
+    expect(
+      resolveActionOptions('moveTo', {
+        options: {
+          motion: { kind: 'inertia' },
+        },
+      }),
+    ).toEqual({
+      motion: {
+        kind: 'inertia',
+        initialVelocity: BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
+        deceleration: BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
+      },
+    })
+    expect(
+      resolveActionOptions('click', {
+        options: {
+          motion: { kind: 'inertia', initialVelocity: 900 },
+        },
+      }),
+    ).toEqual({
+      motion: {
+        kind: 'inertia',
+        initialVelocity: 900,
+        deceleration: BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
+      },
+      pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
   })
 

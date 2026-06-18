@@ -61,11 +61,16 @@ export type PointerEngineOptions = Readonly<{
   }>
 }>
 
-type NormalizedMotionProfile = Readonly<{
-  kind: 'ease'
-  duration: number
-  timing: PointerMotionTiming
-}>
+type NormalizedMotionProfile =
+  | Readonly<{
+      kind: 'ease'
+      duration: number
+      timing: PointerMotionTiming
+    }>
+  | Readonly<{
+      kind: 'inertia'
+      duration: number
+    }>
 
 type InternalPointerState = {
   id: string
@@ -362,13 +367,44 @@ function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
         timing: easeMotion.timing ?? 'ease-in-out',
       }
     }
+    case 'inertia': {
+      const inertiaMotion = motion as Extract<
+        NonNullable<MoveOptions['motion']>,
+        { kind: 'inertia' }
+      >
+
+      return {
+        kind: 'inertia',
+        duration: normalizeInertiaDuration(
+          inertiaMotion.initialVelocity,
+          inertiaMotion.deceleration,
+        ),
+      }
+    }
     case 'linear':
-    case 'inertia':
     case 'spring':
       throw unsupportedMotionProfile(profileKind)
     default:
       throw unsupportedMotionProfile(profileKind)
   }
+}
+
+function normalizeInertiaDuration(
+  initialVelocity: number | undefined,
+  deceleration: number | undefined,
+): number {
+  if (
+    initialVelocity === undefined ||
+    deceleration === undefined ||
+    !Number.isFinite(initialVelocity) ||
+    !Number.isFinite(deceleration) ||
+    initialVelocity <= 0 ||
+    deceleration <= 0
+  ) {
+    return 0
+  }
+
+  return normalizeDuration((initialVelocity / deceleration) * 1000)
 }
 
 function readMotionProfileKind(motion: NonNullable<MoveOptions['motion']>): string {
@@ -385,7 +421,7 @@ function unsupportedMotionProfile(profileKind: string): never {
       details: {
         boundary: 'pointer-engine',
         profileKind,
-        supportedKinds: ['ease'],
+        supportedKinds: ['ease', 'inertia'],
       },
     },
   )
@@ -421,7 +457,17 @@ function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number)
   switch (motion.kind) {
     case 'ease':
       return sampleTimingProgress(motion.timing, clampedProgress)
+    case 'inertia':
+      return sampleInertiaProgress(clampedProgress)
   }
+}
+
+function sampleInertiaProgress(progress: number): number {
+  return roundMotionProgress(1 - (1 - progress) * (1 - progress))
+}
+
+function roundMotionProgress(progress: number): number {
+  return Math.round(progress * 1_000_000_000_000) / 1_000_000_000_000
 }
 
 function sampleTimingProgress(timing: PointerMotionTiming, progress: number): number {

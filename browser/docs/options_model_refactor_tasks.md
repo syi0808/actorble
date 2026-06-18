@@ -295,7 +295,7 @@ Step/call option은 항상 runner-level default보다 우선한다.
 
 ### BOPT-07 Inertia Motion Implementation
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `initialVelocity`와 `deceleration` 기반 deterministic inertia motion을
   구현한다. 이 태스크는 unsupported guard를 실제 runtime behavior로 교체한다.
 - Dependencies: BOPT-06, `pointer-engine`, `timeline-engine`.

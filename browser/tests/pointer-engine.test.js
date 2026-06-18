@@ -350,27 +350,98 @@ describe('BrowserPointerEngine', () => {
       details: {
         boundary: 'pointer-engine',
         profileKind: 'linear',
-        supportedKinds: ['ease'],
+        supportedKinds: ['ease', 'inertia'],
       },
     })
 
     expect(timeline.nextFrame).not.toHaveBeenCalled()
   })
 
-  it('rejects inertia and spring profiles until physical motion is implemented', async () => {
+  it('emits deterministic inertia frame positions and settles at the endpoint', async () => {
+    const timeline = createTimeline(25)
+    const { engine, events } = createEngine({ timeline })
+
+    await expect(
+      engine.moveTo(
+        { x: 100, y: 0 },
+        { motion: { kind: 'inertia', initialVelocity: 1200, deceleration: 4800 } },
+      ),
+    ).resolves.toMatchObject({
+      position: { x: 100, y: 0 },
+      previousPosition: { x: 99, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 100, y: 0 },
+        path: [
+          { x: 19, y: 0 },
+          { x: 36, y: 0 },
+          { x: 51, y: 0 },
+          { x: 64, y: 0 },
+          { x: 75, y: 0 },
+          { x: 84, y: 0 },
+          { x: 91, y: 0 },
+          { x: 96, y: 0 },
+          { x: 99, y: 0 },
+          { x: 100, y: 0 },
+        ],
+      },
+    })
+
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(10)
+    expect(events.map((event) => event.point)).toEqual([
+      { x: 19, y: 0 },
+      { x: 36, y: 0 },
+      { x: 51, y: 0 },
+      { x: 64, y: 0 },
+      { x: 75, y: 0 },
+      { x: 84, y: 0 },
+      { x: 91, y: 0 },
+      { x: 96, y: 0 },
+      { x: 99, y: 0 },
+      { x: 100, y: 0 },
+    ])
+  })
+
+  it('cancels inertia motion and emits no later movement frames', async () => {
+    const controlledTimeline = createControlledTimeline()
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+
+    await engine.down('primary')
+    const movement = engine.moveTo(
+      { x: 100, y: 0 },
+      { motion: { kind: 'inertia', initialVelocity: 1200, deceleration: 4800 } },
+    )
+
+    await Promise.resolve()
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await flushResolvedFrame(controlledTimeline, 25)
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
+    expect(controlledTimeline.pendingFrameCount).toBe(1)
+
+    await engine.cancel()
+    const eventsAtCancellation = [...events]
+
+    expect(engine.getState()).toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+
+    await flushResolvedFrame(controlledTimeline, 25)
+
+    await expect(movement).resolves.toMatchObject({
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(events).toEqual(eventsAtCancellation)
+  })
+
+  it('rejects spring profiles until physical motion is implemented', async () => {
     const timeline = createTimeline(25)
     const { engine } = createEngine({ timeline })
 
-    await expect(
-      engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'inertia', initialVelocity: 1200 } }),
-    ).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        boundary: 'pointer-engine',
-        profileKind: 'inertia',
-        supportedKinds: ['ease'],
-      },
-    })
     await expect(
       engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'spring', stiffness: 170 } }),
     ).rejects.toMatchObject({
@@ -378,7 +449,7 @@ describe('BrowserPointerEngine', () => {
       details: {
         boundary: 'pointer-engine',
         profileKind: 'spring',
-        supportedKinds: ['ease'],
+        supportedKinds: ['ease', 'inertia'],
       },
     })
 

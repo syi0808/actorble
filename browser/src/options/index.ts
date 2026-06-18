@@ -25,6 +25,11 @@ const DEFAULT_POINTER_MOTION = {
   duration: 250,
 } as const satisfies PointerMotionProfile
 
+const DEFAULT_INERTIA_MOTION = {
+  initialVelocity: 1200,
+  deceleration: 4800,
+} as const
+
 const DEFAULT_FEEDBACK = {
   enabled: true,
   cursor: true,
@@ -37,6 +42,7 @@ const DEFAULT_FEEDBACK = {
 
 export const BROWSER_OPTION_DEFAULTS = {
   pointerMotion: DEFAULT_POINTER_MOTION,
+  inertiaMotion: DEFAULT_INERTIA_MOTION,
   typingDelay: 60,
   clickPressDwell: 80,
   feedback: DEFAULT_FEEDBACK,
@@ -191,6 +197,7 @@ export function resolveActionOptions<TAction extends BrowserActionName>(
 
   resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, run.actionDefaults))
   resolved = mergeActionLayer(action, resolved, input.options)
+  resolved = normalizeResolvedActionOptions(action, resolved)
 
   return resolved as BrowserActionOptions<TAction>
 }
@@ -410,6 +417,41 @@ function mergeActionLayer(
   }
 
   return { ...next, ...definedLayer }
+}
+
+function normalizeResolvedActionOptions(
+  action: BrowserActionName,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isPointerAction(action)) {
+    return options
+  }
+
+  const motion = options.motion
+
+  if (!isInertiaMotionProfile(motion)) {
+    return options
+  }
+
+  return {
+    ...options,
+    motion: {
+      kind: 'inertia',
+      initialVelocity:
+        motion.initialVelocity ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
+      deceleration: motion.deceleration ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
+    },
+  }
+}
+
+function isInertiaMotionProfile(
+  motion: unknown,
+): motion is Extract<PointerMotionProfile, { kind: 'inertia' }> {
+  return (
+    typeof motion === 'object' &&
+    motion !== null &&
+    (motion as { kind?: unknown }).kind === 'inertia'
+  )
 }
 
 function definedOptions(options: Readonly<Record<string, unknown>>): Record<string, unknown> {

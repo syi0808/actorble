@@ -431,7 +431,7 @@ describe('BrowserGestureEngine', () => {
       details: {
         boundary: 'pointer-engine',
         profileKind: 'spring',
-        supportedKinds: ['ease'],
+        supportedKinds: ['ease', 'inertia'],
       },
     })
 
