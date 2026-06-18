@@ -67,6 +67,33 @@
         <div class="toolbar">
           <button id="record-button" type="button">Record</button>
         </div>
+        <div id="recorded-draft-review" class="recorded-draft-review" hidden>
+          <dl class="recorded-draft-fields">
+            <div>
+              <dt>Draft</dt>
+              <dd id="recorded-draft-summary">No recorded draft</dd>
+            </div>
+            <div>
+              <dt>Validation</dt>
+              <dd id="recorded-draft-validation">None</dd>
+            </div>
+            <div>
+              <dt>Sensitive</dt>
+              <dd id="recorded-draft-sensitive">No sensitive inputs</dd>
+            </div>
+          </dl>
+          <label class="checkbox-field">
+            <input id="recorded-draft-sensitive-confirm" type="checkbox" />
+            <span>Confirm sensitive recorded inputs</span>
+          </label>
+          <div class="toolbar wrap-toolbar">
+            <button id="recorded-draft-replace-button" type="button">Replace</button>
+            <button id="recorded-draft-append-button" type="button">Append</button>
+            <button id="recorded-draft-discard-button" type="button">Discard</button>
+            <button id="recorded-draft-save-new-button" type="button">Save as new</button>
+            <button id="recorded-draft-export-button" type="button">Export draft</button>
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="steps-title">

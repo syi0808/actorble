@@ -7,6 +7,7 @@ import {
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
+  type ScenarioTargetTextStep,
 } from '../src/scenario/types.js'
 import type { ScenarioCodeExport } from '../src/scenario/export-code.js'
 import { failure, ok, type ExtensionResult } from '../src/shared/result.js'
@@ -542,7 +543,7 @@ describe('sidepanel scenario editor', () => {
     expect(acceptedStatus).toBe(true)
   })
 
-  it('starts and stops recording, then reviews the returned draft as an unsaved scenario', async () => {
+  it('starts and stops recording, then reviews the returned draft without overwriting the current scenario', async () => {
     const { editor, sent, saves, exports } = createTestEditor({
       createRecordId: () => 'record-sidepanel-1',
       sendResponse(message) {
@@ -561,13 +562,14 @@ describe('sidepanel scenario editor', () => {
       },
     })
     await editor.refresh()
+    const beforeRecording = editor.getSnapshot().draftDocument
 
     const start = await editor.startRecording()
     const stop = await editor.stopRecording()
     const snapshot = editor.getSnapshot()
     const view = createSidepanelScenarioEditorView(snapshot)
-    const exported = await editor.exportSelected()
-    const saved = await editor.saveDraft()
+    const exported = editor.exportRecordedDraft()
+    const replaced = editor.replaceWithRecordedDraft()
 
     expect(start).toMatchObject({
       ok: true,
@@ -602,9 +604,48 @@ describe('sidepanel scenario editor', () => {
       }),
     ])
     expect(snapshot).toMatchObject({
-      selectedScenarioId: undefined,
+      selectedScenarioId: 'newest-scenario',
       issues: [],
-      message: 'Recorded draft ready',
+      message: 'Recorded draft ready for review',
+      draftDocument: beforeRecording,
+      recordedDraftReview: {
+        draftId: 'record-sidepanel-1',
+        sourceEventCount: 1,
+        validationStatus: 'valid',
+        sensitiveInputCount: 0,
+        document: {
+          id: 'recorded-record-sidepanel-1',
+          name: 'Recorded scenario record-sidepanel-1',
+          steps: [
+            {
+              id: 'recorded-step-1',
+              action: 'fill',
+              input: 'user@example.com',
+            },
+          ],
+        },
+      },
+    })
+    expect(view.recordedDraftReview).toMatchObject({
+      summary: '1 source event · valid',
+      buttons: {
+        replace: { disabled: false },
+        append: { disabled: false },
+        saveAsNew: { disabled: false },
+        export: { disabled: false },
+      },
+    })
+    expect(exported).toMatchObject({
+      ok: true,
+      value: {
+        id: 'recorded-record-sidepanel-1',
+        filename: 'recorded-record-sidepanel-1.json',
+      },
+    })
+    expect(replaced).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedScenarioId: undefined,
+      recordedDraftReview: undefined,
       draftDocument: {
         id: 'recorded-record-sidepanel-1',
         name: 'Recorded scenario record-sidepanel-1',
@@ -617,14 +658,7 @@ describe('sidepanel scenario editor', () => {
         ],
       },
     })
-    expect(view.buttons.export.disabled).toBe(false)
-    expect(exported).toMatchObject({
-      ok: true,
-      value: {
-        id: 'recorded-record-sidepanel-1',
-        filename: 'recorded-record-sidepanel-1.json',
-      },
-    })
+    const saved = await editor.saveDraft()
     expect(saved).toMatchObject({
       ok: true,
       value: {
@@ -642,7 +676,136 @@ describe('sidepanel scenario editor', () => {
     })
   })
 
-  it('loads the latest cached recorder draft from the background handoff', async () => {
+  it('appends or discards a reviewed recorded draft by explicit user action', async () => {
+    const { editor, updates } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok(recordedDraft('record-popup-1'))
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+    const originalStepCount = editor.getSnapshot().draftDocument?.steps.length ?? 0
+
+    await editor.loadRecordedDraft('record-popup-1')
+    const discarded = editor.discardRecordedDraft()
+    await editor.loadRecordedDraft('record-popup-1')
+    const appended = editor.appendRecordedDraftSteps()
+    const saved = await editor.saveDraft()
+
+    expect(discarded).toMatchObject({ ok: true })
+    expect(appended).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedScenarioId: 'newest-scenario',
+      dirty: false,
+      recordedDraftReview: undefined,
+    })
+    expect(editor.getSnapshot().draftDocument?.steps).toHaveLength(originalStepCount + 1)
+    expect(editor.getSnapshot().draftDocument?.steps.at(-1)).toMatchObject({
+      id: 'recorded-step-1',
+      action: 'fill',
+      input: 'user@example.com',
+    })
+    expect(saved).toMatchObject({
+      ok: true,
+      value: {
+        id: 'newest-scenario',
+      },
+    })
+    expect(updates).toHaveLength(1)
+    expect(updates[0].id).toBe('newest-scenario')
+    expect(updates[0].update.document?.steps).toHaveLength(originalStepCount + 1)
+  })
+
+  it('saves a reviewed recorded draft as a new scenario without replacing the current draft first', async () => {
+    const { editor, saves } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok(recordedDraft('record-popup-1'))
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    await editor.loadRecordedDraft('record-popup-1')
+    const saved = await editor.saveRecordedDraftAsNew()
+
+    expect(saved).toMatchObject({
+      ok: true,
+      value: {
+        id: 'recorded-record-popup-1',
+        name: 'Recorded scenario record-popup-1',
+      },
+    })
+    expect(saves).toHaveLength(1)
+    expect(saves[0]).toMatchObject({
+      name: 'Recorded scenario record-popup-1',
+      document: {
+        id: 'recorded-record-popup-1',
+      },
+    })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedScenarioId: 'recorded-record-popup-1',
+      dirty: false,
+      recordedDraftReview: undefined,
+    })
+  })
+
+  it('requires visible confirmation before saving sensitive recorded input', async () => {
+    const { editor, saves } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok(recordedDraft('record-sensitive-1', {
+            input: '[masked]',
+            note: 'Sensitive input was masked during recording (password_type); confirm the value before saving.',
+          }))
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    await editor.loadRecordedDraft('record-sensitive-1')
+    const initialView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    const blocked = await editor.saveRecordedDraftAsNew()
+    const replaceBlocked = editor.replaceWithRecordedDraft()
+    editor.confirmRecordedDraftSensitiveInputs(true)
+    const saved = await editor.saveRecordedDraftAsNew()
+
+    expect(initialView.recordedDraftReview).toMatchObject({
+      sensitiveSummary: '1 sensitive input requires confirmation',
+      buttons: {
+        saveAsNew: { disabled: true },
+      },
+    })
+    expect(blocked).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'recorder_error',
+          message: 'Confirm sensitive recorded inputs before saving the recorded draft.',
+        },
+      ],
+    })
+    expect(replaceBlocked).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'recorder_error',
+        },
+      ],
+    })
+    expect(saved).toMatchObject({ ok: true })
+    expect(saves).toHaveLength(1)
+    expect(editor.getSnapshot().recordedDraftReview).toBeUndefined()
+  })
+
+  it('loads a cached recorder draft by handoff id for review', async () => {
     const { editor, sent } = createTestEditor({
       sendResponse(message) {
         if (message.kind === 'record:draft:get') {
@@ -654,7 +817,7 @@ describe('sidepanel scenario editor', () => {
     })
     await editor.refresh()
 
-    const loaded = await editor.loadRecordedDraft()
+    const loaded = await editor.loadRecordedDraft('record-popup-1')
 
     expect(loaded).toMatchObject({
       ok: true,
@@ -666,20 +829,25 @@ describe('sidepanel scenario editor', () => {
       createExtensionMessage({
         kind: 'record:draft:get',
         payload: {
-          tabId: 7,
+          draftId: 'record-popup-1',
           scenarioId: 'newest-scenario',
         },
       }),
     ])
     expect(editor.getSnapshot()).toMatchObject({
-      selectedScenarioId: undefined,
-      draftDocument: {
-        id: 'recorded-record-popup-1',
-        steps: [
-          {
-            action: 'fill',
-          },
-        ],
+      selectedScenarioId: 'newest-scenario',
+      recordedDraftReview: {
+        draftId: 'record-popup-1',
+        sourceEventCount: 1,
+        validationStatus: 'valid',
+        document: {
+          id: 'recorded-record-popup-1',
+          steps: [
+            {
+              action: 'fill',
+            },
+          ],
+        },
       },
     })
   })
@@ -1032,7 +1200,10 @@ function commandReceiptForRecord(
   }
 }
 
-function recordedDraft(draftId: string) {
+function recordedDraft(
+  draftId: string,
+  stepPatch: Partial<ScenarioTargetTextStep> = {},
+) {
   return {
     draftId,
     sessionId: draftId,
@@ -1059,6 +1230,7 @@ function recordedDraft(draftId: string) {
             ],
           },
           input: 'user@example.com',
+          ...stepPatch,
         },
       ],
     } satisfies ScenarioDocument,

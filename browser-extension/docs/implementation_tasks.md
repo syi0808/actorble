@@ -546,7 +546,7 @@ src/recorder
 
 ### T23 Recorded Draft Review And Merge
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Treat recorder output as a builder review input. A recorded draft
   should not silently overwrite the selected scenario.
 - Dependencies: T19, T20, T22.

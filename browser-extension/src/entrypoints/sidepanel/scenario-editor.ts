@@ -1,5 +1,6 @@
 import {
   addStep as addBuilderStep,
+  appendDraftSteps as appendBuilderDraftSteps,
   assignLocatorToTargetSlot,
   clearTargetSlot,
   createScenario as createBuilderScenario,
@@ -44,6 +45,9 @@ import {
   exportScenarioToCode,
   type ScenarioCodeExport,
 } from '../../scenario/export-code.js'
+import {
+  RECORDER_MASKED_VALUE,
+} from '../../recorder/event-capture.js'
 import {
   documentWithRecordedDraftDefaults,
   type RecordedEmptyRecordingState,
@@ -119,6 +123,22 @@ export type SidepanelRecordCommandReceipt = Readonly<{
   emptyRecording?: RecordedEmptyRecordingState
 }>
 
+export type SidepanelRecordedDraftReview = Readonly<{
+  draftId: string
+  sessionId: string
+  tabId: number
+  frameId?: number
+  scenarioId?: string
+  runId?: string
+  sourceEventCount: number
+  createdAt: number
+  document: BuilderDraftDocument
+  validationStatus: 'valid' | 'invalid'
+  validationIssues: readonly ExtensionIssue[]
+  sensitiveInputCount: number
+  sensitiveInputsConfirmed: boolean
+}>
+
 export type SidepanelScenarioEditorSnapshot = Readonly<{
   scenarios: readonly ScenarioRecord[]
   selectedScenarioId?: string
@@ -131,6 +151,7 @@ export type SidepanelScenarioEditorSnapshot = Readonly<{
   issues: readonly ExtensionIssue[]
   currentRun?: SidepanelScenarioRunReceipt
   currentRecord?: SidepanelRecordSession
+  recordedDraftReview?: SidepanelRecordedDraftReview
   trace: TraceDisplayState
   currentTrace: TraceRunDisplayView | undefined
   message?: string
@@ -208,6 +229,23 @@ export type SidepanelWorkflowView = Readonly<{
   summary: string
 }>
 
+export type SidepanelRecordedDraftReviewView = Readonly<{
+  draftId: string
+  sourceEventCount: number
+  validationStatus: SidepanelRecordedDraftReview['validationStatus']
+  summary: string
+  validationSummary: string
+  sensitiveSummary: string
+  sensitiveInputsConfirmed: boolean
+  buttons: Readonly<{
+    replace: SidepanelButtonView
+    append: SidepanelButtonView
+    discard: SidepanelButtonView
+    saveAsNew: SidepanelButtonView
+    export: SidepanelButtonView
+  }>
+}>
+
 export type SidepanelActionFamilyOptionView = Readonly<{
   value: BuilderStepActionFamily
   label: string
@@ -247,6 +285,7 @@ export type SidepanelScenarioEditorView = Readonly<{
   }>
   issueViews: readonly SidepanelIssueView[]
   validationSummary: string
+  recordedDraftReview?: SidepanelRecordedDraftReviewView
   runSummary: string
   traceView: TraceRunDisplayView | undefined
   buttons: Readonly<{
@@ -295,6 +334,14 @@ export type SidepanelScenarioEditor = Readonly<{
   importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>
   exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>>
   exportSelectedCode(): ExtensionResult<ScenarioCodeExport>
+  exportRecordedDraft(): ExtensionResult<ScenarioJsonExport>
+  replaceWithRecordedDraft(): ExtensionResult<ScenarioDocument>
+  appendRecordedDraftSteps(): ExtensionResult<ScenarioDocument>
+  discardRecordedDraft(): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  saveRecordedDraftAsNew(): Promise<ExtensionResult<ScenarioRecord>>
+  confirmRecordedDraftSensitiveInputs(
+    confirmed: boolean,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot>
   runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
   dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
   startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
@@ -331,6 +378,7 @@ export function createSidepanelScenarioEditor(
     ...(createStepId === undefined ? {} : { createStepId }),
   })
   let externalIssues: readonly ExtensionIssue[] = []
+  let recordedDraftReview: SidepanelRecordedDraftReview | undefined
   let snapshot = emptySnapshot(traceStore.getState())
 
   async function refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>> {
@@ -750,6 +798,162 @@ export function createSidepanelScenarioEditor(
     return exported
   }
 
+  function exportRecordedDraft(): ExtensionResult<ScenarioJsonExport> {
+    const review = recordedDraftReview
+    if (review === undefined) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'No recorded draft is available to export.',
+      })
+    }
+
+    const validation = validateRecordedDraftReview(review)
+    if (!validation.ok) {
+      externalIssues = validation.issues
+      syncSnapshotFromSession({
+        pendingAction: null,
+        message: undefined,
+      })
+      return failure(validation.issues)
+    }
+
+    const id = validation.value.id ?? `recorded-${review.draftId}`
+    externalIssues = []
+    syncSnapshotFromSession({
+      pendingAction: null,
+      message: 'Recorded draft exported',
+    })
+
+    return ok({
+      id,
+      filename: `${filenameBase(id)}.json`,
+      jsonText: `${JSON.stringify(validation.value, null, 2)}\n`,
+      document: validation.value,
+    })
+  }
+
+  function replaceWithRecordedDraft(): ExtensionResult<ScenarioDocument> {
+    const ready = recordedDraftReadyForSave('replace')
+    if (!ready.ok) {
+      return failure(ready.issues)
+    }
+
+    session = withDefaultTargetSlot(openDraftDocument(session, ready.value.document as BuilderDraftDocument, {
+      dirty: true,
+    }))
+    recordedDraftReview = undefined
+    externalIssues = []
+    syncSnapshotFromSession({
+      pendingAction: null,
+      message: 'Recorded draft replaced current draft',
+    })
+
+    return ok(ready.value.document)
+  }
+
+  function appendRecordedDraftSteps(): ExtensionResult<ScenarioDocument> {
+    const ready = recordedDraftReadyForSave('append')
+    if (!ready.ok) {
+      return failure(ready.issues)
+    }
+
+    const appended = appendBuilderDraftSteps(
+      session,
+      ready.value.document.steps as readonly BuilderDraftStep[],
+    )
+    if (!appended.ok) {
+      setExternalIssues(appended.issues, {
+        pendingAction: null,
+        message: undefined,
+      })
+      return failure(appended.issues)
+    }
+
+    session = withDefaultTargetSlot(appended.value)
+    recordedDraftReview = undefined
+    return scenarioDocumentResultFromSession({
+      pendingAction: null,
+      message: 'Recorded steps appended',
+    })
+  }
+
+  function discardRecordedDraft(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    if (recordedDraftReview === undefined) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'No recorded draft is available to discard.',
+      })
+    }
+
+    recordedDraftReview = undefined
+    externalIssues = []
+    syncSnapshotFromSession({
+      pendingAction: null,
+      message: 'Recorded draft discarded',
+    })
+
+    return ok(snapshot)
+  }
+
+  async function saveRecordedDraftAsNew(): Promise<ExtensionResult<ScenarioRecord>> {
+    const ready = recordedDraftReadyForSave('save')
+    if (!ready.ok) {
+      return failure(ready.issues)
+    }
+
+    syncSnapshotFromSession({
+      pendingAction: 'save',
+      message: undefined,
+    })
+
+    const result = await client.saveScenario({
+      name: ready.value.document.name,
+      document: ready.value.document,
+    })
+    if (!result.ok) {
+      externalIssues = result.issues
+      syncSnapshotFromSession({
+        pendingAction: null,
+      })
+      return result
+    }
+
+    replaceScenario(result.value)
+    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)))
+    recordedDraftReview = undefined
+    externalIssues = []
+    syncSnapshotFromSession({
+      pendingAction: null,
+      message: 'Recorded draft saved',
+    })
+
+    return result
+  }
+
+  function confirmRecordedDraftSensitiveInputs(
+    confirmed: boolean,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const review = recordedDraftReview
+    if (review === undefined) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'No recorded draft is available to confirm.',
+      })
+    }
+
+    recordedDraftReview = {
+      ...review,
+      sensitiveInputsConfirmed: review.sensitiveInputCount > 0 && confirmed,
+    }
+    externalIssues = []
+    syncSnapshotFromSession({
+      pendingAction: null,
+      message: undefined,
+    })
+
+    return ok(snapshot)
+  }
+
   async function runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
     if (session.draftDocument === undefined) {
       return setIssue({
@@ -914,10 +1118,7 @@ export function createSidepanelScenarioEditor(
 
     const draft = responseResult.value as RecordedScenarioDraftHandoff | null
     if (draft !== null) {
-      const applied = applyRecordedDraft(draft)
-      if (!applied.ok) {
-        return failure(applied.issues)
-      }
+      openRecordedDraftReview(draft)
     } else {
       externalIssues = []
       syncSnapshotFromSession({
@@ -1051,10 +1252,7 @@ export function createSidepanelScenarioEditor(
     applyRecordReceipt(receipt)
 
     if (receipt.recordedDraft !== undefined) {
-      const applied = applyRecordedDraft(receipt.recordedDraft)
-      if (!applied.ok) {
-        return failure(applied.issues)
-      }
+      openRecordedDraftReview(receipt.recordedDraft)
     } else {
       externalIssues = []
       syncSnapshotFromSession({
@@ -1153,6 +1351,46 @@ export function createSidepanelScenarioEditor(
     return ok(receipt)
   }
 
+  function recordedDraftReadyForSave(
+    _action: 'replace' | 'append' | 'save',
+  ): ExtensionResult<Readonly<{
+    review: SidepanelRecordedDraftReview
+    document: ScenarioDocument
+  }>> {
+    const review = recordedDraftReview
+    if (review === undefined) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'No recorded draft is available for review.',
+      })
+    }
+
+    const validation = validateRecordedDraftReview(review)
+    if (!validation.ok) {
+      setExternalIssues(validation.issues, {
+        pendingAction: null,
+        message: undefined,
+      })
+      return failure(validation.issues)
+    }
+
+    if (recordedDraftNeedsSensitiveConfirmation(review)) {
+      return setIssue({
+        code: 'recorder_error',
+        message: 'Confirm sensitive recorded inputs before saving the recorded draft.',
+        details: {
+          draftId: review.draftId,
+          sensitiveInputCount: review.sensitiveInputCount,
+        },
+      })
+    }
+
+    return ok({
+      review,
+      document: validation.value,
+    })
+  }
+
   function setIssue<TValue>(issue: ExtensionIssue): ExtensionResult<TValue> {
     setExternalIssues([issue], {
       pendingAction: null,
@@ -1177,9 +1415,9 @@ export function createSidepanelScenarioEditor(
     setRecordStateInSession(record)
   }
 
-  function applyRecordedDraft(
+  function openRecordedDraftReview(
     draft: RecordedScenarioDraftHandoff,
-  ): ExtensionResult<ScenarioDocument> {
+  ): void {
     const document = documentWithRecordedDraftDefaults(draft)
     const validation = validateScenarioDocument(document)
     const currentRecord = snapshot.currentRecord ?? {
@@ -1194,6 +1432,23 @@ export function createSidepanelScenarioEditor(
       updatedAt: draft.createdAt,
     } satisfies SidepanelRecordSession
 
+    const reviewDocument = (validation.ok ? validation.value : document) as BuilderDraftDocument
+    recordedDraftReview = {
+      draftId: draft.draftId,
+      sessionId: draft.sessionId,
+      tabId: draft.tabId,
+      ...(draft.frameId === undefined ? {} : { frameId: draft.frameId }),
+      ...(draft.scenarioId === undefined ? {} : { scenarioId: draft.scenarioId }),
+      ...(draft.runId === undefined ? {} : { runId: draft.runId }),
+      sourceEventCount: draft.sourceEventCount,
+      createdAt: draft.createdAt,
+      document: reviewDocument,
+      validationStatus: validation.ok ? 'valid' : 'invalid',
+      validationIssues: validation.ok ? [] : validation.issues,
+      sensitiveInputCount: countSensitiveRecordedInputs(reviewDocument),
+      sensitiveInputsConfirmed: false,
+    }
+
     const nextRecord = {
       ...currentRecord,
       status: validation.ok ? 'stopped' : 'failed',
@@ -1201,19 +1456,13 @@ export function createSidepanelScenarioEditor(
       updatedAt: draft.createdAt,
     } satisfies SidepanelRecordSession
 
-    session = withDefaultTargetSlot(openDraftDocument(
-      setRecordState(session, recordStateForSession(nextRecord)),
-      (validation.ok ? validation.value : document) as BuilderDraftDocument,
-      { dirty: true },
-    ))
-    externalIssues = validation.ok ? [] : validation.issues
+    session = setRecordState(session, recordStateForSession(nextRecord))
+    externalIssues = []
     syncSnapshotFromSession({
       currentRecord: nextRecord,
       pendingAction: null,
-      message: validation.ok ? 'Recorded draft ready' : undefined,
+      message: validation.ok ? 'Recorded draft ready for review' : 'Recorded draft needs review',
     })
-
-    return validation
   }
 
   function replaceScenario(record: ScenarioRecord): void {
@@ -1267,22 +1516,25 @@ export function createSidepanelScenarioEditor(
       draftDocument: session.draftDocument,
       dirty: session.dirty,
       issues: externalIssues.length === 0 ? session.issues : externalIssues,
+      recordedDraftReview,
       trace: traceStore.getState(),
       currentTrace: traceStore.getCurrentView(),
       ...patch,
     }
   }
 
-  function scenarioDocumentResultFromSession(): ExtensionResult<ScenarioDocument> {
+  function scenarioDocumentResultFromSession(
+    patch: Partial<SidepanelScenarioEditorSnapshot> = {},
+  ): ExtensionResult<ScenarioDocument> {
     const validation = getValidatedScenarioDocument(session)
     if (!validation.ok) {
       externalIssues = validation.issues
-      syncSnapshotFromSession()
+      syncSnapshotFromSession(patch)
       return validation
     }
 
     externalIssues = []
-    syncSnapshotFromSession()
+    syncSnapshotFromSession(patch)
     return validation
   }
 
@@ -1344,6 +1596,12 @@ export function createSidepanelScenarioEditor(
     importJson,
     exportSelected,
     exportSelectedCode,
+    exportRecordedDraft,
+    replaceWithRecordedDraft,
+    appendRecordedDraftSteps,
+    discardRecordedDraft,
+    saveRecordedDraftAsNew,
+    confirmRecordedDraftSensitiveInputs,
     runSelectedScenario,
     dryRunSelectedStep,
     startRecording,
@@ -1385,6 +1643,7 @@ export function createSidepanelScenarioEditorView(
       message: issue.message,
     })),
     validationSummary: validationSummary(snapshot),
+    recordedDraftReview: recordedDraftReviewView(snapshot, anyPending, hasDocument),
     runSummary: runSummary(snapshot),
     traceView: snapshot.currentTrace,
     buttons: {
@@ -1463,6 +1722,45 @@ export function createSidepanelScenarioEditorView(
       },
     },
   }
+}
+
+function validateRecordedDraftReview(
+  review: SidepanelRecordedDraftReview,
+): ExtensionResult<ScenarioDocument> {
+  return validateScenarioDocument(review.document)
+}
+
+function recordedDraftNeedsSensitiveConfirmation(
+  review: SidepanelRecordedDraftReview,
+): boolean {
+  return review.sensitiveInputCount > 0 && !review.sensitiveInputsConfirmed
+}
+
+function sensitiveReviewSummary(review: SidepanelRecordedDraftReview): string {
+  if (review.sensitiveInputCount === 0) {
+    return 'No sensitive inputs'
+  }
+
+  const count = `${review.sensitiveInputCount} sensitive input${
+    review.sensitiveInputCount === 1 ? '' : 's'
+  }`
+  return review.sensitiveInputsConfirmed
+    ? `${count} confirmed`
+    : `${count} requires confirmation`
+}
+
+function countSensitiveRecordedInputs(document: BuilderDraftDocument): number {
+  return document.steps.filter(stepHasSensitiveRecordedInput).length
+}
+
+function stepHasSensitiveRecordedInput(step: BuilderDraftStep): boolean {
+  const input = readStepProperty(step, 'input')
+  const note = readStepProperty(step, 'note')
+
+  return (
+    input === RECORDER_MASKED_VALUE ||
+    (typeof note === 'string' && note.includes('Sensitive input was'))
+  )
 }
 
 function stepFieldUpdateFromInput(
@@ -1614,6 +1912,62 @@ function workflowStatus(
   }
 
   return snapshot.dirty || snapshot.selectedScenarioId === undefined ? 'draft' : 'saved'
+}
+
+function recordedDraftReviewView(
+  snapshot: SidepanelScenarioEditorSnapshot,
+  anyPending: boolean,
+  hasDocument: boolean,
+): SidepanelRecordedDraftReviewView | undefined {
+  const review = snapshot.recordedDraftReview
+  if (review === undefined) {
+    return undefined
+  }
+
+  const invalid = review.validationStatus === 'invalid'
+  const needsSensitiveConfirmation = recordedDraftNeedsSensitiveConfirmation(review)
+  const mergeDisabled = anyPending || invalid || needsSensitiveConfirmation
+
+  return {
+    draftId: review.draftId,
+    sourceEventCount: review.sourceEventCount,
+    validationStatus: review.validationStatus,
+    summary: `${review.sourceEventCount} source event${review.sourceEventCount === 1 ? '' : 's'} · ${
+      review.validationStatus
+    }`,
+    validationSummary: invalid
+      ? `${review.validationIssues.length} issue${review.validationIssues.length === 1 ? '' : 's'}`
+      : 'Valid',
+    sensitiveSummary: sensitiveReviewSummary(review),
+    sensitiveInputsConfirmed: review.sensitiveInputsConfirmed,
+    buttons: {
+      replace: {
+        label: 'Replace',
+        disabled: mergeDisabled,
+        pending: false,
+      },
+      append: {
+        label: 'Append',
+        disabled: mergeDisabled || !hasDocument,
+        pending: false,
+      },
+      discard: {
+        label: 'Discard',
+        disabled: anyPending,
+        pending: false,
+      },
+      saveAsNew: {
+        label: 'Save as new',
+        disabled: mergeDisabled,
+        pending: snapshot.pendingAction === 'save',
+      },
+      export: {
+        label: 'Export draft',
+        disabled: anyPending || invalid,
+        pending: false,
+      },
+    },
+  }
 }
 
 function actionFamilyOptions(): readonly SidepanelActionFamilyOptionView[] {

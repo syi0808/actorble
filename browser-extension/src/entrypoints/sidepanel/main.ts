@@ -21,9 +21,11 @@ import {
   type SidepanelTargetSlotRowView,
 } from './scenario-editor.js'
 import type { BuilderStepActionFamily } from '../../builder/index.js'
+import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
 
 const scenarioRepository = createWxtScenarioStorageRepository()
-const targetTabId = targetTabIdFromLocation(window.location)
+const launchParams = sidepanelLaunchParamsFromUrl(window.location.href)
+const targetTabId = launchParams.targetTabId
 const editor = createSidepanelScenarioEditor({
   listScenarios() {
     return scenarioRepository.list()
@@ -105,6 +107,28 @@ const exportButton = requiredElement<HTMLButtonElement>('#export-button')
 const runButton = requiredElement<HTMLButtonElement>('#run-button')
 const recordButton = requiredElement<HTMLButtonElement>('#record-button')
 const recordStatus = requiredElement<HTMLElement>('#record-status')
+const recordedDraftReview = requiredElement<HTMLElement>('#recorded-draft-review')
+const recordedDraftSummary = requiredElement<HTMLElement>('#recorded-draft-summary')
+const recordedDraftValidation = requiredElement<HTMLElement>('#recorded-draft-validation')
+const recordedDraftSensitive = requiredElement<HTMLElement>('#recorded-draft-sensitive')
+const recordedDraftSensitiveConfirm = requiredElement<HTMLInputElement>(
+  '#recorded-draft-sensitive-confirm',
+)
+const recordedDraftReplaceButton = requiredElement<HTMLButtonElement>(
+  '#recorded-draft-replace-button',
+)
+const recordedDraftAppendButton = requiredElement<HTMLButtonElement>(
+  '#recorded-draft-append-button',
+)
+const recordedDraftDiscardButton = requiredElement<HTMLButtonElement>(
+  '#recorded-draft-discard-button',
+)
+const recordedDraftSaveNewButton = requiredElement<HTMLButtonElement>(
+  '#recorded-draft-save-new-button',
+)
+const recordedDraftExportButton = requiredElement<HTMLButtonElement>(
+  '#recorded-draft-export-button',
+)
 const stepList = requiredElement<HTMLUListElement>('#step-list')
 const stepSummary = requiredElement<HTMLElement>('#step-summary')
 const stepActionFamily = requiredElement<HTMLSelectElement>('#step-action-family')
@@ -196,6 +220,38 @@ recordButton.addEventListener('click', () => {
       ? editor.stopRecording()
       : editor.startRecording()
   ))
+})
+
+recordedDraftSensitiveConfirm.addEventListener('change', () => {
+  editor.confirmRecordedDraftSensitiveInputs(recordedDraftSensitiveConfirm.checked)
+  render(editor.getSnapshot())
+})
+
+recordedDraftReplaceButton.addEventListener('click', () => {
+  editor.replaceWithRecordedDraft()
+  render(editor.getSnapshot())
+})
+
+recordedDraftAppendButton.addEventListener('click', () => {
+  editor.appendRecordedDraftSteps()
+  render(editor.getSnapshot())
+})
+
+recordedDraftDiscardButton.addEventListener('click', () => {
+  editor.discardRecordedDraft()
+  render(editor.getSnapshot())
+})
+
+recordedDraftSaveNewButton.addEventListener('click', () => {
+  void runAction(() => editor.saveRecordedDraftAsNew())
+})
+
+recordedDraftExportButton.addEventListener('click', () => {
+  const exported = editor.exportRecordedDraft()
+  if (exported.ok) {
+    downloadFile(exported.value.filename, exported.value.jsonText, 'application/json')
+  }
+  render(editor.getSnapshot())
 })
 
 stepList.addEventListener('click', (event) => {
@@ -365,7 +421,7 @@ browser.runtime.onMessage.addListener((message) => {
 render(editor.getSnapshot())
 void runAction(async () => {
   await editor.refresh()
-  await editor.loadRecordedDraft()
+  await editor.loadRecordedDraft(launchParams.recordedDraftId)
 })
 
 async function runAction(action: () => Promise<unknown>): Promise<void> {
@@ -448,6 +504,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   renderIssues(view.issueViews)
   renderStatus(snapshot)
   recordStatus.textContent = recordSummary(snapshot)
+  renderRecordedDraftReview(view, snapshot)
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
@@ -470,6 +527,36 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   applyButtonView(runButton, view.buttons.run)
   applyButtonView(recordButton, view.buttons.record)
   applyButtonView(dryRunButton, view.buttons.dryRun)
+}
+
+function renderRecordedDraftReview(
+  view: ReturnType<typeof createSidepanelScenarioEditorView>,
+  snapshot: SidepanelScenarioEditorSnapshot,
+): void {
+  const review = view.recordedDraftReview
+  recordedDraftReview.hidden = review === undefined
+  if (review === undefined) {
+    recordedDraftSummary.textContent = 'No recorded draft'
+    recordedDraftValidation.textContent = 'None'
+    recordedDraftSensitive.textContent = 'No sensitive inputs'
+    recordedDraftSensitiveConfirm.checked = false
+    recordedDraftSensitiveConfirm.disabled = true
+    return
+  }
+
+  const sensitiveInputCount = snapshot.recordedDraftReview?.sensitiveInputCount ?? 0
+  recordedDraftSummary.textContent = review.summary
+  recordedDraftValidation.textContent = review.validationSummary
+  recordedDraftSensitive.textContent = review.sensitiveSummary
+  recordedDraftSensitiveConfirm.disabled = sensitiveInputCount === 0
+  if (document.activeElement !== recordedDraftSensitiveConfirm) {
+    recordedDraftSensitiveConfirm.checked = review.sensitiveInputsConfirmed
+  }
+  applyButtonView(recordedDraftReplaceButton, review.buttons.replace)
+  applyButtonView(recordedDraftAppendButton, review.buttons.append)
+  applyButtonView(recordedDraftDiscardButton, review.buttons.discard)
+  applyButtonView(recordedDraftSaveNewButton, review.buttons.saveAsNew)
+  applyButtonView(recordedDraftExportButton, review.buttons.export)
 }
 
 function renderTargetPicker(
@@ -785,14 +872,4 @@ function requiredElement<TElement extends HTMLElement>(selector: string): TEleme
 
 function capitalize(value: string): string {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
-}
-
-function targetTabIdFromLocation(location: Location): number | undefined {
-  const rawValue = new URL(location.href).searchParams.get('targetTabId')
-  if (rawValue === null) {
-    return undefined
-  }
-
-  const value = Number(rawValue)
-  return Number.isInteger(value) && value > 0 ? value : undefined
 }

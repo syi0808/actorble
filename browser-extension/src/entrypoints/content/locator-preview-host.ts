@@ -40,10 +40,11 @@ export function createContentLocatorPreviewHost(
 
     let actorble: ContentLocatorPreviewActorble
     try {
-      actorble = options.createActorble({
+      const actorbleOptions = {
         feedback: 'off',
         motion: false,
-      })
+      } as ActorbleFacadeOptions
+      actorble = options.createActorble(actorbleOptions)
     } catch (error) {
       return failure({
         code: 'runtime_error',

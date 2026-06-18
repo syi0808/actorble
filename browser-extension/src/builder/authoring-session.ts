@@ -239,6 +239,40 @@ export function openDraftDocument(
   )
 }
 
+export function appendDraftSteps(
+  state: ScenarioAuthoringSessionState,
+  steps: readonly BuilderDraftStep[],
+): ExtensionResult<ScenarioAuthoringSessionState> {
+  const document = state.draftDocument
+  if (document === undefined) {
+    return noDraftFailure('Select or create a scenario before appending recorded steps.')
+  }
+
+  if (steps.length === 0) {
+    return failure({
+      code: 'invalid_document',
+      message: 'Recorded draft has no steps to append.',
+      path: ['steps'],
+    })
+  }
+
+  const appendedSteps = cloneJson(steps)
+  const firstAppendedIndex = document.steps.length
+  const firstAppendedStep = appendedSteps[0]
+
+  return ok(withDraftDocument(
+    state,
+    {
+      ...document,
+      steps: [...document.steps, ...appendedSteps],
+    },
+    firstAppendedStep === undefined
+      ? state.selectedStepId
+      : stepIdFor(firstAppendedStep, firstAppendedIndex),
+    true,
+  ))
+}
+
 export function markScenarioSaved(
   state: ScenarioAuthoringSessionState,
   source: BuilderScenarioSource,

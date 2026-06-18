@@ -145,11 +145,12 @@ export function createContentRuntimeHost(
     let actorble: ContentActorbleFacade
 
     try {
-      actorble = options.createActorble({
+      const actorbleOptions = {
         trace,
         feedback: 'debug',
         motion: true,
-      })
+      } as ActorbleFacadeOptions
+      actorble = options.createActorble(actorbleOptions)
     } catch (error) {
       return runtimeFailure('Actorble runtime could not be created.', {
         error: describeUnknownError(error),

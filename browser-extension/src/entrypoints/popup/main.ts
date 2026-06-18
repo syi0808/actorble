@@ -5,9 +5,18 @@ import {
   createPopupRunControlsView,
   type PopupRunControlsSnapshot,
 } from './run-controls.js'
+import {
+  recordedDraftIdFromRecordStopResult,
+  sidepanelPathForHandoff,
+} from './sidepanel-handoff.js'
 
 type ChromeSidePanelApi = Readonly<{
   open(options: Readonly<{ windowId?: number }>): Promise<void>
+  setOptions?(options: Readonly<{
+    path?: string
+    tabId?: number
+    enabled?: boolean
+  }>): Promise<void>
 }>
 
 type ChromeTabsApi = Readonly<{
@@ -70,11 +79,12 @@ recordButton.addEventListener('click', () => {
         : controls.startRecording()
     ))
 
+    const recordedDraftId = recordedDraftIdFromRecordStopResult(result)
     if (
       snapshot.currentRecord?.status === 'recording' &&
-      isRecordStopDraftResult(result)
+      recordedDraftId !== undefined
     ) {
-      await openSidePanel(panelButton)
+      await openSidePanel(panelButton, recordedDraftId)
     }
   })()
 })
@@ -120,26 +130,6 @@ async function runAction(
   const result = await operation
   render(controls.getSnapshot())
   return result
-}
-
-function isRecordStopDraftResult(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-
-  const result = value as Readonly<{
-    ok?: unknown
-    value?: Readonly<{
-      kind?: unknown
-      recordedDraft?: unknown
-    }>
-  }>
-
-  return (
-    result.ok === true &&
-    result.value?.kind === 'record:stop' &&
-    result.value.recordedDraft !== undefined
-  )
 }
 
 function render(snapshot: PopupRunControlsSnapshot): void {
@@ -191,7 +181,10 @@ function applyButtonView(
   button.dataset.pending = view.pending ? 'true' : 'false'
 }
 
-async function openSidePanel(button: HTMLButtonElement): Promise<void> {
+async function openSidePanel(
+  button: HTMLButtonElement,
+  recordedDraftId?: string,
+): Promise<void> {
   button.dataset.pending = 'true'
   button.disabled = true
   statusMessage.textContent = 'Opening panel'
@@ -202,13 +195,26 @@ async function openSidePanel(button: HTMLButtonElement): Promise<void> {
       throw new Error('Chrome sidePanel API is unavailable.')
     }
 
+    const targetTabId = await getCurrentTabId()
+    const path = sidepanelPathForHandoff({
+      targetTabId,
+      recordedDraftId,
+    })
+    if (chromeApi.sidePanel.setOptions === undefined && recordedDraftId !== undefined) {
+      throw new Error('Chrome sidePanel setOptions API is unavailable.')
+    }
+    await chromeApi.sidePanel.setOptions?.({
+      path,
+      ...(targetTabId === undefined ? {} : { tabId: targetTabId }),
+      enabled: true,
+    })
     await chromeApi.sidePanel.open({
       windowId: chromeApi.windows?.WINDOW_ID_CURRENT ?? -2,
     })
     statusMessage.textContent = 'Panel opened'
     window.close()
   } catch {
-    await openSidePanelFallback()
+    await openSidePanelFallback(recordedDraftId)
     statusMessage.textContent = 'Panel opened in a tab'
     window.close()
   } finally {
@@ -217,12 +223,14 @@ async function openSidePanel(button: HTMLButtonElement): Promise<void> {
   }
 }
 
-async function openSidePanelFallback(): Promise<void> {
+async function openSidePanelFallback(recordedDraftId?: string): Promise<void> {
   const chromeApi = chromeExtension()
   const targetTabId = await getCurrentTabId()
-  const url = chromeApi.runtime?.getURL(
-    targetTabId === undefined ? 'sidepanel.html' : `sidepanel.html?targetTabId=${targetTabId}`,
-  ) ?? '/sidepanel.html'
+  const path = sidepanelPathForHandoff({
+    targetTabId,
+    recordedDraftId,
+  })
+  const url = chromeApi.runtime?.getURL(path) ?? `/${path}`
 
   await chromeApi.tabs?.create?.({ url })
 }
