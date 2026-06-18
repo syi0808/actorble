@@ -8,6 +8,7 @@ import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
 } from '../src/scenario/types.js'
+import type { ScenarioCodeExport } from '../src/scenario/export-code.js'
 import { failure, ok, type ExtensionResult } from '../src/shared/result.js'
 import type {
   ScenarioJsonExport,
@@ -207,6 +208,55 @@ describe('sidepanel scenario editor', () => {
       },
     })
     expect(exports).toEqual(['imported-scenario'])
+  })
+
+  it('exports the selected draft as TypeScript without using JSON storage export', async () => {
+    const { editor, exports } = createTestEditor()
+    await editor.refresh()
+
+    const result = editor.exportSelectedCode()
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        filename: 'browser-login-flow.actorble.ts',
+      },
+    } satisfies ExtensionResult<Partial<ScenarioCodeExport>>)
+    if (result.ok) {
+      expect(result.value.source).toContain("export const scenario: Scenario =")
+      expect(result.value.source).toContain("await actorble.run(scenario, runOptions)")
+    }
+    expect(exports).toEqual([])
+  })
+
+  it('surfaces TypeScript export errors on the editor snapshot', async () => {
+    const unsupported = scenarioRecord(
+      'unsupported-export',
+      'Unsupported export',
+      '2026-06-17T00:03:00.000Z',
+      {
+        schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
+        id: 'unsupported-export',
+        name: 'Unsupported export',
+        platform: { browser: { capability: 'future' } },
+        steps: [{ action: 'delay', duration: 1 }],
+      },
+    )
+    const { editor } = createTestEditor({ scenarios: [unsupported] })
+    await editor.refresh()
+
+    const result = editor.exportSelectedCode()
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'unsupported_platform_extension',
+          path: ['platform'],
+        },
+      ],
+    })
+    expect(editor.getSnapshot().issues).toEqual(result.ok ? [] : result.issues)
   })
 
   it('dispatches a selected-step dry run with one compiled step and a dry-run id', async () => {

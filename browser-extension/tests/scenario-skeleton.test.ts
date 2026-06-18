@@ -132,16 +132,15 @@ describe('scenario skeleton contracts', () => {
     expect(migration.value).toBe(draftScenario)
   })
 
-  it('keeps code export as an explicit stub', () => {
+  it('exports draft documents to browser TypeScript code', () => {
     const codeExport = exportScenarioToCode(draftScenario)
 
-    expect(codeExport.ok).toBe(false)
-    expect(codeExport).toMatchObject({
-      issues: [
-        {
-          code: 'not_implemented',
-        },
-      ],
-    })
+    expect(codeExport.ok).toBe(true)
+    if (!codeExport.ok) {
+      return
+    }
+    expect(codeExport.value.filename).toBe('skeleton-smoke.actorble.ts')
+    expect(codeExport.value.source).toContain("import { Actorble, type Scenario } from '@actorble/browser'")
+    expect(codeExport.value.source).toContain("action: 'delay'")
   })
 })

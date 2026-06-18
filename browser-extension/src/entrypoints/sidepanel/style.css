@@ -115,6 +115,12 @@ select {
   font-size: 13px;
 }
 
+.compact-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 112px;
+}
+
 input[readonly] {
   color: var(--muted);
   background: var(--panel-strong);

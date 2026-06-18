@@ -10,6 +10,10 @@ import {
   type BrowserRuntimeCompilation,
 } from '../../scenario/compile-to-browser-runtime.js'
 import {
+  exportScenarioToCode,
+  type ScenarioCodeExport,
+} from '../../scenario/export-code.js'
+import {
   documentWithRecordedDraftDefaults,
   type RecordedScenarioDraftHandoff,
 } from '../../recorder/workflow.js'
@@ -205,6 +209,7 @@ export type SidepanelScenarioEditor = Readonly<{
   saveDraft(): Promise<ExtensionResult<ScenarioRecord>>
   importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>
   exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>>
+  exportSelectedCode(): ExtensionResult<ScenarioCodeExport>
   runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
   dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
   startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
@@ -565,6 +570,36 @@ export function createSidepanelScenarioEditor(
       pendingAction: null,
       issues: exported.ok ? [] : exported.issues,
       message: exported.ok ? 'Exported' : undefined,
+    }
+
+    return exported
+  }
+
+  function exportSelectedCode(): ExtensionResult<ScenarioCodeExport> {
+    if (snapshot.draftDocument === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a scenario before exporting TypeScript.',
+      })
+    }
+
+    const validation = validateScenarioDocument(snapshot.draftDocument)
+    if (!validation.ok) {
+      snapshot = {
+        ...snapshot,
+        pendingAction: null,
+        issues: validation.issues,
+        message: undefined,
+      }
+      return failure(validation.issues)
+    }
+
+    const exported = exportScenarioToCode(validation.value)
+    snapshot = {
+      ...snapshot,
+      pendingAction: null,
+      issues: exported.ok ? [] : exported.issues,
+      message: exported.ok ? 'Exported TypeScript' : undefined,
     }
 
     return exported
@@ -1084,6 +1119,7 @@ export function createSidepanelScenarioEditor(
     saveDraft,
     importJson,
     exportSelected,
+    exportSelectedCode,
     runSelectedScenario,
     dryRunSelectedStep,
     startRecording,

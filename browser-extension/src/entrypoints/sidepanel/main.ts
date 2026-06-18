@@ -90,6 +90,7 @@ const locatorPreviewer = createLocatorPreviewer({
 
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
+const exportFormat = requiredElement<HTMLSelectElement>('#export-format')
 const scenarioSummary = requiredElement<HTMLElement>('#scenario-summary')
 const scenarioName = requiredElement<HTMLInputElement>('#scenario-name')
 const scenarioDescription = requiredElement<HTMLTextAreaElement>('#scenario-description')
@@ -313,11 +314,20 @@ async function importSelectedFile(): Promise<void> {
 }
 
 async function exportSelectedScenario(): Promise<void> {
+  if (exportFormat.value === 'typescript') {
+    const exported = editor.exportSelectedCode()
+    if (exported.ok) {
+      downloadFile(exported.value.filename, exported.value.source, 'text/typescript')
+    }
+    render(editor.getSnapshot())
+    return
+  }
+
   const operation = editor.exportSelected()
   render(editor.getSnapshot())
   const exported = await operation
   if (exported.ok) {
-    downloadJson(exported.value.filename, exported.value.jsonText)
+    downloadFile(exported.value.filename, exported.value.jsonText, 'application/json')
   }
   render(editor.getSnapshot())
 }
@@ -351,6 +361,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
 
   scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
   scenarioFile.disabled = view.buttons.import.disabled
+  exportFormat.disabled = view.buttons.export.disabled
   applyButtonView(validateButton, view.buttons.validate)
   applyButtonView(saveButton, view.buttons.save)
   applyButtonView(exportButton, view.buttons.export)
@@ -582,8 +593,8 @@ function setInputValue(
   element.value = value
 }
 
-function downloadJson(filename: string, jsonText: string): void {
-  const url = URL.createObjectURL(new Blob([jsonText], { type: 'application/json' }))
+function downloadFile(filename: string, content: string, mimeType: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }))
   const link = document.createElement('a')
 
   link.href = url

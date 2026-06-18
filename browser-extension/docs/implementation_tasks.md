@@ -396,7 +396,7 @@ src/recorder
 
 ### T16 TypeScript Code Export
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Export scenario documents to browser-oriented TypeScript code
   artifacts for users who want to move from GUI authoring to source-controlled
   Actorble scripts.
