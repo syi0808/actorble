@@ -1,6 +1,9 @@
 import type {
   ActorbleExtensionMessage,
   ExtensionMessageKind,
+  InspectorCancellationReason,
+  InspectorSessionCorrelation,
+  InspectorTargetMetadata,
   PopupGetStateMessage,
   RequiredRunCorrelation,
   RequiredTabCorrelation,
@@ -71,12 +74,31 @@ export type BackgroundRecordSession = Readonly<{
   updatedAt: number
 }>
 
-export type BackgroundSessionSnapshot = BackgroundRunSession | BackgroundRecordSession
+export type BackgroundInspectorSession = Readonly<{
+  type: 'inspector'
+  sessionId: string
+  tabId: number
+  frameId?: number
+  scenarioId?: string
+  runId?: string
+  status: 'inspecting' | 'selected' | 'cancelled' | 'stopped'
+  startedAt: number
+  updatedAt: number
+  selectedTarget?: InspectorTargetMetadata
+  reason?: InspectorCancellationReason
+  message?: string
+}>
+
+export type BackgroundSessionSnapshot =
+  | BackgroundRunSession
+  | BackgroundRecordSession
+  | BackgroundInspectorSession
 
 export type BackgroundCommandReceipt = Readonly<{
   kind: ExtensionMessageKind
   tabId: number
   frameId?: number
+  sessionId?: string
   scenarioId?: string
   runId?: string
   contentReady: boolean
@@ -107,6 +129,7 @@ export type BackgroundOrchestrator = Readonly<{
   resolveActiveTarget(frameId?: number): Promise<ExtensionResult<BackgroundTarget>>
   getRunSession(runId: string): BackgroundRunSession | null
   getRecordSession(correlation: Partial<RequiredTabCorrelation> & Readonly<{ runId?: string }>): BackgroundRecordSession | null
+  getInspectorSession(sessionId: string): BackgroundInspectorSession | null
 }>
 
 export type BackgroundOrchestratorOptions = Readonly<{
@@ -138,6 +161,16 @@ type TraceEventMessage = Extract<
   Readonly<{ kind: 'trace:event' }>
 >
 
+type InspectorSelectedMessage = Extract<
+  ActorbleExtensionMessage,
+  Readonly<{ kind: 'inspector:selected' }>
+>
+
+type InspectorCancelledMessage = Extract<
+  ActorbleExtensionMessage,
+  Readonly<{ kind: 'inspector:cancelled' }>
+>
+
 export function createBackgroundOrchestrator(
   host: BackgroundBrowserHost,
   options: BackgroundOrchestratorOptions = {},
@@ -145,6 +178,7 @@ export function createBackgroundOrchestrator(
   const getNow = options.now ?? Date.now
   const runSessions = new Map<string, BackgroundRunSession>()
   const recordSessions = new Map<string, BackgroundRecordSession>()
+  const inspectorSessions = new Map<string, BackgroundInspectorSession>()
 
   async function handleMessage(
     message: unknown,
@@ -170,6 +204,10 @@ export function createBackgroundOrchestrator(
         return ingestRuntimeStatus(message)
       case 'trace:event':
         return ingestTraceEvent(message)
+      case 'inspector:selected':
+        return ingestInspectorSelected(message)
+      case 'inspector:cancelled':
+        return ingestInspectorCancelled(message)
       case 'popup:get-state':
         return getPopupState(message)
       case 'scenario:validate':
@@ -374,8 +412,9 @@ export function createBackgroundOrchestrator(
       case 'record:stop':
         return upsertRecordSession(message.payload, 'stopped')
       case 'inspector:start':
+        return upsertInspectorSession(message.payload, 'inspecting')
       case 'inspector:stop':
-        return undefined
+        return upsertInspectorSession(message.payload, 'stopped')
     }
   }
 
@@ -443,6 +482,59 @@ export function createBackgroundOrchestrator(
     return recordSessions.get(recordSessionId(correlation as RequiredTabCorrelation)) ?? null
   }
 
+  function ingestInspectorSelected(
+    message: InspectorSelectedMessage,
+  ): ExtensionResult<BackgroundCommandReceipt> {
+    const session = upsertInspectorSession(message.payload, 'selected', {
+      selectedTarget: message.payload.target,
+    })
+    return ok(receiptFor(message.kind, message.payload, true, session))
+  }
+
+  function ingestInspectorCancelled(
+    message: InspectorCancelledMessage,
+  ): ExtensionResult<BackgroundCommandReceipt> {
+    const session = upsertInspectorSession(message.payload, 'cancelled', {
+      reason: message.payload.reason,
+      message: message.payload.message,
+    })
+    return ok(receiptFor(message.kind, message.payload, true, session))
+  }
+
+  function upsertInspectorSession(
+    correlation: InspectorSessionCorrelation,
+    status: BackgroundInspectorSession['status'],
+    update: Readonly<{
+      selectedTarget?: InspectorTargetMetadata
+      reason?: InspectorCancellationReason
+      message?: string
+    }> = {},
+  ): BackgroundInspectorSession {
+    const timestamp = getNow()
+    const existing = inspectorSessions.get(correlation.sessionId)
+    const session = {
+      type: 'inspector',
+      sessionId: correlation.sessionId,
+      tabId: correlation.tabId,
+      ...optionalFrameId(correlation.frameId),
+      ...(correlation.scenarioId === undefined ? {} : { scenarioId: correlation.scenarioId }),
+      ...(correlation.runId === undefined ? {} : { runId: correlation.runId }),
+      status,
+      startedAt: existing?.startedAt ?? timestamp,
+      updatedAt: timestamp,
+      ...(update.selectedTarget === undefined ? {} : { selectedTarget: update.selectedTarget }),
+      ...(update.reason === undefined ? {} : { reason: update.reason }),
+      ...(update.message === undefined ? {} : { message: update.message }),
+    } satisfies BackgroundInspectorSession
+
+    inspectorSessions.set(correlation.sessionId, session)
+    return session
+  }
+
+  function getInspectorSession(sessionId: string): BackgroundInspectorSession | null {
+    return inspectorSessions.get(sessionId) ?? null
+  }
+
   function latestRunSession(
     filter: RequiredTabCorrelation & Readonly<{ scenarioId?: string }>,
   ): BackgroundRunSession | undefined {
@@ -472,6 +564,7 @@ export function createBackgroundOrchestrator(
     resolveActiveTarget,
     getRunSession,
     getRecordSession,
+    getInspectorSession,
   }
 }
 
@@ -523,7 +616,8 @@ export function createWxtBackgroundBrowserHost(
 
 function receiptFor(
   kind: ExtensionMessageKind,
-  correlation: RequiredTabCorrelation & Readonly<{ scenarioId?: string; runId?: string }>,
+  correlation: RequiredTabCorrelation &
+    Readonly<{ sessionId?: string; scenarioId?: string; runId?: string }>,
   contentReady: boolean,
   session?: BackgroundSessionSnapshot,
 ): BackgroundCommandReceipt {
@@ -531,6 +625,7 @@ function receiptFor(
     kind,
     tabId: correlation.tabId,
     ...optionalFrameId(correlation.frameId),
+    ...(correlation.sessionId === undefined ? {} : { sessionId: correlation.sessionId }),
     ...(correlation.scenarioId === undefined ? {} : { scenarioId: correlation.scenarioId }),
     ...(correlation.runId === undefined ? {} : { runId: correlation.runId }),
     contentReady,

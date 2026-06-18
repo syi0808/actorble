@@ -1,5 +1,7 @@
 import { createActorble } from '@actorble/browser'
 import { browser } from 'wxt/browser'
+import { isExtensionMessageOfKind } from '../../messaging/index.js'
+import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
 import { createContentRuntimeHost } from './runtime-host.js'
 
 export default defineContentScript({
@@ -7,6 +9,12 @@ export default defineContentScript({
   allFrames: true,
   runAt: 'document_idle',
   main() {
+    const inspectorHost = createContentInspectorHost({
+      adapter: createDomInspectorAdapter(),
+      sendMessage(message) {
+        return browser.runtime.sendMessage(message)
+      },
+    })
     const runtimeHost = createContentRuntimeHost({
       createActorble,
       sendMessage(message) {
@@ -14,6 +22,15 @@ export default defineContentScript({
       },
     })
 
-    browser.runtime.onMessage.addListener((message) => runtimeHost.handleMessage(message))
+    browser.runtime.onMessage.addListener((message) => {
+      if (
+        isExtensionMessageOfKind(message, 'inspector:start') ||
+        isExtensionMessageOfKind(message, 'inspector:stop')
+      ) {
+        return inspectorHost.handleMessage(message)
+      }
+
+      return runtimeHost.handleMessage(message)
+    })
   },
 })

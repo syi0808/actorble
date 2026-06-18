@@ -1,4 +1,8 @@
 import { browser } from 'wxt/browser'
+import {
+  createTargetPicker,
+  createTargetPickerView,
+} from '../../inspector/target-picker.js'
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
 import type { TraceRunDisplayView } from '../../trace/index.js'
 import {
@@ -9,6 +13,7 @@ import {
 } from './scenario-editor.js'
 
 const scenarioRepository = createWxtScenarioStorageRepository()
+const targetTabId = targetTabIdFromLocation(window.location)
 const editor = createSidepanelScenarioEditor({
   listScenarios() {
     return scenarioRepository.list()
@@ -39,7 +44,24 @@ const editor = createSidepanelScenarioEditor({
     return browser.runtime.sendMessage(message)
   },
 }, {
-  targetTabId: targetTabIdFromLocation(window.location),
+  targetTabId,
+})
+const targetPicker = createTargetPicker({
+  async getActiveTab() {
+    const [activeTab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    })
+    return activeTab ?? null
+  },
+  async getTab(tabId) {
+    return await browser.tabs.get(tabId)
+  },
+  sendMessage(message) {
+    return browser.runtime.sendMessage(message)
+  },
+}, {
+  targetTabId,
 })
 
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
@@ -62,6 +84,11 @@ const stepFromJson = requiredElement<HTMLTextAreaElement>('#step-from-json')
 const stepToJson = requiredElement<HTMLTextAreaElement>('#step-to-json')
 const stepInputJson = requiredElement<HTMLTextAreaElement>('#step-input-json')
 const dryRunButton = requiredElement<HTMLButtonElement>('#dry-run-button')
+const targetPickerStatus = requiredElement<HTMLElement>('#target-picker-status')
+const targetPickerSelected = requiredElement<HTMLElement>('#target-picker-selected')
+const targetPickerIssues = requiredElement<HTMLElement>('#target-picker-issues')
+const targetPickerStartButton = requiredElement<HTMLButtonElement>('#target-picker-start-button')
+const targetPickerStopButton = requiredElement<HTMLButtonElement>('#target-picker-stop-button')
 const validationSummary = requiredElement<HTMLElement>('#validation-summary')
 const issueList = requiredElement<HTMLUListElement>('#issue-list')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
@@ -161,8 +188,19 @@ dryRunButton.addEventListener('click', () => {
   void runAction(() => editor.dryRunSelectedStep())
 })
 
+targetPickerStartButton.addEventListener('click', () => {
+  void runTargetPickerAction(() => targetPicker.start(editor.getSnapshot().selectedScenarioId))
+})
+
+targetPickerStopButton.addEventListener('click', () => {
+  void runTargetPickerAction(() => targetPicker.stop())
+})
+
 browser.runtime.onMessage.addListener((message) => {
-  if (editor.ingestMessage(message)) {
+  const editorHandled = editor.ingestMessage(message)
+  const pickerHandled = targetPicker.ingestMessage(message)
+
+  if (editorHandled || pickerHandled) {
     render(editor.getSnapshot())
   }
 })
@@ -171,6 +209,13 @@ render(editor.getSnapshot())
 void runAction(() => editor.refresh())
 
 async function runAction(action: () => Promise<unknown>): Promise<void> {
+  const operation = action()
+  render(editor.getSnapshot())
+  await operation
+  render(editor.getSnapshot())
+}
+
+async function runTargetPickerAction(action: () => Promise<unknown>): Promise<void> {
   const operation = action()
   render(editor.getSnapshot())
   await operation
@@ -225,6 +270,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
+  renderTargetPicker()
 
   scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
   scenarioFile.disabled = view.buttons.import.disabled
@@ -233,6 +279,15 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   applyButtonView(exportButton, view.buttons.export)
   applyButtonView(runButton, view.buttons.run)
   applyButtonView(dryRunButton, view.buttons.dryRun)
+}
+
+function renderTargetPicker(): void {
+  const view = createTargetPickerView(targetPicker.getSnapshot())
+  targetPickerStatus.textContent = view.statusSummary
+  targetPickerSelected.textContent = view.selectedSummary
+  targetPickerIssues.textContent = view.issueSummary
+  applyButtonView(targetPickerStartButton, view.buttons.start)
+  applyButtonView(targetPickerStopButton, view.buttons.stop)
 }
 
 function renderScenarioOptions(

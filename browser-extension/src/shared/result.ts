@@ -12,6 +12,7 @@ export type ExtensionIssueCode =
   | 'export_error'
   | 'storage_error'
   | 'runtime_error'
+  | 'inspector_error'
 
 export type ExtensionIssuePath = readonly (string | number)[]
 

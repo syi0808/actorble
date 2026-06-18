@@ -96,6 +96,8 @@ export function createContentRuntimeHost(
       case 'record:stop':
       case 'inspector:start':
       case 'inspector:stop':
+      case 'inspector:selected':
+      case 'inspector:cancelled':
       case 'trace:event':
       case 'runtime:status':
       case 'popup:get-state':

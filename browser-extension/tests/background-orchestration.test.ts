@@ -166,6 +166,133 @@ describe('background orchestration', () => {
     })
   })
 
+  it('routes inspector sessions and ingests selected target metadata', async () => {
+    const activeTab = await createActiveTab()
+    const sendMessage = vi
+      .spyOn(fakeBrowser.tabs, 'sendMessage')
+      .mockResolvedValue({ received: true })
+    const orchestrator = createTestOrchestrator()
+    const start = createExtensionMessage({
+      kind: 'inspector:start',
+      payload: {
+        tabId: activeTab.id,
+        frameId: 0,
+        scenarioId: 'scenario-1',
+        sessionId: 'inspect-1',
+      },
+    })
+
+    const startResult = await orchestrator.handleMessage(start)
+    now += 25
+    const selectedResult = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'inspector:selected',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          sessionId: 'inspect-1',
+          target: {
+            tagName: 'button',
+            id: 'submit',
+            text: 'Sign in',
+            frameUrl: 'http://localhost:3000/dashboard',
+            rect: {
+              x: 10,
+              y: 20,
+              width: 100,
+              height: 32,
+            },
+          },
+        },
+      }),
+    )
+
+    expect(startResult).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'inspector:start',
+        sessionId: 'inspect-1',
+        session: {
+          type: 'inspector',
+          sessionId: 'inspect-1',
+          status: 'inspecting',
+        },
+      },
+    })
+    expect(sendMessage).toHaveBeenCalledWith(activeTab.id, start, { frameId: 0 })
+    expect(selectedResult).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'inspector:selected',
+        sessionId: 'inspect-1',
+        session: {
+          type: 'inspector',
+          sessionId: 'inspect-1',
+          status: 'selected',
+          selectedTarget: {
+            tagName: 'button',
+            id: 'submit',
+          },
+          updatedAt: 1_700_000_000_025,
+        },
+      },
+    })
+    expect(orchestrator.getInspectorSession('inspect-1')).toMatchObject({
+      sessionId: 'inspect-1',
+      status: 'selected',
+      selectedTarget: {
+        tagName: 'button',
+        id: 'submit',
+      },
+    })
+  })
+
+  it('ingests inspector cancellation reasons', async () => {
+    const activeTab = await createActiveTab()
+    vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          sessionId: 'inspect-1',
+        },
+      }),
+    )
+    now += 50
+    const result = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'inspector:cancelled',
+        payload: {
+          tabId: activeTab.id,
+          frameId: 0,
+          sessionId: 'inspect-1',
+          reason: 'navigation',
+          message: 'Page navigation ended inspection.',
+        },
+      }),
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'inspector:cancelled',
+        session: {
+          type: 'inspector',
+          sessionId: 'inspect-1',
+          status: 'cancelled',
+          reason: 'navigation',
+          message: 'Page navigation ended inspection.',
+          updatedAt: 1_700_000_000_050,
+        },
+      },
+    })
+  })
+
   it('returns popup state for the active tab and latest matching sessions', async () => {
     const activeTab = await createActiveTab()
     vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockResolvedValue({ received: true })

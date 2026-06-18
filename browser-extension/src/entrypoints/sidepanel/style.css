@@ -329,13 +329,15 @@ button[data-pending="true"] {
   background: color-mix(in srgb, var(--danger) 12%, var(--panel));
 }
 
-.run-fields {
+.run-fields,
+.target-picker-fields {
   display: grid;
   gap: 10px;
   margin: 0;
 }
 
-.run-fields div {
+.run-fields div,
+.target-picker-fields div {
   display: grid;
   gap: 3px;
 }

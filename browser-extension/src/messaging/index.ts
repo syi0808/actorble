@@ -13,6 +13,8 @@ export const extensionMessageKinds = [
   'record:stop',
   'inspector:start',
   'inspector:stop',
+  'inspector:selected',
+  'inspector:cancelled',
   'trace:event',
   'runtime:status',
   'popup:get-state',
@@ -37,6 +39,41 @@ export type RequiredRunCorrelation = RequiredTabCorrelation &
     scenarioId: string
     runId: string
   }>
+
+export type InspectorSessionCorrelation = RequiredTabCorrelation &
+  Readonly<{
+    sessionId: string
+    scenarioId?: string
+    runId?: string
+  }>
+
+export type InspectorTargetRect = Readonly<{
+  x: number
+  y: number
+  width: number
+  height: number
+}>
+
+export type InspectorTargetMetadata = Readonly<{
+  tagName: string
+  rect: InspectorTargetRect
+  frameUrl?: string
+  id?: string
+  classes?: readonly string[]
+  role?: string
+  ariaLabel?: string
+  labelText?: string
+  testId?: string
+  inputType?: string
+  href?: string
+  text?: string
+}>
+
+export type InspectorCancellationReason =
+  | 'user'
+  | 'stopped'
+  | 'navigation'
+  | 'content_lost'
 
 export type ExtensionMessage<
   TKind extends ExtensionMessageKind,
@@ -89,19 +126,28 @@ export type RecordStopMessage = ExtensionMessage<
 
 export type InspectorStartMessage = ExtensionMessage<
   'inspector:start',
-  RequiredTabCorrelation &
-    Readonly<{
-      scenarioId?: string
-      runId?: string
-    }>
+  InspectorSessionCorrelation
 >
 
 export type InspectorStopMessage = ExtensionMessage<
   'inspector:stop',
-  RequiredTabCorrelation &
+  InspectorSessionCorrelation
+>
+
+export type InspectorSelectedMessage = ExtensionMessage<
+  'inspector:selected',
+  InspectorSessionCorrelation &
     Readonly<{
-      scenarioId?: string
-      runId?: string
+      target: InspectorTargetMetadata
+    }>
+>
+
+export type InspectorCancelledMessage = ExtensionMessage<
+  'inspector:cancelled',
+  InspectorSessionCorrelation &
+    Readonly<{
+      reason: InspectorCancellationReason
+      message?: string
     }>
 >
 
@@ -139,6 +185,8 @@ export type ActorbleExtensionMessage =
   | RecordStopMessage
   | InspectorStartMessage
   | InspectorStopMessage
+  | InspectorSelectedMessage
+  | InspectorCancelledMessage
   | TraceEventMessage
   | RuntimeStatusMessage
   | PopupGetStateMessage
@@ -197,6 +245,13 @@ const traceEventLevels = [
   'error',
 ] as const satisfies readonly NonNullable<TraceDisplayEvent['level']>[]
 
+const inspectorCancellationReasons = [
+  'user',
+  'stopped',
+  'navigation',
+  'content_lost',
+] as const satisfies readonly InspectorCancellationReason[]
+
 function isPayloadForKind(
   kind: ExtensionMessageKind,
   payload: unknown,
@@ -218,9 +273,18 @@ function isPayloadForKind(
       return hasRequiredRunCorrelation(payload)
     case 'record:start':
     case 'record:stop':
+      return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload)
     case 'inspector:start':
     case 'inspector:stop':
-      return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload)
+      return hasInspectorSessionCorrelation(payload)
+    case 'inspector:selected':
+      return hasInspectorSessionCorrelation(payload) && isInspectorTargetMetadata(payload.target)
+    case 'inspector:cancelled':
+      return (
+        hasInspectorSessionCorrelation(payload) &&
+        isInspectorCancellationReason(payload.reason) &&
+        isOptionalString(payload.message)
+      )
     case 'trace:event':
       return hasRequiredRunCorrelation(payload) && isTraceDisplayEvent(payload.event)
     case 'runtime:status':
@@ -262,6 +326,17 @@ function hasOptionalSessionCorrelation(payload: UnknownRecord): boolean {
   return isOptionalString(payload.scenarioId) && isOptionalString(payload.runId)
 }
 
+function hasInspectorSessionCorrelation(
+  payload: UnknownRecord,
+): payload is UnknownRecord & InspectorSessionCorrelation {
+  return (
+    hasRequiredTabCorrelation(payload) &&
+    typeof payload.sessionId === 'string' &&
+    payload.sessionId.length > 0 &&
+    hasOptionalSessionCorrelation(payload)
+  )
+}
+
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string'
 }
@@ -299,6 +374,46 @@ function isTraceDisplayEvent(value: unknown): value is TraceDisplayEvent {
     isOptionalTraceEventLevel(value.level) &&
     isOptionalString(value.message) &&
     (value.details === undefined || isRecord(value.details))
+  )
+}
+
+function isInspectorCancellationReason(
+  value: unknown,
+): value is InspectorCancellationReason {
+  return (
+    typeof value === 'string' &&
+    inspectorCancellationReasons.includes(value as InspectorCancellationReason)
+  )
+}
+
+function isInspectorTargetMetadata(value: unknown): value is InspectorTargetMetadata {
+  if (!isRecord(value) || !isRecord(value.rect)) {
+    return false
+  }
+
+  return (
+    typeof value.tagName === 'string' &&
+    isFiniteNumber(value.rect.x) &&
+    isFiniteNumber(value.rect.y) &&
+    isFiniteNumber(value.rect.width) &&
+    isFiniteNumber(value.rect.height) &&
+    isOptionalString(value.frameUrl) &&
+    isOptionalString(value.id) &&
+    isOptionalStringArray(value.classes) &&
+    isOptionalString(value.role) &&
+    isOptionalString(value.ariaLabel) &&
+    isOptionalString(value.labelText) &&
+    isOptionalString(value.testId) &&
+    isOptionalString(value.inputType) &&
+    isOptionalString(value.href) &&
+    isOptionalString(value.text)
+  )
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((item) => typeof item === 'string'))
   )
 }
 

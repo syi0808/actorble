@@ -303,7 +303,7 @@ src/recorder
 
 ### T11 Inspector Target Picker
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add target picker orchestration between side panel and content
   script. The inspector coordinates overlay and selection; runtime target
   resolution remains in `@actorble/browser`.

@@ -94,13 +94,48 @@ const validMessages = [
     payload: {
       tabId: 7,
       frameId: 0,
+      sessionId: 'inspect-1',
     },
   },
   {
     kind: 'inspector:stop',
     payload: {
       tabId: 7,
+      sessionId: 'inspect-1',
       scenarioId: 'scenario-1',
+    },
+  },
+  {
+    kind: 'inspector:selected',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      sessionId: 'inspect-1',
+      scenarioId: 'scenario-1',
+      target: {
+        tagName: 'button',
+        id: 'submit',
+        classes: ['primary'],
+        role: 'button',
+        ariaLabel: 'Sign in',
+        text: 'Sign in',
+        frameUrl: 'http://localhost:3000/login',
+        rect: {
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 32,
+        },
+      },
+    },
+  },
+  {
+    kind: 'inspector:cancelled',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      sessionId: 'inspect-1',
+      reason: 'user',
     },
   },
   {
@@ -140,6 +175,8 @@ describe('messaging skeleton contracts', () => {
       'record:stop',
       'inspector:start',
       'inspector:stop',
+      'inspector:selected',
+      'inspector:cancelled',
       'trace:event',
       'runtime:status',
       'popup:get-state',
@@ -196,8 +233,10 @@ describe('messaging skeleton contracts', () => {
   it.each([
     ['record:start', { frameId: 0 }],
     ['record:stop', { scenarioId: 'scenario-1' }],
-    ['inspector:start', { runId: 'run-1' }],
+    ['inspector:start', { tabId: 7 }],
     ['inspector:stop', { frameId: 0 }],
+    ['inspector:selected', { tabId: 7, sessionId: 'inspect-1' }],
+    ['inspector:cancelled', { tabId: 7, reason: 'user' }],
   ])('rejects %s messages with missing tab correlation', (kind, payload) => {
     expect(isActorbleExtensionMessage({ kind, payload })).toBe(false)
   })
@@ -219,6 +258,49 @@ describe('messaging skeleton contracts', () => {
         payload: {
           tabId: 7,
           scenarioId: 123,
+          sessionId: 'inspect-1',
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:stop',
+        payload: {
+          tabId: 7,
+          sessionId: 123,
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects invalid inspector selected and cancellation payloads', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:selected',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          target: {
+            tagName: 'button',
+            rect: {
+              x: 10,
+              y: 20,
+              width: Number.NaN,
+              height: 32,
+            },
+          },
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:cancelled',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          reason: 'unknown',
         },
       }),
     ).toBe(false)
