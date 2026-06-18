@@ -307,8 +307,12 @@ dryRunButton.addEventListener('click', () => {
 })
 
 targetPickerStartButton.addEventListener('click', () => {
+  const snapshot = editor.getSnapshot()
   locatorPreviewer.clear()
-  void runTargetPickerAction(() => targetPicker.start(editor.getSnapshot().selectedScenarioId))
+  void runTargetPickerAction(() => targetPicker.start({
+    scenarioId: snapshot.selectedScenarioId,
+    targetSlot: snapshot.selectedTargetSlot,
+  }))
 })
 
 targetPickerStopButton.addEventListener('click', () => {
@@ -328,7 +332,12 @@ locatorPreviewList.addEventListener('click', (event) => {
     return
   }
 
-  editor.applyLocatorToSelectedStep(candidate.locator)
+  const targetSlot = locatorPreviewer.getSnapshot().targetSlot
+  if (targetSlot === undefined) {
+    editor.applyLocatorToSelectedStep(candidate.locator)
+  } else {
+    editor.applyLocatorToTargetSlot(targetSlot, candidate.locator)
+  }
   render(editor.getSnapshot())
 })
 
@@ -344,7 +353,10 @@ browser.runtime.onMessage.addListener((message) => {
     const selected = targetPicker.getSnapshot().selected
     if (selected !== undefined) {
       void runLocatorPreviewAction(() => (
-        locatorPreviewer.previewTarget(selected.target, editor.getSnapshot().selectedScenarioId)
+        locatorPreviewer.previewTarget(selected.target, {
+          scenarioId: selected.scenarioId ?? editor.getSnapshot().selectedScenarioId,
+          targetSlot: selected.targetSlot,
+        })
       ))
     }
   }

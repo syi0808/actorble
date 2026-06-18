@@ -6,6 +6,7 @@ import type {
   InspectorCancellationReason,
   InspectorSessionCorrelation,
   InspectorTargetMetadata,
+  InspectorTargetSlotCorrelation,
   PopupGetStateMessage,
   RequiredRunCorrelation,
   RequiredTabCorrelation,
@@ -96,6 +97,7 @@ export type BackgroundInspectorSession = Readonly<{
   frameId?: number
   scenarioId?: string
   runId?: string
+  targetSlot?: InspectorTargetSlotCorrelation
   status: 'inspecting' | 'selected' | 'cancelled' | 'stopped'
   startedAt: number
   updatedAt: number
@@ -116,6 +118,7 @@ export type BackgroundCommandReceipt = Readonly<{
   sessionId?: string
   scenarioId?: string
   runId?: string
+  targetSlot?: InspectorTargetSlotCorrelation
   contentReady: boolean
   session?: BackgroundSessionSnapshot
   recordedDraft?: RecordedScenarioDraftHandoff
@@ -843,6 +846,7 @@ export function createBackgroundOrchestrator(
       ...optionalFrameId(correlation.frameId),
       ...(correlation.scenarioId === undefined ? {} : { scenarioId: correlation.scenarioId }),
       ...(correlation.runId === undefined ? {} : { runId: correlation.runId }),
+      ...(correlation.targetSlot === undefined ? {} : { targetSlot: correlation.targetSlot }),
       status,
       startedAt: existing?.startedAt ?? timestamp,
       updatedAt: timestamp,
@@ -1103,7 +1107,12 @@ export function createWxtBackgroundBrowserHost(
 function receiptFor(
   kind: ExtensionMessageKind,
   correlation: RequiredTabCorrelation &
-    Readonly<{ sessionId?: string; scenarioId?: string; runId?: string }>,
+    Readonly<{
+      sessionId?: string
+      scenarioId?: string
+      runId?: string
+      targetSlot?: InspectorTargetSlotCorrelation
+    }>,
   contentReady: boolean,
   session?: BackgroundSessionSnapshot,
 ): BackgroundCommandReceipt {
@@ -1114,6 +1123,7 @@ function receiptFor(
     ...(correlation.sessionId === undefined ? {} : { sessionId: correlation.sessionId }),
     ...(correlation.scenarioId === undefined ? {} : { scenarioId: correlation.scenarioId }),
     ...(correlation.runId === undefined ? {} : { runId: correlation.runId }),
+    ...(correlation.targetSlot === undefined ? {} : { targetSlot: correlation.targetSlot }),
     contentReady,
     ...(session === undefined ? {} : { session }),
   }

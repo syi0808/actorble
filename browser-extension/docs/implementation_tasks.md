@@ -505,7 +505,7 @@ src/recorder
 
 ### T21 Target Slot Inspector Integration
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Integrate inspector and locator preview into target assignment.
   Target picking should start from a selected target slot and write back to that
   exact slot after locator preview.

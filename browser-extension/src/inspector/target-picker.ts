@@ -1,9 +1,11 @@
 import {
   createExtensionMessage,
+  isInspectorTargetSlotCorrelation,
   isActorbleExtensionMessage,
   type ActorbleExtensionMessage,
   type InspectorSessionCorrelation,
   type InspectorTargetMetadata,
+  type InspectorTargetSlotCorrelation,
   type RequiredTabCorrelation,
 } from '../messaging/index.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../shared/result.js'
@@ -18,6 +20,7 @@ export type TargetPickerSession = RequiredTabCorrelation &
     sessionId: string
     scenarioId?: string
     runId?: string
+    targetSlot?: InspectorTargetSlotCorrelation
     startedAt: number
   }>
 
@@ -57,6 +60,11 @@ export type TargetPickerOptions = Readonly<{
   now?: () => number
 }>
 
+export type TargetPickerStartInput = Readonly<{
+  scenarioId?: string
+  targetSlot?: InspectorTargetSlotCorrelation
+}>
+
 export type TargetPickerButtonView = Readonly<{
   label: string
   disabled: boolean
@@ -74,7 +82,7 @@ export type TargetPickerView = Readonly<{
 }>
 
 export type TargetPicker = Readonly<{
-  start(scenarioId?: string): Promise<ExtensionResult<TargetPickerSession>>
+  start(input?: string | TargetPickerStartInput): Promise<ExtensionResult<TargetPickerSession>>
   stop(): Promise<ExtensionResult<TargetPickerSession>>
   ingestMessage(message: unknown): boolean
   getSnapshot(): TargetPickerSnapshot
@@ -95,8 +103,9 @@ export function createTargetPicker(
   let snapshot = idleSnapshot()
 
   async function start(
-    scenarioId?: string,
+    input?: string | TargetPickerStartInput,
   ): Promise<ExtensionResult<TargetPickerSession>> {
+    const startInput = normalizeStartInput(input)
     if (snapshot.session !== undefined) {
       return setIssue({
         code: 'inspector_error',
@@ -125,7 +134,8 @@ export function createTargetPicker(
       tabId: target.value.id,
       ...(frameId === undefined ? {} : { frameId }),
       sessionId: createSessionId(),
-      ...(scenarioId === undefined ? {} : { scenarioId }),
+      ...(startInput.scenarioId === undefined ? {} : { scenarioId: startInput.scenarioId }),
+      ...(startInput.targetSlot === undefined ? {} : { targetSlot: startInput.targetSlot }),
       startedAt: now(),
     } satisfies TargetPickerSession
 
@@ -216,6 +226,7 @@ export function createTargetPicker(
           sessionId: message.payload.sessionId,
           ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
           ...(message.payload.runId === undefined ? {} : { runId: message.payload.runId }),
+          ...(message.payload.targetSlot === undefined ? {} : { targetSlot: message.payload.targetSlot }),
           target: normalizePickedTargetMetadata(message.payload.target),
           selectedAt: now(),
         },
@@ -426,6 +437,7 @@ function sessionPayload(session: TargetPickerSession): InspectorSessionCorrelati
     sessionId: session.sessionId,
     ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
     ...(session.runId === undefined ? {} : { runId: session.runId }),
+    ...(session.targetSlot === undefined ? {} : { targetSlot: session.targetSlot }),
   }
 }
 
@@ -443,8 +455,19 @@ function sessionFromReceipt(
     sessionId: typeof value.sessionId === 'string' ? value.sessionId : fallback.sessionId,
     ...(typeof value.scenarioId === 'string' ? { scenarioId: value.scenarioId } : optionalScenarioId(fallback.scenarioId)),
     ...(typeof value.runId === 'string' ? { runId: value.runId } : optionalRunId(fallback.runId)),
+    ...(isInspectorTargetSlotCorrelation(value.targetSlot)
+      ? { targetSlot: value.targetSlot }
+      : optionalTargetSlot(fallback.targetSlot)),
     startedAt: fallback.startedAt,
   }
+}
+
+function normalizeStartInput(input: string | TargetPickerStartInput | undefined): TargetPickerStartInput {
+  if (typeof input === 'string') {
+    return { scenarioId: input }
+  }
+
+  return input ?? {}
 }
 
 function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
@@ -457,6 +480,12 @@ function optionalScenarioId(scenarioId: string | undefined): Readonly<{ scenario
 
 function optionalRunId(runId: string | undefined): Readonly<{ runId?: string }> {
   return runId === undefined ? {} : { runId }
+}
+
+function optionalTargetSlot(
+  targetSlot: InspectorTargetSlotCorrelation | undefined,
+): Readonly<{ targetSlot?: InspectorTargetSlotCorrelation }> {
+  return targetSlot === undefined ? {} : { targetSlot }
 }
 
 function idleSnapshot(): TargetPickerSnapshot {

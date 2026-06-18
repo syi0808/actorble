@@ -411,6 +411,10 @@ describe('background orchestration', () => {
         frameId: 0,
         scenarioId: 'scenario-1',
         sessionId: 'inspect-1',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
       },
     })
 
@@ -424,6 +428,10 @@ describe('background orchestration', () => {
           frameId: 0,
           scenarioId: 'scenario-1',
           sessionId: 'inspect-1',
+          targetSlot: {
+            kind: 'step-target',
+            stepId: 'submit',
+          },
           target: {
             tagName: 'button',
             id: 'submit',
@@ -449,6 +457,10 @@ describe('background orchestration', () => {
           type: 'inspector',
           sessionId: 'inspect-1',
           status: 'inspecting',
+          targetSlot: {
+            kind: 'step-target',
+            stepId: 'submit',
+          },
         },
       },
     })
@@ -462,6 +474,10 @@ describe('background orchestration', () => {
           type: 'inspector',
           sessionId: 'inspect-1',
           status: 'selected',
+          targetSlot: {
+            kind: 'step-target',
+            stepId: 'submit',
+          },
           selectedTarget: {
             tagName: 'button',
             id: 'submit',
@@ -473,6 +489,10 @@ describe('background orchestration', () => {
     expect(orchestrator.getInspectorSession('inspect-1')).toMatchObject({
       sessionId: 'inspect-1',
       status: 'selected',
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit',
+      },
       selectedTarget: {
         tagName: 'button',
         id: 'submit',

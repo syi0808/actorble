@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addStep,
+  assignLocatorToTargetSlot,
   assignLocatorToSelectedTargetSlot,
   createDefaultStepForActionFamily,
   createScenario,
@@ -9,6 +10,7 @@ import {
   duplicateStep,
   getValidatedScenarioDocument,
   insertStep,
+  listTargetSlotsForStep,
   markScenarioSaved,
   reorderStep,
   selectScenario,
@@ -391,6 +393,78 @@ describe('builder authoring session', () => {
     expect(JSON.stringify(validDocument)).not.toContain('currentRun')
   })
 
+  it('discovers writable target slots and writes locators to explicit slots', () => {
+    const discoveryCases: readonly Readonly<{
+      family: BuilderStepActionFamily
+      expectedSlots: readonly string[]
+    }>[] = [
+      { family: 'click', expectedSlots: ['step-target'] },
+      { family: 'drag', expectedSlots: ['drag-from', 'drag-to'] },
+      { family: 'waitForVisible', expectedSlots: ['waitFor-target'] },
+      { family: 'scrollToTarget', expectedSlots: ['scrollTo-target'] },
+      { family: 'clickCurrent', expectedSlots: [] },
+      { family: 'waitForText', expectedSlots: [] },
+      { family: 'scrollToPosition', expectedSlots: [] },
+    ]
+
+    for (const { family, expectedSlots } of discoveryCases) {
+      expect(
+        listTargetSlotsForStep(
+          createDefaultStepForActionFamily(family, { id: `id-${family}` }),
+          `id-${family}`,
+        ).map((slot) => slot.kind),
+      ).toEqual(expectedSlots)
+    }
+
+    const session = createScenarioAuthoringSession({
+      createScenarioId: () => 'slot-document',
+      createStepId: () => 'slot-step',
+    })
+    const created = unwrap(createScenario(session, {
+      initialStepFamily: 'click',
+    }))
+    const withStepTarget = unwrap(assignLocatorToTargetSlot(created, {
+      kind: 'step-target',
+      stepId: 'slot-step',
+    }, testIdLocator('primary-target')))
+    const dragStep = unwrap(updateStepActionFamily(withStepTarget, 'slot-step', 'drag'))
+    const withDragFrom = unwrap(assignLocatorToTargetSlot(dragStep, {
+      kind: 'drag-from',
+      stepId: 'slot-step',
+    }, testIdLocator('drag-source')))
+    const withDragTo = unwrap(assignLocatorToTargetSlot(withDragFrom, {
+      kind: 'drag-to',
+      stepId: 'slot-step',
+    }, testIdLocator('drag-destination')))
+    const waitStep = unwrap(updateStepActionFamily(withDragTo, 'slot-step', 'waitForVisible'))
+    const withWaitTarget = unwrap(assignLocatorToTargetSlot(waitStep, {
+      kind: 'waitFor-target',
+      stepId: 'slot-step',
+    }, testIdLocator('wait-target')))
+    const scrollStep = unwrap(updateStepActionFamily(withWaitTarget, 'slot-step', 'scrollToTarget'))
+    const withScrollTarget = unwrap(assignLocatorToTargetSlot(scrollStep, {
+      kind: 'scrollTo-target',
+      stepId: 'slot-step',
+    }, testIdLocator('scroll-target')))
+
+    expect(withStepTarget.draftDocument?.steps[0]).toMatchObject({
+      target: targetWithLocator('primary-target'),
+    })
+    expect(withDragTo.draftDocument?.steps[0]).toMatchObject({
+      from: targetWithLocator('drag-source'),
+      to: targetWithLocator('drag-destination'),
+    })
+    expect(withWaitTarget.draftDocument?.steps[0]).toMatchObject({
+      input: {
+        kind: 'visible',
+        target: targetWithLocator('wait-target'),
+      },
+    })
+    expect(withScrollTarget.draftDocument?.steps[0]).toMatchObject({
+      target: targetWithLocator('scroll-target'),
+    })
+  })
+
   it('keeps run and record state in the authoring session, not the scenario document', () => {
     const session = createTestSession()
     const withRun = setRunState(session, {
@@ -457,5 +531,20 @@ function emptyTarget() {
     kind: 'target',
     strict: true,
     locators: [],
+  }
+}
+
+function testIdLocator(value: string) {
+  return {
+    strategy: 'testId' as const,
+    value,
+  }
+}
+
+function targetWithLocator(value: string) {
+  return {
+    kind: 'target',
+    strict: true,
+    locators: [testIdLocator(value)],
   }
 }

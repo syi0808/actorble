@@ -44,6 +44,45 @@ describe('inspector target picker', () => {
     })
   })
 
+  it('starts inspection with the selected builder target slot correlation', async () => {
+    const { picker, sent } = createTestPicker()
+
+    const result = await picker.start({
+      scenarioId: 'scenario-1',
+      targetSlot: {
+        kind: 'drag-to',
+        stepId: 'drag-step',
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        tabId: 7,
+        sessionId: 'inspect-1',
+        scenarioId: 'scenario-1',
+        targetSlot: {
+          kind: 'drag-to',
+          stepId: 'drag-step',
+        },
+      },
+    })
+    expect(sent).toEqual([
+      createExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          scenarioId: 'scenario-1',
+          targetSlot: {
+            kind: 'drag-to',
+            stepId: 'drag-step',
+          },
+        },
+      }),
+    ])
+  })
+
   it('stops the active inspection session and clears the active state', async () => {
     const { picker, sent } = createTestPicker()
     await picker.start('scenario-1')
@@ -82,7 +121,12 @@ describe('inspector target picker', () => {
         sessionId: 'stale-inspection',
       }),
     )
-    const accepted = picker.ingestMessage(selectedMessage())
+    const accepted = picker.ingestMessage(selectedMessage({
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit',
+      },
+    }))
 
     expect(stale).toBe(false)
     expect(accepted).toBe(true)
@@ -91,6 +135,10 @@ describe('inspector target picker', () => {
       session: undefined,
       selected: {
         sessionId: 'inspect-1',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
         target: {
           tagName: 'button',
           id: 'submit',
@@ -204,7 +252,14 @@ function createTestPicker(options: TestPickerOptions = {}) {
 }
 
 function selectedMessage(
-  overrides: Partial<{ sessionId: string; frameId: number }> = {},
+  overrides: Partial<{
+    sessionId: string
+    frameId: number
+    targetSlot: Readonly<{
+      kind: 'step-target' | 'drag-from' | 'drag-to' | 'waitFor-target' | 'scrollTo-target'
+      stepId: string
+    }>
+  }> = {},
 ): ActorbleExtensionMessage {
   return createExtensionMessage({
     kind: 'inspector:selected',
@@ -213,6 +268,7 @@ function selectedMessage(
       ...(overrides.frameId === undefined ? {} : { frameId: overrides.frameId }),
       sessionId: overrides.sessionId ?? 'inspect-1',
       scenarioId: 'scenario-1',
+      ...(overrides.targetSlot === undefined ? {} : { targetSlot: overrides.targetSlot }),
       target: {
         tagName: 'button',
         id: 'submit',

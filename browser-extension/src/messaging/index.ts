@@ -60,7 +60,20 @@ export type InspectorSessionCorrelation = RequiredTabCorrelation &
     sessionId: string
     scenarioId?: string
     runId?: string
+    targetSlot?: InspectorTargetSlotCorrelation
   }>
+
+export type InspectorTargetSlotKind =
+  | 'step-target'
+  | 'drag-from'
+  | 'drag-to'
+  | 'waitFor-target'
+  | 'scrollTo-target'
+
+export type InspectorTargetSlotCorrelation = Readonly<{
+  kind: InspectorTargetSlotKind
+  stepId: string
+}>
 
 export type InspectorTargetRect = Readonly<{
   x: number
@@ -190,6 +203,7 @@ export type LocatorPreviewMessage = ExtensionMessage<
   RequiredTabCorrelation &
     Readonly<{
       scenarioId?: string
+      targetSlot?: InspectorTargetSlotCorrelation
       candidates: readonly LocatorPreviewCandidateMessage[]
     }>
 >
@@ -361,6 +375,7 @@ function isPayloadForKind(
       return (
         hasRequiredTabCorrelation(payload) &&
         isOptionalString(payload.scenarioId) &&
+        isOptionalInspectorTargetSlotCorrelation(payload.targetSlot) &&
         Array.isArray(payload.candidates) &&
         payload.candidates.length > 0 &&
         payload.candidates.every(isLocatorPreviewCandidate)
@@ -422,7 +437,38 @@ function hasInspectorSessionCorrelation(
     hasRequiredTabCorrelation(payload) &&
     typeof payload.sessionId === 'string' &&
     payload.sessionId.length > 0 &&
-    hasOptionalSessionCorrelation(payload)
+    hasOptionalSessionCorrelation(payload) &&
+    isOptionalInspectorTargetSlotCorrelation(payload.targetSlot)
+  )
+}
+
+export function isInspectorTargetSlotCorrelation(
+  value: unknown,
+): value is InspectorTargetSlotCorrelation {
+  return (
+    isRecord(value) &&
+    isInspectorTargetSlotKind(value.kind) &&
+    typeof value.stepId === 'string' &&
+    value.stepId.length > 0
+  )
+}
+
+function isOptionalInspectorTargetSlotCorrelation(
+  value: unknown,
+): value is InspectorTargetSlotCorrelation | undefined {
+  return value === undefined || isInspectorTargetSlotCorrelation(value)
+}
+
+function isInspectorTargetSlotKind(value: unknown): value is InspectorTargetSlotKind {
+  return (
+    typeof value === 'string' &&
+    (
+      value === 'step-target' ||
+      value === 'drag-from' ||
+      value === 'drag-to' ||
+      value === 'waitFor-target' ||
+      value === 'scrollTo-target'
+    )
   )
 }
 

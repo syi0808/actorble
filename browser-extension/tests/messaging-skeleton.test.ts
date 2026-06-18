@@ -306,6 +306,45 @@ describe('messaging skeleton contracts', () => {
     expect(isExtensionMessageOfKind(message, message.kind)).toBe(true)
   })
 
+  it('narrows inspector messages with target slot correlation', () => {
+    const targetSlot = {
+      kind: 'drag-to',
+      stepId: 'drag-step',
+    } as const
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          scenarioId: 'scenario-1',
+          targetSlot,
+        },
+      }),
+    ).toBe(true)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:selected',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          targetSlot,
+          target: {
+            tagName: 'button',
+            rect: {
+              x: 10,
+              y: 20,
+              width: 100,
+              height: 32,
+            },
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
   it('rejects unknown message kinds and invalid envelopes', () => {
     expect(isActorbleExtensionMessage({ kind: 'runtime:status' })).toBe(false)
     expect(isActorbleExtensionMessage({ kind: 'unknown', payload: {} })).toBe(false)
@@ -406,6 +445,24 @@ describe('messaging skeleton contracts', () => {
           tabId: 7,
           sessionId: 'inspect-1',
           reason: 'unknown',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it.each([
+    { kind: 'unknown', stepId: 'step-1' },
+    { kind: 'step-target', stepId: '' },
+    { kind: 'step-target' },
+    'step-target:step-1',
+  ])('rejects invalid inspector target slot correlation %#', (targetSlot) => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'inspector:start',
+        payload: {
+          tabId: 7,
+          sessionId: 'inspect-1',
+          targetSlot,
         },
       }),
     ).toBe(false)

@@ -29,6 +29,10 @@ describe('content inspector host', () => {
         frameId: 0,
         sessionId: 'inspect-1',
         status: 'inspecting',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
       },
     })
     expect(adapter.highlight).toHaveBeenCalledWith({
@@ -64,6 +68,10 @@ describe('content inspector host', () => {
           frameId: 0,
           sessionId: 'inspect-1',
           scenarioId: 'scenario-1',
+          targetSlot: {
+            kind: 'step-target',
+            stepId: 'submit',
+          },
           target: targetMetadata,
         },
       }),
@@ -91,6 +99,10 @@ describe('content inspector host', () => {
       payload: {
         sessionId: 'inspect-1',
         reason: 'user',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
       },
     })
 
@@ -118,6 +130,10 @@ describe('content inspector host', () => {
       payload: {
         sessionId: 'inspect-1',
         reason: 'stopped',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
       },
     })
 
@@ -139,6 +155,10 @@ describe('content inspector host', () => {
       payload: {
         sessionId: 'inspect-1',
         reason: 'navigation',
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit',
+        },
       },
     })
   })
@@ -258,6 +278,10 @@ function startMessage(): ActorbleExtensionMessage {
       frameId: 0,
       sessionId: 'inspect-1',
       scenarioId: 'scenario-1',
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit',
+      },
     },
   })
 }
@@ -270,6 +294,10 @@ function stopMessage(): ActorbleExtensionMessage {
       frameId: 0,
       sessionId: 'inspect-1',
       scenarioId: 'scenario-1',
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit',
+      },
     },
   })
 }

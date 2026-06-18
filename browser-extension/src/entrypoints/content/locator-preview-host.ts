@@ -65,6 +65,7 @@ export function createContentLocatorPreviewHost(
         tabId: message.payload.tabId,
         ...(message.payload.frameId === undefined ? {} : { frameId: message.payload.frameId }),
         ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
+        ...(message.payload.targetSlot === undefined ? {} : { targetSlot: message.payload.targetSlot }),
         candidates,
       })
     } finally {

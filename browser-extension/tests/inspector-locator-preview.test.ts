@@ -162,6 +162,48 @@ describe('inspector locator preview', () => {
       ],
     })
   })
+
+  it('preserves builder target slot correlation through preview requests and snapshots', async () => {
+    const sent: ActorbleExtensionMessage[] = []
+    const previewer = createLocatorPreviewer(createPreviewClient(sent))
+
+    const result = await previewer.previewTarget(pickedTarget, {
+      scenarioId: 'scenario-1',
+      targetSlot: {
+        kind: 'waitFor-target',
+        stepId: 'wait-step',
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        scenarioId: 'scenario-1',
+        targetSlot: {
+          kind: 'waitFor-target',
+          stepId: 'wait-step',
+        },
+      },
+    })
+    expect(sent[0]).toMatchObject({
+      kind: 'locator:preview',
+      payload: {
+        tabId: 7,
+        scenarioId: 'scenario-1',
+        targetSlot: {
+          kind: 'waitFor-target',
+          stepId: 'wait-step',
+        },
+      },
+    })
+    expect(previewer.getSnapshot()).toMatchObject({
+      status: 'ready',
+      targetSlot: {
+        kind: 'waitFor-target',
+        stepId: 'wait-step',
+      },
+    })
+  })
 })
 
 function createPreviewClient(sent: ActorbleExtensionMessage[]): LocatorPreviewClient {
@@ -174,6 +216,9 @@ function createPreviewClient(sent: ActorbleExtensionMessage[]): LocatorPreviewCl
       return ok({
         tabId: 7,
         scenarioId: 'scenario-1',
+        ...(message.kind === 'locator:preview' && message.payload.targetSlot === undefined
+          ? {}
+          : { targetSlot: message.kind === 'locator:preview' ? message.payload.targetSlot : undefined }),
         candidates: [
           {
             ...createLocatorCandidates(pickedTarget)[0],

@@ -504,6 +504,7 @@ function normalizeCorrelation(
     sessionId: correlation.sessionId,
     ...(correlation.scenarioId === undefined ? {} : { scenarioId: correlation.scenarioId }),
     ...(correlation.runId === undefined ? {} : { runId: correlation.runId }),
+    ...(correlation.targetSlot === undefined ? {} : { targetSlot: correlation.targetSlot }),
   }
 }
 

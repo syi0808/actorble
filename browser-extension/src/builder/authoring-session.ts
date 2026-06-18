@@ -555,11 +555,49 @@ export function clearTargetSlot(
   }
 }
 
+export function listTargetSlotsForStep(
+  step: BuilderDraftStep,
+  stepId: string,
+): readonly BuilderTargetSlot[] {
+  switch (step.action) {
+    case 'click':
+    case 'moveTo':
+    case 'doubleClick':
+    case 'focus':
+    case 'typeInto':
+    case 'fill':
+      return [{ kind: 'step-target', stepId }]
+    case 'drag':
+      return [
+        { kind: 'drag-from', stepId },
+        { kind: 'drag-to', stepId },
+      ]
+    case 'waitFor':
+      return isTargetWaitCondition(step.input)
+        ? [{ kind: 'waitFor-target', stepId }]
+        : []
+    case 'scrollTo':
+      return hasOwn(step, 'target')
+        ? [{ kind: 'scrollTo-target', stepId }]
+        : []
+    default:
+      return []
+  }
+}
+
 export function assignLocatorToSelectedTargetSlot(
   state: ScenarioAuthoringSessionState,
   locator: ScenarioLocator,
 ): ExtensionResult<ScenarioAuthoringSessionState> {
   return assignTargetToSelectedTargetSlot(state, targetGroupFromLocator(locator))
+}
+
+export function assignLocatorToTargetSlot(
+  state: ScenarioAuthoringSessionState,
+  slot: BuilderTargetSlot,
+  locator: ScenarioLocator,
+): ExtensionResult<ScenarioAuthoringSessionState> {
+  return assignTargetToTargetSlot(state, slot, targetGroupFromLocator(locator))
 }
 
 export function assignTargetToSelectedTargetSlot(
@@ -574,6 +612,14 @@ export function assignTargetToSelectedTargetSlot(
     })
   }
 
+  return assignTargetToTargetSlot(state, slot, target)
+}
+
+export function assignTargetToTargetSlot(
+  state: ScenarioAuthoringSessionState,
+  slot: BuilderTargetSlot,
+  target: ScenarioTarget,
+): ExtensionResult<ScenarioAuthoringSessionState> {
   const located = locateStep(state, slot.stepId)
   if (!located.ok) {
     return located
@@ -592,7 +638,10 @@ export function assignTargetToSelectedTargetSlot(
   const steps = replaceStep(document.steps, index, nextStep)
 
   return ok(withDraftDocument(
-    state,
+    {
+      ...state,
+      selectedTargetSlot: retargetSlot(slot, stepIdFor(nextStep, index)),
+    },
     {
       ...document,
       steps,

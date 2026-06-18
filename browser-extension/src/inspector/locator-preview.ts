@@ -2,6 +2,7 @@ import {
   createExtensionMessage,
   type ActorbleExtensionMessage,
   type InspectorTargetMetadata,
+  type InspectorTargetSlotCorrelation,
   type RequiredTabCorrelation,
 } from '../messaging/index.js'
 import type { ScenarioLocator, ScenarioPointLocator } from '../scenario/types.js'
@@ -32,12 +33,14 @@ export type LocatorPreviewCandidate = LocatorCandidate &
 export type LocatorPreviewRequest = RequiredTabCorrelation &
   Readonly<{
     scenarioId?: string
+    targetSlot?: InspectorTargetSlotCorrelation
     candidates: readonly LocatorCandidate[]
   }>
 
 export type LocatorPreviewResult = RequiredTabCorrelation &
   Readonly<{
     scenarioId?: string
+    targetSlot?: InspectorTargetSlotCorrelation
     candidates: readonly LocatorPreviewCandidate[]
   }>
 
@@ -66,15 +69,21 @@ export type LocatorPreviewStatus =
 export type LocatorPreviewSnapshot = Readonly<{
   status: LocatorPreviewStatus
   target?: InspectorTargetMetadata
+  targetSlot?: InspectorTargetSlotCorrelation
   candidates: readonly LocatorPreviewCandidate[]
   issues: readonly ExtensionIssue[]
   message?: string
 }>
 
+export type LocatorPreviewContext = Readonly<{
+  scenarioId?: string
+  targetSlot?: InspectorTargetSlotCorrelation
+}>
+
 export type LocatorPreviewer = Readonly<{
   previewTarget(
     target: InspectorTargetMetadata,
-    scenarioId?: string,
+    input?: string | LocatorPreviewContext,
   ): Promise<ExtensionResult<LocatorPreviewResult>>
   clear(): void
   getSnapshot(): LocatorPreviewSnapshot
@@ -208,8 +217,9 @@ export function createLocatorPreviewer(
 
   async function previewTarget(
     target: InspectorTargetMetadata,
-    scenarioId?: string,
+    input?: string | LocatorPreviewContext,
   ): Promise<ExtensionResult<LocatorPreviewResult>> {
+    const context = normalizePreviewContext(input)
     const candidates = createLocatorCandidates(target)
 
     if (candidates.length === 0) {
@@ -222,6 +232,7 @@ export function createLocatorPreviewer(
     snapshot = {
       status: 'previewing',
       target,
+      ...(context.targetSlot === undefined ? {} : { targetSlot: context.targetSlot }),
       candidates: candidates.map((candidate) => ({
         ...candidate,
         matchCount: 0,
@@ -247,7 +258,8 @@ export function createLocatorPreviewer(
       payload: {
         tabId: resolvedTab.value.id,
         ...(frameId === undefined ? {} : { frameId }),
-        ...(scenarioId === undefined ? {} : { scenarioId }),
+        ...(context.scenarioId === undefined ? {} : { scenarioId: context.scenarioId }),
+        ...(context.targetSlot === undefined ? {} : { targetSlot: context.targetSlot }),
         candidates,
       },
     })
@@ -279,14 +291,22 @@ export function createLocatorPreviewer(
       return responseResult
     }
 
+    const result = {
+      ...responseResult.value,
+      ...(responseResult.value.targetSlot === undefined && context.targetSlot !== undefined
+        ? { targetSlot: context.targetSlot }
+        : {}),
+    } satisfies LocatorPreviewResult
+
     snapshot = {
       status: 'ready',
       target,
-      candidates: responseResult.value.candidates,
+      ...(result.targetSlot === undefined ? {} : { targetSlot: result.targetSlot }),
+      candidates: result.candidates,
       issues: [],
       message: 'Locator preview ready',
     }
-    return responseResult
+    return ok(result)
   }
 
   function clear(): void {
@@ -324,6 +344,14 @@ function idleSnapshot(): LocatorPreviewSnapshot {
     candidates: [],
     issues: [],
   }
+}
+
+function normalizePreviewContext(input: string | LocatorPreviewContext | undefined): LocatorPreviewContext {
+  if (typeof input === 'string') {
+    return { scenarioId: input }
+  }
+
+  return input ?? {}
 }
 
 async function resolvePreviewTargetTab(

@@ -1,6 +1,6 @@
 import {
   addStep as addBuilderStep,
-  assignLocatorToSelectedTargetSlot,
+  assignLocatorToTargetSlot,
   clearTargetSlot,
   createScenario as createBuilderScenario,
   createScenarioAuthoringSession,
@@ -8,6 +8,7 @@ import {
   duplicateStep as duplicateBuilderStep,
   getValidatedScenarioDocument,
   insertStep as insertBuilderStep,
+  listTargetSlotsForStep as listBuilderTargetSlotsForStep,
   markScenarioSaved,
   openDraftDocument,
   reorderStep as reorderBuilderStep,
@@ -282,6 +283,10 @@ export type SidepanelScenarioEditor = Readonly<{
   updateSelectedStepFields(
     update: SidepanelStepFieldUpdate,
   ): ExtensionResult<ScenarioDocument>
+  applyLocatorToTargetSlot(
+    slot: BuilderTargetSlot,
+    locator: ScenarioLocator,
+  ): ExtensionResult<ScenarioDocument>
   applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument>
   validateDraft(): ExtensionResult<ScenarioDocument>
   saveDraft(): Promise<ExtensionResult<ScenarioRecord>>
@@ -535,7 +540,29 @@ export function createSidepanelScenarioEditor(
 
     const slotReady = ensureSelectedTargetSlot(session)
     session = slotReady
-    const assigned = assignLocatorToSelectedTargetSlot(session, locator)
+    const slot = session.selectedTargetSlot
+    if (slot === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a target slot before applying a locator.',
+      })
+    }
+
+    return applyLocatorToTargetSlot(slot, locator)
+  }
+
+  function applyLocatorToTargetSlot(
+    slot: BuilderTargetSlot,
+    locator: ScenarioLocator,
+  ): ExtensionResult<ScenarioDocument> {
+    if (session.draftDocument === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a scenario before applying a locator.',
+      })
+    }
+
+    const assigned = assignLocatorToTargetSlot(session, slot, locator)
     if (!assigned.ok) {
       setExternalIssues(assigned.issues, { message: undefined })
       return failure(assigned.issues)
@@ -1307,6 +1334,7 @@ export function createSidepanelScenarioEditor(
     updateSelectedStepActionFamily,
     updateDocumentFields,
     updateSelectedStepFields,
+    applyLocatorToTargetSlot,
     applyLocatorToSelectedStep,
     validateDraft,
     saveDraft,
@@ -1676,32 +1704,7 @@ function targetSlotsForStep(
   step: BuilderDraftStep,
   stepId: string,
 ): readonly BuilderTargetSlot[] {
-  switch (step.action) {
-    case 'click':
-    case 'moveTo':
-    case 'doubleClick':
-    case 'focus':
-    case 'typeInto':
-    case 'fill':
-      return [{ kind: 'step-target', stepId }]
-    case 'drag':
-      return [
-        { kind: 'drag-from', stepId },
-        { kind: 'drag-to', stepId },
-      ]
-    case 'scrollTo':
-      return readStepProperty(step, 'target') === undefined
-        ? []
-        : [{ kind: 'scrollTo-target', stepId }]
-    case 'waitFor': {
-      const input = readStepProperty(step, 'input')
-      return isRecord(input) && (input.kind === 'visible' || input.kind === 'hidden')
-        ? [{ kind: 'waitFor-target', stepId }]
-        : []
-    }
-    default:
-      return []
-  }
+  return listBuilderTargetSlotsForStep(step, stepId)
 }
 
 function targetSlotLabel(slot: BuilderTargetSlot): string {

@@ -272,6 +272,101 @@ describe('sidepanel scenario editor', () => {
     })
   })
 
+  it('writes locator preview selections into the correlated target slot', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'slot-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'slot-document',
+      name: 'Slot document',
+      initialStepFamily: 'drag',
+    })
+    editor.selectTargetSlot('drag-from:slot-step')
+    editor.applyLocatorToSelectedStep({
+      strategy: 'testId',
+      value: 'drag-source',
+    })
+
+    const assigned = editor.applyLocatorToTargetSlot({
+      kind: 'drag-to',
+      stepId: 'slot-step',
+    }, {
+      strategy: 'testId',
+      value: 'drop-zone',
+    })
+
+    expect(assigned).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedTargetSlot: {
+        kind: 'drag-to',
+        stepId: 'slot-step',
+      },
+      draftDocument: {
+        steps: [
+          {
+            action: 'drag',
+            from: {
+              kind: 'target',
+              strict: true,
+              locators: [
+                {
+                  strategy: 'testId',
+                  value: 'drag-source',
+                },
+              ],
+            },
+            to: {
+              kind: 'target',
+              strict: true,
+              locators: [
+                {
+                  strategy: 'testId',
+                  value: 'drop-zone',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    })
+  })
+
+  it('renders target slots for every writable target-bearing action and none for targetless actions', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'slot-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'slot-document',
+      name: 'Slot document',
+      initialStepFamily: 'drag',
+    })
+
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
+      expect.objectContaining({ id: 'drag-from:slot-step', selected: true }),
+      expect.objectContaining({ id: 'drag-to:slot-step', selected: false }),
+    ])
+
+    editor.updateSelectedStepActionFamily('waitForVisible')
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
+      expect.objectContaining({ id: 'waitFor-target:slot-step', selected: true }),
+    ])
+
+    editor.updateSelectedStepActionFamily('scrollToTarget')
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
+      expect.objectContaining({ id: 'scrollTo-target:slot-step', selected: true }),
+    ])
+
+    editor.updateSelectedStepActionFamily('waitForText')
+    const targetlessView = createSidepanelScenarioEditorView(editor.getSnapshot())
+
+    expect(targetlessView.targetSlotRows).toEqual([])
+    expect(targetlessView.workflow.selectedTargetSlotId).toBeUndefined()
+  })
+
   it('imports and exports scenarios through the storage repository', async () => {
     const imported = scenarioRecord(
       'imported-scenario',
@@ -715,6 +810,7 @@ type TestEditorOptions = Readonly<{
   createRunId?: () => string
   createDryRunId?: () => string
   createRecordId?: () => string
+  createStepId?: () => string
   sendResponse?:
     | ExtensionResult<unknown>
     | Promise<ExtensionResult<unknown>>
@@ -814,6 +910,7 @@ function createTestEditor(options: TestEditorOptions = {}) {
     createRunId: options.createRunId ?? (() => 'run-1'),
     createDryRunId: options.createDryRunId ?? (() => 'dry-run-1'),
     createRecordId: options.createRecordId ?? (() => 'record-1'),
+    ...(options.createStepId === undefined ? {} : { createStepId: options.createStepId }),
   })
 
   return { editor, sent, updates, saves, imports, exports }
