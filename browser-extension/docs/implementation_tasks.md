@@ -11,7 +11,7 @@ inspector, message routing, run control, trace display를 소유한다.
 
 - WXT entrypoint는 composition boundary다. feature module의 core logic은
   `src/scenario`, `src/messaging`, `src/storage`, `src/trace`, `src/inspector`,
-  `src/recorder`에 둔다.
+  `src/recorder`, `src/builder`에 둔다.
 - Scenario document는 `../schemas/scenario`의 portable JSON artifact다. extension은
   validate, migrate, compile, store, import, export만 수행한다.
 - Compiled runtime scenario는 content script host에서만 `@actorble/browser`로
@@ -20,6 +20,8 @@ inspector, message routing, run control, trace display를 소유한다.
   runtime trace semantic은 `@actorble/browser` 책임으로 남긴다.
 - Message는 recording, inspection, execution이 같은 tab에서 시간차로 일어날 수
   있음을 전제로 `tabId`, `frameId`, `scenarioId`, `runId` correlation을 보존한다.
+- `frameId`는 known frame에만 포함한다. top frame을 가정해 모든 command에
+  `frameId: 0`을 붙이지 않는다.
 - Browser API, DOM event capture, overlay host, storage API 접근은 narrow adapter나
   entrypoint boundary 뒤에 둔다.
 - Recorder는 sensitive data handling을 명시적으로 다룬다. password value를
@@ -37,10 +39,10 @@ src/entrypoints/popup
   -> short-lived run/record/panel controls
 
 src/entrypoints/sidepanel
-  -> scenario validation and compiler UI wiring
+  -> scenario workflow builder composition
   -> storage repository
-  -> inspector launcher
-  -> recorder workflow
+  -> target slot inspector and locator preview
+  -> recorded draft review
   -> trace display
 
 src/entrypoints/background
@@ -48,6 +50,7 @@ src/entrypoints/background
   -> storage repository
   -> tab/frame routing
   -> content readiness and permission checks
+  -> navigation-safe recording event buffers
 
 src/entrypoints/content
   -> messaging contracts
@@ -75,6 +78,12 @@ src/messaging
 
 src/trace
   -> runtime status and trace event ingestion/display model
+
+src/builder
+  -> scenario document authoring session
+  -> step operations
+  -> target slot model
+  -> validation write-back
 
 src/inspector
   -> messaging
@@ -430,9 +439,148 @@ src/recorder
   - Manual verification confirms trace and capability data match side panel
     runtime state.
 
+### T18 Content Readiness And Frame Correlation
+
+- Status: [ ] Not started
+- Briefing: Replace implicit `frameId: 0` routing with explicit content
+  readiness and known-frame correlation. This removes a common cause of
+  record/run/inspect commands silently targeting the wrong frame.
+- Dependencies: T3, T4, T5, T11, T13.
+- Completion criteria:
+  - Content scripts emit or answer `content:ready` with tab/frame capability
+    metadata where the browser API permits it.
+  - Background resolves active-tab readiness without blindly adding
+    `frameId: 0`.
+  - Run, record, inspector, and locator preview commands include `frameId` only
+    when the frame is known.
+  - Unsupported pages, missing content scripts, and cross-origin frame limits
+    surface as user-facing states.
+- Test expectations:
+  - Vitest covers active-tab readiness, omitted frame id routing, known frame
+    routing, content-not-ready, and unsupported page errors.
+  - `pnpm typecheck` passes.
+
+### T19 Builder Authoring Session And Step Operations
+
+- Status: [ ] Not started
+- Briefing: Introduce `src/builder` as the testable model for scenario workflow
+  authoring. It owns draft state and structured scenario document edits instead
+  of treating JSON textareas as the primary editor.
+- Dependencies: T1, T7, T9.
+- Completion criteria:
+  - Authoring session tracks selected scenario, draft document, dirty state,
+    selected step, selected target slot, validation issues, run state, and
+    record state.
+  - Builder operations support create/select scenario, add, insert, duplicate,
+    delete, reorder, and update step action families.
+  - Step operations produce portable scenario documents and do not store
+    builder UI state inside scenario documents.
+  - Validation runs after mutating operations and preserves actionable paths.
+- Test expectations:
+  - Vitest covers session initialization, dirty state, each step operation,
+    action-specific default step creation, validation write-back, and unchanged
+    metadata preservation.
+
+### T20 Side Panel Workflow Builder UI
+
+- Status: [ ] Not started
+- Briefing: Replace the scattered side panel sections with a workflow builder
+  composed around the authoring session. The UI should make the common path:
+  add action, set target/input/options, validate, dry-run, and save.
+- Dependencies: T10, T18, T19.
+- Completion criteria:
+  - Side panel renders scenario list, step timeline/list, selected-step
+    structured editor, target slot controls, validation, run feedback, and
+    trace feedback as one workflow.
+  - Raw JSON editing is no longer the primary editor; import/export and repair
+    remain available as secondary flows.
+  - Per-step dry run uses the selected step from the authoring session and the
+    same background/content routing as full scenario run.
+  - Buttons and pending states are derived from session state, not duplicated
+    across unrelated feature objects.
+- Test expectations:
+  - Vitest covers rendered view models for empty session, saved scenario,
+    unsaved draft, invalid step, pending run, and dry-run command payload.
+  - `pnpm build` passes.
+
+### T21 Target Slot Inspector Integration
+
+- Status: [ ] Not started
+- Briefing: Integrate inspector and locator preview into target assignment.
+  Target picking should start from a selected target slot and write back to that
+  exact slot after locator preview.
+- Dependencies: T11, T12, T18, T19, T20.
+- Completion criteria:
+  - Builder exposes target slots for step target, drag from, drag to,
+    waitFor target, and scrollTo target.
+  - Inspector start messages carry enough correlation to recover the selected
+    target slot in side panel state.
+  - Locator preview writes the selected locator into the correlated target slot,
+    not only the top-level selected step target.
+  - Inspector launch is disabled for actions without a writable target slot.
+- Test expectations:
+  - Vitest covers target slot discovery, inspector session correlation,
+    selected target normalization, locator preview, write-back for every target
+    slot, and disabled launch for targetless actions.
+
+### T22 Navigation-Safe Recorder Event Buffer
+
+- Status: [ ] Not started
+- Briefing: Move recording event ownership from content-script memory to a
+  background-owned session buffer. This makes browser usage recording survive
+  normal page navigation and frame reload.
+- Dependencies: T3, T4, T13, T14, T18.
+- Completion criteria:
+  - `record:start` creates a background session and tells eligible content
+    scripts to capture.
+  - Content capture flushes incremental `record:event` messages with
+    correlation metadata.
+  - `pagehide` or navigation flushes pending events before content cleanup.
+  - `record:stop` normalizes buffered events into a draft scenario.
+  - Empty recordings return an explicit empty recording state instead of invalid
+    empty scenario JSON.
+- Test expectations:
+  - Vitest covers record event ingestion order, pagehide flush, navigation
+    continuity, mismatched session rejection, empty recording state, and
+    normalization failure reporting.
+
+### T23 Recorded Draft Review And Merge
+
+- Status: [ ] Not started
+- Briefing: Treat recorder output as a builder review input. A recorded draft
+  should not silently overwrite the selected scenario.
+- Dependencies: T19, T20, T22.
+- Completion criteria:
+  - Side panel opens recorded drafts in builder review with source event count
+    and validation status.
+  - User can replace the current draft, append recorded steps, discard the
+    recording, save as a new scenario, or export.
+  - Sensitive recorded inputs require visible confirmation before save.
+  - Popup record stop can hand off a draft to side panel by draft id.
+- Test expectations:
+  - Vitest covers replace, append, discard, save-as-new, export, sensitive input
+    confirmation, and popup-to-side-panel draft handoff.
+
+### T24 Workflow Verification Harness
+
+- Status: [ ] Not started
+- Briefing: Add verification that exercises the extension as a workflow rather
+  than only isolated message models.
+- Dependencies: T18, T20, T21, T23.
+- Completion criteria:
+  - A browser-targeted verification path runs against an allowed local page or
+    a deterministic fixture page.
+  - Verification covers add action, pick target, dry-run step, record a short
+    interaction, review draft, save, and run scenario.
+  - Existing unit tests remain focused on feature modules and adapters.
+- Test expectations:
+  - `pnpm test`, `pnpm typecheck`, and `pnpm build` pass.
+  - Manual or automated browser verification captures failures for routing,
+    inspector write-back, recorder draft review, and run feedback.
+
 ## First Vertical Slice
 
-The first vertical slice is T1 through T6:
+The completed initial vertical slice is T1 through T6:
 
 ```txt
 draft scenario JSON
@@ -455,6 +603,31 @@ Acceptance criteria:
 - The UI displays at least running, completed, and failed statuses with `runId`
   correlation.
 
+## Redesign Vertical Slice
+
+The first redesign slice is T18 through T21:
+
+```txt
+content readiness without implicit frameId
+-> builder authoring session
+-> add a click step
+-> select the step target slot
+-> inspector selects an element
+-> locator preview returns candidates
+-> chosen locator writes into the target slot
+-> step validates
+-> dry-run sends one compiled step through background/content routing
+```
+
+Acceptance criteria:
+
+- A user can create a new draft scenario without importing JSON.
+- A user can add a target-bearing action and set its target with inspector.
+- Inspector is not a detached tool in the primary flow; it is launched from a
+  concrete target slot.
+- The dry-run path does not depend on `frameId: 0` unless the frame is known.
+- Validation and trace feedback appear in the same builder workflow.
+
 ## Execution Checklist
 
 - Before each task, add or update focused Vitest coverage for the behavior being
@@ -467,6 +640,7 @@ Acceptance criteria:
 - Store scenario documents, not compiled runtime scenarios.
 - Preserve `scenarioId`, `runId`, `tabId`, and `frameId` through async message
   paths where applicable.
+- Include `frameId` only for known frame correlations.
 - Treat unsupported pages, missing permissions, cross-origin frame limits, and
   content-script readiness as user-visible states.
 - Run `pnpm test`, `pnpm typecheck`, and `pnpm build` before marking an

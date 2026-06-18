@@ -53,17 +53,24 @@ shared schema가 소유하는 것:
 
 ```txt
 browser-extension/
-  manifest.json
+  wxt.config.ts
   src/
-    popup/
-    side-panel/
-    background/
-    content-script/
+    entrypoints/
+      popup/
+      sidepanel/
+      background/
+      content/
+      devtools/
+      devtools-panel/
     scenario/
       validate.ts
       migrate.ts
       compile-to-browser-runtime.ts
       export-code.ts
+    builder/
+      authoring-session.ts
+      step-operations.ts
+      target-slots.ts
     recorder/
       event-capture.ts
       event-to-step.ts
@@ -76,8 +83,11 @@ browser-extension/
     trace/
 ```
 
-이 문서는 의도적으로 abstract level에 머뭅니다. 위 디렉토리는 필요한 build setup을
-정한 뒤 implementation을 시작할 때 생성합니다.
+WXT가 extension manifest를 생성하므로 source `manifest.json`은 두지 않습니다.
+entrypoint-specific code는 `src/entrypoints` 아래에 두고, workflow builder처럼
+테스트 가능한 authoring logic은 entrypoint 밖의 feature module에 둡니다.
+
+Related decision: `docs/adr/2026-06-18-browser-extension-workflow-builder.md`.
 
 ## 4. Runtime Components
 
@@ -96,17 +106,54 @@ workflow를 popup이 소유하지 않습니다.
 
 ### Side Panel
 
-side panel은 primary authoring surface입니다.
+side panel은 primary authoring surface이며, 단순 step JSON editor가 아니라
+**scenario workflow builder**입니다. 사용자는 action을 추가하고, action별 입력을
+채우고, target이 필요한 slot을 inspector로 지정하고, step 단위 또는 scenario 전체를
+dry-run한 뒤 저장합니다.
 
 - scenario list
-- step list와 step editor
-- target picker launch
-- locator candidate preview
+- authoring session과 unsaved draft 관리
+- step add / insert / duplicate / delete / reorder
+- action family별 structured editor
+- target slot picker와 locator candidate preview
 - options editor
 - validation error
 - import/export
 - per-step dry run
 - trace와 failure detail
+
+side panel은 raw JSON textarea를 primary editor로 노출하지 않습니다. JSON import,
+export, advanced repair는 가능하지만, 일반 authoring flow는 structured operation을
+통해 scenario document를 변경합니다.
+
+권장 authoring session model:
+
+```txt
+ScenarioAuthoringSession
+- selectedScenarioId
+- draftDocument
+- dirty state
+- selectedStepId
+- selectedTargetSlot
+- run session
+- record session
+- trace view
+- validation issues
+```
+
+`selectedTargetSlot`은 target이 들어갈 위치를 명시합니다.
+
+```txt
+TargetSlot
+- step target
+- drag from
+- drag to
+- waitFor target
+- scrollTo target
+```
+
+inspector와 locator preview는 target slot이 선택된 상태에서만 primary authoring
+flow에 진입합니다. standalone inspector는 diagnostics 용도로만 허용합니다.
 
 ### Background Service Worker
 
@@ -117,6 +164,7 @@ background service worker는 extension-level state를 조율합니다.
 - storage access
 - content script readiness
 - long-running run/record session metadata
+- recording event buffering across navigation
 - permission check
 
 Actorble action을 직접 실행하지 않습니다.
@@ -127,12 +175,17 @@ content script는 page runtime host입니다.
 
 - `Actorble` browser instance 생성
 - compiled runtime scenario 실행
-- recording 중 page event capture
+- recording 중 page event capture와 incremental event flush
 - target inspector overlay host
 - trace와 status update를 extension UI로 stream
 
 content script는 browser extension isolation과 permission boundary를 넘나들기
 때문에 page-facing code를 작고 명시적으로 유지해야 합니다.
+
+content script memory는 navigation과 frame reload에 의해 사라질 수 있으므로,
+recording source of truth를 content script 내부 배열로 두지 않습니다. content
+script는 capture host이고, background service worker가 correlated recording
+session과 event buffer를 소유합니다.
 
 ### Optional DevTools Panel
 
@@ -165,27 +218,63 @@ Side panel or popup
 ```txt
 Popup or side panel
 -> record:start
--> content script captures page events
+-> background creates recording session and event buffer
+-> content script captures page events and flushes record:event messages
+-> pagehide/navigation flushes pending events before cleanup
+-> record:stop asks background to normalize buffered events
 -> recorder synthesizes locator candidates
 -> event-to-step normalizer compresses raw events
--> draft scenario document is returned to side panel
--> user edits, validates, saves, or exports
+-> draft scenario document is opened in side panel builder review
+-> user merges, edits, validates, saves, or exports
 ```
 
 recorder output은 draft로 다룹니다. raw browser event보다 `fill`, `click` 같은
 stable intent step을 우선합니다.
 
+recording은 browser 사용을 scenario화하는 primary input path입니다. 따라서 다음
+invariants를 지켜야 합니다.
+
+- content script navigation 또는 reload가 recorded events를 잃게 하면 안 됩니다.
+- stop 시점에 event가 없으면 invalid empty scenario 대신 user-facing empty recording
+  state를 반환해야 합니다.
+- recorded draft는 기존 scenario를 조용히 덮어쓰지 않습니다. builder가 replace,
+  append, discard를 명시적으로 선택하게 합니다.
+- sensitive input은 draft review에서 확인해야 저장할 수 있습니다.
+
 ### Pick Target
 
 ```txt
-Side panel
--> inspector:start
+Side panel target slot
+-> inspector:start with target slot correlation
 -> content script shows hover highlight
 -> user selects element
 -> locator synthesis returns ranked candidates
 -> side panel previews match count and strictness
--> selected target is written into the scenario document
+-> selected locator is written into the correlated target slot
 ```
+
+target picker는 별도 feature가 아니라 builder의 target assignment interaction입니다.
+선택 결과는 현재 step의 단일 `target` 필드에만 쓰지 않고, correlated target slot에
+씁니다. target slot이 없는 action에서는 inspector launch를 비활성화합니다.
+
+### Build Scenario
+
+```txt
+Side panel
+-> create or select scenario authoring session
+-> add/insert step by action family
+-> edit action-specific fields
+-> choose target slot
+-> pick target and preview locator candidates
+-> write chosen target into draft document
+-> validate affected step and document
+-> dry-run step or run scenario
+-> save portable scenario document
+```
+
+builder는 portable scenario document만 저장합니다. builder-specific UI state,
+selected slot, temporary locator candidates, trace view는 scenario document에
+저장하지 않습니다.
 
 ## 6. Scenario Compiler Responsibilities
 
@@ -219,15 +308,27 @@ compiler가 하지 말아야 할 일:
 - `scenario:resume`
 - `scenario:stop`
 - `record:start`
+- `record:event`
 - `record:stop`
+- `record:draft:get`
 - `inspector:start`
 - `inspector:stop`
+- `inspector:selected`
+- `inspector:cancelled`
+- `locator:preview`
 - `trace:event`
 - `runtime:status`
+- `content:ready`
 
 가능한 경우 message에는 `tabId`, `frameId`, `scenarioId`, `runId`를 포함합니다.
 recording, inspection, execution이 같은 tab에서 시간차를 두고 일어날 수 있으므로
 runtime message는 correlation-friendly해야 합니다.
+
+`frameId`는 known frame에 대해서만 포함합니다. top-frame operation이라고 가정해서
+항상 `frameId: 0`을 넣지 않습니다. active tab의 content readiness와 frame routing은
+background가 판단하고, iframe target은 inspector 또는 recorder가 관측한 frame
+correlation으로만 지정합니다. cross-origin frame은 별도 capability boundary로
+표시합니다.
 
 ## 8. Storage Model
 
@@ -262,10 +363,11 @@ recorder는 sensitive data handling을 명시적으로 다뤄야 합니다.
 
 ## 10. Delivery Phases
 
-1. active tab에서 imported scenario JSON 실행
-2. scenario document save/load/import/export
-3. target inspector와 locator preview 추가
-4. side-panel scenario builder 추가
-5. recorder와 event-to-step normalization 추가
-6. scenario JSON에서 TypeScript code export 추가
-7. optional DevTools trace panel 추가
+1. active tab routing과 content readiness를 안정화하고 frame correlation 정책 정리
+2. side panel scenario workflow builder와 authoring session model 도입
+3. target slot 기반 inspector와 locator preview를 builder에 통합
+4. navigation-safe recorder event buffering과 recorded draft review 도입
+5. step dry-run, scenario run, trace display를 builder action flow에 결합
+6. popup을 short-lived run/record control과 side panel handoff에 한정
+7. scenario JSON에서 TypeScript code export 유지
+8. optional DevTools trace panel 유지
