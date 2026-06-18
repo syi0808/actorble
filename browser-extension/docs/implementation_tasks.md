@@ -563,7 +563,7 @@ src/recorder
 
 ### T24 Workflow Verification Harness
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add verification that exercises the extension as a workflow rather
   than only isolated message models.
 - Dependencies: T18, T20, T21, T23.
