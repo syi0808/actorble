@@ -360,7 +360,7 @@ src/recorder
 
 ### T14 Event-To-Step Normalization
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Convert raw recorded browser events into stable scenario draft steps.
   Prefer user intent steps such as `click` and `fill` over low-level browser
   events.
