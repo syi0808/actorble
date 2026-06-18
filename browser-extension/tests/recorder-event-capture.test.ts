@@ -5,14 +5,21 @@ import {
   detectSensitiveInputReason,
   type RecorderClickEvent,
   type RecorderEventCaptureAdapter,
+  type RecorderEventFlush,
   type RecorderSession,
   type RecorderTextEvent,
 } from '../src/recorder/event-capture.js'
 
 describe('recorder event capture', () => {
-  it('captures click events with locator-useful target context and cleans listeners on stop', () => {
+  it('flushes click events with locator-useful target context and cleans listeners on stop', async () => {
     const adapter = createFakeAdapter()
-    const capture = createRecorderEventCapturePort(adapter, { now: createClock(1000) })
+    const flushes: RecorderEventFlush[] = []
+    const capture = createRecorderEventCapturePort(adapter, {
+      now: createClock(1000),
+      flushEvents(flush) {
+        flushes.push(flush)
+      },
+    })
 
     const start = capture.start(session())
     adapter.dispatchClick(targets.button, {
@@ -22,7 +29,7 @@ describe('recorder event capture', () => {
       pageY: 218,
       button: 0,
     })
-    const stop = capture.stop('record-1')
+    const stop = await capture.stop('record-1')
 
     expect(start).toMatchObject({
       ok: true,
@@ -32,57 +39,133 @@ describe('recorder event capture', () => {
         frameId: 0,
       },
     })
-    expect(stop).toMatchObject({
+    expect(stop).toEqual({
       ok: true,
-      value: [
-        {
-          kind: 'click',
-          timestamp: 1000,
-          clientX: 12,
-          clientY: 18,
-          pageX: 112,
-          pageY: 218,
-          button: 0,
-          target: {
-            tagName: 'button',
-            id: 'submit',
-            role: 'button',
-            text: 'Sign in',
-          },
-        },
-      ],
+      value: undefined,
     })
+    expect(flushes).toMatchObject([
+      {
+        tabId: 7,
+        frameId: 0,
+        sessionId: 'record-1',
+        reason: 'incremental',
+        events: [
+          {
+            kind: 'click',
+            timestamp: 1000,
+            clientX: 12,
+            clientY: 18,
+            pageX: 112,
+            pageY: 218,
+            button: 0,
+            target: {
+              tagName: 'button',
+              id: 'submit',
+              role: 'button',
+              text: 'Sign in',
+            },
+          },
+        ],
+      },
+    ])
     expect(adapter.removedListeners).toEqual(['click', 'input', 'change', 'pagehide'])
   })
 
-  it('captures text input and masks sensitive values before storing raw events', () => {
+  it('captures text input and masks sensitive values before flushing raw events', async () => {
     const adapter = createFakeAdapter()
-    const capture = createRecorderEventCapturePort(adapter, { now: createClock(2000) })
+    const flushes: RecorderEventFlush[] = []
+    const capture = createRecorderEventCapturePort(adapter, {
+      now: createClock(2000),
+      flushEvents(flush) {
+        flushes.push(flush)
+      },
+    })
 
     capture.start(session())
     adapter.dispatchInput(targets.password)
-    const stop = capture.stop('record-1')
+    const stop = await capture.stop('record-1')
+
+    expect(stop).toMatchObject({ ok: true })
+    expect(flushes).toMatchObject([
+      {
+        reason: 'incremental',
+        events: [
+          {
+            kind: 'text',
+            timestamp: 2000,
+            source: 'input',
+            value: RECORDER_MASKED_VALUE,
+            sensitive: true,
+            sensitiveReason: 'password_type',
+            target: {
+              tagName: 'input',
+              id: 'password',
+              inputType: 'password',
+              name: 'password',
+            },
+          },
+        ],
+      },
+    ])
+    expect(JSON.stringify(flushes)).not.toContain('correct horse battery staple')
+  })
+
+  it('flushes pending events on page navigation and ignores later events', async () => {
+    const adapter = createFakeAdapter()
+    const flushes: RecorderEventFlush[] = []
+    const capture = createRecorderEventCapturePort(adapter, {
+      now: createClock(3000),
+      autoFlush: false,
+      flushEvents(flush) {
+        flushes.push(flush)
+      },
+    })
+
+    capture.start(session())
+    adapter.dispatchClick(targets.button)
+    adapter.dispatchPagehide()
+    adapter.dispatchClick(targets.button)
+    const stop = await capture.stop('record-1')
+
+    expect(adapter.removedListeners).toEqual(['click', 'input', 'change', 'pagehide'])
+    expect(stop).toEqual({
+      ok: true,
+      value: undefined,
+    })
+    expect(flushes).toMatchObject([
+      {
+        reason: 'pagehide',
+        events: [
+          {
+            kind: 'click',
+            timestamp: 3000,
+          },
+        ],
+      },
+    ])
+  })
+
+  it('reports flush failures on stop', async () => {
+    const adapter = createFakeAdapter()
+    const capture = createRecorderEventCapturePort(adapter, {
+      flushEvents() {
+        throw new Error('background unavailable')
+      },
+    })
+
+    capture.start(session())
+    adapter.dispatchClick(targets.button)
+    const stop = await capture.stop('record-1')
 
     expect(stop).toMatchObject({
-      ok: true,
-      value: [
+      ok: false,
+      issues: [
         {
-          kind: 'text',
-          timestamp: 2000,
-          source: 'input',
-          value: RECORDER_MASKED_VALUE,
-          sensitive: true,
-          sensitiveReason: 'password_type',
-          target: {
-            tagName: 'input',
-            id: 'password',
-            inputType: 'password',
-            name: 'password',
-          },
+          code: 'recorder_error',
+          message: 'Recorder events could not be flushed.',
         },
       ],
     })
-    expect(JSON.stringify(stop)).not.toContain('correct horse battery staple')
   })
 
   it('marks secret-like fields as sensitive even when the input type is not password', () => {
@@ -101,23 +184,7 @@ describe('recorder event capture', () => {
     ).toBe('password_type')
   })
 
-  it('removes listeners on page navigation and ignores later events', () => {
-    const adapter = createFakeAdapter()
-    const capture = createRecorderEventCapturePort(adapter, { now: createClock(3000) })
-
-    capture.start(session())
-    adapter.dispatchPagehide()
-    adapter.dispatchClick(targets.button)
-    const stop = capture.stop('record-1')
-
-    expect(adapter.removedListeners).toEqual(['click', 'input', 'change', 'pagehide'])
-    expect(stop).toEqual({
-      ok: true,
-      value: [],
-    })
-  })
-
-  it('rejects overlapping sessions and mismatched stops', () => {
+  it('rejects overlapping sessions and mismatched stops', async () => {
     const adapter = createFakeAdapter()
     const capture = createRecorderEventCapturePort(adapter)
 
@@ -131,7 +198,7 @@ describe('recorder event capture', () => {
         },
       ],
     })
-    expect(capture.stop('record-2')).toMatchObject({
+    await expect(capture.stop('record-2')).resolves.toMatchObject({
       ok: false,
       issues: [
         {

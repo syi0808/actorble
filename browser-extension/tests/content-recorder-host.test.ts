@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createContentRecorderHost } from '../src/entrypoints/content/recorder-host.js'
+import {
+  createContentRecorderHost,
+  createRecordEventFlushSender,
+} from '../src/entrypoints/content/recorder-host.js'
 import {
   createExtensionMessage,
   type ActorbleExtensionMessage,
@@ -11,10 +14,16 @@ import {
 } from '../src/recorder/event-capture.js'
 
 describe('content recorder host', () => {
-  it('starts and stops a correlated recorder session with captured events', async () => {
+  it('starts and stops a correlated recorder session and flushes captured events', async () => {
     const adapter = createFakeAdapter()
+    const sent: ActorbleExtensionMessage[] = []
     const host = createContentRecorderHost({
-      capture: createRecorderEventCapturePort(adapter, { now: () => 5000 }),
+      capture: createRecorderEventCapturePort(adapter, {
+        now: () => 5000,
+        flushEvents: createRecordEventFlushSender((message) => {
+          sent.push(message)
+        }),
+      }),
       now: () => 1000,
     })
 
@@ -44,18 +53,72 @@ describe('content recorder host', () => {
         runId: 'record-1',
         sessionId: 'record-1',
         status: 'stopped',
-        events: [
-          {
-            kind: 'click',
-            timestamp: 5000,
-            target: {
-              tagName: 'button',
-              id: 'submit',
-            },
-          },
-        ],
       },
     })
+    expect(stop.ok && stop.value).not.toHaveProperty('events')
+    expect(sent).toMatchObject([
+      {
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+          sessionId: 'record-1',
+          reason: 'incremental',
+          events: [
+            {
+              kind: 'click',
+              timestamp: 5000,
+              target: {
+                tagName: 'button',
+                id: 'submit',
+              },
+            },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('flushes pending events on pagehide before content cleanup', async () => {
+    const adapter = createFakeAdapter()
+    const sent: ActorbleExtensionMessage[] = []
+    const host = createContentRecorderHost({
+      capture: createRecorderEventCapturePort(adapter, {
+        now: () => 5000,
+        autoFlush: false,
+        flushEvents: createRecordEventFlushSender((message) => {
+          sent.push(message)
+        }),
+      }),
+      now: () => 1000,
+    })
+
+    await host.handleMessage(startMessage())
+    adapter.dispatchClick()
+    adapter.dispatchPagehide()
+    await Promise.resolve()
+
+    expect(sent).toMatchObject([
+      {
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+          sessionId: 'record-1',
+          reason: 'pagehide',
+          events: [
+            {
+              kind: 'click',
+              timestamp: 5000,
+            },
+          ],
+        },
+      },
+    ])
   })
 
   it('rejects overlapping recorder sessions and mismatched stops', async () => {
@@ -135,6 +198,7 @@ type FakeElement = Readonly<{ key: string }>
 function createFakeAdapter() {
   const target = { key: 'button' } satisfies FakeElement
   let click: ((event: RecorderClickEvent<FakeElement>) => void) | undefined
+  let pagehide: (() => void) | undefined
 
   const adapter = {
     onClick(listener) {
@@ -147,7 +211,8 @@ function createFakeAdapter() {
     onChange() {
       return () => {}
     },
-    onPagehide() {
+    onPagehide(listener) {
+      pagehide = listener
       return () => {}
     },
     describeElement() {
@@ -174,8 +239,12 @@ function createFakeAdapter() {
         target,
       })
     },
+    dispatchPagehide() {
+      pagehide?.()
+    },
   } satisfies RecorderEventCaptureAdapter<FakeElement> & {
     dispatchClick(): void
+    dispatchPagehide(): void
   }
 
   return adapter

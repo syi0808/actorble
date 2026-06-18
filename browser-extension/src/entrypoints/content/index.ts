@@ -4,7 +4,11 @@ import { isExtensionMessageOfKind } from '../../messaging/index.js'
 import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
 import { createContentLocatorPreviewHost } from './locator-preview-host.js'
 import { createContentReadinessHost } from './readiness.js'
-import { createContentRecorderHost, createDomRecorderEventCapturePort } from './recorder-host.js'
+import {
+  createContentRecorderHost,
+  createDomRecorderEventCapturePort,
+  createRecordEventFlushSender,
+} from './recorder-host.js'
 import { createContentRuntimeHost } from './runtime-host.js'
 
 type RuntimeFrameIdApi = Readonly<{
@@ -32,7 +36,11 @@ export default defineContentScript({
       createActorble,
     })
     const recorderHost = createContentRecorderHost({
-      capture: createDomRecorderEventCapturePort(),
+      capture: createDomRecorderEventCapturePort({
+        flushEvents: createRecordEventFlushSender((message) => {
+          return browser.runtime.sendMessage(message)
+        }),
+      }),
     })
     const runtimeFrameId = browser.runtime as RuntimeFrameIdApi
     const readinessHost = createContentReadinessHost({

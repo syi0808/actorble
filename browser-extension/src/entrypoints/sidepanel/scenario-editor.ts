@@ -46,6 +46,7 @@ import {
 } from '../../scenario/export-code.js'
 import {
   documentWithRecordedDraftDefaults,
+  type RecordedEmptyRecordingState,
   type RecordedScenarioDraftHandoff,
 } from '../../recorder/workflow.js'
 import type {
@@ -115,6 +116,7 @@ export type SidepanelRecordCommandReceipt = Readonly<{
   status?: SidepanelRecordSession['status']
   session?: SidepanelRecordSession
   recordedDraft?: RecordedScenarioDraftHandoff
+  emptyRecording?: RecordedEmptyRecordingState
 }>
 
 export type SidepanelScenarioEditorSnapshot = Readonly<{
@@ -1057,7 +1059,8 @@ export function createSidepanelScenarioEditor(
       externalIssues = []
       syncSnapshotFromSession({
         pendingAction: null,
-        message: receipt.kind === 'record:start' ? 'Recording' : snapshot.message,
+        message: receipt.emptyRecording?.message ??
+          (receipt.kind === 'record:start' ? 'Recording' : snapshot.message),
       })
     }
 

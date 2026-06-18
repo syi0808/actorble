@@ -126,6 +126,56 @@ describe('popup run controls', () => {
     })
   })
 
+  it('keeps stopped record state when the background returns an empty recording', async () => {
+    const { controls } = createTestControls({
+      createRecordId: () => 'record-popup-1',
+      sendResponse(message) {
+        if (message.kind === 'record:stop') {
+          return ok({
+            kind: message.kind,
+            tabId: message.payload.tabId,
+            frameId: message.payload.frameId,
+            scenarioId: message.payload.scenarioId,
+            runId: message.payload.runId,
+            contentReady: true,
+            session: sessionFor(message),
+            emptyRecording: {
+              sessionId: message.payload.runId ?? 'record-popup-1',
+              tabId: message.payload.tabId,
+              frameId: message.payload.frameId,
+              scenarioId: message.payload.scenarioId,
+              runId: message.payload.runId,
+              sourceEventCount: 0,
+              createdAt: 1_700_000_000_000,
+              message: 'No browser events were recorded.',
+            },
+          })
+        }
+
+        return commandReceiptFor(message)
+      },
+    })
+    await controls.refresh()
+
+    await controls.startRecording()
+    const stop = await controls.stopRecording()
+
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        emptyRecording: {
+          sourceEventCount: 0,
+        },
+      },
+    })
+    expect(controls.getSnapshot()).toMatchObject({
+      currentRecord: {
+        runId: 'record-popup-1',
+        status: 'stopped',
+      },
+    })
+  })
+
   it('dispatches active run control commands from popup state', async () => {
     const { controls, sent } = createTestControls({
       initialState: popupState({
@@ -252,7 +302,9 @@ type TestControlsOptions = Readonly<{
   createRunId?: () => string
   createRecordId?: () => string
   initialState?: PopupBackgroundState
-  sendResponse?: ExtensionResult<unknown>
+  sendResponse?:
+    | ExtensionResult<unknown>
+    | ((message: ActorbleExtensionMessage) => ExtensionResult<unknown>)
 }>
 
 function createTestControls(options: TestControlsOptions = {}) {
@@ -269,6 +321,10 @@ function createTestControls(options: TestControlsOptions = {}) {
       }
 
       if (options.sendResponse !== undefined) {
+        if (typeof options.sendResponse === 'function') {
+          return options.sendResponse(message)
+        }
+
         return options.sendResponse
       }
 
@@ -311,6 +367,7 @@ function commandReceiptFor(message: ActorbleExtensionMessage) {
     case 'runtime:status':
     case 'content:ready':
     case 'popup:get-state':
+    case 'record:event':
     case 'record:draft:get':
       throw new Error(`Unexpected popup test command: ${message.kind}`)
   }

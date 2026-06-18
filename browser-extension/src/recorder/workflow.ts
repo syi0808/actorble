@@ -15,6 +15,16 @@ export type RecordedScenarioDraftHandoff = RequiredTabCorrelation &
     runId?: string
   }>
 
+export type RecordedEmptyRecordingState = RequiredTabCorrelation &
+  Readonly<{
+    sessionId: string
+    sourceEventCount: 0
+    createdAt: number
+    message: string
+    scenarioId?: string
+    runId?: string
+  }>
+
 export function documentWithRecordedDraftDefaults(
   draft: RecordedScenarioDraftHandoff,
 ): ScenarioDocument {
@@ -34,4 +44,3 @@ export function recordedScenarioId(draftId: string): string {
 
   return `recorded-${suffix.length === 0 ? 'scenario' : suffix}`
 }
-

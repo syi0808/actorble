@@ -15,7 +15,10 @@ import { createExtensionMessage, isActorbleExtensionMessage } from '../../messag
 import type { LocatorPreviewResult } from '../../inspector/locator-preview.js'
 import { normalizeRecordedEvents } from '../../recorder/event-to-step.js'
 import type { RawRecordedEvent } from '../../recorder/event-capture.js'
-import type { RecordedScenarioDraftHandoff } from '../../recorder/workflow.js'
+import type {
+  RecordedEmptyRecordingState,
+  RecordedScenarioDraftHandoff,
+} from '../../recorder/workflow.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type { RuntimeRunStatus } from '../../trace/index.js'
 
@@ -122,6 +125,7 @@ export type BackgroundCommandReceipt = Readonly<{
   contentReady: boolean
   session?: BackgroundSessionSnapshot
   recordedDraft?: RecordedScenarioDraftHandoff
+  emptyRecording?: RecordedEmptyRecordingState
 }>
 
 export type BackgroundPopupState = Readonly<{
@@ -181,6 +185,11 @@ type RecordCommandMessage = Extract<
   Readonly<{ kind: 'record:start' | 'record:stop' }>
 >
 
+type RecordEventMessage = Extract<
+  ActorbleExtensionMessage,
+  Readonly<{ kind: 'record:event' }>
+>
+
 type RecordDraftGetMessage = Extract<
   ActorbleExtensionMessage,
   Readonly<{ kind: 'record:draft:get' }>
@@ -193,7 +202,6 @@ type ContentRecorderReceipt = RequiredTabCorrelation &
     scenarioId?: string
     runId?: string
     status: 'recording' | 'stopped'
-    events?: readonly RawRecordedEvent[]
   }>
 
 type LocatorPreviewMessage = Extract<
@@ -232,6 +240,7 @@ export function createBackgroundOrchestrator(
   const getNow = options.now ?? Date.now
   const runSessions = new Map<string, BackgroundRunSession>()
   const recordSessions = new Map<string, BackgroundRecordSession>()
+  const recordEventBuffers = new Map<string, RawRecordedEvent[]>()
   const inspectorSessions = new Map<string, BackgroundInspectorSession>()
   const recordedDrafts = new Map<string, RecordedScenarioDraftHandoff>()
   const contentFrames = new Map<number, Map<number, ContentReadyMetadata>>()
@@ -258,6 +267,8 @@ export function createBackgroundOrchestrator(
       case 'record:start':
       case 'record:stop':
         return routeRecordCommand(message)
+      case 'record:event':
+        return ingestRecordEvent(message)
       case 'record:draft:get':
         return getRecordedDraft(message)
       case 'locator:preview':
@@ -380,6 +391,10 @@ export function createBackgroundOrchestrator(
   async function routeRecordCommand(
     message: RecordCommandMessage,
   ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
+    if (message.kind === 'record:stop') {
+      return stopRecordCommand(message)
+    }
+
     const target = await resolveTargetTab(message.payload)
     if (!target.ok) {
       return target
@@ -394,20 +409,148 @@ export function createBackgroundOrchestrator(
       return failure(conflict)
     }
 
+    const session = upsertRecordSession(routedMessage.payload, 'recording')
+    recordEventBuffers.set(session.sessionId, [])
+
+    const armed = await armContentRecorder(session)
+    if (!armed.ok) {
+      const [issue] = armed.issues
+      recordEventBuffers.delete(session.sessionId)
+      upsertRecordSession(routedMessage.payload, 'failed', {
+        message: issue?.message ?? 'Recorder command failed.',
+      })
+      return armed
+    }
+
+    return ok(receiptFor(
+      routedMessage.kind,
+      {
+        ...routedMessage.payload,
+        sessionId: session.sessionId,
+      },
+      true,
+      session,
+    ))
+  }
+
+  async function stopRecordCommand(
+    message: Extract<RecordCommandMessage, Readonly<{ kind: 'record:stop' }>>,
+  ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
+    const sessionId = recordSessionId(message.payload)
+    const activeSession = recordSessions.get(sessionId)
+    if (
+      activeSession === undefined ||
+      activeSession.status !== 'recording' ||
+      !matchesRecordCommandCorrelation(activeSession, message.payload)
+    ) {
+      return failure({
+        code: 'recorder_error',
+        message: 'No active recorder session matches the stop command.',
+        details: targetDetails(message.payload),
+      })
+    }
+
+    const contentReady = await stopContentRecorder(activeSession)
+    const events = recordEventBuffers.get(sessionId) ?? []
+
+    if (events.length === 0) {
+      recordEventBuffers.delete(sessionId)
+      const emptyRecording = createEmptyRecording(activeSession)
+      const session = upsertRecordSession(activeSession, 'stopped', {
+        message: emptyRecording.message,
+      })
+      return ok({
+        ...receiptFor(
+          message.kind,
+          {
+            ...activeSession,
+            sessionId,
+          },
+          contentReady,
+          session,
+        ),
+        emptyRecording,
+      })
+    }
+
+    const draft = createRecordedDraft(activeSession, events)
+    recordEventBuffers.delete(sessionId)
+    if (!draft.ok) {
+      const [issue] = draft.issues
+      upsertRecordSession(activeSession, 'failed', {
+        message: issue?.message ?? 'Recorded draft could not be created.',
+      })
+      return draft
+    }
+
+    const session = upsertRecordSession(activeSession, 'stopped', {
+      draftId: draft.value.draftId,
+    })
+    return ok({
+      ...receiptFor(
+        message.kind,
+        {
+          ...activeSession,
+          sessionId,
+        },
+        contentReady,
+        session,
+      ),
+      recordedDraft: draft.value,
+    })
+  }
+
+  async function armContentRecorder(
+    session: BackgroundRecordSession,
+  ): Promise<ExtensionResult<ContentRecorderReceipt>> {
+    const message = createExtensionMessage({
+      kind: 'record:start',
+      payload: {
+        tabId: session.tabId,
+        ...optionalFrameId(session.frameId),
+        ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
+        ...(session.runId === undefined ? {} : { runId: session.runId }),
+      },
+    })
+
+    return sendRecorderCommandToContent(message, session)
+  }
+
+  async function stopContentRecorder(
+    session: BackgroundRecordSession,
+  ): Promise<boolean> {
+    const message = createExtensionMessage({
+      kind: 'record:stop',
+      payload: {
+        tabId: session.tabId,
+        ...optionalFrameId(session.frameId),
+        ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
+        ...(session.runId === undefined ? {} : { runId: session.runId }),
+      },
+    })
+
+    const result = await sendRecorderCommandToContent(message, session)
+    return result.ok
+  }
+
+  async function sendRecorderCommandToContent(
+    message: RecordCommandMessage,
+    session: RequiredTabCorrelation,
+  ): Promise<ExtensionResult<ContentRecorderReceipt>> {
     let response: unknown
     try {
       response = await host.sendTabMessage(
-        target.value.tabId,
-        routedMessage,
-        frameOptions(target.value.frameId),
+        session.tabId,
+        message,
+        frameOptions(session.frameId),
       )
     } catch (error) {
       return failure({
         code: 'content_not_ready',
-        message: `Content script is not ready for tab ${target.value.tabId}.`,
+        message: `Content script is not ready for tab ${session.tabId}.`,
         details: {
-          tabId: target.value.tabId,
-          frameId: target.value.frameId,
+          tabId: session.tabId,
+          frameId: session.frameId,
           error: errorMessage(error),
         },
       })
@@ -415,72 +558,33 @@ export function createBackgroundOrchestrator(
 
     const contentResult = readExtensionResult<ContentRecorderReceipt>(response)
     if (contentResult === null) {
-      const issue = {
+      return failure({
         code: 'unsupported_message',
         message: 'Content recorder returned an unsupported response.',
         details: {
-          tabId: target.value.tabId,
-          frameId: target.value.frameId,
-          kind: routedMessage.kind,
+          tabId: session.tabId,
+          frameId: session.frameId,
+          kind: message.kind,
         },
-      } satisfies ExtensionIssue
-      upsertRecordSession(routedMessage.payload, 'failed', { message: issue.message })
-      return failure(issue)
+      })
     }
 
     if (!contentResult.ok) {
-      const [issue] = contentResult.issues
-      upsertRecordSession(routedMessage.payload, 'failed', {
-        message: issue?.message ?? 'Recorder command failed.',
-      })
       return contentResult
     }
 
-    if (contentResult.value.kind !== routedMessage.kind) {
-      const issue = {
+    if (contentResult.value.kind !== message.kind) {
+      return failure({
         code: 'unsupported_message',
         message: 'Content recorder response kind does not match the command.',
         details: {
-          expected: routedMessage.kind,
+          expected: message.kind,
           actual: contentResult.value.kind,
         },
-      } satisfies ExtensionIssue
-      upsertRecordSession(routedMessage.payload, 'failed', { message: issue.message })
-      return failure(issue)
-    }
-
-    let recordedDraft: RecordedScenarioDraftHandoff | undefined
-    let session: BackgroundRecordSession
-    if (routedMessage.kind === 'record:stop') {
-      const draft = createRecordedDraft(contentResult.value)
-      if (!draft.ok) {
-        const [issue] = draft.issues
-        upsertRecordSession(routedMessage.payload, 'failed', {
-          message: issue?.message ?? 'Recorded draft could not be created.',
-        })
-        return draft
-      }
-
-      recordedDraft = draft.value
-      session = upsertRecordSession(routedMessage.payload, 'stopped', {
-        draftId: recordedDraft.draftId,
       })
-    } else {
-      session = upsertRecordSession(routedMessage.payload, 'recording')
     }
 
-    return ok({
-      ...receiptFor(
-        routedMessage.kind,
-        {
-          ...routedMessage.payload,
-          sessionId: contentResult.value.sessionId,
-        },
-        true,
-        session,
-      ),
-      ...(recordedDraft === undefined ? {} : { recordedDraft }),
-    })
+    return contentResult
   }
 
   function getRecordedDraft(
@@ -672,10 +776,10 @@ export function createBackgroundOrchestrator(
     }))
   }
 
-  function ingestContentReady(
+  async function ingestContentReady(
     message: ContentReadyMessage,
     sender?: BackgroundMessageSender,
-  ): ExtensionResult<BackgroundCommandReceipt> {
+  ): Promise<ExtensionResult<BackgroundCommandReceipt>> {
     const tabId = message.payload.tabId ?? sender?.tab?.id
     if (tabId === undefined) {
       return failure({
@@ -692,6 +796,14 @@ export function createBackgroundOrchestrator(
       ...(message.payload.url === undefined && sender?.url !== undefined ? { url: sender.url } : {}),
     })
 
+    const activeRecord = activeRecordSessionFor({
+      tabId,
+      ...optionalFrameId(metadata.frameId),
+    })
+    if (activeRecord !== undefined) {
+      await armContentRecorder(activeRecord)
+    }
+
     return ok(receiptFor(
       message.kind,
       {
@@ -699,6 +811,41 @@ export function createBackgroundOrchestrator(
         ...optionalFrameId(metadata.frameId),
       },
       true,
+      activeRecord,
+    ))
+  }
+
+  function ingestRecordEvent(
+    message: RecordEventMessage,
+  ): ExtensionResult<BackgroundCommandReceipt> {
+    const session = recordSessions.get(message.payload.sessionId)
+    if (
+      session === undefined ||
+      session.status !== 'recording' ||
+      !matchesRecordEventCorrelation(session, message.payload)
+    ) {
+      return failure({
+        code: 'recorder_error',
+        message: 'Recorded events do not match an active recorder session.',
+        details: {
+          sessionId: message.payload.sessionId,
+          ...targetDetails(message.payload),
+        },
+      })
+    }
+
+    const events = recordEventBuffers.get(session.sessionId) ?? []
+    events.push(...message.payload.events)
+    recordEventBuffers.set(session.sessionId, events)
+
+    return ok(receiptFor(
+      message.kind,
+      {
+        ...message.payload,
+        sessionId: session.sessionId,
+      },
+      true,
+      session,
     ))
   }
 
@@ -1008,22 +1155,22 @@ export function createBackgroundOrchestrator(
   }
 
   function createRecordedDraft(
-    receipt: ContentRecorderReceipt,
+    session: BackgroundRecordSession,
+    events: readonly RawRecordedEvent[],
   ): ExtensionResult<RecordedScenarioDraftHandoff> {
-    const events = receipt.events ?? []
     const normalized = normalizeRecordedEvents(events)
     if (!normalized.ok) {
       return normalized
     }
 
-    const draftId = receipt.runId ?? receipt.sessionId
+    const draftId = session.runId ?? session.sessionId
     const draft = {
       draftId,
-      sessionId: receipt.sessionId,
-      tabId: receipt.tabId,
-      ...optionalFrameId(receipt.frameId),
-      ...(receipt.scenarioId === undefined ? {} : { scenarioId: receipt.scenarioId }),
-      ...(receipt.runId === undefined ? {} : { runId: receipt.runId }),
+      sessionId: session.sessionId,
+      tabId: session.tabId,
+      ...optionalFrameId(session.frameId),
+      ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
+      ...(session.runId === undefined ? {} : { runId: session.runId }),
       document: normalized.value.document,
       sourceEventCount: events.length,
       createdAt: getNow(),
@@ -1031,6 +1178,21 @@ export function createBackgroundOrchestrator(
 
     recordedDrafts.set(draft.draftId, draft)
     return ok(draft)
+  }
+
+  function createEmptyRecording(
+    session: BackgroundRecordSession,
+  ): RecordedEmptyRecordingState {
+    return {
+      sessionId: session.sessionId,
+      tabId: session.tabId,
+      ...optionalFrameId(session.frameId),
+      ...(session.scenarioId === undefined ? {} : { scenarioId: session.scenarioId }),
+      ...(session.runId === undefined ? {} : { runId: session.runId }),
+      sourceEventCount: 0,
+      createdAt: getNow(),
+      message: 'No browser events were recorded.',
+    }
   }
 
   function selectRecordedDraft(
@@ -1195,6 +1357,29 @@ function matchesTarget(
   target: RequiredTabCorrelation,
 ): boolean {
   return session.tabId === target.tabId && session.frameId === target.frameId
+}
+
+function matchesRecordEventCorrelation(
+  session: BackgroundRecordSession,
+  payload: RecordEventMessage['payload'],
+): boolean {
+  return (
+    session.sessionId === payload.sessionId &&
+    matchesTarget(session, payload) &&
+    (payload.scenarioId === undefined || session.scenarioId === payload.scenarioId) &&
+    (payload.runId === undefined || session.runId === payload.runId)
+  )
+}
+
+function matchesRecordCommandCorrelation(
+  session: BackgroundRecordSession,
+  payload: RequiredTabCorrelation & Readonly<{ scenarioId?: string; runId?: string }>,
+): boolean {
+  return (
+    matchesTarget(session, payload) &&
+    (payload.scenarioId === undefined || session.scenarioId === payload.scenarioId) &&
+    (payload.runId === undefined || session.runId === payload.runId)
+  )
 }
 
 function targetDetails(

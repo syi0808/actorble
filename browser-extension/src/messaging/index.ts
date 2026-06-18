@@ -1,5 +1,6 @@
 import type { BrowserRuntimeCompilation } from '../scenario/compile-to-browser-runtime.js'
 import type { ScenarioDocument, ScenarioLocator } from '../scenario/types.js'
+import type { RawRecordedEvent } from '../recorder/event-capture.js'
 import type {
   RuntimeDebugSnapshot,
   TraceDisplayEvent,
@@ -14,6 +15,7 @@ export const extensionMessageKinds = [
   'scenario:resume',
   'scenario:stop',
   'record:start',
+  'record:event',
   'record:stop',
   'record:draft:get',
   'inspector:start',
@@ -143,6 +145,20 @@ export type RecordStartMessage = ExtensionMessage<
     }>
 >
 
+export type RecordEventFlushReason = 'incremental' | 'pagehide' | 'stop'
+
+export type RecordEventMessage = ExtensionMessage<
+  'record:event',
+  RequiredTabCorrelation &
+    Readonly<{
+      sessionId: string
+      scenarioId?: string
+      runId?: string
+      reason: RecordEventFlushReason
+      events: readonly RawRecordedEvent[]
+    }>
+>
+
 export type RecordStopMessage = ExtensionMessage<
   'record:stop',
   RequiredTabCorrelation &
@@ -251,6 +267,7 @@ export type ActorbleExtensionMessage =
   | ScenarioRunMessage
   | ScenarioControlMessage
   | RecordStartMessage
+  | RecordEventMessage
   | RecordStopMessage
   | RecordDraftGetMessage
   | InspectorStartMessage
@@ -353,6 +370,17 @@ function isPayloadForKind(
     case 'record:start':
     case 'record:stop':
       return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload)
+    case 'record:event':
+      return (
+        hasRequiredTabCorrelation(payload) &&
+        typeof payload.sessionId === 'string' &&
+        payload.sessionId.length > 0 &&
+        hasOptionalSessionCorrelation(payload) &&
+        isRecordEventFlushReason(payload.reason) &&
+        Array.isArray(payload.events) &&
+        payload.events.length > 0 &&
+        payload.events.every(isRawRecordedEvent)
+      )
     case 'record:draft:get':
       return (
         isOptionalString(payload.draftId) &&
@@ -517,6 +545,79 @@ function isRuntimeRunStatus(value: unknown): value is RuntimeRunStatus {
     typeof value === 'string' &&
     runtimeRunStatuses.includes(value as RuntimeRunStatus)
   )
+}
+
+function isRecordEventFlushReason(value: unknown): value is RecordEventFlushReason {
+  return value === 'incremental' || value === 'pagehide' || value === 'stop'
+}
+
+function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
+  if (!isRecord(value) || !isRecorderTargetSnapshot(value.target) || !isFiniteNumber(value.timestamp)) {
+    return false
+  }
+
+  if (value.kind === 'click') {
+    return (
+      isFiniteNumber(value.clientX) &&
+      isFiniteNumber(value.clientY) &&
+      isOptionalFiniteNumber(value.pageX) &&
+      isOptionalFiniteNumber(value.pageY) &&
+      isFiniteNumber(value.button)
+    )
+  }
+
+  if (value.kind === 'text') {
+    return (
+      (value.source === 'input' || value.source === 'change') &&
+      typeof value.value === 'string' &&
+      typeof value.sensitive === 'boolean' &&
+      (
+        value.sensitiveReason === undefined ||
+        value.sensitiveReason === 'password_type' ||
+        value.sensitiveReason === 'secret_like_field'
+      )
+    )
+  }
+
+  return false
+}
+
+function isRecorderTargetSnapshot(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.tagName !== 'string' || !isRecorderTargetRect(value.rect)) {
+    return false
+  }
+
+  return (
+    isOptionalString(value.frameUrl) &&
+    isOptionalString(value.id) &&
+    (
+      value.classes === undefined ||
+      (Array.isArray(value.classes) && value.classes.every((className) => typeof className === 'string'))
+    ) &&
+    isOptionalString(value.role) &&
+    isOptionalString(value.ariaLabel) &&
+    isOptionalString(value.labelText) &&
+    isOptionalString(value.testId) &&
+    isOptionalString(value.inputType) &&
+    isOptionalString(value.name) &&
+    isOptionalString(value.placeholder) &&
+    isOptionalString(value.href) &&
+    isOptionalString(value.text)
+  )
+}
+
+function isRecorderTargetRect(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.x) &&
+    isNumber(value.y) &&
+    isNumber(value.width) &&
+    isNumber(value.height)
+  )
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number'
 }
 
 function isTraceDisplayEvent(value: unknown): value is TraceDisplayEvent {

@@ -6,7 +6,10 @@ import {
   type RequiredRunCorrelation,
 } from '../../messaging/index.js'
 import { compileToBrowserRuntime } from '../../scenario/compile-to-browser-runtime.js'
-import type { RecordedScenarioDraftHandoff } from '../../recorder/workflow.js'
+import type {
+  RecordedEmptyRecordingState,
+  RecordedScenarioDraftHandoff,
+} from '../../recorder/workflow.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
 import type { ScenarioRecord } from '../../storage/index.js'
 import type { RuntimeRunStatus } from '../../trace/index.js'
@@ -127,6 +130,7 @@ export type PopupCommandReceipt = Readonly<{
   session?: PopupRunSession | PopupRecordSession
   status?: RuntimeRunStatus | PopupRecordSession['status']
   recordedDraft?: RecordedScenarioDraftHandoff
+  emptyRecording?: RecordedEmptyRecordingState
 }>
 
 export type PopupRunControls = Readonly<{

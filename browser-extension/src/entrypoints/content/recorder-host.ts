@@ -1,5 +1,7 @@
 import {
+  createExtensionMessage,
   isActorbleExtensionMessage,
+  type ActorbleExtensionMessage,
   type ActorbleExtensionMessageByKind,
   type ExtensionMessageKind,
   type RequiredTabCorrelation,
@@ -7,9 +9,10 @@ import {
 import {
   createRecorderEventCapturePort,
   detectSensitiveInputReason,
-  type RawRecordedEvent,
   type RecorderClickEvent,
   type RecorderEventCaptureAdapter,
+  type RecorderEventCaptureOptions,
+  type RecorderEventFlush,
   type RecorderEventCapturePort,
   type RecorderTargetSnapshot,
   type RecorderTextEvent,
@@ -27,7 +30,6 @@ export type ContentRecorderReceipt = RequiredTabCorrelation &
     scenarioId?: string
     runId?: string
     status: 'recording' | 'stopped'
-    events?: readonly RawRecordedEvent[]
   }>
 
 export type ContentRecorderHost = Readonly<{
@@ -39,6 +41,10 @@ export type ContentRecorderHostOptions = Readonly<{
   capture: RecorderEventCapturePort
   now?: () => number
 }>
+
+export type ContentRecorderMessageSender = (
+  message: ActorbleExtensionMessage,
+) => Promise<unknown> | unknown
 
 type RecordStartMessage = ActorbleExtensionMessageByKind<'record:start'>
 type RecordStopMessage = ActorbleExtensionMessageByKind<'record:stop'>
@@ -70,6 +76,7 @@ export function createContentRecorderHost(
       case 'scenario:pause':
       case 'scenario:resume':
       case 'scenario:stop':
+      case 'record:event':
       case 'record:draft:get':
       case 'inspector:start':
       case 'inspector:stop':
@@ -98,6 +105,8 @@ export function createContentRecorderHost(
       sessionId,
       startedAt: getNow(),
       sensitiveInputPolicy: 'mask',
+      ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
+      ...(message.payload.runId === undefined ? {} : { runId: message.payload.runId }),
     })
 
     if (!result.ok) {
@@ -117,23 +126,22 @@ export function createContentRecorderHost(
 
   function stopRecording(
     message: RecordStopMessage,
-  ): ExtensionResult<ContentRecorderReceipt> {
+  ): Promise<ExtensionResult<ContentRecorderReceipt>> {
     const sessionId = recordSessionId(message.payload)
-    const result = options.capture.stop(sessionId)
+    return options.capture.stop(sessionId).then((result) => {
+      if (!result.ok) {
+        return result
+      }
 
-    if (!result.ok) {
-      return result
-    }
-
-    return ok({
-      kind: 'record:stop',
-      tabId: message.payload.tabId,
-      ...(message.payload.frameId === undefined ? {} : { frameId: message.payload.frameId }),
-      ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
-      ...(message.payload.runId === undefined ? {} : { runId: message.payload.runId }),
-      sessionId,
-      status: 'stopped',
-      events: result.value,
+      return ok({
+        kind: 'record:stop',
+        tabId: message.payload.tabId,
+        ...(message.payload.frameId === undefined ? {} : { frameId: message.payload.frameId }),
+        ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
+        ...(message.payload.runId === undefined ? {} : { runId: message.payload.runId }),
+        sessionId,
+        status: 'stopped',
+      })
     })
   }
 
@@ -145,8 +153,29 @@ export function createContentRecorderHost(
   }
 }
 
-export function createDomRecorderEventCapturePort(): RecorderEventCapturePort {
-  return createRecorderEventCapturePort(createDomRecorderAdapter())
+export function createRecordEventFlushSender(
+  sendMessage: ContentRecorderMessageSender,
+): (flush: RecorderEventFlush) => Promise<void> {
+  return async (flush) => {
+    await sendMessage(createExtensionMessage({
+      kind: 'record:event',
+      payload: {
+        tabId: flush.tabId,
+        ...(flush.frameId === undefined ? {} : { frameId: flush.frameId }),
+        ...(flush.scenarioId === undefined ? {} : { scenarioId: flush.scenarioId }),
+        ...(flush.runId === undefined ? {} : { runId: flush.runId }),
+        sessionId: flush.sessionId,
+        reason: flush.reason,
+        events: flush.events,
+      },
+    }))
+  }
+}
+
+export function createDomRecorderEventCapturePort(
+  options: RecorderEventCaptureOptions = {},
+): RecorderEventCapturePort {
+  return createRecorderEventCapturePort(createDomRecorderAdapter(), options)
 }
 
 export function createDomRecorderAdapter(

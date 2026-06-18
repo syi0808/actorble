@@ -684,6 +684,58 @@ describe('sidepanel scenario editor', () => {
     })
   })
 
+  it('surfaces empty recording stops without replacing the current draft', async () => {
+    const { editor } = createTestEditor({
+      createRecordId: () => 'record-sidepanel-1',
+      sendResponse(message) {
+        if (message.kind === 'record:start') {
+          return ok(commandReceiptForRecord(message, 'recording'))
+        }
+
+        if (message.kind === 'record:stop') {
+          return ok({
+            ...commandReceiptForRecord(message, 'stopped'),
+            emptyRecording: {
+              sessionId: message.payload.runId ?? 'record-sidepanel-1',
+              tabId: message.payload.tabId,
+              frameId: message.payload.frameId,
+              scenarioId: message.payload.scenarioId,
+              runId: message.payload.runId,
+              sourceEventCount: 0,
+              createdAt: 1_700_000_000_000,
+              message: 'No browser events were recorded.',
+            },
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+    const before = editor.getSnapshot().draftDocument
+
+    await editor.startRecording()
+    const stop = await editor.stopRecording()
+
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        emptyRecording: {
+          sourceEventCount: 0,
+          message: 'No browser events were recorded.',
+        },
+      },
+    })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedScenarioId: 'newest-scenario',
+      draftDocument: before,
+      message: 'No browser events were recorded.',
+      currentRecord: {
+        status: 'stopped',
+      },
+    })
+  })
+
   it('surfaces recorder draft validation failures from stop responses', async () => {
     const { editor } = createTestEditor({
       createRecordId: () => 'record-sidepanel-1',

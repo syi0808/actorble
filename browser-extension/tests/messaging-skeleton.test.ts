@@ -85,6 +85,26 @@ const debugSnapshot = {
   },
 } as const
 
+const recordedEvent = {
+  kind: 'click',
+  target: {
+    tagName: 'button',
+    id: 'submit',
+    role: 'button',
+    text: 'Sign in',
+    rect: {
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 32,
+    },
+  },
+  timestamp: 100,
+  clientX: 12,
+  clientY: 18,
+  button: 0,
+} as const
+
 const validMessages = [
   {
     kind: 'scenario:validate',
@@ -124,6 +144,18 @@ const validMessages = [
       frameId: 0,
       scenarioId: 'scenario-1',
       runId: 'record-1',
+    },
+  },
+  {
+    kind: 'record:event',
+    payload: {
+      tabId: 7,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      runId: 'record-1',
+      sessionId: 'record-1',
+      reason: 'incremental',
+      events: [recordedEvent],
     },
   },
   {
@@ -264,6 +296,7 @@ describe('messaging skeleton contracts', () => {
       'scenario:resume',
       'scenario:stop',
       'record:start',
+      'record:event',
       'record:stop',
       'record:draft:get',
       'inspector:start',
@@ -366,6 +399,7 @@ describe('messaging skeleton contracts', () => {
 
   it.each([
     ['record:start', { frameId: 0 }],
+    ['record:event', { frameId: 0, sessionId: 'record-1', reason: 'incremental', events: [recordedEvent] }],
     ['record:stop', { scenarioId: 'scenario-1' }],
     ['inspector:start', { tabId: 7 }],
     ['inspector:stop', { frameId: 0 }],
@@ -413,6 +447,44 @@ describe('messaging skeleton contracts', () => {
         kind: 'record:draft:get',
         payload: {
           tabId: '7',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects invalid recorder event flush payloads', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          sessionId: '',
+          reason: 'incremental',
+          events: [recordedEvent],
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          sessionId: 'record-1',
+          reason: 'unknown',
+          events: [recordedEvent],
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          sessionId: 'record-1',
+          reason: 'incremental',
+          events: [],
         },
       }),
     ).toBe(false)

@@ -56,16 +56,26 @@ export type RawRecordedTextEvent = Readonly<{
 
 export type RawRecordedEvent = RawRecordedClickEvent | RawRecordedTextEvent
 
+export type RecorderEventFlushReason = 'incremental' | 'pagehide' | 'stop'
+
 export type RecorderSession = RequiredTabCorrelation &
   Readonly<{
     sessionId: string
     startedAt: number
     sensitiveInputPolicy: RecorderSensitiveInputPolicy
+    scenarioId?: string
+    runId?: string
   }>
 
 export type RecorderCaptureStartReceipt = RecorderSession &
   Readonly<{
     status: 'recording'
+  }>
+
+export type RecorderEventFlush = RecorderSession &
+  Readonly<{
+    reason: RecorderEventFlushReason
+    events: readonly RawRecordedEvent[]
   }>
 
 export type RecorderClickEvent<TElement = unknown> = Readonly<{
@@ -93,19 +103,27 @@ export type RecorderEventCaptureAdapter<TElement = unknown> = Readonly<{
 
 export interface RecorderEventCapturePort {
   start(session: RecorderSession): ExtensionResult<RecorderCaptureStartReceipt>
-  stop(sessionId: string): ExtensionResult<readonly RawRecordedEvent[]>
+  stop(sessionId: string): Promise<ExtensionResult<void>>
   dispose(): void
 }
 
 export type RecorderEventCaptureOptions = Readonly<{
   now?: () => number
+  autoFlush?: boolean
+  flushEvents?: (flush: RecorderEventFlush) => Promise<void> | void
 }>
 
 type ActiveRecorderSession<TElement> = {
   session: RecorderSession
-  events: RawRecordedEvent[]
+  pendingEvents: RawRecordedEvent[]
   disposers: (() => void)[]
   cleaned: boolean
+  flushChain: Promise<void>
+  flushIssue?: {
+    code: 'recorder_error'
+    message: string
+    details?: Readonly<Record<string, unknown>>
+  }
 }
 
 export function createRecorderEventCapturePort<TElement = unknown>(
@@ -131,16 +149,20 @@ export function createRecorderEventCapturePort<TElement = unknown>(
 
     const active: ActiveRecorderSession<TElement> = {
       session,
-      events: [],
+      pendingEvents: [],
       disposers: [],
       cleaned: false,
+      flushChain: Promise.resolve(),
     }
 
     active.disposers = [
       adapter.onClick((event) => captureClick(active, event)),
       adapter.onInput((event) => captureText(active, 'input', event)),
       adapter.onChange((event) => captureText(active, 'change', event)),
-      adapter.onPagehide(() => cleanup(active)),
+      adapter.onPagehide(() => {
+        queueFlush(active, 'pagehide')
+        cleanup(active)
+      }),
     ]
     activeSession = active
 
@@ -150,9 +172,9 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     })
   }
 
-  function stop(sessionId: string): ExtensionResult<readonly RawRecordedEvent[]> {
+  async function stop(sessionId: string): Promise<ExtensionResult<void>> {
     if (activeSession === null) {
-      return ok([])
+      return ok(undefined)
     }
 
     if (activeSession.session.sessionId !== sessionId) {
@@ -166,9 +188,16 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       })
     }
 
-    const events = activeSession.events
-    cleanup(activeSession)
-    return ok(events)
+    const stoppedSession = activeSession
+    queueFlush(stoppedSession, 'stop')
+    cleanup(stoppedSession)
+    await stoppedSession.flushChain
+
+    if (stoppedSession.flushIssue !== undefined) {
+      return failure(stoppedSession.flushIssue)
+    }
+
+    return ok(undefined)
   }
 
   function dispose(): void {
@@ -185,7 +214,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       return
     }
 
-    active.events.push({
+    enqueueEvent(active, {
       kind: 'click',
       target: adapter.describeElement(event.target),
       timestamp: getNow(),
@@ -208,7 +237,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
 
     const sensitiveReason = adapter.sensitiveInputReason(event.target)
     const sensitive = sensitiveReason !== null
-    active.events.push({
+    enqueueEvent(active, {
       kind: 'text',
       target: adapter.describeElement(event.target),
       source,
@@ -220,6 +249,55 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       sensitive,
       ...(sensitiveReason === null ? {} : { sensitiveReason }),
       timestamp: getNow(),
+    })
+  }
+
+  function enqueueEvent(
+    active: ActiveRecorderSession<TElement>,
+    event: RawRecordedEvent,
+  ): void {
+    active.pendingEvents.push(event)
+    if (options.autoFlush !== false) {
+      queueFlush(active, 'incremental')
+    }
+  }
+
+  function queueFlush(
+    active: ActiveRecorderSession<TElement>,
+    reason: RecorderEventFlushReason,
+  ): void {
+    if (active.pendingEvents.length === 0) {
+      return
+    }
+
+    const flushEvents = options.flushEvents
+    const events = active.pendingEvents
+    active.pendingEvents = []
+
+    if (flushEvents === undefined) {
+      return
+    }
+
+    const flush = {
+      ...active.session,
+      reason,
+      events,
+    } satisfies RecorderEventFlush
+
+    active.flushChain = active.flushChain.then(async () => {
+      try {
+        await flushEvents(flush)
+      } catch (error) {
+        active.flushIssue ??= {
+          code: 'recorder_error',
+          message: 'Recorder events could not be flushed.',
+          details: {
+            sessionId: active.session.sessionId,
+            reason,
+            error: errorMessage(error),
+          },
+        }
+      }
     })
   }
 
@@ -247,6 +325,10 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     stop,
     dispose,
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export type SensitiveInputMetadata = Readonly<{

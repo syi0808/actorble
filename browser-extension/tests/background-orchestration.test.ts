@@ -6,6 +6,7 @@ import {
 } from '../src/entrypoints/background/orchestration.js'
 import { createLocatorCandidates } from '../src/inspector/locator-preview.js'
 import { createExtensionMessage, type ActorbleExtensionMessage } from '../src/messaging/index.js'
+import type { RawRecordedEvent, RawRecordedTextEvent } from '../src/recorder/event-capture.js'
 
 const compilation = {
   scenario: {
@@ -173,7 +174,7 @@ describe('background orchestration', () => {
       }
 
       if (extensionMessage.kind === 'record:stop') {
-        return okContentRecordReceipt(extensionMessage, 'stopped', [recordedTextEvent()])
+        return okContentRecordReceipt(extensionMessage, 'stopped')
       }
 
       return { received: true }
@@ -190,6 +191,9 @@ describe('background orchestration', () => {
     })
 
     const startResult = await orchestrator.handleMessage(start)
+    const eventResult = await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [recordedTextEvent('user@example.com')]),
+    )
     now += 25
     const stopResult = await orchestrator.handleMessage(
       createExtensionMessage({
@@ -207,6 +211,16 @@ describe('background orchestration', () => {
       ok: true,
       value: {
         kind: 'record:start',
+        session: {
+          runId: 'record-1',
+          status: 'recording',
+        },
+      },
+    })
+    expect(eventResult).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'record:event',
         session: {
           runId: 'record-1',
           status: 'recording',
@@ -239,7 +253,7 @@ describe('background orchestration', () => {
       }
 
       if (extensionMessage.kind === 'record:stop') {
-        return okContentRecordReceipt(extensionMessage, 'stopped', [recordedTextEvent()])
+        return okContentRecordReceipt(extensionMessage, 'stopped')
       }
 
       return { received: true }
@@ -256,6 +270,14 @@ describe('background orchestration', () => {
           runId: 'record-1',
         },
       }),
+    )
+    await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [recordedTextEvent('u', 1_700_000_000_010)]),
+    )
+    await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [
+        recordedTextEvent('user@example.com', 1_700_000_000_020, 'change'),
+      ]),
     )
     now += 25
     const stop = await orchestrator.handleMessage(
@@ -291,7 +313,7 @@ describe('background orchestration', () => {
           frameId: 0,
           scenarioId: 'scenario-1',
           runId: 'record-1',
-          sourceEventCount: 1,
+          sourceEventCount: 2,
           createdAt: 1_700_000_000_025,
           document: {
             steps: [
@@ -309,7 +331,7 @@ describe('background orchestration', () => {
       ok: true,
       value: {
         draftId: 'record-1',
-        sourceEventCount: 1,
+        sourceEventCount: 2,
         document: {
           steps: [
             {
@@ -318,6 +340,216 @@ describe('background orchestration', () => {
           ],
         },
       },
+    })
+  })
+
+  it('ingests pagehide record event flushes before normalizing on stop', async () => {
+    const activeTab = await createActiveTab()
+    mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped')
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(recordStartMessage(activeTab.id))
+    await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [recordedTextEvent('user@example.com')], {
+        reason: 'pagehide',
+      }),
+    )
+    const stop = await orchestrator.handleMessage(recordStopMessage(activeTab.id))
+
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        recordedDraft: {
+          sourceEventCount: 1,
+          document: {
+            steps: [
+              {
+                action: 'fill',
+                input: 'user@example.com',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('re-arms content recording after navigation readiness and continues buffering', async () => {
+    const activeTab = await createActiveTab()
+    const sendMessage = mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped')
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(recordStartMessage(activeTab.id))
+    sendMessage.mockClear()
+    const ready = await orchestrator.handleMessage(
+      createExtensionMessage({
+        kind: 'content:ready',
+        payload: {
+          url: 'http://localhost:3000/next',
+        },
+      }),
+      {
+        tab: activeTab,
+        frameId: 0,
+        url: 'http://localhost:3000/next',
+      },
+    )
+    await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [recordedTextEvent('after navigation')]),
+    )
+    const stop = await orchestrator.handleMessage(recordStopMessage(activeTab.id))
+
+    expect(ready).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'content:ready',
+        session: {
+          type: 'record',
+          runId: 'record-1',
+          status: 'recording',
+        },
+      },
+    })
+    expect(sendMessage).toHaveBeenCalledWith(
+      activeTab.id,
+      recordStartMessage(activeTab.id),
+      { frameId: 0 },
+    )
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        recordedDraft: {
+          sourceEventCount: 1,
+        },
+      },
+    })
+  })
+
+  it('rejects recorder event flushes that do not match the active session', async () => {
+    const activeTab = await createActiveTab()
+    mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(recordStartMessage(activeTab.id))
+    const result = await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [recordedTextEvent('ignored')], {
+        sessionId: 'other-recording',
+      }),
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'recorder_error',
+          message: 'Recorded events do not match an active recorder session.',
+        },
+      ],
+    })
+  })
+
+  it('returns an explicit empty recording state instead of an invalid empty draft', async () => {
+    const activeTab = await createActiveTab()
+    mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped')
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(recordStartMessage(activeTab.id))
+    now += 25
+    const stop = await orchestrator.handleMessage(recordStopMessage(activeTab.id))
+
+    expect(stop).toMatchObject({
+      ok: true,
+      value: {
+        kind: 'record:stop',
+        emptyRecording: {
+          sessionId: 'record-1',
+          tabId: activeTab.id,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+          sourceEventCount: 0,
+          createdAt: 1_700_000_000_025,
+          message: 'No browser events were recorded.',
+        },
+      },
+    })
+    expect(stop.ok && stop.value).not.toHaveProperty('recordedDraft')
+  })
+
+  it('reports normalization failures from the background event buffer', async () => {
+    const activeTab = await createActiveTab()
+    mockReadyContentScript(async (_tabId, message) => {
+      const extensionMessage = message as ActorbleExtensionMessage
+      if (extensionMessage.kind === 'record:start') {
+        return okContentRecordReceipt(extensionMessage, 'recording')
+      }
+
+      if (extensionMessage.kind === 'record:stop') {
+        return okContentRecordReceipt(extensionMessage, 'stopped')
+      }
+
+      return { received: true }
+    })
+    const orchestrator = createTestOrchestrator()
+
+    await orchestrator.handleMessage(recordStartMessage(activeTab.id))
+    await orchestrator.handleMessage(
+      recordEventMessage(activeTab.id, [invalidLocatorEvent()]),
+    )
+    const stop = await orchestrator.handleMessage(recordStopMessage(activeTab.id))
+
+    expect(stop).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'recorder_error',
+          path: ['events', 0, 'target'],
+        },
+      ],
+    })
+    expect(orchestrator.getRecordSession({ runId: 'record-1' })).toMatchObject({
+      status: 'failed',
+      message: 'No locator candidates could be built for the recorded target.',
     })
   })
 
@@ -847,10 +1079,53 @@ function createRunMessage(tabId: number, frameId?: number) {
   })
 }
 
+function recordStartMessage(tabId: number) {
+  return createExtensionMessage({
+    kind: 'record:start',
+    payload: {
+      tabId,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      runId: 'record-1',
+    },
+  })
+}
+
+function recordStopMessage(tabId: number) {
+  return createExtensionMessage({
+    kind: 'record:stop',
+    payload: {
+      tabId,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      runId: 'record-1',
+    },
+  })
+}
+
+function recordEventMessage(
+  tabId: number,
+  events: readonly RawRecordedEvent[],
+  overrides: Partial<Extract<ActorbleExtensionMessage, { kind: 'record:event' }>['payload']> = {},
+) {
+  return createExtensionMessage({
+    kind: 'record:event',
+    payload: {
+      tabId,
+      frameId: 0,
+      scenarioId: 'scenario-1',
+      runId: 'record-1',
+      sessionId: 'record-1',
+      reason: 'incremental',
+      events,
+      ...overrides,
+    },
+  })
+}
+
 function okContentRecordReceipt(
   message: ReturnType<typeof createExtensionMessage>,
   status: 'recording' | 'stopped',
-  events?: readonly unknown[],
 ) {
   if (message.kind !== 'record:start' && message.kind !== 'record:stop') {
     throw new Error(`Expected recorder message, received ${message.kind}`)
@@ -868,12 +1143,15 @@ function okContentRecordReceipt(
       runId: message.payload.runId,
       sessionId,
       status,
-      ...(events === undefined ? {} : { events }),
     },
   }
 }
 
-function recordedTextEvent() {
+function recordedTextEvent(
+  value = 'user@example.com',
+  timestamp = 1_700_000_000_020,
+  source: RawRecordedTextEvent['source'] = 'input',
+): RawRecordedTextEvent {
   return {
     kind: 'text',
     target: {
@@ -889,9 +1167,28 @@ function recordedTextEvent() {
         height: 32,
       },
     },
-    source: 'input',
-    value: 'user@example.com',
+    source,
+    value,
     sensitive: false,
+    timestamp,
+  }
+}
+
+function invalidLocatorEvent(): RawRecordedEvent {
+  return {
+    kind: 'click',
+    target: {
+      tagName: 'div',
+      rect: {
+        x: Number.NaN,
+        y: Number.NaN,
+        width: Number.NaN,
+        height: Number.NaN,
+      },
+    },
     timestamp: 1_700_000_000_020,
+    clientX: 0,
+    clientY: 0,
+    button: 0,
   }
 }

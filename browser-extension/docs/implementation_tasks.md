@@ -525,7 +525,7 @@ src/recorder
 
 ### T22 Navigation-Safe Recorder Event Buffer
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Move recording event ownership from content-script memory to a
   background-owned session buffer. This makes browser usage recording survive
   normal page navigation and frame reload.
