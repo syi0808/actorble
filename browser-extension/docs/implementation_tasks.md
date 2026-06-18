@@ -462,7 +462,7 @@ src/recorder
 
 ### T19 Builder Authoring Session And Step Operations
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Introduce `src/builder` as the testable model for scenario workflow
   authoring. It owns draft state and structured scenario document edits instead
   of treating JSON textareas as the primary editor.
