@@ -673,7 +673,7 @@ src/recorder
 
 ### T29 Recording Review Inside Builder Flow
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Treat recording as a primary input path for the builder rather than
   a detached card. Recording status belongs to the scenario shell, and recorded
   output belongs to builder review.
