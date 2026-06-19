@@ -58,43 +58,89 @@ describe('browser extension scaffold', () => {
     expect(contentScript).toContain("matches: ['http://*/*', 'https://*/*']")
   })
 
-  it('uses one sidepanel scenario shell instead of document and recording cards', async () => {
+  it('uses one sidepanel scenario lifecycle shell', async () => {
     const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+    const scenarioShell = sectionMarkup(sidepanelHtml, 'scenario-shell')
 
+    expect(topLevelSectionIds(sidepanelHtml)).toEqual([
+      'scenario-shell',
+      'builder-workbench',
+      'debug-drawer',
+    ])
     expect(sidepanelHtml).toContain('id="scenario-shell-title"')
-    expect(sidepanelHtml).not.toContain('id="document-title"')
-    expect(sidepanelHtml).not.toContain('id="recording-title"')
+    expect(scenarioShell).toContain('id="recorded-draft-review"')
+    expect(scenarioShell).toContain('id="record-button"')
+    expect(scenarioShell).toContain('id="run-button"')
+    expect(scenarioShell).toContain('id="scenario-name"')
+    expectNoLegacyPeerSurfaceIds(sidepanelHtml)
   })
 
-  it('uses one sidepanel builder workbench instead of separate steps and editor cards', async () => {
+  it('uses one sidepanel builder workbench for timeline and selected-step editing', async () => {
     const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+    const workbench = sectionMarkup(sidepanelHtml, 'builder-workbench')
 
     expect(sidepanelHtml).toContain('id="builder-workbench-title"')
-    expect(sidepanelHtml).not.toContain('id="steps-title"')
-    expect(sidepanelHtml).not.toContain('id="step-editor-title"')
+    expect(workbench).toContain('id="step-list"')
+    expect(workbench).toContain('id="step-action"')
+    expect(workbench).toContain('id="dry-run-button"')
+    expectNoLegacyPeerSurfaceIds(sidepanelHtml)
   })
 
-  it('inlines target assignment instead of standalone target picker and locator preview cards', async () => {
+  it('inlines target assignment in the selected-step workbench', async () => {
     const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+    const scenarioShell = sectionMarkup(sidepanelHtml, 'scenario-shell')
+    const workbench = sectionMarkup(sidepanelHtml, 'builder-workbench')
+    const debugDrawer = sectionMarkup(sidepanelHtml, 'debug-drawer')
 
-    expect(sidepanelHtml).toContain('id="target-assignment-title"')
-    expect(sidepanelHtml).toContain('id="target-picker-start-button"')
-    expect(sidepanelHtml).toContain('id="locator-preview-list"')
-    expect(sidepanelHtml).not.toContain('id="target-picker-title"')
-    expect(sidepanelHtml).not.toContain('id="locator-preview-title"')
+    expect(workbench).toContain('id="target-assignment-title"')
+    expect(workbench).toContain('id="target-picker-start-button"')
+    expect(workbench).toContain('id="locator-preview-list"')
+    expect(scenarioShell).not.toContain('id="target-assignment-title"')
+    expect(debugDrawer).not.toContain('id="target-assignment-title"')
+    expectNoLegacyPeerSurfaceIds(sidepanelHtml)
   })
 
-  it('uses a collapsible debug drawer instead of primary validation and run cards', async () => {
+  it('keeps validation, locator diagnostics, run trace, and failures in a collapsed debug drawer', async () => {
     const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+    const scenarioShell = sectionMarkup(sidepanelHtml, 'scenario-shell')
+    const workbench = sectionMarkup(sidepanelHtml, 'builder-workbench')
+    const debugDrawer = sectionMarkup(sidepanelHtml, 'debug-drawer')
 
-    expect(sidepanelHtml).toContain('id="debug-drawer-title"')
-    expect(sidepanelHtml).toContain('id="debug-drawer-toggle"')
-    expect(sidepanelHtml).toContain('id="debug-drawer-panel"')
-    expect(sidepanelHtml).toContain('id="debug-validation-issues"')
-    expect(sidepanelHtml).toContain('id="debug-locator-issues"')
-    expect(sidepanelHtml).toContain('id="debug-run-summary"')
-    expect(sidepanelHtml).toContain('id="debug-failure-detail"')
-    expect(sidepanelHtml).not.toContain('id="validation-title"')
-    expect(sidepanelHtml).not.toContain('id="run-title"')
+    expect(debugDrawer).toContain('id="debug-drawer-title"')
+    expect(debugDrawer).toContain('id="debug-drawer-toggle"')
+    expect(debugDrawer).toContain('id="debug-drawer-panel"')
+    expect(debugDrawer).toContain('id="debug-validation-issues"')
+    expect(debugDrawer).toContain('id="debug-locator-issues"')
+    expect(debugDrawer).toContain('id="debug-run-summary"')
+    expect(debugDrawer).toContain('id="debug-failure-detail"')
+    expect(debugDrawer).toContain('id="debug-drawer-panel" class="debug-drawer-panel" hidden')
+    expect(scenarioShell).not.toContain('id="debug-validation-issues"')
+    expect(workbench).not.toContain('id="debug-run-summary"')
+    expectNoLegacyPeerSurfaceIds(sidepanelHtml)
   })
 })
+
+function topLevelSectionIds(html: string): string[] {
+  return [...html.matchAll(/^      <section id="([^"]+)"/gm)].map((match) => match[1])
+}
+
+function sectionMarkup(html: string, id: string): string {
+  const start = html.indexOf(`<section id="${id}"`)
+  if (start < 0) {
+    throw new Error(`Missing section ${id}.`)
+  }
+
+  const next = html.indexOf('\n      <section id="', start + 1)
+  return next < 0 ? html.slice(start) : html.slice(start, next)
+}
+
+function expectNoLegacyPeerSurfaceIds(html: string): void {
+  expect(html).not.toContain('id="document-title"')
+  expect(html).not.toContain('id="recording-title"')
+  expect(html).not.toContain('id="steps-title"')
+  expect(html).not.toContain('id="step-editor-title"')
+  expect(html).not.toContain('id="target-picker-title"')
+  expect(html).not.toContain('id="locator-preview-title"')
+  expect(html).not.toContain('id="validation-title"')
+  expect(html).not.toContain('id="run-title"')
+}

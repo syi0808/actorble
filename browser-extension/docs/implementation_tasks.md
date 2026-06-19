@@ -715,7 +715,7 @@ src/recorder
 
 ### T31 Side Panel Recomposition Verification
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Verify the recomposed side panel as an end-to-end authoring service
   surface. This task closes the UI rewrite by removing stale card assumptions
   and proving the primary scenario flow works.

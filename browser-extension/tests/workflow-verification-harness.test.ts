@@ -28,6 +28,9 @@ import {
   type SidepanelScenarioEditorClient,
 } from '../src/entrypoints/sidepanel/scenario-editor.js'
 import {
+  createSidepanelRecompositionViewModel,
+} from '../src/entrypoints/sidepanel/recomposition-view-model.js'
+import {
   createLocatorPreviewCandidateViews,
   createLocatorPreviewer,
 } from '../src/inspector/locator-preview.js'
@@ -60,7 +63,7 @@ beforeEach(() => {
 })
 
 describe('workflow verification harness', () => {
-  it('verifies authoring, target picking, dry-run, recording review, save, and run feedback', async () => {
+  it('verifies recomposed authoring, target picking, dry-run, recording review, save, and run feedback', async () => {
     const harness = await createWorkflowHarness()
 
     await harness.editor.refresh()
@@ -68,6 +71,10 @@ describe('workflow verification harness', () => {
       id: 'workflow-scenario',
       name: 'Workflow verification',
       initialStepFamily: 'delay',
+    })
+    harness.editor.updateDocumentFields({
+      name: 'Workflow verification edited',
+      description: 'End-to-end recomposed flow',
     })
     const added = harness.editor.addStep('click')
 
@@ -78,6 +85,46 @@ describe('workflow verification harness', () => {
         status: 'draft',
         selectedStepId: 'workflow-click',
         selectedTargetSlotId: 'step-target:workflow-click',
+      },
+    })
+    expectRecomposedPrimarySurfaces(recomposedViewFor(harness))
+    expect(recomposedViewFor(harness)).toMatchObject({
+      scenarioShell: {
+        status: 'draft',
+        dirty: true,
+        metadata: {
+          name: 'Workflow verification edited',
+          description: 'End-to-end recomposed flow',
+        },
+        selectedStepId: 'workflow-click',
+        selectedTargetSlotId: 'step-target:workflow-click',
+      },
+      builderWorkbench: {
+        status: 'ready',
+        selectedStep: {
+          id: 'workflow-click',
+          action: 'click',
+          actionFamily: 'click',
+          fields: {
+            controls: {
+              targetSlots: true,
+            },
+          },
+        },
+      },
+      targetAssignment: {
+        status: 'idle',
+        selectedTargetSlotId: 'step-target:workflow-click',
+        buttons: {
+          start: {
+            disabled: false,
+          },
+        },
+      },
+      debugDrawer: {
+        expanded: false,
+        activeView: 'validation',
+        attention: true,
       },
     })
 
@@ -139,6 +186,20 @@ describe('workflow verification harness', () => {
         }),
       ]),
     )
+    expect(recomposedViewFor(harness).targetAssignment).toMatchObject({
+      status: 'selected',
+      selectedTargetSlotId: 'step-target:workflow-click',
+      locatorPreview: {
+        status: 'ready',
+        summary: expect.stringContaining('candidate'),
+        candidates: expect.arrayContaining([
+          expect.objectContaining({
+            strategy: 'testId',
+            selectable: true,
+          }),
+        ]),
+      },
+    })
 
     if (testIdCandidate === undefined || selected.targetSlot === undefined) {
       throw new Error('Expected a selectable testId candidate.')
@@ -198,6 +259,18 @@ describe('workflow verification harness', () => {
       runId: 'dry-run-workflow',
       status: 'completed',
     })
+    expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
+      expanded: false,
+      activeView: 'run-trace',
+      attention: false,
+      views: {
+        runTrace: {
+          runId: 'dry-run-workflow',
+          status: 'completed',
+          latestEventName: 'workflow:run',
+        },
+      },
+    })
 
     const recordStart = await harness.editor.startRecording()
     harness.recorderAdapter.dispatchInput('user@example.com')
@@ -237,6 +310,18 @@ describe('workflow verification harness', () => {
         },
       },
     })
+    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2)
+    expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
+      summary: '1 source event · valid',
+      buttons: {
+        append: {
+          disabled: false,
+        },
+        replace: {
+          disabled: false,
+        },
+      },
+    })
 
     const appended = harness.editor.appendRecordedDraftSteps()
     const saved = await harness.editor.saveDraft()
@@ -253,6 +338,20 @@ describe('workflow verification harness', () => {
     expect(harness.saves[0].document.steps.at(-1)).toMatchObject({
       action: 'fill',
       input: 'user@example.com',
+    })
+    expect(recomposedViewFor(harness)).toMatchObject({
+      scenarioShell: {
+        status: 'saved',
+        dirty: false,
+      },
+      builderWorkbench: {
+        steps: [
+          expect.objectContaining({ action: 'delay' }),
+          expect.objectContaining({ action: 'click' }),
+          expect.objectContaining({ action: 'fill' }),
+        ],
+      },
+      recordedDraftReview: undefined,
     })
 
     const run = await harness.editor.runSelectedScenario()
@@ -287,10 +386,99 @@ describe('workflow verification harness', () => {
     expect(createSidepanelScenarioEditorView(harness.editor.getSnapshot()).runSummary).toContain(
       'Completed run-workflow',
     )
+    expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
+      expanded: false,
+      activeView: 'run-trace',
+      attention: false,
+      views: {
+        runTrace: {
+          runId: 'run-workflow',
+          status: 'completed',
+          latestEventName: 'workflow:run',
+        },
+      },
+    })
+  })
+
+  it('verifies recorded draft replace and failed run details through the recomposed drawer', async () => {
+    const harness = await createWorkflowHarness({ runtimeMode: 'failure' })
+
+    await createTargetedWorkflowDraft(harness)
+    const recordStart = await harness.editor.startRecording()
+    harness.recorderAdapter.dispatchInput('replacement@example.com')
+    await flushAsyncWork()
+    const recordStop = await harness.editor.stopRecording()
+
+    expect(recordStart).toMatchObject({ ok: true })
+    expect(recordStop).toMatchObject({ ok: true })
+    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2)
+    expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
+      summary: '1 source event · valid',
+      buttons: {
+        replace: {
+          disabled: false,
+        },
+      },
+    })
+
+    const replaced = harness.editor.replaceWithRecordedDraft()
+    const saved = await harness.editor.saveDraft()
+
+    expect(replaced).toMatchObject({ ok: true })
+    expect(saved).toMatchObject({ ok: true })
+    expect(harness.saves[0].document.steps).toEqual([
+      expect.objectContaining({
+        action: 'fill',
+        input: 'replacement@example.com',
+      }),
+    ])
+    expect(recomposedViewFor(harness).recordedDraftReview).toBeUndefined()
+
+    const run = await harness.editor.runSelectedScenario()
+    await flushAsyncWork()
+
+    expect(run).toMatchObject({
+      ok: true,
+      value: {
+        runId: 'run-workflow',
+        status: 'running',
+      },
+    })
+    expect(recomposedViewFor(harness)).toMatchObject({
+      scenarioShell: {
+        runStatus: 'failed',
+      },
+      debugDrawer: {
+        expanded: false,
+        activeView: 'failure',
+        attention: true,
+        views: {
+          failure: {
+            message: 'Workflow target missing.',
+            eventName: 'workflow:failure',
+            details: {
+              data: {
+                stepId: expect.any(String),
+              },
+            },
+          },
+          runTrace: {
+            runId: 'run-workflow',
+            status: 'failed',
+            eventCount: 1,
+            latestEventName: 'workflow:failure',
+          },
+        },
+      },
+    })
   })
 })
 
-async function createWorkflowHarness() {
+type WorkflowHarnessOptions = Readonly<{
+  runtimeMode?: 'success' | 'failure'
+}>
+
+async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
   let now = 1_700_000_000_000
   const routedMessages: ActorbleExtensionMessage[] = []
   const contentMessages: ActorbleExtensionMessage[] = []
@@ -341,8 +529,10 @@ async function createWorkflowHarness() {
     now: () => now,
   })
   const contentRuntime = createContentRuntimeHost({
-    createActorble(options) {
-      return createRuntimeActorble(options, runtimeRuns)
+    createActorble(actorbleOptions) {
+      return createRuntimeActorble(actorbleOptions, runtimeRuns, {
+        mode: options.runtimeMode ?? 'success',
+      })
     },
     now: () => now++,
     sendMessage: deliverContentMessage,
@@ -487,6 +677,78 @@ async function createWorkflowHarness() {
     saves,
     runtimeRuns,
   }
+}
+
+type WorkflowHarness = Awaited<ReturnType<typeof createWorkflowHarness>>
+
+function recomposedViewFor(harness: WorkflowHarness) {
+  return createSidepanelRecompositionViewModel({
+    editor: harness.editor.getSnapshot(),
+    targetPicker: harness.targetPicker.getSnapshot(),
+    locatorPreview: harness.locatorPreviewer.getSnapshot(),
+  })
+}
+
+function expectRecomposedPrimarySurfaces(
+  view: ReturnType<typeof recomposedViewFor>,
+): void {
+  expect(Object.keys(view)).toEqual([
+    'scenarioShell',
+    'builderWorkbench',
+    'targetAssignment',
+    'recordedDraftReview',
+    'debugDrawer',
+  ])
+  expect(view).not.toHaveProperty('document')
+  expect(view).not.toHaveProperty('recording')
+  expect(view).not.toHaveProperty('targetPicker')
+  expect(view).not.toHaveProperty('locatorPreview')
+  expect(view).not.toHaveProperty('validation')
+  expect(view).not.toHaveProperty('run')
+}
+
+async function createTargetedWorkflowDraft(harness: WorkflowHarness): Promise<void> {
+  await harness.editor.refresh()
+  expect(harness.editor.createScenario({
+    id: 'workflow-scenario',
+    name: 'Workflow verification',
+    initialStepFamily: 'delay',
+  })).toMatchObject({ ok: true })
+  harness.editor.updateDocumentFields({
+    name: 'Workflow verification edited',
+    description: 'End-to-end recomposed flow',
+  })
+  expect(harness.editor.addStep('click')).toMatchObject({ ok: true })
+
+  await harness.targetPicker.start({
+    scenarioId: 'workflow-scenario',
+    targetSlot: harness.editor.getSnapshot().selectedTargetSlot,
+  })
+  harness.inspectorAdapter.dispatchPointerMove(220, 122)
+  harness.inspectorAdapter.dispatchClick(220, 122)
+  await flushAsyncWork()
+
+  const selected = harness.targetPicker.getSnapshot().selected
+  if (selected === undefined) {
+    throw new Error('Expected a selected target.')
+  }
+
+  await harness.locatorPreviewer.previewTarget(selected.target, {
+    scenarioId: selected.scenarioId,
+    targetSlot: selected.targetSlot,
+  })
+  const candidate = harness.locatorPreviewer.getSnapshot().candidates.find(
+    (locatorCandidate) => locatorCandidate.strategy === 'testId',
+  )
+
+  if (candidate === undefined || selected.targetSlot === undefined) {
+    throw new Error('Expected a selectable testId candidate.')
+  }
+
+  expect(harness.editor.applyLocatorToTargetSlot(
+    selected.targetSlot,
+    candidate.locator,
+  )).toMatchObject({ ok: true })
 }
 
 type ActiveFixtureTab = Readonly<{
@@ -667,6 +929,7 @@ function createLocatorPreviewActorble(): ContentLocatorPreviewActorble {
 function createRuntimeActorble(
   options: ActorbleFacadeOptions,
   runtimeRuns: ScenarioDocument[],
+  runtimeOptions: Readonly<{ mode: 'success' | 'failure' }>,
 ): ContentActorbleFacade {
   const trace = options.trace as TraceCollector | undefined
 
@@ -676,6 +939,13 @@ function createRuntimeActorble(
         setTimeout(resolve, 0)
       })
       runtimeRuns.push(scenario)
+      if (runtimeOptions.mode === 'failure') {
+        trace?.appendEvent('workflow:failure', {
+          stepId: scenario.steps.at(0)?.id,
+        })
+        throw new Error('Workflow target missing.')
+      }
+
       trace?.appendEvent('workflow:run', {
         stepCount: scenario.steps.length,
       })
