@@ -130,7 +130,7 @@ extension recorder and schema support
 
 ### TSPS-07 Runtime Scenario And Capability Integration
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Wire `selectText` and `pointerSequence` through runtime scenario runner, action defaults, capability/fidelity reporting, and diagnostics.
 - Dependencies: TSPS-05, TSPS-06.
 - Completion criteria:

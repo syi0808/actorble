@@ -29,6 +29,7 @@ import type {
   ScenarioDelayStep,
   ScenarioScrollToStep,
   ScenarioStep,
+  PointerSequence,
   ScrollPosition,
   TargetLike,
   WaitCondition,
@@ -328,6 +329,18 @@ export class BrowserScenarioRunner implements ScenarioRunner {
           step.to,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
         )
+      case 'selectText':
+        assertRequiredField(step.target, step.action, stepIndex, 'target')
+        return this.#orchestrator.selectText(
+          step.target,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
+      case 'pointerSequence':
+        assertPointerSequence(step.sequence, step.action, stepIndex)
+        return this.#orchestrator.pointerSequence(
+          step.sequence,
+          this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+        )
       case 'waitFor':
         assertWaitCondition(step.input, step.action, stepIndex)
         return this.#orchestrator
@@ -597,6 +610,21 @@ function assertTarget(
   })
 }
 
+function assertRequiredField<TValue>(
+  value: TValue | undefined,
+  action: string,
+  stepIndex: number,
+  field: string,
+): asserts value is TValue {
+  if (value !== undefined) {
+    return
+  }
+
+  throw actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" requires ${field}.`, {
+    details: { action, stepIndex, field },
+  })
+}
+
 function assertStringInput(
   input: unknown,
   action: string,
@@ -625,6 +653,24 @@ function assertWaitCondition(
     `Scenario step "${action}" requires a wait condition input.`,
     {
       details: { action, stepIndex, field: 'input' },
+    },
+  )
+}
+
+function assertPointerSequence(
+  sequence: unknown,
+  action: string,
+  stepIndex: number,
+): asserts sequence is PointerSequence {
+  if (Array.isArray(sequence)) {
+    return
+  }
+
+  throw actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Scenario step "${action}" requires a pointer sequence.`,
+    {
+      details: { action, stepIndex, field: 'sequence' },
     },
   )
 }

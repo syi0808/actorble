@@ -2,6 +2,7 @@ import { Actorble, css } from '../../src/index.js'
 import type {
   PointerSequence,
   PointerSequenceOptions,
+  Scenario,
   ScenarioStep,
   SelectTextOptions,
   TextSelectionTarget,
@@ -31,6 +32,19 @@ const pointerSequence: PointerSequence = [
 ]
 
 const pointerSequenceOptions: PointerSequenceOptions = { timeout: 500 }
+const selectionScenarioStep: ScenarioStep = {
+  action: 'selectText',
+  target: offsetSelectionTarget,
+  options: selectOptions,
+}
+const pointerSequenceScenarioStep: ScenarioStep = {
+  action: 'pointerSequence',
+  sequence: pointerSequence,
+  options: pointerSequenceOptions,
+}
+const selectionScenario: Scenario = {
+  steps: [selectionScenarioStep, pointerSequenceScenarioStep],
+}
 
 // @ts-expect-error public scenario steps do not expose standalone pointerDown actions.
 const independentPointerDownAction: ScenarioStep['action'] = 'pointerDown'
@@ -47,6 +61,9 @@ void [
   selectOptions,
   pointerSequence,
   pointerSequenceOptions,
+  selectionScenarioStep,
+  pointerSequenceScenarioStep,
+  selectionScenario,
   independentPointerDownAction,
   independentPointerUpAction,
 ]

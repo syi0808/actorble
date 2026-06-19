@@ -746,6 +746,20 @@ export type ScenarioDragStep = Readonly<{
   options?: ScenarioStepOptions<DragOptions>
 }>
 
+export type ScenarioSelectTextStep = Readonly<{
+  id?: string
+  action: 'selectText'
+  target: TextSelectionTarget
+  options?: ScenarioStepOptions<SelectTextOptions>
+}>
+
+export type ScenarioPointerSequenceStep = Readonly<{
+  id?: string
+  action: 'pointerSequence'
+  sequence: PointerSequence
+  options?: ScenarioStepOptions<PointerSequenceOptions>
+}>
+
 export type ScenarioWaitForStep = Readonly<{
   id?: string
   action: 'waitFor'
@@ -772,6 +786,8 @@ export type ScenarioStep =
   | ScenarioPressStep
   | ScenarioScrollToStep
   | ScenarioDragStep
+  | ScenarioSelectTextStep
+  | ScenarioPointerSequenceStep
   | ScenarioWaitForStep
   | ScenarioDelayStep
 

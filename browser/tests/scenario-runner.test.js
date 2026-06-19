@@ -29,6 +29,8 @@ function createOrchestrator(overrides = {}) {
     press: vi.fn(),
     scrollTo: vi.fn(),
     drag: vi.fn(),
+    selectText: vi.fn(async () => {}),
+    pointerSequence: vi.fn(async () => {}),
     waitFor: vi.fn(async (condition) => ({ condition, satisfied: true, strategy: 'settled' })),
     geometry: vi.fn(),
     ...overrides,
@@ -310,6 +312,67 @@ describe('BrowserScenarioRunner', () => {
     ])
   })
 
+  it('runs text selection and pointer sequence scenario steps in order through the action orchestrator', async () => {
+    const calls = []
+    const selectionTarget = {
+      anchor: { target: css('#copy'), offset: 0 },
+      focus: { target: css('#copy'), offset: 8 },
+    }
+    const sequence = [
+      { type: 'move', to: { x: 10, y: 12 }, duration: 20 },
+      { type: 'down', button: 'primary' },
+      { type: 'move', to: { x: 80, y: 12 }, duration: 60 },
+      { type: 'up', button: 'primary' },
+    ]
+    const waitCondition = { kind: 'custom', predicate: () => true }
+    const trace = new BrowserDiagnosticsTrace({ idPrefix: 'scenario' })
+    const orchestrator = createOrchestrator({
+      selectText: vi.fn(async (target, options) => {
+        calls.push(['selectText', target, options])
+        trace.appendEvent('selection:applied', { selectedTextLength: 8 })
+      }),
+      pointerSequence: vi.fn(async (input, options) => {
+        calls.push(['pointerSequence', input, options])
+        trace.appendEvent('pointer-sequence:completed', { stepCount: input.length })
+      }),
+      waitFor: vi.fn(async (condition, options) => {
+        calls.push(['waitFor', condition, options])
+        return { condition, satisfied: true, strategy: 'settled' }
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator, trace })
+
+    await expect(
+      runner.run({
+        steps: [
+          { action: 'selectText', target: selectionTarget, options: { timeout: 10 } },
+          { action: 'pointerSequence', sequence, options: { timeout: 20 } },
+          { action: 'waitFor', input: waitCondition },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'selectText',
+        selectionTarget,
+        expect.objectContaining({ timeout: 10, signal: expect.any(AbortSignal) }),
+      ],
+      [
+        'pointerSequence',
+        sequence,
+        expect.objectContaining({ timeout: 20, signal: expect.any(AbortSignal) }),
+      ],
+      ['waitFor', waitCondition, expect.objectContaining({ signal: expect.any(AbortSignal) })],
+    ])
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'selection:applied' }),
+        expect.objectContaining({ name: 'pointer-sequence:completed' }),
+      ]),
+    )
+  })
+
   it('materializes run-level action defaults before executing scenario steps', async () => {
     const clickTarget = css('#save')
     const typeTarget = css('#name')
@@ -358,6 +421,62 @@ describe('BrowserScenarioRunner', () => {
         'actorble',
         {
           delay: 5,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+    ])
+  })
+
+  it('materializes run-level defaults for text selection and pointer sequence steps', async () => {
+    const selectionTarget = css('#message')
+    const sequence = [{ type: 'move', to: { x: 1, y: 2 } }]
+    const calls = []
+    const orchestrator = createOrchestrator({
+      selectText: vi.fn(async (target, options) => {
+        calls.push(['selectText', target, options])
+      }),
+      pointerSequence: vi.fn(async (input, options) => {
+        calls.push(['pointerSequence', input, options])
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await expect(
+      runner.run(
+        {
+          steps: [
+            { action: 'selectText', target: selectionTarget },
+            {
+              action: 'pointerSequence',
+              sequence,
+              options: { timeout: 40, duration: 15 },
+            },
+          ],
+        },
+        {
+          actionDefaults: {
+            selectText: { timeout: 30 },
+            pointerSequence: { timeout: 50, duration: 90 },
+          },
+        },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      [
+        'selectText',
+        selectionTarget,
+        {
+          timeout: 30,
+          signal: expect.any(AbortSignal),
+        },
+      ],
+      [
+        'pointerSequence',
+        sequence,
+        {
+          duration: 15,
+          timeout: 40,
           signal: expect.any(AbortSignal),
         },
       ],
@@ -472,6 +591,90 @@ describe('BrowserScenarioRunner', () => {
     expect(actionSignal).toBeInstanceOf(AbortSignal)
     expect(actionSignal).not.toBe(runDefaultSignal)
     expect(actionSignal.aborted).toBe(true)
+  })
+
+  it('pauses before a text selection step and starts it only after resume', async () => {
+    const firstStep = deferred()
+    const selectionTarget = css('#copy')
+    const calls = []
+    const orchestrator = createOrchestrator({
+      click: vi.fn(async () => {
+        calls.push('click')
+        runner.pause()
+        firstStep.resolve()
+      }),
+      selectText: vi.fn(async () => {
+        calls.push('selectText')
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({
+      steps: [
+        { action: 'click', target: css('#save') },
+        { action: 'selectText', target: selectionTarget },
+      ],
+    })
+
+    await firstStep.promise
+
+    await vi.waitFor(() => {
+      expect(runner.getSnapshot()).toMatchObject({
+        status: 'paused',
+        currentStepIndex: 1,
+      })
+    })
+    expect(calls).toEqual(['click'])
+
+    runner.resume()
+
+    await expect(run).resolves.toBeUndefined()
+    expect(calls).toEqual(['click', 'selectText'])
+  })
+
+  it('stops an in-flight pointer sequence through the scenario abort signal', async () => {
+    let sequenceSignal
+    const orchestrator = createOrchestrator({
+      pointerSequence: vi.fn((_sequence, options) => {
+        sequenceSignal = options.signal
+        return new Promise(() => {})
+      }),
+    })
+    const runner = new BrowserScenarioRunner({ orchestrator })
+    const run = runner.run({
+      steps: [{ action: 'pointerSequence', sequence: [{ type: 'down', button: 'primary' }] }],
+    })
+    run.catch(() => {})
+
+    await vi.waitFor(() => expect(sequenceSignal).toBeDefined())
+    runner.stop()
+
+    await expect(run).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'scenario.run', reason: 'scenario stopped' },
+    })
+    expect(sequenceSignal).toBeInstanceOf(AbortSignal)
+    expect(sequenceSignal.aborted).toBe(true)
+  })
+
+  it('rejects text selection and pointer sequence steps with missing required fields', async () => {
+    const runner = new BrowserScenarioRunner({ orchestrator: createOrchestrator() })
+
+    await expect(
+      runner.run({
+        steps: [{ action: 'selectText' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: { action: 'selectText', stepIndex: 0, field: 'target' },
+    })
+    await expect(
+      runner.run({
+        steps: [{ action: 'pointerSequence' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: { action: 'pointerSequence', stepIndex: 0, field: 'sequence' },
+    })
   })
 
   it('adds scenario step context to unsupported scrollTo coordinate failures', async () => {
