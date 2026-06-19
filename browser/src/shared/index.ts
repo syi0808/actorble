@@ -192,6 +192,7 @@ export interface BaseLocator<TKind extends LocatorKind> {
 export interface CssLocator extends BaseLocator<'css'> {
   readonly selector: string
   readonly root?: ParentNode
+  readonly matchIndex?: number
 }
 
 export interface ElementLocator extends BaseLocator<'element'> {
@@ -203,21 +204,25 @@ export interface RoleLocator extends BaseLocator<'role'> {
   readonly name?: string | RegExp
   readonly exact?: boolean
   readonly includeHidden?: boolean
+  readonly matchIndex?: number
 }
 
 export interface TextLocator extends BaseLocator<'text'> {
   readonly value: string | RegExp
   readonly exact?: boolean
+  readonly matchIndex?: number
 }
 
 export interface LabelLocator extends BaseLocator<'label'> {
   readonly value: string | RegExp
   readonly exact?: boolean
+  readonly matchIndex?: number
 }
 
 export interface TestIdLocator extends BaseLocator<'testId'> {
   readonly value: string
   readonly attribute?: string
+  readonly matchIndex?: number
 }
 
 export interface PointLocator extends BaseLocator<'point'> {
@@ -234,8 +239,11 @@ export type Locator =
   | TestIdLocator
   | PointLocator
 
-export function css(selector: string, options: { root?: ParentNode } = {}): CssLocator {
-  return { kind: 'css', selector, root: options.root }
+export function css(
+  selector: string,
+  options: Omit<CssLocator, 'kind' | 'selector'> = {},
+): CssLocator {
+  return { kind: 'css', selector, ...options }
 }
 
 export function element(target: Element): ElementLocator {

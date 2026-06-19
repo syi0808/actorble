@@ -100,6 +100,28 @@ describe('BrowserTargetResolver', () => {
     expect(first.element.textContent).toBe('One')
   })
 
+  it('uses matchIndex to select a specific query locator match', async () => {
+    document.body.innerHTML = `
+      <button id="first" class="choice" data-testid="save">One</button>
+      <button id="second" class="choice" data-testid="save">Two</button>
+      <button id="third" class="choice" data-testid="save">Three</button>
+    `
+    const resolver = createResolver()
+
+    await expect(resolver.resolve(css('.choice', { matchIndex: 1 }), { strict: true })).resolves.toMatchObject({
+      element: document.querySelector('#second'),
+      locator: { kind: 'css', selector: '.choice', matchIndex: 1 },
+    })
+    await expect(resolver.resolveAll(testId('save', { matchIndex: 2 }))).resolves.toMatchObject([
+      { element: document.querySelector('#third') },
+    ])
+    await expect(resolver.exists(role('button', { name: /./, matchIndex: 2 }))).resolves.toBe(true)
+    await expect(resolver.exists(role('button', { name: /./, matchIndex: 3 }))).resolves.toBe(false)
+    await expect(resolver.resolve(text('Two', { matchIndex: 1 }))).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+    })
+  })
+
   it('resolves element locators and reports detached elements', async () => {
     const button = document.createElement('button')
     button.id = 'save'

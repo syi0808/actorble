@@ -204,7 +204,8 @@ export class BrowserTargetResolver implements TargetResolver {
   }
 
   #resolveCandidates(locator: Locator, pass: ResolutionPass): readonly TargetCandidate[] {
-    switch (locator.kind) {
+    const candidates = (() => {
+      switch (locator.kind) {
       case 'css':
         return this.#rankElements(
           this.#dom
@@ -227,7 +228,10 @@ export class BrowserTargetResolver implements TargetResolver {
         return this.#rankTestIdLocator(locator)
       case 'point':
         return this.#rankPointLocator(locator)
-    }
+      }
+    })()
+
+    return applyLocatorMatchIndex(locator, candidates)
   }
 
   #resolveFirstCandidate(
@@ -236,6 +240,9 @@ export class BrowserTargetResolver implements TargetResolver {
     options: ResolveOptions,
   ): TargetCandidate | null | undefined {
     if (options.strict === true || this.#trace !== undefined) {
+      return undefined
+    }
+    if (locatorMatchIndex(locator) !== undefined) {
       return undefined
     }
 
@@ -283,6 +290,10 @@ export class BrowserTargetResolver implements TargetResolver {
   }
 
   #hasCandidate(locator: Locator, pass: ResolutionPass): boolean {
+    if (locatorMatchIndex(locator) !== undefined) {
+      return this.#resolveCandidates(locator, pass).length > 0
+    }
+
     switch (locator.kind) {
       case 'css':
         return (
@@ -998,23 +1009,59 @@ function isLocator(target: TargetLike): target is Locator {
   return typeof target === 'object' && target !== null && 'kind' in target
 }
 
+function locatorMatchIndex(locator: Locator): number | undefined {
+  switch (locator.kind) {
+    case 'css':
+    case 'role':
+    case 'text':
+    case 'label':
+    case 'testId':
+      return locator.matchIndex
+    case 'element':
+    case 'point':
+      return undefined
+  }
+}
+
+function applyLocatorMatchIndex(
+  locator: Locator,
+  candidates: readonly TargetCandidate[],
+): readonly TargetCandidate[] {
+  const matchIndex = locatorMatchIndex(locator)
+  if (matchIndex === undefined) {
+    return candidates
+  }
+
+  if (!Number.isInteger(matchIndex) || matchIndex < 0) {
+    return []
+  }
+
+  const candidate = candidates[matchIndex]
+  return candidate === undefined ? [] : [candidate]
+}
+
 function describeLocator(locator: Locator): string {
   switch (locator.kind) {
     case 'css':
-      return `css(${JSON.stringify(locator.selector)})`
+      return formatLocatorDescription(`css(${JSON.stringify(locator.selector)})`, locator)
     case 'element':
       return 'element()'
     case 'role':
-      return `role(${JSON.stringify(locator.role)})`
+      return formatLocatorDescription(`role(${JSON.stringify(locator.role)})`, locator)
     case 'text':
-      return `text(${formatTextMatcher(locator.value)})`
+      return formatLocatorDescription(`text(${formatTextMatcher(locator.value)})`, locator)
     case 'label':
-      return `label(${formatTextMatcher(locator.value)})`
+      return formatLocatorDescription(`label(${formatTextMatcher(locator.value)})`, locator)
     case 'testId':
-      return `testId(${JSON.stringify(locator.value)})`
+      return formatLocatorDescription(`testId(${JSON.stringify(locator.value)})`, locator)
     case 'point':
       return `point(${locator.point.x}, ${locator.point.y})`
   }
+}
+
+function formatLocatorDescription(base: string, locator: Locator): string {
+  const matchIndex = locatorMatchIndex(locator)
+  return matchIndex === undefined ? base : `${base} matchIndex:${matchIndex}`
 }
 
 function formatTextMatcher(value: string | RegExp): string {
@@ -1024,7 +1071,7 @@ function formatTextMatcher(value: string | RegExp): string {
 function summarizeLocator(locator: Locator): Readonly<Record<string, unknown>> {
   switch (locator.kind) {
     case 'css':
-      return { kind: locator.kind, selector: locator.selector }
+      return withOptionalMatchIndex({ kind: locator.kind, selector: locator.selector }, locator)
     case 'element':
       return { kind: locator.kind }
     case 'role':
@@ -1032,15 +1079,20 @@ function summarizeLocator(locator: Locator): Readonly<Record<string, unknown>> {
         kind: locator.kind,
         role: locator.role,
         name: locator.name instanceof RegExp ? locator.name.toString() : locator.name,
+        ...(locator.matchIndex === undefined ? {} : { matchIndex: locator.matchIndex }),
       }
     case 'text':
     case 'label':
       return {
         kind: locator.kind,
         value: locator.value instanceof RegExp ? locator.value.toString() : locator.value,
+        ...(locator.matchIndex === undefined ? {} : { matchIndex: locator.matchIndex }),
       }
     case 'testId':
-      return { kind: locator.kind, value: locator.value, attribute: locator.attribute }
+      return withOptionalMatchIndex(
+        { kind: locator.kind, value: locator.value, attribute: locator.attribute },
+        locator,
+      )
     case 'point':
       return {
         kind: locator.kind,
@@ -1048,4 +1100,12 @@ function summarizeLocator(locator: Locator): Readonly<Record<string, unknown>> {
         coordinateSpace: locator.coordinateSpace,
       }
   }
+}
+
+function withOptionalMatchIndex<TValue extends Readonly<Record<string, unknown>>>(
+  value: TValue,
+  locator: Locator,
+): TValue | TValue & Readonly<{ matchIndex: number }> {
+  const matchIndex = locatorMatchIndex(locator)
+  return matchIndex === undefined ? value : { ...value, matchIndex }
 }
