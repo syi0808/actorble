@@ -9,6 +9,7 @@ import type {
   FocusOptions,
   MoveOptions,
   PointerMotionProfile,
+  PointerSequenceOptions,
   PressOptions,
   RunOptions,
   ScrollOptions,
@@ -95,6 +96,7 @@ export type BrowserActionName =
   | 'scrollTo'
   | 'drag'
   | 'selectText'
+  | 'pointerSequence'
   | 'waitFor'
 
 export type BrowserActionOptionMap = Readonly<{
@@ -110,6 +112,7 @@ export type BrowserActionOptionMap = Readonly<{
   scrollTo: ScrollOptions
   drag: DragOptions
   selectText: SelectTextOptions
+  pointerSequence: PointerSequenceOptions
   waitFor: WaitOptions
 }>
 
@@ -406,6 +409,8 @@ function actionDefaultsFor(
       return defaults.drag
     case 'selectText':
       return defaults.selectText
+    case 'pointerSequence':
+      return defaults.pointerSequence
     case 'waitFor':
       return defaults.waitFor
   }
@@ -510,7 +515,8 @@ function isPointerAction(action: BrowserActionName): boolean {
     action === 'click' ||
     action === 'clickCurrent' ||
     action === 'doubleClick' ||
-    action === 'drag'
+    action === 'drag' ||
+    action === 'pointerSequence'
   )
 }
 

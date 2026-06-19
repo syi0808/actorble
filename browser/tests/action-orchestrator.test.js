@@ -461,6 +461,33 @@ function createHarness(options = {}) {
       })
       return { completed: true }
     }),
+    pointerSequence: vi.fn(async (sequence) => {
+      calls.push('gesture.pointerSequence')
+
+      for (const step of sequence) {
+        if (step.type === 'move') {
+          signals.emit({ type: 'pointer:moved', point: step.to, previousPoint: null })
+        } else if (step.type === 'down') {
+          signals.emit({
+            type: 'pointer:down',
+            point: currentGeometry.clickablePoint.point,
+            button: step.button ?? 'primary',
+          })
+        } else if (step.type === 'up') {
+          signals.emit({
+            type: 'pointer:up',
+            point: currentGeometry.clickablePoint.point,
+            button: step.button ?? 'primary',
+          })
+        }
+      }
+
+      if (options.pointerSequenceFailure) {
+        throw options.pointerSequenceFailure
+      }
+
+      return { completed: true }
+    }),
     cancel: vi.fn(async () => {
       calls.push('gesture.cancel')
       if (options.cancelFailure) {
@@ -1572,6 +1599,99 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointermove',
       'wait.settle',
     ])
+  })
+
+  it('pointerSequence executes a cleanup-safe transaction and records trace output', async () => {
+    const { calls, gesture, orchestrator, trace, wait } = createHarness()
+    const sequence = [
+      { type: 'move', to: { x: 1, y: 2 }, duration: 10 },
+      { type: 'down', button: 'primary' },
+      { type: 'pause', duration: 20 },
+      { type: 'move', to: { x: 5, y: 6 } },
+      { type: 'up', button: 'primary' },
+    ]
+    const options = { timeout: 100 }
+
+    await expect(orchestrator.pointerSequence(sequence, options)).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'gesture.pointerSequence',
+      'state.hover:true',
+      'event.pointermove',
+      'state.active:true',
+      'event.pointerdown',
+      'event.pointermove',
+      'state.active:false',
+      'event.pointerup',
+      'wait.settle',
+    ])
+    expect(gesture.pointerSequence).toHaveBeenCalledWith(
+      sequence,
+      expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
+    )
+    expect(wait.settle).toHaveBeenCalledWith('settled', { timeout: 100 })
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pointer-sequence:started',
+          data: expect.objectContaining({
+            stepCount: 5,
+            stepTypes: ['move', 'down', 'pause', 'move', 'up'],
+          }),
+        }),
+        expect.objectContaining({
+          name: 'pointer-sequence:completed',
+          data: expect.objectContaining({ stepCount: 5 }),
+        }),
+      ]),
+    )
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.pointerSequence',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'pointerSequence',
+          completed: true,
+          output: expect.objectContaining({ stepCount: 5 }),
+        }),
+      }),
+    )
+  })
+
+  it('pointerSequence cleans up gesture and interaction state after failed perform', async () => {
+    const failure = actorbleError(
+      'POINTER_SEQUENCE_INCOMPLETE',
+      'Pointer sequence ended while pressed.',
+      {
+        details: { boundary: 'gesture-engine', pressedButtons: ['primary'] },
+      },
+    )
+    const { gesture, orchestrator, state, trace } = createHarness({
+      pointerSequenceFailure: failure,
+    })
+
+    await expect(
+      orchestrator.pointerSequence([{ type: 'down', button: 'primary' }]),
+    ).rejects.toMatchObject({
+      code: 'POINTER_SEQUENCE_INCOMPLETE',
+      details: {
+        boundary: 'gesture-engine',
+        pressedButtons: ['primary'],
+      },
+    })
+
+    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(trace.getTrace().spans.at(-1)).toEqual(
+      expect.objectContaining({
+        name: 'action.pointerSequence',
+        status: 'error',
+        attributes: expect.objectContaining({
+          action: 'pointerSequence',
+          phase: 'perform',
+        }),
+      }),
+    )
   })
 
   it('scrollTo resolves, validates, scrolls the target, invalidates geometry, and waits', async () => {

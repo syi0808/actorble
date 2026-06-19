@@ -354,6 +354,109 @@ describe('BrowserGestureEngine', () => {
     expect(calls).toEqual([['cancel']])
   })
 
+  it('pointerSequence executes move, down, pause, move, and up in order', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+    const controller = new AbortController()
+
+    await expect(
+      engine.pointerSequence(
+        [
+          { type: 'move', to: { x: 1, y: 2 }, duration: 10 },
+          { type: 'down', button: 'primary' },
+          { type: 'pause', duration: 20 },
+          { type: 'move', to: { x: 5, y: 6 }, duration: 30 },
+          { type: 'up', button: 'primary' },
+        ],
+        { timeout: 100, signal: controller.signal },
+      ),
+    ).resolves.toEqual({ completed: true })
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 1, y: 2 }, { timeout: 100, signal: controller.signal, duration: 10 }],
+      ['down', 'primary'],
+      ['delay', 20, { signal: controller.signal }],
+      ['moveTo', { x: 5, y: 6 }, { timeout: 100, signal: controller.signal, duration: 30 }],
+      ['up', 'primary'],
+    ])
+  })
+
+  it('pointerSequence cancels pressed pointer state when movement fails after down', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+    const failure = new Error('sequence move failed')
+
+    pointer.moveTo
+      .mockImplementationOnce(async (point, options) => {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['moveTo', point, options] : ['moveTo', point])
+        return pointer.getState()
+      })
+      .mockImplementationOnce(async (point, options) => {
+        const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+        calls.push(hasOptions ? ['moveTo', point, options] : ['moveTo', point])
+        throw failure
+      })
+
+    await expect(
+      engine.pointerSequence([
+        { type: 'move', to: { x: 1, y: 2 } },
+        { type: 'down', button: 'primary' },
+        { type: 'move', to: { x: 3, y: 4 } },
+      ]),
+    ).rejects.toBe(failure)
+
+    expect(calls).toEqual([
+      ['moveTo', { x: 1, y: 2 }],
+      ['down', 'primary'],
+      ['moveTo', { x: 3, y: 4 }],
+      ['cancel'],
+    ])
+  })
+
+  it('pointerSequence cancels pressed pointer state when pause is cancelled after down', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    timeline.delay.mockImplementationOnce(async (duration, options) => {
+      const hasOptions = options !== undefined && Object.keys(options).length > 0
+
+      calls.push(hasOptions ? ['delay', duration, options] : ['delay', duration])
+      throw cancellationError('timeline.delay', 'scenario stopped')
+    })
+
+    await expect(
+      engine.pointerSequence([
+        { type: 'down', button: 'primary' },
+        { type: 'pause', duration: 50 },
+      ]),
+    ).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { operation: 'timeline.delay', reason: 'scenario stopped' },
+    })
+
+    expect(calls).toEqual([['down', 'primary'], ['delay', 50], ['cancel']])
+  })
+
+  it('pointerSequence cancels and reports incomplete sequences that end while pressed', async () => {
+    const { calls, pointer, timeline } = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer, timeline })
+
+    await expect(
+      engine.pointerSequence([{ type: 'down', button: 'primary' }]),
+    ).rejects.toMatchObject({
+      code: 'POINTER_SEQUENCE_INCOMPLETE',
+      details: {
+        boundary: 'gesture-engine',
+        pressedButtons: ['primary'],
+      },
+    })
+
+    expect(calls).toEqual([['down', 'primary'], ['cancel']])
+  })
+
   it('drag composes move, down, move, and up pointer operations in order', async () => {
     const { calls, pointer, timeline } = createFakePointer()
     const engine = new BrowserGestureEngine({ pointer, timeline })

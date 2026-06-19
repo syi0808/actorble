@@ -483,6 +483,7 @@ export type BrowserActionDefaults = Readonly<{
   scrollTo?: Readonly<Partial<ScrollOptions>>
   drag?: Readonly<Partial<DragOptions>>
   selectText?: Readonly<Partial<SelectTextOptions>>
+  pointerSequence?: Readonly<Partial<PointerSequenceOptions>>
   waitFor?: Readonly<Partial<WaitOptions>>
 }>
 

@@ -40,6 +40,8 @@ import type {
   FocusOptions,
   Locator,
   MoveOptions,
+  PointerSequence,
+  PointerSequenceOptions,
   PressOptions,
   ResolveOptions,
   RunOptions,
@@ -251,6 +253,13 @@ export class Actorble {
     return this.#orchestrator.selectText(
       targetOrRange,
       resolveActionOptions('selectText', { actorble: this.#options, options }),
+    )
+  }
+
+  pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void> {
+    return this.#orchestrator.pointerSequence(
+      sequence,
+      resolveActionOptions('pointerSequence', { actorble: this.#options, options }),
     )
   }
 

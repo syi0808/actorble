@@ -51,6 +51,8 @@ import type {
   PressOptions,
   Point,
   PointerButtonName,
+  PointerSequence,
+  PointerSequenceOptions,
   PlatformTextSelectionEndpoint,
   PlatformTextSelectionRange,
   PlatformTextSelectionSnapshot,
@@ -110,6 +112,7 @@ export type ActionName =
   | 'scrollTo'
   | 'drag'
   | 'selectText'
+  | 'pointerSequence'
   | 'waitFor'
 
 export type ActionTransaction = Readonly<{
@@ -131,6 +134,7 @@ export interface ActionOrchestrator {
   scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
   selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void>
+  pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void>
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>
   geometry(target: TargetLike): Promise<GeometrySnapshot>
 }
@@ -172,7 +176,7 @@ type ActionPhase =
 
 type PointerPerformAction = Extract<
   ActionName,
-  'moveTo' | 'click' | 'doubleClick' | 'clickCurrent' | 'typeInto' | 'drag'
+  'moveTo' | 'click' | 'doubleClick' | 'clickCurrent' | 'typeInto' | 'drag' | 'pointerSequence'
 >
 
 type ClickDispatchState = {
@@ -1286,6 +1290,71 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
+  async pointerSequence(
+    sequence: PointerSequence,
+    options: PointerSequenceOptions = {},
+  ): Promise<void> {
+    const metadata = pointerSequenceTraceMetadata(sequence)
+    const span = this.#startActionSpan('pointerSequence', undefined, {
+      ...options,
+      ...metadata,
+    })
+    let phase: ActionPhase = 'perform'
+    let performStarted = false
+
+    try {
+      span.event('pointer-sequence:started', metadata)
+      performStarted = true
+
+      const result = await this.#withPointerPerformTimeout(
+        'pointerSequence',
+        operationOptions(options),
+        async (performOptions) => {
+          return this.#gesture.pointerSequence(sequence, performOptions)
+        },
+      )
+
+      span.event('pointer-sequence:completed', {
+        stepCount: sequence.length,
+        gestureCompleted: result.completed,
+      })
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'pointerSequence',
+        completed: true,
+        output: {
+          stepCount: sequence.length,
+          gestureCompleted: result.completed,
+        },
+      })
+    } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'pointerSequence')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
+      span.event('pointer-sequence:failed', {
+        stepCount: sequence.length,
+        phase: failurePhase,
+        error: describeUnknownError(error),
+      })
+
+      throw this.#finishActionFailure(span, error, {
+        action: 'pointerSequence',
+        phase: failurePhase,
+      })
+    } finally {
+      this.#clearPointerContext()
+    }
+  }
+
   async waitFor(
     condition: WaitCondition,
     options: WaitOptions = {},
@@ -1814,14 +1883,16 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return
     }
 
-    if (!context || !eventTarget) {
+    if (!eventTarget) {
       return
     }
 
     switch (signal.type) {
       case 'pointer:moved': {
         const pressed = this.#hasPressedCursorButtons()
-        this.#moveDragState(context, pointerHit.target ?? eventTarget)
+        if (context) {
+          this.#moveDragState(context, pointerHit.target ?? eventTarget)
+        }
         this.#showPointerCursor(
           signal.point,
           eventTarget,
@@ -1844,7 +1915,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           this.#hasPressedCursorButtons(),
           pointerHit.target ?? eventTarget,
         )
-        this.#startDragState(context)
+        if (context) {
+          this.#startDragState(context)
+        }
         const allowed = this.#events.dispatchPointerEvent({
           type: 'pointerdown',
           target: eventTarget.element,
@@ -1887,7 +1960,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
           this.#showClickFeedback(signal.point)
         }
 
-        this.#endDragState(context)
+        if (context) {
+          this.#endDragState(context)
+        }
         break
       }
     }
@@ -1913,8 +1988,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     context: PointerSignalContext | null,
     pointerHit: PointerHitSnapshot,
   ): TargetHandle | null {
-    if (!context || signal.type === 'pointer:cancelled') {
+    if (signal.type === 'pointer:cancelled') {
       return null
+    }
+
+    if (!context) {
+      return pointerHit.target
     }
 
     if (!context.drag) {
@@ -2860,6 +2939,15 @@ function selectionTraceOutput(
     strategy: snapshot.strategy,
     collapsed: snapshot.collapsed,
     selectedTextLength: snapshot.selectedText.length,
+  }
+}
+
+function pointerSequenceTraceMetadata(
+  sequence: PointerSequence,
+): Readonly<{ stepCount: number; stepTypes: readonly PointerSequence[number]['type'][] }> {
+  return {
+    stepCount: sequence.length,
+    stepTypes: sequence.map((step) => step.type),
   }
 }
 

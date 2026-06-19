@@ -7,6 +7,9 @@ import type {
   DragOptions,
   MoveOptions,
   Point,
+  PointerButtonName,
+  PointerSequence,
+  PointerSequenceOptions,
   TargetHandle,
 } from '../../shared/index.js'
 import type { PointerEngine } from '../pointer-engine/index.js'
@@ -41,6 +44,8 @@ export type GestureDragOptions = DragOptions &
     resolveToEndpoint?: PointerEndpointResolver
   }>
 
+export type GesturePointerSequenceOptions = PointerSequenceOptions
+
 export type GestureEngineOptions = Readonly<{
   pointer?: PointerEngine
   timeline?: TimelineEngine
@@ -55,6 +60,10 @@ export interface GestureEngine {
   ): Promise<GestureResult>
   hover(point: Point, options?: GestureMoveOptions): Promise<GestureResult>
   drag(from: Point, to: Point, options?: GestureDragOptions): Promise<GestureResult>
+  pointerSequence(
+    sequence: PointerSequence,
+    options?: GesturePointerSequenceOptions,
+  ): Promise<GestureResult>
   cancel(): Promise<GestureResult>
 }
 
@@ -117,6 +126,61 @@ export class BrowserGestureEngine implements GestureEngine {
       return { completed: true }
     } catch (error) {
       if (pressed) {
+        await this.#pointer.cancel()
+      }
+
+      throw error
+    }
+  }
+
+  async pointerSequence(
+    sequence: PointerSequence,
+    options: GesturePointerSequenceOptions = {},
+  ): Promise<GestureResult> {
+    const pressed = new Set<PointerButtonName>()
+
+    try {
+      for (const step of sequence) {
+        assertGestureNotCancelled('gesture.pointerSequence', options)
+
+        switch (step.type) {
+          case 'move':
+            await this.#pointer.moveTo(step.to, pointerSequenceMovementOptions(step, options))
+            break
+          case 'down': {
+            const button = step.button ?? 'primary'
+
+            await this.#pointer.down(button)
+            pressed.add(button)
+            break
+          }
+          case 'up': {
+            const button = step.button ?? 'primary'
+
+            await this.#pointer.up(button)
+            pressed.delete(button)
+            break
+          }
+          case 'pause':
+            await this.#timeline.delay(
+              normalizePauseDuration(step.duration),
+              cancellationOptions(options),
+            )
+            break
+        }
+      }
+
+      if (pressed.size > 0) {
+        await this.#pointer.cancel()
+        const incompleteButtons = [...pressed]
+
+        pressed.clear()
+        throw incompletePointerSequence(incompleteButtons)
+      }
+
+      return { completed: true }
+    } catch (error) {
+      if (pressed.size > 0) {
         await this.#pointer.cancel()
       }
 
@@ -213,6 +277,19 @@ function dragMovementOptions(
   return Object.keys(movement).length === 0 ? undefined : movement
 }
 
+function pointerSequenceMovementOptions(
+  step: Extract<PointerSequence[number], { type: 'move' }>,
+  options: GesturePointerSequenceOptions,
+): PointerMoveOptions | undefined {
+  const movement: PointerMoveOptions = {
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(step.duration === undefined ? {} : { duration: step.duration }),
+  }
+
+  return Object.keys(movement).length === 0 ? undefined : movement
+}
+
 function freshPointMovementOptions(options: ClickOptions): MoveOptions {
   return {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
@@ -259,6 +336,27 @@ function normalizePressDwell(pressDwell: number | undefined): number {
   }
 
   return pressDwell
+}
+
+function normalizePauseDuration(duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0
+  }
+
+  return duration
+}
+
+function incompletePointerSequence(pressedButtons: readonly PointerButtonName[]): never {
+  throw actorbleError(
+    'POINTER_SEQUENCE_INCOMPLETE',
+    'Pointer sequence ended while buttons are still pressed.',
+    {
+      details: {
+        boundary: 'gesture-engine',
+        pressedButtons,
+      },
+    },
+  )
 }
 
 function samePoint(first: Point, second: Point): boolean {

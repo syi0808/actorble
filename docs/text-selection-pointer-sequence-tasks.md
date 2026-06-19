@@ -116,7 +116,7 @@ extension recorder and schema support
 
 ### TSPS-06 Pointer Sequence Transaction
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add `pointerSequence` as a cleanup-safe low-level replay transaction owned by Action Orchestrator, using existing Pointer/Gesture primitives internally.
 - Dependencies: TSPS-02, existing Pointer Engine and Gesture Engine.
 - Completion criteria:

@@ -40,6 +40,7 @@ const independentPointerUpAction: ScenarioStep['action'] = 'pointerUp'
 
 void [
   actorble.selectText(offsetSelectionTarget, selectOptions),
+  actorble.pointerSequence(pointerSequence, pointerSequenceOptions),
   offsetSelectionTarget,
   shortcutSelectionTarget,
   pointSelectionTarget,

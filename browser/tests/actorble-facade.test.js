@@ -43,6 +43,7 @@ function createDependencies() {
     scrollTo: vi.fn(async () => {}),
     drag: vi.fn(async () => {}),
     selectText: vi.fn(async () => {}),
+    pointerSequence: vi.fn(async () => {}),
     waitFor: vi.fn(async () => ({ condition, satisfied: true, strategy: 'settled' })),
     geometry: vi.fn(),
   }
@@ -143,6 +144,12 @@ describe('Actorble facade', () => {
     const scrollOptions = { timeout: 18, behavior: 'instant' }
     const dragOptions = { timeout: 19, force: true }
     const selectTextOptions = { timeout: 21 }
+    const pointerSequence = [
+      { type: 'move', to: { x: 1, y: 2 }, duration: 10 },
+      { type: 'down', button: 'primary' },
+      { type: 'up', button: 'primary' },
+    ]
+    const pointerSequenceOptions = { timeout: 22 }
     const waitOptions = { timeout: 20 }
 
     await expect(actorble.resolve(locator, { strict: true })).resolves.toBe(target)
@@ -158,6 +165,9 @@ describe('Actorble facade', () => {
     await expect(actorble.scrollTo(scrollPosition, scrollOptions)).resolves.toBeUndefined()
     await expect(actorble.drag(locator, otherLocator, dragOptions)).resolves.toBeUndefined()
     await expect(actorble.selectText(locator, selectTextOptions)).resolves.toBeUndefined()
+    await expect(
+      actorble.pointerSequence(pointerSequence, pointerSequenceOptions),
+    ).resolves.toBeUndefined()
     await expect(actorble.waitFor(condition, waitOptions)).resolves.toBeUndefined()
     await expect(actorble.run(scenario, { timeout: 30 })).resolves.toBeUndefined()
     actorble.pause()
@@ -192,6 +202,10 @@ describe('Actorble facade', () => {
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
     expect(orchestrator.selectText).toHaveBeenCalledWith(locator, selectTextOptions)
+    expect(orchestrator.pointerSequence).toHaveBeenCalledWith(
+      pointerSequence,
+      pointerSequenceOptions,
+    )
     expect(orchestrator.waitFor).toHaveBeenCalledWith(condition, waitOptions)
     expect(runner.run).toHaveBeenCalledWith(scenario, { timeout: 30 })
     expect(runner.pause).toHaveBeenCalledOnce()
@@ -212,14 +226,17 @@ describe('Actorble facade', () => {
         moveTo: { duration: 25 },
         typeInto: { delay: 5 },
         selectText: { timeout: 30 },
+        pointerSequence: { timeout: 40 },
       },
     })
     const locator = css('#target-1')
+    const pointerSequence = [{ type: 'move', to: { x: 1, y: 2 } }]
 
     await expect(actorble.click(locator, { timeout: 10, pressDwell: 12 })).resolves.toBeUndefined()
     await expect(actorble.moveTo(locator)).resolves.toBeUndefined()
     await expect(actorble.typeInto(locator, 'hello')).resolves.toBeUndefined()
     await expect(actorble.selectText(locator)).resolves.toBeUndefined()
+    await expect(actorble.pointerSequence(pointerSequence)).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
@@ -229,6 +246,7 @@ describe('Actorble facade', () => {
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { duration: 25 })
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { delay: 5 })
     expect(orchestrator.selectText).toHaveBeenCalledWith(locator, { timeout: 30 })
+    expect(orchestrator.pointerSequence).toHaveBeenCalledWith(pointerSequence, { timeout: 40 })
   })
 
   it('applies actorble-level defaults to the default scenario runner', async () => {
