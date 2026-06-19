@@ -1,4 +1,4 @@
 interface:
   display_name: "Actorble Task Orchestrator"
-  short_description: "Orchestrate Actorble task loops"
-  default_prompt: "Use $actorble-task-orchestrator to plan-gate and execute the next Actorble implementation task."
+  short_description: "Orchestrate Actorble task documents to completion"
+  default_prompt: "Use $actorble-task-orchestrator to plan-gate and execute every incomplete task in the Actorble task document until it is complete."

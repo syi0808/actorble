@@ -1,5 +1,18 @@
 # Actorble Task Orchestrator Prompt Contract
 
+## Loop Contract
+
+The script owns the full task-document loop. For `--task next`, repeat these steps until the task document has no non-terminal task entries:
+
+1. Parse the task document and select the next non-terminal `###` task entry.
+2. Start a fresh App Server thread for that task.
+3. Run one planning turn and one execution turn for that selected task only.
+4. Require the execution turn to verify, mark that selected task terminal, and commit.
+5. Emit `TASK_DONE`, then re-read the task document before selecting the next task.
+6. Emit final `DONE` only when no incomplete task remains.
+
+Use `--once` to preserve the previous one-task behavior.
+
 ## Planning Turn
 
 Run the planning turn in Codex App Server Plan mode with read-only sandbox:
@@ -44,7 +57,7 @@ Task selector: {taskSelector}
 
 Follow TDD. Preserve unrelated user changes. Verify with the narrowest relevant tests. Mark the task complete in the task document only after verification passes. Commit only task-related changes with a conventional commit.
 
-At the end, report the task id, changed behavior, tests run, commit hash, and residual risk.
+At the end, report the task id, changed behavior, tests run, commit hash, and residual risk. If the sandbox prevents staging or committing, report the exact conventional commit message that should be used for the task.
 ```
 
 ## Parent Session Bridge
@@ -56,3 +69,12 @@ When the script prints `NEEDS_HUMAN`, map the emitted `questions` array directly
 ```
 
 Do not change files while waiting for user input.
+
+## Script Events
+
+- `PLAN_CHECK`: one selected task is entering Plan mode.
+- `NEEDS_HUMAN`: parent session must ask the emitted questions and return answers on stdin.
+- `EXECUTE`: one approved task plan is entering execution.
+- `TASK_DONE`: one task iteration completed; keep monitoring because the loop may continue.
+- `DONE`: the requested single task is finished, or the full task document has no incomplete entries.
+- `FAILED`: stop; report `reason` and `lastEvent`.

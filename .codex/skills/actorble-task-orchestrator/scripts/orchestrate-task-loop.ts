@@ -50,12 +50,32 @@ type Args = {
   answers?: ToolRequestUserInputResponse;
   checkAppServer: boolean;
   selfTest: boolean;
+  once: boolean;
+  maxTasks: number;
+  parentCommit: boolean;
 };
 
 type TurnOutcome = {
   turnId: string;
   planText: string | null;
   lastAgentMessage: string | null;
+};
+
+type TaskEntry = {
+  id: string;
+  title: string;
+  line: number;
+  statusText: string | null;
+  terminal: boolean;
+};
+
+type TaskRunResult = {
+  taskId: string;
+  threadId: string;
+  commit: string | null;
+  parentCommit: boolean;
+  tests: string[];
+  summary: string;
 };
 
 const SKILL_DIR = resolve(new URL("..", import.meta.url).pathname);
@@ -81,6 +101,9 @@ function parseArgs(argv: string[]): Args {
     cwd: process.cwd(),
     checkAppServer: false,
     selfTest: false,
+    once: false,
+    maxTasks: 100,
+    parentCommit: true,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -104,6 +127,12 @@ function parseArgs(argv: string[]): Args {
       args.model = next();
     } else if (arg === "--answers") {
       args.answers = readAnswers(next());
+    } else if (arg === "--once") {
+      args.once = true;
+    } else if (arg === "--max-tasks") {
+      args.maxTasks = parsePositiveInteger(next(), "--max-tasks");
+    } else if (arg === "--no-parent-commit") {
+      args.parentCommit = false;
     } else if (arg === "--check-app-server") {
       args.checkAppServer = true;
     } else if (arg === "--self-test") {
@@ -125,13 +154,24 @@ function printHelp(): void {
 
 Options:
   --task-doc <path>   Task document path. Default: browser/docs/implementation_tasks.md
-  --task <id|next>    Task selector. Default: next
+  --task <id|next>    Task selector. Default: next. The next selector loops until all tasks are terminal.
   --cwd <path>        Workspace root. Default: current directory
   --model <model>     Optional model override for child Codex turns
   --answers <json|file> Pre-provided ToolRequestUserInputResponse
+  --once              Run only the selected task, preserving the old one-task behavior
+  --max-tasks <n>     Safety cap for a full task-doc loop. Default: 100
+  --no-parent-commit  Do not create a parent-process commit if the child cannot write .git
   --check-app-server  Validate initialize and collaborationMode/list only
   --self-test         Validate local bridge helpers without starting App Server
 `);
+}
+
+function parsePositiveInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    fail(`${label} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function readAnswers(value: string): ToolRequestUserInputResponse {
@@ -308,11 +348,11 @@ class AppServerClient {
   }
 }
 
-function buildPlanningPrompt(args: Args): string {
+function buildPlanningPrompt(args: Args, taskSelector: string): string {
   return `Use $actorble-task-runner to plan the requested Actorble implementation task, but do not edit files or execute the task yet.
 
 Task document: ${args.taskDoc}
-Task selector: ${args.task}
+Task selector: ${taskSelector}
 
 Ground yourself in the repo before asking questions. Read the task entry, relevant architecture docs, existing source/tests, and git status.
 
@@ -323,18 +363,18 @@ If no user decision is needed, produce one decision-complete <proposed_plan> blo
 Do not mutate files in this planning turn.`;
 }
 
-function buildExecutionPrompt(args: Args, planText: string): string {
+function buildExecutionPrompt(args: Args, taskSelector: string, planText: string): string {
   return `Use $actorble-task-runner to execute the approved Actorble task plan.
 
 Approved plan:
 ${planText}
 
 Task document: ${args.taskDoc}
-Task selector: ${args.task}
+Task selector: ${taskSelector}
 
 Follow TDD. Preserve unrelated user changes. Verify with the narrowest relevant tests. Mark the task complete in the task document only after verification passes. Commit only task-related changes with a conventional commit.
 
-At the end, report the task id, changed behavior, tests run, commit hash, and residual risk.`;
+At the end, report the task id, changed behavior, tests run, commit hash, and residual risk. If the sandbox prevents staging or committing, report the exact conventional commit message that should be used for the task.`;
 }
 
 async function waitForHumanAnswers(params: ToolRequestUserInputParams): Promise<ToolRequestUserInputResponse> {
@@ -424,6 +464,285 @@ async function runTurn(
   return outcome;
 }
 
+function readTaskEntries(cwd: string, taskDoc: string): TaskEntry[] {
+  const taskPath = resolve(cwd, taskDoc);
+  return parseTaskEntries(readFileSync(taskPath, "utf8"));
+}
+
+function parseTaskEntries(text: string): TaskEntry[] {
+  const lines = text.split(/\r?\n/);
+  const entries: TaskEntry[] = [];
+  let current: TaskEntry | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const heading = /^###\s+(.+?)\s*$/.exec(lines[index]);
+    if (heading) {
+      if (current) {
+        current.terminal = isTerminalTask(current.title, current.statusText);
+        entries.push(current);
+      }
+      const title = heading[1].trim();
+      current = {
+        id: taskIdFromHeading(title),
+        title,
+        line: index + 1,
+        statusText: null,
+        terminal: false,
+      };
+      continue;
+    }
+
+    if (current) {
+      const status = /^-\s*Status:\s*(.+?)\s*$/.exec(lines[index]);
+      if (status) {
+        current.statusText = status[1].trim();
+      }
+    }
+  }
+
+  if (current) {
+    current.terminal = isTerminalTask(current.title, current.statusText);
+    entries.push(current);
+  }
+
+  return entries;
+}
+
+function taskIdFromHeading(title: string): string {
+  return title.split(/\s+/)[0].replace(/[.:]$/, "");
+}
+
+function isTerminalTask(title: string, statusText: string | null): boolean {
+  if (statusText) {
+    const checkbox = /\[([^\]]*)\]/.exec(statusText);
+    if (checkbox) {
+      return /^[xX-]$/.test(checkbox[1].trim());
+    }
+    return /\bCompleted\b|Rejected|완료|반려/.test(statusText);
+  }
+
+  return /\bCompleted\b|완료/.test(title);
+}
+
+function selectTaskEntry(args: Args): TaskEntry | null {
+  const entries = readTaskEntries(args.cwd, args.taskDoc);
+
+  if (args.task === "next") {
+    return entries.find((entry) => !entry.terminal) ?? null;
+  }
+
+  const selected = entries.find((entry) => entry.id === args.task);
+  if (!selected) {
+    fail(`Task '${args.task}' was not found in ${args.taskDoc}`);
+  }
+  if (selected.terminal) {
+    fail(`Task '${args.task}' is already terminal in ${args.taskDoc}`);
+  }
+  return selected;
+}
+
+function assertTaskMarkedTerminal(args: Args, taskId: string): void {
+  const updated = readTaskEntries(args.cwd, args.taskDoc).find((entry) => entry.id === taskId);
+  if (!updated) {
+    fail(`Task '${taskId}' disappeared from ${args.taskDoc}`);
+  }
+  if (!updated.terminal) {
+    fail(`Task '${taskId}' did not reach a terminal status after execution`, {
+      taskId,
+      status: updated.statusText,
+      line: updated.line,
+    });
+  }
+}
+
+function gitStatus(cwd: string): string {
+  const result = spawnSync("git", ["status", "--porcelain"], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    fail("Could not read git status", {
+      stdout: result.stdout,
+      stderr: result.stderr,
+    });
+  }
+  return result.stdout;
+}
+
+function assertCleanWorktree(cwd: string, taskId: string): void {
+  const status = gitStatus(cwd).trim();
+  if (status) {
+    fail(`Worktree must be clean before orchestrating task '${taskId}'`, {
+      status: status.split(/\r?\n/),
+    });
+  }
+}
+
+function isWorktreeDirty(cwd: string): boolean {
+  return gitStatus(cwd).trim().length > 0;
+}
+
+function commitDirtyWorktree(cwd: string, message: string): string {
+  const add = spawnSync("git", ["add", "--all"], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (add.status !== 0) {
+    fail("Parent process could not stage task changes", {
+      stdout: add.stdout,
+      stderr: add.stderr,
+      message,
+    });
+  }
+
+  const commit = spawnSync("git", ["commit", "-m", message], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (commit.status !== 0) {
+    fail("Parent process could not commit task changes", {
+      stdout: commit.stdout,
+      stderr: commit.stderr,
+      message,
+    });
+  }
+
+  const head = gitHead(cwd);
+  if (!head) {
+    fail("Parent commit succeeded but HEAD could not be read", { message });
+  }
+  return head;
+}
+
+function extractCommitMessage(text: string, taskId: string): string {
+  const patterns = [
+    /Intended commit message(?: remains)?:\s*`([^`]+)`/i,
+    /Commit message:\s*`([^`]+)`/i,
+    /Commit:\s*\n-\s*`([^`]+)`/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match?.[1] && isConventionalCommit(match[1])) {
+      return match[1];
+    }
+  }
+
+  return `chore(actorble): complete ${taskId}`;
+}
+
+function isConventionalCommit(message: string): boolean {
+  return /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?:\s+\S/.test(message);
+}
+
+async function startThread(client: AppServerClient, args: Args): Promise<{ threadId: string; model: string }> {
+  const threadStart = await client.request("thread/start", {
+    cwd: args.cwd,
+    approvalPolicy: "never",
+    sandbox: "read-only",
+    ...(args.model ? { model: args.model } : {}),
+  });
+  if (!isRecord(threadStart) || !isRecord(threadStart.thread) || typeof threadStart.thread.id !== "string") {
+    fail("thread/start response did not include a thread id", threadStart);
+  }
+  return {
+    threadId: threadStart.thread.id,
+    model: args.model ?? String(threadStart.model ?? "default"),
+  };
+}
+
+async function runTaskIteration(
+  client: AppServerClient,
+  args: Args,
+  task: TaskEntry,
+  iteration: number,
+): Promise<TaskRunResult> {
+  assertCleanWorktree(args.cwd, task.id);
+  const beforeCommit = gitHead(args.cwd);
+  const { threadId, model } = await startThread(client, args);
+
+  emit({ state: "PLAN_CHECK", taskDoc: args.taskDoc, task: task.id, iteration, threadId });
+  const plan = await runTurn(client, threadId, buildPlanningPrompt(args, task.id), {
+    approvalPolicy: "never",
+    effort: "medium",
+    collaborationMode: {
+      mode: "plan",
+      settings: {
+        model,
+        reasoning_effort: "medium",
+        developer_instructions: null,
+      },
+    },
+  });
+  if (!plan.planText || !plan.planText.trim()) {
+    fail("Planning turn completed without a proposed plan", {
+      taskId: task.id,
+      lastAgentMessage: plan.lastAgentMessage,
+    });
+  }
+
+  emit({ state: "EXECUTE", taskDoc: args.taskDoc, task: task.id, iteration, threadId });
+  const execute = await runTurn(client, threadId, buildExecutionPrompt(args, task.id, plan.planText), {
+    approvalPolicy: "never",
+    sandboxPolicy: {
+      type: "workspaceWrite",
+      writableRoots: [args.cwd],
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    },
+    collaborationMode: {
+      mode: "default",
+      settings: {
+        model,
+        reasoning_effort: null,
+        developer_instructions: null,
+      },
+    },
+  });
+
+  assertTaskMarkedTerminal(args, task.id);
+
+  let afterCommit = gitHead(args.cwd);
+  let parentCommit = false;
+  if (afterCommit === beforeCommit && isWorktreeDirty(args.cwd)) {
+    if (!args.parentCommit) {
+      fail(`Task '${task.id}' left uncommitted changes and parent commits are disabled`, {
+        taskId: task.id,
+        status: gitStatus(args.cwd).trim().split(/\r?\n/),
+      });
+    }
+    const commitMessage = extractCommitMessage(execute.lastAgentMessage ?? "", task.id);
+    afterCommit = commitDirtyWorktree(args.cwd, commitMessage);
+    parentCommit = true;
+  }
+
+  if (isWorktreeDirty(args.cwd)) {
+    fail(`Task '${task.id}' left the worktree dirty after execution`, {
+      taskId: task.id,
+      status: gitStatus(args.cwd).trim().split(/\r?\n/),
+    });
+  }
+
+  const result: TaskRunResult = {
+    taskId: task.id,
+    threadId,
+    commit: afterCommit !== beforeCommit ? afterCommit : null,
+    parentCommit,
+    tests: extractTests(execute.lastAgentMessage ?? ""),
+    summary: execute.lastAgentMessage ?? "",
+  };
+  emit({
+    state: "TASK_DONE",
+    taskId: result.taskId,
+    threadId: result.threadId,
+    commit: result.commit,
+    parentCommit: result.parentCommit,
+    tests: result.tests,
+  });
+  return result;
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.selfTest) {
@@ -442,7 +761,6 @@ async function main(): Promise<void> {
     fail(`Prompt contract does not exist: ${PROMPT_CONTRACT_PATH}`);
   }
 
-  const beforeCommit = gitHead(args.cwd);
   const client = new AppServerClient();
   let queuedAnswers = args.answers;
   client.onServerRequest = async (message) => {
@@ -460,64 +778,44 @@ async function main(): Promise<void> {
     const modes = await client.request("collaborationMode/list", {});
     assertPlanModeAvailable(modes);
 
-    const threadStart = await client.request("thread/start", {
-      cwd: args.cwd,
-      approvalPolicy: "never",
-      sandbox: "read-only",
-      ...(args.model ? { model: args.model } : {}),
-    });
-    if (!isRecord(threadStart) || !isRecord(threadStart.thread) || typeof threadStart.thread.id !== "string") {
-      fail("thread/start response did not include a thread id", threadStart);
+    const loopMode = !args.once && args.task === "next";
+    const results: TaskRunResult[] = [];
+    for (let iteration = 1; iteration <= args.maxTasks; iteration += 1) {
+      const task = selectTaskEntry(args);
+      if (!task) {
+        emit({
+          state: "DONE",
+          taskDoc: args.taskDoc,
+          taskId: args.task,
+          allDone: true,
+          completedTasks: results.map((result) => result.taskId),
+          commits: results.map((result) => result.commit).filter((commit): commit is string => Boolean(commit)),
+          tests: [...new Set(results.flatMap((result) => result.tests))],
+          summary: results.map((result) => result.summary).filter(Boolean).join("\n\n---\n\n"),
+        });
+        return;
+      }
+
+      const result = await runTaskIteration(client, args, task, iteration);
+      results.push(result);
+
+      if (!loopMode) {
+        emit({
+          state: "DONE",
+          taskDoc: args.taskDoc,
+          taskId: task.id,
+          allDone: false,
+          completedTasks: [task.id],
+          commits: result.commit ? [result.commit] : [],
+          tests: result.tests,
+          summary: result.summary,
+        });
+        return;
+      }
     }
-    const threadId = threadStart.thread.id;
 
-    emit({ state: "PLAN_CHECK", taskDoc: args.taskDoc, task: args.task, threadId });
-    const plan = await runTurn(client, threadId, buildPlanningPrompt(args), {
-      approvalPolicy: "never",
-      effort: "medium",
-      collaborationMode: {
-        mode: "plan",
-        settings: {
-          model: args.model ?? String(threadStart.model ?? "default"),
-          reasoning_effort: "medium",
-          developer_instructions: null,
-        },
-      },
-    });
-    if (!plan.planText || !plan.planText.trim()) {
-      fail("Planning turn completed without a proposed plan", {
-        lastAgentMessage: plan.lastAgentMessage,
-      });
-    }
-
-    emit({ state: "EXECUTE", taskDoc: args.taskDoc, task: args.task, threadId });
-    const execute = await runTurn(client, threadId, buildExecutionPrompt(args, plan.planText), {
-      approvalPolicy: "never",
-      sandboxPolicy: {
-        type: "workspaceWrite",
-        writableRoots: [args.cwd],
-        networkAccess: false,
-        excludeTmpdirEnvVar: false,
-        excludeSlashTmp: false,
-      },
-      collaborationMode: {
-        mode: "default",
-        settings: {
-          model: args.model ?? String(threadStart.model ?? "default"),
-          reasoning_effort: null,
-          developer_instructions: null,
-        },
-      },
-    });
-
-    const afterCommit = gitHead(args.cwd);
-    emit({
-      state: "DONE",
-      taskId: args.task,
-      threadId,
-      commit: afterCommit !== beforeCommit ? afterCommit : null,
-      tests: extractTests(execute.lastAgentMessage ?? ""),
-      summary: execute.lastAgentMessage ?? "",
+    fail(`Reached --max-tasks=${args.maxTasks} before ${args.taskDoc} reached a terminal state`, {
+      completedTasks: results.map((result) => result.taskId),
     });
   } finally {
     client.close();
@@ -583,6 +881,38 @@ function selfTest(): void {
     fail("self-test failed to normalize string answer");
   }
   assertPlanModeAvailable({ data: [{ name: "Plan", mode: "plan" }] });
+
+  const entries = parseTaskEntries(`# Tasks
+
+### T0. Scaffold - 완료
+
+### TSPS-01 First Task
+- Status: [x] Completed
+
+### TSPS-02 Next Task
+- Status: [ ] Not started
+
+### TSPS-03 Rejected Task
+- Status: [-] Rejected (반려됨)
+`);
+  if (entries.length !== 4 || entries[0].id !== "T0" || entries[2].id !== "TSPS-02") {
+    fail("self-test failed to parse task ids");
+  }
+  if (!entries[0].terminal || !entries[1].terminal || entries[2].terminal || !entries[3].terminal) {
+    fail("self-test failed to classify task terminal status");
+  }
+
+  const commitMessage = extractCommitMessage(
+    "Commit:\n- Not created.\n- Intended commit message remains: `feat(browser): add selection state`.",
+    "TSPS-04",
+  );
+  if (commitMessage !== "feat(browser): add selection state") {
+    fail("self-test failed to extract intended commit message");
+  }
+  if (extractCommitMessage("", "TSPS-04") !== "chore(actorble): complete TSPS-04") {
+    fail("self-test failed to build fallback commit message");
+  }
+
   emit({ state: "SELF_TEST_OK" });
 }
 
