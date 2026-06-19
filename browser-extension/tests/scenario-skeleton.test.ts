@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json'
 import missingStepsFixture from '../../schemas/scenario/draft/fixtures/invalid/missing-steps.json'
+import pointerDownStepFixture from '../../schemas/scenario/draft/fixtures/invalid/pointer-down-step.json'
+import selectTextPointEndpointFixture from '../../schemas/scenario/draft/fixtures/invalid/select-text-point-endpoint.json'
 import { exportScenarioToCode } from '../src/scenario/export-code.js'
 import { migrateScenarioDocument } from '../src/scenario/migrate.js'
 import {
@@ -37,6 +39,26 @@ describe('scenario skeleton contracts', () => {
     }
     expect(result.value.id).toBe('browser-login-flow')
     expect(result.value.steps).toHaveLength(4)
+  })
+
+  it('accepts selectText draft fixtures without transient selection state', async () => {
+    const fixtures = await Promise.all([
+      import('../../schemas/scenario/draft/fixtures/valid/select-text-direct-target.json'),
+      import('../../schemas/scenario/draft/fixtures/valid/select-text-offset-range.json'),
+    ])
+
+    for (const fixture of fixtures) {
+      const result = validateScenarioDocument(fixture.default)
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        continue
+      }
+      expect(result.value.steps[0]).toMatchObject({
+        action: 'selectText',
+      })
+      expect(result.value.steps[0]).not.toHaveProperty('selectedText')
+    }
   })
 
   it('rejects documents with missing required fields', () => {
@@ -117,6 +139,38 @@ describe('scenario skeleton contracts', () => {
         expect.objectContaining({
           code: 'invalid_document',
           path: ['steps', 0, 'duration'],
+        }),
+      ]),
+    })
+  })
+
+  it('rejects invalid selectText endpoints with field-level paths', () => {
+    const result = validateScenarioDocument(selectTextPointEndpointFixture)
+
+    expect(result.ok).toBe(false)
+    expect(result).toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'invalid_document',
+          path: ['steps', 0, 'target', 'anchor', 'offset'],
+        }),
+        expect.objectContaining({
+          code: 'invalid_document',
+          path: ['steps', 0, 'target', 'anchor', 'point'],
+        }),
+      ]),
+    })
+  })
+
+  it('rejects raw pointer primitive draft steps', () => {
+    const result = validateScenarioDocument(pointerDownStepFixture)
+
+    expect(result.ok).toBe(false)
+    expect(result).toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'invalid_document',
+          path: ['steps', 0, 'action'],
         }),
       ]),
     })

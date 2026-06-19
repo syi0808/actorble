@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "select-text-direct-target",
+  "steps": [
+    {
+      "action": "selectText",
+      "target": {
+        "strategy": "css",
+        "selector": "#copy"
+      },
+      "options": {
+        "timeout": 3000
+      }
+    }
+  ]
+}

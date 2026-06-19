@@ -42,7 +42,7 @@ draft를 `actorble.scenario.v1`로 승격하지 않습니다.
 - document envelope: `schemaVersion`, `id`, `name`, `description`, `steps`,
   `metadata`
 - action intent: `click`, `moveTo`, `doubleClick`, `focus`, `type`, `typeInto`,
-  `fill`, `press`, `scrollTo`, `drag`, `waitFor`, `delay`
+  `fill`, `press`, `scrollTo`, `drag`, `selectText`, `waitFor`, `delay`
 - execution control: `timeout`, explicit `delay`, run-level `pacing`
 - `platform`을 통한 platform namespacing
 
@@ -62,3 +62,15 @@ macOS, Windows, Linux runtime이 구체화되면서 바뀔 가능성이 큰 영�
 
 compiler는 지원하지 않는 locator, option, platform extension을 silent no-op으로
 처리하지 말고 capability error로 다루어야 합니다.
+
+## Text Selection
+
+`selectText` is a portable draft intent for changing text selection. A step may
+select all selectable text in a target, or provide offset-based anchor/focus
+endpoints. Draft documents store locator intent and offsets only; selected text,
+selectionchange events, pointer movement, and builder UI state are transient and
+must not be encoded in the step.
+
+`pointerDown`, `pointerMove`, and `pointerUp` are not draft step actions.
+`pointerSequence` is deferred until recorder fallback replay proves that a
+portable cleanup-safe pointer transaction is required.

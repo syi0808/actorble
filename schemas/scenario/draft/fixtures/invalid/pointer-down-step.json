@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "pointer-down-step",
+  "steps": [
+    {
+      "action": "pointerDown",
+      "target": {
+        "strategy": "css",
+        "selector": "#copy"
+      }
+    }
+  ]
+}

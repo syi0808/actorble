@@ -508,4 +508,25 @@ describe('compileToBrowserRuntime', () => {
       ],
     })
   })
+
+  it('keeps selectText draft compilation deferred to TSPS-09', () => {
+    const result = compileToBrowserRuntime(
+      scenario([
+        {
+          action: 'selectText',
+          target: { strategy: 'css', selector: '#copy' },
+        },
+      ]),
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'compiler_error',
+          path: ['steps', 0],
+        },
+      ],
+    })
+  })
 })

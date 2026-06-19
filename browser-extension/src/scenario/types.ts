@@ -131,6 +131,18 @@ export type ScenarioWaitCondition =
   | Readonly<{ kind: 'visible' | 'hidden'; target: ScenarioTarget }>
   | Readonly<{ kind: 'text'; value: ScenarioTextMatcher }>
 
+export type ScenarioTextSelectionEndpoint = Readonly<{
+  target: ScenarioTarget
+  offset: number
+}>
+
+export type ScenarioTextSelectionTarget =
+  | ScenarioTarget
+  | Readonly<{
+      anchor: ScenarioTextSelectionEndpoint
+      focus: ScenarioTextSelectionEndpoint
+    }>
+
 export type ScenarioStepCommon = Readonly<{
   id?: ScenarioId
   note?: string
@@ -194,6 +206,13 @@ export type ScenarioDragStep = ScenarioStepCommon &
     options?: ScenarioActionOptions
   }>
 
+export type ScenarioSelectTextStep = ScenarioStepCommon &
+  Readonly<{
+    action: 'selectText'
+    target: ScenarioTextSelectionTarget
+    options?: ScenarioActionOptions
+  }>
+
 export type ScenarioWaitForStep = ScenarioStepCommon &
   Readonly<{
     action: 'waitFor'
@@ -217,6 +236,7 @@ export type ScenarioStep =
   | ScenarioScrollToTargetStep
   | ScenarioScrollToPositionStep
   | ScenarioDragStep
+  | ScenarioSelectTextStep
   | ScenarioWaitForStep
   | ScenarioDelayStep
 

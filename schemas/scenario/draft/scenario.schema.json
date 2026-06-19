@@ -293,6 +293,40 @@
         }
       ]
     },
+    "selectionEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "offset"],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "textSelectionTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/target"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anchor", "focus"],
+          "properties": {
+            "anchor": {
+              "$ref": "#/$defs/selectionEndpoint"
+            },
+            "focus": {
+              "$ref": "#/$defs/selectionEndpoint"
+            }
+          }
+        }
+      ]
+    },
     "motion": {
       "oneOf": [
         {
@@ -463,6 +497,9 @@
         },
         {
           "$ref": "#/$defs/dragStep"
+        },
+        {
+          "$ref": "#/$defs/selectTextStep"
         },
         {
           "$ref": "#/$defs/waitForStep"
@@ -687,6 +724,31 @@
         },
         "to": {
           "$ref": "#/$defs/target"
+        },
+        "options": {
+          "$ref": "#/$defs/actionOptions"
+        },
+        "platform": {
+          "$ref": "#/$defs/platformExtensions"
+        }
+      }
+    },
+    "selectTextStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        },
+        "action": {
+          "const": "selectText"
+        },
+        "target": {
+          "$ref": "#/$defs/textSelectionTarget"
         },
         "options": {
           "$ref": "#/$defs/actionOptions"

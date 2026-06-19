@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "select-text-offset-range",
+  "steps": [
+    {
+      "action": "selectText",
+      "target": {
+        "anchor": {
+          "target": {
+            "strategy": "css",
+            "selector": "#copy"
+          },
+          "offset": 0
+        },
+        "focus": {
+          "target": {
+            "strategy": "css",
+            "selector": "#copy"
+          },
+          "offset": 8
+        }
+      }
+    }
+  ]
+}

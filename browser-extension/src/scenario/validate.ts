@@ -192,6 +192,16 @@ function validateStep(
       validateTarget(step.to, [...path, 'to'], issues)
       validateOptions(step.options, [...path, 'options'], issues)
       return
+    case 'selectText':
+      rejectUnexpectedProperties(
+        step,
+        new Set(['id', 'note', 'action', 'target', 'options', 'platform']),
+        path,
+        issues,
+      )
+      validateTextSelectionTarget(step.target, [...path, 'target'], issues)
+      validateOptions(step.options, [...path, 'options'], issues)
+      return
     case 'waitFor':
       rejectUnexpectedProperties(
         step,
@@ -274,6 +284,39 @@ function validateTarget(
   }
 
   validateLocator(target, path, issues)
+}
+
+function validateTextSelectionTarget(
+  target: unknown,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+): void {
+  if (isRecord(target) && ('anchor' in target || 'focus' in target)) {
+    rejectUnexpectedProperties(target, new Set(['anchor', 'focus']), path, issues)
+    validateSelectionEndpoint(target.anchor, [...path, 'anchor'], issues)
+    validateSelectionEndpoint(target.focus, [...path, 'focus'], issues)
+    return
+  }
+
+  validateTarget(target, path, issues)
+}
+
+function validateSelectionEndpoint(
+  endpoint: unknown,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+): void {
+  if (!isRecord(endpoint)) {
+    issues.push(issue('Selection endpoint must be an object.', path))
+    return
+  }
+
+  rejectUnexpectedProperties(endpoint, new Set(['target', 'offset']), path, issues)
+  validateTarget(endpoint.target, [...path, 'target'], issues)
+  validateOptionalInteger(endpoint.offset, [...path, 'offset'], issues, 0)
+  if (endpoint.offset === undefined) {
+    issues.push(issue('Missing required property "offset".', [...path, 'offset']))
+  }
 }
 
 function validateLocator(

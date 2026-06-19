@@ -144,7 +144,7 @@ extension recorder and schema support
 
 ### TSPS-08 Schema Draft Actions
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add portable draft schema support only after TSPS-01 proves stable semantics. Add `selectText` first; add `pointerSequence` only if fallback replay must be portable.
 - Dependencies: TSPS-01, TSPS-07.
 - Completion criteria:

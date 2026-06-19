@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "id": "select-text-point-endpoint",
+  "steps": [
+    {
+      "action": "selectText",
+      "target": {
+        "anchor": {
+          "target": {
+            "strategy": "css",
+            "selector": "#copy"
+          },
+          "point": {
+            "x": 12,
+            "y": 24
+          }
+        },
+        "focus": {
+          "target": {
+            "strategy": "css",
+            "selector": "#copy"
+          },
+          "offset": 8
+        }
+      }
+    }
+  ]
+}

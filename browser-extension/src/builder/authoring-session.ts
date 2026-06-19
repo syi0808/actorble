@@ -28,6 +28,7 @@ export type BuilderStepActionFamily =
   | 'scrollToTarget'
   | 'scrollToPosition'
   | 'drag'
+  | 'selectText'
   | 'waitForVisible'
   | 'waitForHidden'
   | 'waitForText'
@@ -778,6 +779,12 @@ export function createDefaultStepForActionFamily(
         action: 'drag',
         from: emptyTargetGroup(),
         to: emptyTargetGroup(),
+      }
+    case 'selectText':
+      return {
+        ...common,
+        action: 'selectText',
+        target: emptyTargetGroup(),
       }
     case 'waitForVisible':
     case 'waitForHidden':
