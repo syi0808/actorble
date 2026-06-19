@@ -91,6 +91,7 @@ Related decisions:
 
 - `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
 - `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
+- `docs/adr/2026-06-19-inspector-match-index-targeting.md`
 
 ## 4. Runtime Components
 
@@ -185,7 +186,10 @@ Target assignment는 selected step editor 내부의 target field control입니�
 필요한 action만 `Set target` interaction을 활성화합니다. drag는 from/to, waitFor는
 wait target, scrollTo target은 scroll target처럼 action-specific slot을 명시합니다.
 target picker UI는 standalone card가 아니라 해당 slot을 채우는 버튼과 진행 상태입니다.
-선택된 locator candidate는 항상 correlated target slot에 기록합니다.
+inspector에서 요소를 선택하면 extension은 locator candidate를 preview하고, 선택된
+요소와 매칭되는 최상위 candidate를 correlated target slot에 즉시 기록합니다.
+candidate가 여러 요소에 매칭되면 browser locator의 0-based `matchIndex`로 선택
+요소를 disambiguate합니다.
 
 Recording은 builder의 primary input path입니다. record start/stop은 scenario shell에서
 제공하고, stop 후 draft가 있으면 builder review surface에 표시합니다. recorded draft는
@@ -292,14 +296,15 @@ Side panel target slot
 -> inspector:start with target slot correlation
 -> content script shows hover highlight
 -> user selects element
--> locator synthesis returns ranked candidates
--> side panel previews match count and strictness
--> selected locator is written into the correlated target slot
+-> locator synthesis previews ranked candidates and selected match index
+-> best candidate matching the selected element is written into the correlated target slot
 ```
 
 target picker는 별도 feature가 아니라 builder의 target assignment interaction입니다.
 선택 결과는 현재 step의 단일 `target` 필드에만 쓰지 않고, correlated target slot에
 씁니다. target slot이 없는 action에서는 inspector launch를 비활성화합니다.
+선택된 요소를 어떤 candidate도 확인하지 못하면 draft document를 변경하지 않고
+locator issue를 표시합니다.
 
 ### Build Scenario
 
@@ -309,8 +314,7 @@ Side panel
 -> add/insert step by action family
 -> edit action-specific fields
 -> choose target slot
--> pick target and preview locator candidates
--> write chosen target into draft document
+-> pick target and auto-apply matching locator into draft document
 -> validate affected step and document
 -> dry-run step or run scenario
 -> save portable scenario document
@@ -318,7 +322,9 @@ Side panel
 
 builder는 portable scenario document만 저장합니다. builder-specific UI state,
 selected slot, temporary locator candidates, trace view는 scenario document에
-저장하지 않습니다.
+저장하지 않습니다. target group의 `platform["actorble.browser"].inspector` metadata는
+선택 당시의 browser-specific inspector evidence이며, 실행 의미는 locator의
+`matchIndex`가 담당합니다.
 
 ## 6. Scenario Compiler Responsibilities
 
@@ -328,7 +334,7 @@ compiler가 해야 할 일:
 - 지원하지 않는 schema version 거부
 - 필요한 browser capability 검증
 - JSON locator를 `@actorble/browser` locator object로 변환
-- 지원하지 않는 platform extension을 명시적으로 drop 또는 fail 처리
+- 지원하는 browser platform extension을 해석하고 나머지는 명시적으로 fail 처리
 - default timeout과 pacing 적용
 - trace correlation에 유용한 step id 보존
 - unsupported locator, ambiguous target, unsupported option에 대해 actionable

@@ -266,6 +266,7 @@ const inputs = await stuntman.resolveAll(label('Project name'))
 ```txt
 - role / text / label / selector / coordinate 기반 target 탐색
 - 후보 ranking
+- locator-level match index disambiguation
 - ambiguous target 처리
 - strict mode 지원
 - target debug 정보 제공
@@ -315,6 +316,11 @@ strict: true
 strict: false
 - ranking으로 best candidate 선택
 - trace에 candidate list 기록
+
+matchIndex가 있는 locator
+- base locator 후보를 먼저 ranking한다
+- 0-based matchIndex에 해당하는 후보만 target으로 선택한다
+- 범위를 벗어나면 후보 0개와 동일하게 처리한다
 ```
 
 ---
