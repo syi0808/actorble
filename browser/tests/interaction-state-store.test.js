@@ -37,10 +37,17 @@ describe('BrowserInteractionStateStore', () => {
         source: null,
         target: null,
       },
+      selection: {
+        active: false,
+        target: null,
+        anchor: null,
+        focus: null,
+      },
     })
 
     snapshot.hovered.push(targetHandle('mutated'))
     snapshot.dragging.source = targetHandle('drag-source')
+    snapshot.selection.anchor = { target: targetHandle('selection-anchor'), offset: 1 }
 
     expect(store.snapshot()).toEqual({
       hovered: [],
@@ -51,6 +58,12 @@ describe('BrowserInteractionStateStore', () => {
       dragging: {
         source: null,
         target: null,
+      },
+      selection: {
+        active: false,
+        target: null,
+        anchor: null,
+        focus: null,
       },
     })
   })
@@ -212,6 +225,164 @@ describe('BrowserInteractionStateStore', () => {
         effect('dragging', source, false),
         effect('dragging', nextDropTarget, false),
       ],
+    })
+  })
+
+  it('tracks selection start, change, and end through semantic descriptors', () => {
+    const store = new BrowserInteractionStateStore()
+    const paragraph = targetHandle('paragraph')
+    const anchor = { target: paragraph, offset: 0 }
+    const focus = { target: paragraph, offset: 8 }
+    const nextFocus = { target: paragraph, offset: 12 }
+
+    expect(
+      store.dispatch({
+        type: 'selection:started',
+        target: paragraph,
+        anchor,
+        focus,
+        text: 'Selected',
+        surface: 'document-text',
+        strategy: 'selection-api',
+        collapsed: false,
+      }),
+    ).toMatchObject({
+      previous: { selection: { active: false, target: null } },
+      next: {
+        selection: {
+          active: true,
+          target: paragraph,
+          anchor,
+          focus,
+          text: 'Selected',
+          surface: 'document-text',
+          strategy: 'selection-api',
+          collapsed: false,
+        },
+      },
+      effects: [effect('selection', paragraph, true)],
+    })
+
+    expect(
+      store.dispatch({
+        type: 'selection:changed',
+        target: paragraph,
+        anchor,
+        focus: nextFocus,
+        text: 'Selected tex',
+        surface: 'document-text',
+        strategy: 'selection-api',
+        collapsed: false,
+      }),
+    ).toMatchObject({
+      previous: {
+        selection: {
+          active: true,
+          target: paragraph,
+          focus,
+          text: 'Selected',
+        },
+      },
+      next: {
+        selection: {
+          active: true,
+          target: paragraph,
+          focus: nextFocus,
+          text: 'Selected tex',
+        },
+      },
+      effects: [],
+    })
+
+    expect(store.dispatch({ type: 'selection:ended' })).toMatchObject({
+      previous: { selection: { active: true, target: paragraph } },
+      next: { selection: { active: false, target: null, anchor: null, focus: null } },
+      effects: [effect('selection', paragraph, false)],
+    })
+  })
+
+  it('syncs selection state from platform reads without importing platform adapters', () => {
+    const store = new BrowserInteractionStateStore()
+    const input = targetHandle('input')
+    const anchorNode = document.createElement('input')
+    const focusNode = anchorNode
+
+    expect(
+      store.dispatch({
+        type: 'selection:synced',
+        target: input,
+        snapshot: {
+          surface: 'input',
+          strategy: 'input-range-api',
+          selectedText: 'Mina',
+          anchorNode,
+          focusNode,
+          anchorOffset: 0,
+          focusOffset: 4,
+          collapsed: false,
+        },
+      }),
+    ).toMatchObject({
+      next: {
+        selection: {
+          active: true,
+          target: input,
+          anchor: { node: anchorNode, offset: 0 },
+          focus: { node: focusNode, offset: 4 },
+          text: 'Mina',
+          surface: 'input',
+          strategy: 'input-range-api',
+          collapsed: false,
+        },
+      },
+      effects: [effect('selection', input, true)],
+    })
+  })
+
+  it('clears selection interaction state on pointer cancellation and reset', () => {
+    const store = new BrowserInteractionStateStore()
+    const source = targetHandle('source')
+    const selectionTarget = targetHandle('selection-target')
+    const anchor = { target: selectionTarget, offset: 0 }
+    const focus = { target: selectionTarget, offset: 4 }
+
+    store.dispatch({ type: 'dragging:started', source })
+    store.dispatch({
+      type: 'selection:started',
+      target: selectionTarget,
+      anchor,
+      focus,
+      text: 'Text',
+      surface: 'document-text',
+      strategy: 'selection-api',
+      collapsed: false,
+    })
+
+    expect(store.dispatch({ type: 'pointer:cancelled' })).toMatchObject({
+      next: {
+        dragging: { source: null, target: null },
+        selection: { active: false, target: null, anchor: null, focus: null },
+      },
+      effects: [
+        effect('dragging', source, false),
+        effect('selection', selectionTarget, false),
+      ],
+    })
+
+    store.dispatch({
+      type: 'selection:started',
+      target: selectionTarget,
+      anchor,
+      focus,
+      text: 'Text',
+      surface: 'document-text',
+      strategy: 'selection-api',
+      collapsed: false,
+    })
+
+    expect(store.reset()).toMatchObject({
+      next: { selection: { active: false, target: null, anchor: null, focus: null } },
+      effects: [effect('selection', selectionTarget, false)],
     })
   })
 

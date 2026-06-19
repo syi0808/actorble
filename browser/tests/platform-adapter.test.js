@@ -470,6 +470,7 @@ describe('BrowserStateApplier', () => {
       { kind: 'focus', target: handle, active: true },
       { kind: 'focus-visible', target: handle, active: true },
       { kind: 'dragging', target: handle, active: true },
+      { kind: 'selection', target: handle, active: true },
     ])
 
     expect(target.hasAttribute('data-actorble-hover')).toBe(true)
@@ -477,15 +478,18 @@ describe('BrowserStateApplier', () => {
     expect(target.hasAttribute('data-actorble-focus')).toBe(true)
     expect(target.hasAttribute('data-actorble-focus-visible')).toBe(true)
     expect(target.hasAttribute('data-actorble-dragging')).toBe(true)
+    expect(target.hasAttribute('data-actorble-selection')).toBe(true)
 
     applier.applyStateEffects([
       { kind: 'active', target: handle, active: false },
       { kind: 'focus-visible', target: null, active: false },
+      { kind: 'selection', target: handle, active: false },
     ])
 
     expect(target.hasAttribute('data-actorble-hover')).toBe(true)
     expect(target.hasAttribute('data-actorble-active')).toBe(false)
     expect(target.hasAttribute('data-actorble-focus-visible')).toBe(false)
+    expect(target.hasAttribute('data-actorble-selection')).toBe(false)
 
     applier.cleanup()
 
@@ -493,6 +497,7 @@ describe('BrowserStateApplier', () => {
       'data-actorble-hover',
       'data-actorble-focus',
       'data-actorble-dragging',
+      'data-actorble-selection',
     ]) {
       expect(target.hasAttribute(attribute)).toBe(false)
     }

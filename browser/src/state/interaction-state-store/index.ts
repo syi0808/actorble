@@ -1,5 +1,30 @@
-import type { ActorbleListener, Disposable, StateEffect, TargetHandle } from '../../shared/index.js'
+import type {
+  ActorbleListener,
+  Disposable,
+  PlatformTextSelectionSnapshot,
+  StateEffect,
+  TargetHandle,
+  TextSelectionStrategy,
+  TextSelectionSurface,
+} from '../../shared/index.js'
 import type { PointerSignal } from '../../input/pointer-signals/index.js'
+
+export type InteractionStateSelectionEndpoint = Readonly<{
+  target?: TargetHandle
+  node?: Node | HTMLInputElement | HTMLTextAreaElement | null
+  offset: number
+}>
+
+export type InteractionStateSelection = Readonly<{
+  active: boolean
+  target: TargetHandle | null
+  anchor: InteractionStateSelectionEndpoint | null
+  focus: InteractionStateSelectionEndpoint | null
+  text?: string
+  surface?: TextSelectionSurface
+  strategy?: TextSelectionStrategy
+  collapsed?: boolean
+}>
 
 export type InteractionStateSnapshot = Readonly<{
   hovered: readonly TargetHandle[]
@@ -11,6 +36,7 @@ export type InteractionStateSnapshot = Readonly<{
     source: TargetHandle | null
     target: TargetHandle | null
   }>
+  selection: InteractionStateSelection
 }>
 
 export type InteractionStateDiff = Readonly<{
@@ -50,6 +76,24 @@ export type InteractionStateEvent =
     }>
   | Readonly<{
       type: 'dragging:ended'
+    }>
+  | Readonly<{
+      type: 'selection:started' | 'selection:changed'
+      target: TargetHandle | null
+      anchor: InteractionStateSelectionEndpoint
+      focus: InteractionStateSelectionEndpoint
+      text?: string
+      surface?: TextSelectionSurface
+      strategy?: TextSelectionStrategy
+      collapsed?: boolean
+    }>
+  | Readonly<{
+      type: 'selection:ended'
+    }>
+  | Readonly<{
+      type: 'selection:synced'
+      target?: TargetHandle | null
+      snapshot: PlatformTextSelectionSnapshot
     }>
 
 export interface InteractionStateStore {
@@ -168,6 +212,16 @@ function createEmptySnapshot(): InteractionStateSnapshot {
       source: null,
       target: null,
     },
+    selection: emptySelectionState(),
+  }
+}
+
+function emptySelectionState(): InteractionStateSelection {
+  return {
+    active: false,
+    target: null,
+    anchor: null,
+    focus: null,
   }
 }
 
@@ -218,6 +272,7 @@ function reduceState(
           source: null,
           target: null,
         },
+        selection: emptySelectionState(),
       }
 
     case 'focus:changed':
@@ -265,6 +320,34 @@ function reduceState(
           target: null,
         },
       }
+
+    case 'selection:started':
+    case 'selection:changed':
+      return {
+        ...next,
+        selection: {
+          active: true,
+          target: event.target,
+          anchor: cloneSelectionEndpoint(event.anchor),
+          focus: cloneSelectionEndpoint(event.focus),
+          text: event.text,
+          surface: event.surface,
+          strategy: event.strategy,
+          collapsed: event.collapsed,
+        },
+      }
+
+    case 'selection:ended':
+      return {
+        ...next,
+        selection: emptySelectionState(),
+      }
+
+    case 'selection:synced':
+      return {
+        ...next,
+        selection: selectionFromPlatformSnapshot(event.snapshot, event.target ?? null),
+      }
   }
 }
 
@@ -278,6 +361,7 @@ function diffEffects(
     ...focusEffects(previous, next),
     ...targetEffects('typing', previous.typing, next.typing),
     ...draggingEffects(previous, next),
+    ...selectionEffects(previous, next),
   ]
 }
 
@@ -320,6 +404,13 @@ function draggingEffects(
     uniqueTargets([previous.dragging.source, previous.dragging.target]),
     uniqueTargets([next.dragging.source, next.dragging.target]),
   )
+}
+
+function selectionEffects(
+  previous: InteractionStateSnapshot,
+  next: InteractionStateSnapshot,
+): StateEffect[] {
+  return targetEffects('selection', previous.selection.target, next.selection.target)
 }
 
 function targetEffects(
@@ -370,7 +461,8 @@ function hasStateChanged(
     previous.focusVisible !== next.focusVisible ||
     !sameTarget(previous.typing, next.typing) ||
     !sameTarget(previous.dragging.source, next.dragging.source) ||
-    !sameTarget(previous.dragging.target, next.dragging.target)
+    !sameTarget(previous.dragging.target, next.dragging.target) ||
+    !sameSelection(previous.selection, next.selection)
   )
 }
 
@@ -385,7 +477,81 @@ function cloneSnapshot(snapshot: InteractionStateSnapshot): InteractionStateSnap
       source: snapshot.dragging.source,
       target: snapshot.dragging.target,
     },
+    selection: cloneSelection(snapshot.selection),
   }
+}
+
+function selectionFromPlatformSnapshot(
+  snapshot: PlatformTextSelectionSnapshot,
+  target: TargetHandle | null,
+): InteractionStateSelection {
+  return {
+    active: Boolean(target || !snapshot.collapsed || snapshot.selectedText),
+    target,
+    anchor: selectionEndpointFromPlatform(snapshot.anchorNode, snapshot.anchorOffset),
+    focus: selectionEndpointFromPlatform(snapshot.focusNode, snapshot.focusOffset),
+    text: snapshot.selectedText,
+    surface: snapshot.surface,
+    strategy: snapshot.strategy,
+    collapsed: snapshot.collapsed,
+  }
+}
+
+function selectionEndpointFromPlatform(
+  node: Node | HTMLInputElement | HTMLTextAreaElement | null,
+  offset: number,
+): InteractionStateSelectionEndpoint {
+  return { node, offset }
+}
+
+function cloneSelection(selection: InteractionStateSelection): InteractionStateSelection {
+  return {
+    active: selection.active,
+    target: selection.target,
+    anchor: selection.anchor ? cloneSelectionEndpoint(selection.anchor) : null,
+    focus: selection.focus ? cloneSelectionEndpoint(selection.focus) : null,
+    text: selection.text,
+    surface: selection.surface,
+    strategy: selection.strategy,
+    collapsed: selection.collapsed,
+  }
+}
+
+function cloneSelectionEndpoint(
+  endpoint: InteractionStateSelectionEndpoint,
+): InteractionStateSelectionEndpoint {
+  return {
+    target: endpoint.target,
+    node: endpoint.node,
+    offset: endpoint.offset,
+  }
+}
+
+function sameSelection(
+  left: InteractionStateSelection,
+  right: InteractionStateSelection,
+): boolean {
+  return (
+    left.active === right.active &&
+    sameTarget(left.target, right.target) &&
+    sameSelectionEndpoint(left.anchor, right.anchor) &&
+    sameSelectionEndpoint(left.focus, right.focus) &&
+    left.text === right.text &&
+    left.surface === right.surface &&
+    left.strategy === right.strategy &&
+    left.collapsed === right.collapsed
+  )
+}
+
+function sameSelectionEndpoint(
+  left: InteractionStateSelectionEndpoint | null,
+  right: InteractionStateSelectionEndpoint | null,
+): boolean {
+  if (left === null || right === null) {
+    return left === right
+  }
+
+  return sameTarget(left.target ?? null, right.target ?? null) && left.node === right.node && left.offset === right.offset
 }
 
 function uniqueTargets(targets: readonly (TargetHandle | null)[]): TargetHandle[] {

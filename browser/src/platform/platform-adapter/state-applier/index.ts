@@ -84,6 +84,7 @@ const stateAttributeByKind: Record<StateEffectKind, string> = {
   'focus-visible': 'data-actorble-focus-visible',
   typing: 'data-actorble-typing',
   dragging: 'data-actorble-dragging',
+  selection: 'data-actorble-selection',
 }
 
 const stateKinds = Object.keys(stateAttributeByKind) as StateEffectKind[]

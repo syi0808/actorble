@@ -615,6 +615,7 @@ export type StateEffectKind =
   | 'focus-visible'
   | 'typing'
   | 'dragging'
+  | 'selection'
 
 export type StateEffect = Readonly<{
   kind: StateEffectKind

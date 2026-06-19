@@ -88,7 +88,7 @@ extension recorder and schema support
 
 ### TSPS-04 Selection State Slice
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Extend Interaction State Store with selection state and diffs so runtime trace and visual/state effects can observe selection changes without owning DOM application.
 - Dependencies: TSPS-02.
 - Completion criteria:
