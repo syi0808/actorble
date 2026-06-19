@@ -246,6 +246,24 @@ function createPointerVisualTrackerDouble() {
   }
 }
 
+function createSelectionDouble(snapshot = {}) {
+  return {
+    readSelection: vi.fn(() => snapshot),
+    applySelection: vi.fn((range) => ({
+      surface: 'input',
+      strategy: 'input-range-api',
+      selectedText: 'Selected',
+      anchorNode: range.anchor.target,
+      focusNode: range.focus.target,
+      anchorOffset: range.anchor.offset,
+      focusOffset: range.focus.offset,
+      collapsed: range.anchor.offset === range.focus.offset,
+      ...snapshot,
+    })),
+    clearSelection: vi.fn(),
+  }
+}
+
 function createHarness(options = {}) {
   const calls = []
   const target = options.target ?? targetHandle()
@@ -528,6 +546,7 @@ function createHarness(options = {}) {
       calls.push('state.cleanup')
     }),
   }
+  const selection = options.selection ?? createSelectionDouble(options.selectionSnapshot)
   const dom = options.dom ?? {
     getRoot: vi.fn(() => options.root ?? document),
     elementFromPoint: vi.fn((point, hitOptions) => {
@@ -605,6 +624,7 @@ function createHarness(options = {}) {
     focus,
     keyboard,
     text,
+    selection,
     wait,
     trace,
     timeline: options.timeline,
@@ -631,6 +651,7 @@ function createHarness(options = {}) {
     keyboard,
     orchestrator,
     resolver,
+    selection,
     state,
     store,
     surface,
@@ -784,6 +805,238 @@ describe('BrowserActionOrchestrator', () => {
     await expect(orchestrator.geometry(target)).resolves.toBe(geometry)
 
     expect(calls).toEqual(['geometry.snapshot'])
+  })
+
+  it('selectText applies input range selection, syncs state, traces metadata, and waits', async () => {
+    const input = document.createElement('input')
+    input.id = 'message'
+    input.value = 'Hello selection'
+    document.body.append(input)
+    const target = {
+      id: 'input-target',
+      element: input,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#message', description: 'input#message' },
+    }
+    const selection = createSelectionDouble({
+      surface: 'input',
+      strategy: 'input-range-api',
+      selectedText: 'PRIVATE_TOKEN',
+      anchorNode: input,
+      focusNode: input,
+      anchorOffset: 6,
+      focusOffset: 15,
+      collapsed: false,
+    })
+    const { calls, orchestrator, store, trace, wait } = createHarness({
+      target,
+      selection,
+    })
+
+    await expect(
+      orchestrator.selectText({
+        anchor: { target, offset: 6 },
+        focus: { target, offset: 15 },
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(calls).toEqual([
+      'resolver.validate',
+      'resolver.validate',
+      'surface.ensureVisible',
+      'wait.settle',
+    ])
+    expect(selection.applySelection).toHaveBeenCalledWith({
+      anchor: { target: input, offset: 6 },
+      focus: { target: input, offset: 15 },
+    })
+    expect(store.snapshot().selection).toMatchObject({
+      active: true,
+      target,
+      text: 'PRIVATE_TOKEN',
+      surface: 'input',
+      strategy: 'input-range-api',
+      collapsed: false,
+    })
+    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(trace.getTrace().spans).toEqual([
+      expect.objectContaining({
+        name: 'action.selectText',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          action: 'selectText',
+          completed: true,
+          targetIds: ['input-target'],
+          output: {
+            surface: 'input',
+            strategy: 'input-range-api',
+            collapsed: false,
+            selectedTextLength: 13,
+          },
+        }),
+      }),
+    ])
+    expect(JSON.stringify(trace.getTrace())).not.toContain('PRIVATE_TOKEN')
+  })
+
+  it('selectText maps document element offsets to text node ranges', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'Readable document text'
+    document.body.append(paragraph)
+    const textNode = paragraph.firstChild
+    const target = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const selection = createSelectionDouble({
+      surface: 'document-text',
+      strategy: 'selection-api',
+      selectedText: 'document',
+      anchorNode: textNode,
+      focusNode: textNode,
+      anchorOffset: 9,
+      focusOffset: 17,
+      collapsed: false,
+    })
+    const { orchestrator } = createHarness({ target, selection })
+
+    await expect(
+      orchestrator.selectText({
+        anchor: { target, offset: 9 },
+        focus: { target, offset: 17 },
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(selection.applySelection).toHaveBeenCalledWith({
+      anchor: { target: textNode, offset: 9 },
+      focus: { target: textNode, offset: 17 },
+    })
+  })
+
+  it('selectText selects all text for a direct target', async () => {
+    const input = document.createElement('input')
+    input.id = 'message'
+    input.value = 'Hello selection'
+    document.body.append(input)
+    const target = {
+      id: 'input-target',
+      element: input,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#message', description: 'input#message' },
+    }
+    const selection = createSelectionDouble()
+    const { orchestrator } = createHarness({ target, selection })
+
+    await expect(orchestrator.selectText(target)).resolves.toBeUndefined()
+
+    expect(selection.applySelection).toHaveBeenCalledWith({
+      anchor: { target: input, offset: 0 },
+      focus: { target: input, offset: input.value.length },
+    })
+  })
+
+  it('selectText selects all document text for a direct target', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'Readable document text'
+    document.body.append(paragraph)
+    const textNode = paragraph.firstChild
+    const target = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const selection = createSelectionDouble()
+    const { orchestrator } = createHarness({ target, selection })
+
+    await expect(orchestrator.selectText(target)).resolves.toBeUndefined()
+
+    expect(selection.applySelection).toHaveBeenCalledWith({
+      anchor: { target: textNode, offset: 0 },
+      focus: { target: textNode, offset: paragraph.textContent.length },
+    })
+  })
+
+  it('selectText propagates unsupported surface failures from the selection adapter', async () => {
+    const unsupported = actorbleError(
+      'TEXT_SELECTION_UNSUPPORTED',
+      'Input selection is not supported for this input type.',
+      {
+        details: {
+          boundary: 'selection-adapter',
+          reason: 'unsupported-input-type',
+        },
+      },
+    )
+    const selection = createSelectionDouble()
+    selection.applySelection.mockImplementation(() => {
+      throw unsupported
+    })
+    const input = document.createElement('input')
+    input.id = 'quantity'
+    input.type = 'number'
+    input.value = '42'
+    document.body.append(input)
+    const target = {
+      id: 'number-target',
+      element: input,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#quantity', description: 'input#quantity' },
+    }
+    const { orchestrator } = createHarness({ target, selection })
+
+    await expect(orchestrator.selectText(target)).rejects.toThrowError(
+      expect.objectContaining({
+        code: 'TEXT_SELECTION_UNSUPPORTED',
+        details: expect.objectContaining({
+          reason: 'unsupported-input-type',
+        }),
+      }),
+    )
+  })
+
+  it('selectText rejects point endpoints with actionable text selection errors', async () => {
+    const { orchestrator, target } = createHarness()
+
+    await expect(
+      orchestrator.selectText({
+        anchor: { target, point: { x: 1, y: 2 } },
+        focus: { target, offset: 4 },
+      }),
+    ).rejects.toThrowError(
+      expect.objectContaining({
+        code: 'TEXT_SELECTION_UNSUPPORTED',
+        details: expect.objectContaining({
+          action: 'selectText',
+          reason: 'point-endpoints-not-yet-supported',
+        }),
+      }),
+    )
+  })
+
+  it('selectText fails stale target validation before applying selection', async () => {
+    const stale = actorbleError('TARGET_STALE', 'Target is stale.')
+    const selection = createSelectionDouble()
+    const { orchestrator, target } = createHarness({ validateFailure: stale, selection })
+
+    await expect(orchestrator.selectText(target)).rejects.toThrowError(
+      expect.objectContaining({ code: 'TARGET_STALE' }),
+    )
+    expect(selection.applySelection).not.toHaveBeenCalled()
   })
 
   it('click resolves and validates the target before dispatching pointer and activation events', async () => {

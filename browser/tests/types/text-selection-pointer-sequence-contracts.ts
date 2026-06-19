@@ -1,4 +1,4 @@
-import { css } from '../../src/index.js'
+import { Actorble, css } from '../../src/index.js'
 import type {
   PointerSequence,
   PointerSequenceOptions,
@@ -20,6 +20,7 @@ const pointSelectionTarget: TextSelectionTarget = {
 }
 
 const selectOptions: SelectTextOptions = { timeout: 250 }
+const actorble = new Actorble()
 
 const pointerSequence: PointerSequence = [
   { type: 'move', to: { x: 10, y: 12 }, duration: 20 },
@@ -38,6 +39,7 @@ const independentPointerDownAction: ScenarioStep['action'] = 'pointerDown'
 const independentPointerUpAction: ScenarioStep['action'] = 'pointerUp'
 
 void [
+  actorble.selectText(offsetSelectionTarget, selectOptions),
   offsetSelectionTarget,
   shortcutSelectionTarget,
   pointSelectionTarget,

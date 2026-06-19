@@ -10,6 +10,7 @@ import { BrowserPointerSignalBus } from '../../input/pointer-signals/index.js'
 import {
   BrowserDomAdapter,
   BrowserEventDispatcher,
+  BrowserSelectionAdapter,
   BrowserStateApplier,
   BrowserStyleAdapter,
   type TextInputMutationPort,
@@ -50,14 +51,21 @@ import type {
   PressOptions,
   Point,
   PointerButtonName,
+  PlatformTextSelectionEndpoint,
+  PlatformTextSelectionRange,
+  PlatformTextSelectionSnapshot,
   ScrollOptions,
   ScrollPosition,
+  SelectTextOptions,
+  SelectionPort,
   StateApplyPort,
   StateEffect,
   TargetDebugInfo,
   TargetHandle,
   TargetLike,
   TargetValidity,
+  TextSelectionEndpoint,
+  TextSelectionTarget,
   TypeOptions,
   WaitCondition,
   WaitOptions,
@@ -101,6 +109,7 @@ export type ActionName =
   | 'press'
   | 'scrollTo'
   | 'drag'
+  | 'selectText'
   | 'waitFor'
 
 export type ActionTransaction = Readonly<{
@@ -121,6 +130,7 @@ export interface ActionOrchestrator {
   press(keys: string, options?: PressOptions): Promise<void>
   scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
+  selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void>
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>
   geometry(target: TargetLike): Promise<GeometrySnapshot>
 }
@@ -134,6 +144,7 @@ export type ActionOrchestratorOptions = Readonly<{
   interactability?: InteractabilityEngine
   keyboard?: KeyboardEngine
   resolver?: TargetResolver
+  selection?: SelectionPort
   signals?: PointerSignalBus
   state?: StateApplyPort
   store?: InteractionStateStore
@@ -216,6 +227,12 @@ type DragSignalContext = {
   active: boolean
 }
 
+type ResolvedTextSelectionRange = Readonly<{
+  primaryTarget: TargetHandle
+  secondaryTarget?: TargetHandle
+  range: PlatformTextSelectionRange
+}>
+
 const emptyPointerHit: PointerHitSnapshot = {
   target: null,
   hoverChain: [],
@@ -230,6 +247,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #interactability: InteractabilityEngine
   readonly #keyboard: KeyboardEngine
   readonly #resolver: TargetResolver
+  readonly #selection: SelectionPort
   readonly #state: StateApplyPort
   readonly #store: InteractionStateStore
   readonly #surface: SurfaceEngine
@@ -301,6 +319,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#keyboard =
       options.keyboard ?? new BrowserKeyboardEngine({ dom, events, store, timeline })
     this.#resolver = options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
+    this.#selection = options.selection ?? new BrowserSelectionAdapter(dom.getRoot())
     this.#state = state
     this.#store = store
     this.#surface = surface
@@ -1217,6 +1236,56 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
+  async selectText(
+    targetOrRange: TextSelectionTarget,
+    options: SelectTextOptions = {},
+  ): Promise<void> {
+    const span = this.#startActionSpan('selectText', selectionTraceTarget(targetOrRange), options)
+    let phase: ActionPhase = 'resolve'
+    let primaryTarget: TargetHandle | undefined
+    let range: ResolvedTextSelectionRange | undefined
+
+    try {
+      range = await this.#resolveTextSelectionRange(targetOrRange, options)
+      primaryTarget = range.primaryTarget
+
+      phase = 'ensureVisible'
+      await this.#surface.ensureVisible(primaryTarget, options)
+
+      if (range.secondaryTarget && range.secondaryTarget.id !== primaryTarget.id) {
+        await this.#surface.ensureVisible(range.secondaryTarget, options)
+      }
+
+      phase = 'perform'
+      const snapshot = this.#selection.applySelection(range.range)
+
+      this.#store.dispatch({
+        type: 'selection:synced',
+        target: primaryTarget,
+        snapshot,
+      })
+
+      span.event('selection:applied', selectionTraceMetadata(range, snapshot))
+
+      phase = 'wait'
+      await this.#wait.settle('settled', operationOptions(options))
+
+      span.end({
+        action: 'selectText',
+        completed: true,
+        targetId: primaryTarget.id,
+        targetIds: uniqueTargetIds([primaryTarget, range.secondaryTarget]),
+        output: selectionTraceOutput(snapshot),
+      })
+    } catch (error) {
+      throw this.#finishActionFailure(span, error, {
+        action: 'selectText',
+        phase,
+        targetId: primaryTarget?.id,
+      })
+    }
+  }
+
   async waitFor(
     condition: WaitCondition,
     options: WaitOptions = {},
@@ -1273,6 +1342,71 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       : await this.#resolver.resolve(toLocator(target), operationOptions(options))
 
     return this.#resolver.validate(resolved)
+  }
+
+  async #resolveTextSelectionRange(
+    targetOrRange: TextSelectionTarget,
+    options: OperationOptions,
+  ): Promise<ResolvedTextSelectionRange> {
+    if (isTextSelectionRangeTarget(targetOrRange)) {
+      const anchor = await this.#resolveTextSelectionEndpoint(targetOrRange.anchor, options)
+      const focus = await this.#resolveTextSelectionEndpoint(targetOrRange.focus, options)
+
+      return {
+        primaryTarget: anchor.handle,
+        secondaryTarget: focus.handle,
+        range: {
+          anchor: anchor.endpoint,
+          focus: focus.endpoint,
+        },
+      }
+    }
+
+    const handle = await this.#resolveTarget(targetOrRange, options)
+    const range = fullTextSelectionRangeForHandle(handle)
+
+    return {
+      primaryTarget: handle,
+      range,
+    }
+  }
+
+  async #resolveTextSelectionEndpoint(
+    endpoint: TextSelectionEndpoint,
+    options: OperationOptions,
+  ): Promise<Readonly<{ handle: TargetHandle; endpoint: PlatformTextSelectionEndpoint }>> {
+    if (endpoint.point !== undefined) {
+      throw actorbleError(
+        'TEXT_SELECTION_UNSUPPORTED',
+        'Point-based text selection endpoints are not supported yet.',
+        {
+          details: {
+            action: 'selectText',
+            reason: 'point-endpoints-not-yet-supported',
+          },
+        },
+      )
+    }
+
+    if (endpoint.offset === undefined) {
+      throw actorbleError(
+        'TEXT_SELECTION_UNSUPPORTED',
+        'Text selection endpoints require an offset.',
+        {
+          details: {
+            action: 'selectText',
+            reason: 'offset-required',
+          },
+        },
+      )
+    }
+
+    const handle = await this.#resolveTarget(endpoint.target, options)
+
+    return {
+      handle,
+      endpoint: platformEndpointForHandleOffset(handle, endpoint.offset),
+    }
   }
 
   #currentPointerContextOrThrow(span: TraceSpanHandle): CurrentPointerContext {
@@ -2590,6 +2724,157 @@ function clickablePointOrThrow(
       },
     },
   )
+}
+
+function fullTextSelectionRangeForHandle(handle: TargetHandle): PlatformTextSelectionRange {
+  const target = handle.element
+  const endOffset = textSelectionLengthForElement(target)
+
+  return {
+    anchor: platformEndpointForHandleOffset(handle, 0),
+    focus: platformEndpointForHandleOffset(handle, endOffset),
+  }
+}
+
+function platformEndpointForHandleOffset(
+  handle: TargetHandle,
+  offset: number,
+): PlatformTextSelectionEndpoint {
+  assertValidTextSelectionOffset(offset)
+
+  const target = handle.element
+
+  if (isTextControlElement(target)) {
+    return { target, offset }
+  }
+
+  return textNodeEndpointForElementOffset(target, offset)
+}
+
+function textSelectionLengthForElement(element: Element): number {
+  if (isTextControlElement(element)) {
+    return element.value.length
+  }
+
+  return element.textContent?.length ?? 0
+}
+
+function textNodeEndpointForElementOffset(
+  element: Element,
+  offset: number,
+): PlatformTextSelectionEndpoint {
+  const document = element.ownerDocument
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  let remaining = offset
+  let node = walker.nextNode()
+  let lastTextNode: Text | null = null
+
+  while (node) {
+    const textNode = node as Text
+    const length = textNode.data.length
+
+    lastTextNode = textNode
+
+    if (remaining <= length) {
+      return { target: textNode, offset: remaining }
+    }
+
+    remaining -= length
+    node = walker.nextNode()
+  }
+
+  if (lastTextNode && remaining === 0) {
+    return { target: lastTextNode, offset: lastTextNode.data.length }
+  }
+
+  throw actorbleError(
+    'TEXT_SELECTION_UNSUPPORTED',
+    'Text selection offset is outside the target text content.',
+    {
+      details: {
+        action: 'selectText',
+        reason: 'offset-out-of-range',
+        targetId: handleIdForElement(element),
+        offset,
+        textLength: element.textContent?.length ?? 0,
+      },
+    },
+  )
+}
+
+function assertValidTextSelectionOffset(offset: number): void {
+  if (Number.isInteger(offset) && offset >= 0) {
+    return
+  }
+
+  throw actorbleError('TEXT_SELECTION_UNSUPPORTED', 'Text selection offset is invalid.', {
+    details: {
+      action: 'selectText',
+      reason: 'invalid-offset',
+      offset,
+    },
+  })
+}
+
+function isTextControlElement(
+  element: Element,
+): element is HTMLInputElement | HTMLTextAreaElement {
+  return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+}
+
+function isTextSelectionRangeTarget(
+  target: TextSelectionTarget,
+): target is Readonly<{ anchor: TextSelectionEndpoint; focus: TextSelectionEndpoint }> {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    'anchor' in target &&
+    'focus' in target
+  )
+}
+
+function selectionTraceTarget(target: TextSelectionTarget): TargetLike | undefined {
+  if (isTextSelectionRangeTarget(target)) {
+    return target.anchor.target
+  }
+
+  return target
+}
+
+function selectionTraceMetadata(
+  range: ResolvedTextSelectionRange,
+  snapshot: PlatformTextSelectionSnapshot,
+): Readonly<Record<string, unknown>> {
+  return {
+    action: 'selectText',
+    targetIds: uniqueTargetIds([range.primaryTarget, range.secondaryTarget]),
+    ...selectionTraceOutput(snapshot),
+  }
+}
+
+function selectionTraceOutput(
+  snapshot: PlatformTextSelectionSnapshot,
+): Readonly<Record<string, unknown>> {
+  return {
+    surface: snapshot.surface,
+    strategy: snapshot.strategy,
+    collapsed: snapshot.collapsed,
+    selectedTextLength: snapshot.selectedText.length,
+  }
+}
+
+function uniqueTargetIds(targets: readonly (TargetHandle | undefined)[]): string[] {
+  return [
+    ...new Set(
+      targets
+        .filter((target): target is TargetHandle => Boolean(target))
+        .map((target) => target.id),
+    ),
+  ]
+}
+
+function handleIdForElement(element: Element): string | undefined {
+  return element.id || undefined
 }
 
 function assertCanClick(

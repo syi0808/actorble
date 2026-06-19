@@ -12,6 +12,7 @@ import type {
   PressOptions,
   RunOptions,
   ScrollOptions,
+  SelectTextOptions,
   TypeOptions,
   VisualTextVisibility,
   WaitOptions,
@@ -93,6 +94,7 @@ export type BrowserActionName =
   | 'press'
   | 'scrollTo'
   | 'drag'
+  | 'selectText'
   | 'waitFor'
 
 export type BrowserActionOptionMap = Readonly<{
@@ -107,6 +109,7 @@ export type BrowserActionOptionMap = Readonly<{
   press: PressOptions
   scrollTo: ScrollOptions
   drag: DragOptions
+  selectText: SelectTextOptions
   waitFor: WaitOptions
 }>
 
@@ -401,6 +404,8 @@ function actionDefaultsFor(
       return defaults.scrollTo
     case 'drag':
       return defaults.drag
+    case 'selectText':
+      return defaults.selectText
     case 'waitFor':
       return defaults.waitFor
   }

@@ -102,7 +102,7 @@ extension recorder and schema support
 
 ### TSPS-05 `selectText` Runtime Lifecycle
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Implement `selectText` as a first-class runtime action with strategy selection, trace, wait/settlement, and cleanup handled by Action Orchestrator.
 - Dependencies: TSPS-03, TSPS-04.
 - Completion criteria:

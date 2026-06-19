@@ -184,6 +184,7 @@ describe('browser options model', () => {
       actionDefaults: {
         click: { duration: 300, pressDwell: 90 },
         typeInto: { delay: 25 },
+        selectText: { timeout: 100 },
       },
     })
     const run = resolveRunOptions({
@@ -191,6 +192,7 @@ describe('browser options model', () => {
       actionDefaults: {
         click: { pressDwell: 70 },
         typeInto: { delay: 10 },
+        selectText: { timeout: 50 },
       },
     })
 
@@ -218,6 +220,19 @@ describe('browser options model', () => {
     })
     expect(resolveActionOptions('typeInto', { actorble, run, options: { delay: 5 } })).toEqual({
       delay: 5,
+    })
+    expect(resolveActionOptions('selectText', { actorble, run })).toEqual({
+      timeout: 50,
+    })
+    expect(
+      resolveActionOptions('selectText', {
+        actorble,
+        run,
+        options: { timeout: 5, signal },
+      }),
+    ).toEqual({
+      timeout: 5,
+      signal,
     })
   })
 })

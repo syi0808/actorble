@@ -46,9 +46,11 @@ import type {
   Scenario,
   ScrollOptions,
   ScrollPosition,
+  SelectTextOptions,
   TargetHandle,
   TargetInspection,
   TargetLike,
+  TextSelectionTarget,
   TypeOptions,
   WaitCondition,
   WaitOptions,
@@ -242,6 +244,13 @@ export class Actorble {
       from,
       to,
       resolveActionOptions('drag', { actorble: this.#options, options }),
+    )
+  }
+
+  selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void> {
+    return this.#orchestrator.selectText(
+      targetOrRange,
+      resolveActionOptions('selectText', { actorble: this.#options, options }),
     )
   }
 
