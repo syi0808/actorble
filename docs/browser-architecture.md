@@ -94,6 +94,8 @@ Platform Adapter
 Public API
 → type / typeInto / fill 구분
 → click(target) / clickCurrent() 구분
+→ selectText는 drag와 별도 intent로 구분
+→ raw pointer primitive는 pointerSequence transaction 또는 advanced device namespace로 분리
 ```
 
 ---
@@ -148,6 +150,8 @@ class Stuntman {
 
   scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
+  selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void>
+  pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void>
 
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<void>
 
@@ -164,6 +168,48 @@ class Stuntman {
   on(event: DebugEventName, listener: Listener): void
   off(event: DebugEventName, listener: Listener): void
 }
+```
+
+### Text selection and pointer control
+
+Decision history: `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`.
+
+`selectText` is a user-intent action, not a drag alias. It changes the current
+document, input, textarea, contenteditable, or editor selection range. The
+browser implementation must prove the endpoint model with a PoC before the API
+is treated as stable across all editable surfaces.
+
+```ts
+type TextSelectionTarget =
+  | TargetLike
+  | {
+      anchor: TextSelectionEndpoint
+      focus: TextSelectionEndpoint
+    }
+
+type TextSelectionEndpoint = {
+  target: TargetLike
+  offset?: number
+  point?: Point
+}
+```
+
+`pointerDown`, `pointerMove`, and `pointerUp` are state-opening device
+primitives. They may exist internally and may be exposed later under an
+advanced device-control namespace, but recorder output and scenario playback
+should not model them as independent portable actions. When low-level replay is
+needed, it must be represented as one `pointerSequence` action so the Action
+Orchestrator owns timeout, cancellation, trace, pointer-up/pointer-cancel
+cleanup, and interaction-state cleanup.
+
+```ts
+type PointerSequence = readonly PointerSequenceStep[]
+
+type PointerSequenceStep =
+  | { type: 'move'; to: Point; duration?: DurationMs }
+  | { type: 'down'; button?: PointerButtonName }
+  | { type: 'up'; button?: PointerButtonName }
+  | { type: 'pause'; duration: DurationMs }
 ```
 
 ### Browser option model
@@ -214,6 +260,8 @@ type RunOptions = OperationOptions & {
     typeInto?: Partial<TypeOptions>
     press?: Partial<PressOptions>
     drag?: Partial<DragOptions>
+    selectText?: Partial<SelectTextOptions>
+    pointerSequence?: Partial<PointerSequenceOptions>
   }
 }
 ```
@@ -278,7 +326,7 @@ Action Orchestrator
 
 기존 `Action Planner`를 대체하는 핵심 실행 계층입니다.
 
-Action Orchestrator는 `click`, `moveTo`, `typeInto`, `drag` 같은 high-level action을 안전한 lifecycle로 실행합니다.
+Action Orchestrator는 `click`, `moveTo`, `typeInto`, `drag`, `selectText` 같은 user-intent action과 `pointerSequence` 같은 transactional device action을 안전한 lifecycle로 실행합니다.
 
 담당:
 
@@ -321,6 +369,13 @@ Action Orchestrator가 책임지는 실패/중단 처리:
 - force click 허용 여부
 - 실패 시 trace span과 actionable error context 생성
 ```
+
+Public action boundary는 기본적으로 cleanup-safe해야 합니다. `pointerDown`,
+`pointerMove`, `pointerUp` 같은 low-level primitive는 호출이 끝나도 pressed,
+active, pointer capture 같은 열린 상태를 남길 수 있으므로 기본 scenario step으로
+노출하지 않습니다. Low-level replay가 필요하면 `pointerSequence`를 하나의 Action
+Orchestrator transaction으로 실행하고, 실패/중단 시 pointer up 또는 pointer cancel과
+Interaction State cleanup을 보장합니다.
 
 ---
 
@@ -615,7 +670,8 @@ Gesture Engine은 pointer 기반 composite action을 담당합니다.
 - longPress
 - drag
 - hover settle
-- selection drag
+- text selection gesture
+- pointer sequence
 ```
 
 Gesture Engine은 Pointer Engine을 사용하지만, Pointer Engine 자체는 아닙니다.
@@ -630,6 +686,10 @@ Gesture Engine
 
 `click(target)`은 Action Orchestrator가 lifecycle을 관리하고, 실제 pointer down/up sequence는 Gesture Engine이 수행합니다.
 
+Text selection은 pointer drag와 같은 signal sequence를 사용할 수 있지만 drag로
+정규화하지 않습니다. `drag`는 source와 drop destination 사이의 이동 intent이고,
+`selectText`는 selection anchor/focus/range를 변경하는 intent입니다.
+
 Drag는 capability 기반으로 관리합니다.
 
 ```ts
@@ -637,8 +697,18 @@ type DragCapability =
   | 'none'
   | 'pointer-gesture'
   | 'html5-dnd'
-  | 'editor-selection'
   | 'custom-adapter'
+```
+
+Text selection은 별도 capability로 관리합니다.
+
+```ts
+type TextSelectionCapability =
+  | 'none'
+  | 'selection-api'
+  | 'pointer-gesture'
+  | 'editor-adapter'
+  | 'native'
 ```
 
 ---
@@ -724,6 +794,12 @@ cancelled
 
 포인터가 어떤 요소 위에 있는지, 어떤 요소를 누르고 있는지는 Pointer Engine에서 관리하지 않습니다.
 
+Pointer Engine의 `down` / `moveTo` / `up` primitive는 Gesture Engine과 Action
+Orchestrator가 조합하는 내부 장치 primitive입니다. 이 primitive를 public API로
+노출하더라도 advanced device-control surface로 분리해야 하며, portable scenario의
+기본 action vocabulary는 열린 primitive 대신 `click`, `drag`, `selectText`,
+`pointerSequence`처럼 transaction boundary가 닫힌 action을 사용합니다.
+
 ---
 
 ## 12. Pointer Signals
@@ -774,7 +850,7 @@ PointerEngine
 ```txt
 - pointer signal 해석
 - focus / keyboard / text input signal 해석
-- hover / active / focus / typing / dragging 상태 관리
+- hover / active / focus / typing / dragging / selection 상태 관리
 - previous state와 next state 비교
 - state diff 생성
 - Platform Adapter와 Visual Layer에 반영할 effect 생성
@@ -829,6 +905,14 @@ type BrowserInteractionState = {
     active: boolean
     source: TargetHandle | null
     currentDropTarget: TargetHandle | null
+  }
+
+  selection: {
+    active: boolean
+    target: TargetHandle | null
+    anchor: TextSelectionEndpoint | null
+    focus: TextSelectionEndpoint | null
+    text?: string
   }
 }
 ```
@@ -943,6 +1027,11 @@ Keyboard Engine과 분리합니다.
 - controlled input 대응
 - editor adapter 연동
 ```
+
+Text Input Engine은 입력 중 기존 selection을 읽거나 교체할 수 있지만, 사용자가
+명시적으로 텍스트 범위를 선택하는 action 자체는 `selectText` lifecycle로 실행합니다.
+즉 text insertion과 text selection은 같은 DOM selection primitive를 공유할 수 있어도
+public intent와 trace는 분리합니다.
 
 입력 전략:
 
@@ -1092,6 +1181,7 @@ Wait / Observation Engine은 Geometry cache invalidation과도 연결되어야 �
 - elementFromPoint hit-test
 - DOM pointer/mouse event dispatch
 - keyboard/input event dispatch
+- Selection API와 input selection range 적용
 - element.focus()
 - activeElement 읽기
 - data-stuntman-* attribute 적용
@@ -1104,6 +1194,7 @@ v0.3에서는 Platform Adapter 내부 책임을 namespace로 분리합니다.
 BrowserPlatformAdapter
 ├─ dom
 ├─ events
+├─ selection
 ├─ state
 └─ styles
 ```
@@ -1126,6 +1217,12 @@ class BrowserPlatformAdapter {
     dispatchClick(target: Element, point: Point): void
     dispatchKeyboardEvent(...args): void
     dispatchInputEvent(...args): void
+  }
+
+  selection: {
+    readSelection(root?: Document | ShadowRoot): BrowserSelectionSnapshot
+    applySelection(range: BrowserSelectionRange): void
+    clearSelection(root?: Document | ShadowRoot): void
   }
 
   state: {
@@ -1320,8 +1417,18 @@ type CapabilityReport = {
     | 'none'
     | 'pointer-gesture'
     | 'html5-dnd'
-    | 'editor-selection'
     | 'custom-adapter'
+
+  textSelection:
+    | 'none'
+    | 'selection-api'
+    | 'pointer-gesture'
+    | 'editor-adapter'
+    | 'native'
+
+  pointerSequence:
+    | 'none'
+    | 'transactional'
 }
 ```
 
@@ -1332,6 +1439,8 @@ type CapabilityReport = {
 아니면 DOM event를 합성하는가?
 hover/focus/active는 native인가, mirror인가?
 drag/drop은 어느 수준까지 지원하는가?
+text selection은 Selection API, pointer gesture, editor adapter 중 무엇으로 지원되는가?
+low-level pointer 재생은 transaction cleanup을 보장하는가?
 ```
 
 ---
@@ -1423,12 +1532,15 @@ pointer:move:tick
 pointer:move:end
 pointer:down
 pointer:up
+pointer:sequence:start
+pointer:sequence:end
 
 interaction:hover:change
 interaction:active:change
 interaction:focus:change
 interaction:typing:start
 interaction:typing:end
+interaction:selection:change
 
 pseudo:mirror:apply
 pseudo:mirror:clear
@@ -1462,8 +1574,10 @@ UNSUPPORTED_CAPABILITY
 
 INPUT_NOT_EDITABLE
 INPUT_COMPOSITION_UNSUPPORTED
+TEXT_SELECTION_UNSUPPORTED
 
 POINTER_CAPTURE_CONFLICT
+POINTER_SEQUENCE_INCOMPLETE
 VISUAL_LAYER_HITTEST_BLOCKED
 
 WAIT_TIMEOUT
@@ -1662,7 +1776,38 @@ flowchart TD
 
 ---
 
-## 28. 상태 소유권 최종 정리
+## 28. `selectText(targetOrRange)` 최종 흐름
+
+```mermaid
+flowchart TD
+    A[selectText target or range] --> B[Action Orchestrator starts selection span]
+    B --> C[resolve selection target or endpoints]
+    C --> D[validate target freshness]
+    D --> E[ensure surface]
+    E --> F[compute endpoint geometry if pointer gesture is needed]
+    F --> G[choose selection strategy]
+
+    G --> H{strategy}
+    H -->|selection-api| I[Platform selection applies DOM/input range]
+    H -->|pointer-gesture| J[Gesture Engine performs selection gesture]
+    H -->|editor-adapter| K[Editor adapter applies selection]
+
+    I --> L[read platform selection]
+    J --> L
+    K --> L
+    L --> M[InteractionStateStore syncs selection]
+    M --> N[wait selection settle]
+    N --> O[cleanup and close trace span]
+```
+
+`selectText`의 endpoint model은 안정화 전 PoC가 필요합니다. PoC는 일반 document
+text, `input` / `textarea`, `contenteditable`, editor adapter, iframe, shadow root를
+나누어 검증해야 합니다. 검증되지 않은 surface는 capability로 `none` 또는 낮은
+fidelity를 보고하고 actionable error를 반환합니다.
+
+---
+
+## 29. 상태 소유권 최종 정리
 
 ```txt
 Target Resolver
@@ -1700,7 +1845,8 @@ Gesture Engine
 - doubleClick
 - longPress
 - drag
-- selection drag
+- text selection gesture
+- pointer sequence
 
 Pointer Engine
 - position
@@ -1777,7 +1923,7 @@ Capability / Fidelity Reporter
 
 ---
 
-## 29. 최종 설계 원칙
+## 30. 최종 설계 원칙
 
 ```txt
 1. Target Resolver는 외부 API로 노출한다.
@@ -1821,11 +1967,15 @@ Capability / Fidelity Reporter
 20. Runner-level action defaults are allowed, but step/call-level options always override them.
 
 21. Motion can be disabled at runner level without disabling action execution.
+
+22. Text selection is a first-class intent action, separate from drag/drop.
+
+23. Low-level pointer replay must cross the public scenario boundary as a cleanup-safe transaction such as pointerSequence, not as independent pointerDown/pointerUp steps.
 ```
 
 ---
 
-## 30. 한 줄 요약
+## 31. 한 줄 요약
 
 ```txt
 @stuntman/browser는 DOM event dispatcher 모음이 아니라,

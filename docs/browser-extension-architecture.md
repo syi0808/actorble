@@ -92,6 +92,7 @@ Related decisions:
 - `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
 - `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
 - `docs/adr/2026-06-19-inspector-match-index-targeting.md`
+- `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`
 
 ## 4. Runtime Components
 
@@ -152,6 +153,8 @@ TargetSlot
 - step target
 - drag from
 - drag to
+- text selection anchor
+- text selection focus
 - waitFor target
 - scrollTo target
 ```
@@ -196,6 +199,12 @@ Recording은 builder의 primary input path입니다. record start/stop은 scenar
 현재 draft를 조용히 덮어쓰지 않고 replace, append, save as new, export, discard 중
 명시적 사용자 선택으로만 반영합니다. empty recording과 sensitive input confirmation은
 review surface에서 처리합니다.
+
+Recorder는 click/input/change만 보지 않고 pointer sequence, selectionchange,
+drag/drop event도 capture host에서 관측해야 합니다. Normalizer는 raw event를 그대로
+저장하기보다 `click`, `fill`, `typeInto`, `selectText`, `drag` 같은 stable intent를
+우선 생성합니다. Gesture intent를 안정적으로 판별하지 못했지만 replay fidelity를
+보존해야 하는 경우에만 cleanup-safe한 `pointerSequence` fallback을 사용합니다.
 
 Locator preview, validation details, run trace, failure detail은 debugging information으로
 취급합니다. 기본 상태는 접힌 debug drawer이며, validation failure나 run failure처럼
@@ -267,7 +276,8 @@ Side panel or popup
 Popup or side panel
 -> record:start
 -> background creates recording session and event buffer
--> content script captures page events and flushes record:event messages
+-> content script captures page, pointer, selection, drag/drop, and text events
+-> content script flushes record:event messages
 -> pagehide/navigation flushes pending events before cleanup
 -> record:stop asks background to normalize buffered events
 -> recorder synthesizes locator candidates
@@ -276,8 +286,31 @@ Popup or side panel
 -> user merges, edits, validates, saves, or exports
 ```
 
-recorder output은 draft로 다룹니다. raw browser event보다 `fill`, `click` 같은
-stable intent step을 우선합니다.
+recorder output은 draft로 다룹니다. raw browser event보다 `fill`, `click`,
+`selectText`, `drag` 같은 stable intent step을 우선합니다.
+
+Recorder normalizer는 다음 우선순위로 event window를 해석합니다.
+
+```txt
+text input/change
+→ fill 또는 typeInto
+
+pointer down/move/up + selectionchange
+→ selectText
+
+dragstart/drop 또는 명확한 draggable/drop target
+→ drag
+
+movement threshold 이하 + selection 변화 없음
+→ click
+
+판별 실패 + replay fidelity 필요
+→ pointerSequence fallback
+```
+
+`pointerDown`, `pointerMove`, `pointerUp`는 독립 scenario step으로 정규화하지
+않습니다. Low-level pointer 재생이 필요한 경우에도 하나의 `pointerSequence` step으로
+닫아 Action Orchestrator가 cleanup을 책임지게 합니다.
 
 recording은 browser 사용을 scenario화하는 primary input path입니다. 따라서 다음
 invariants를 지켜야 합니다.
@@ -337,6 +370,7 @@ compiler가 해야 할 일:
 - 지원하는 browser platform extension을 해석하고 나머지는 명시적으로 fail 처리
 - default timeout과 pacing 적용
 - trace correlation에 유용한 step id 보존
+- `selectText`와 `pointerSequence` 같은 capability-sensitive action의 runtime 지원 여부 검증
 - unsupported locator, ambiguous target, unsupported option에 대해 actionable
   error 생성
 
@@ -345,6 +379,8 @@ compiler가 하지 말아야 할 일:
 - input event dispatch
 - pointer/keyboard behavior 재구현
 - action settlement semantic 결정
+- pointer sequence cleanup semantic 결정
+- text selection endpoint semantic 결정
 - browser extension UI state 의존
 
 ## 7. Message Channels
@@ -406,6 +442,7 @@ recorder는 sensitive data handling을 명시적으로 다뤄야 합니다.
 
 - password value를 조용히 저장하지 않기
 - secret일 수 있는 recorded text field 표시
+- selection에 포함된 text도 secret일 수 있으므로 draft review에서 표시/마스킹 정책 적용
 - input value masking 또는 omission 허용
 - host permission을 좁게 scope
 - content script를 실행할 수 없는 page 표시
@@ -418,7 +455,8 @@ recorder는 sensitive data handling을 명시적으로 다뤄야 합니다.
 3. side panel scenario workflow builder와 authoring session model 도입
 4. target slot 기반 inspector와 locator preview를 selected step editor에 통합
 5. navigation-safe recorder event buffering과 recorded draft review 도입
-6. step dry-run, scenario run, trace display를 builder action flow에 결합
-7. popup을 short-lived run/record control과 side panel handoff에 한정
-8. scenario JSON에서 TypeScript code export 유지
-9. optional DevTools trace panel 유지
+6. pointer/selection-aware recorder normalization과 `selectText` PoC 도입
+7. step dry-run, scenario run, trace display를 builder action flow에 결합
+8. popup을 short-lived run/record control과 side panel handoff에 한정
+9. scenario JSON에서 TypeScript code export 유지
+10. optional DevTools trace panel 유지

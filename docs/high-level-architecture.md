@@ -75,7 +75,7 @@ Scenario
 6. Geometry Engine은 target의 공간 정보를 계산한다.
 7. Interactability Engine은 target이 실제로 조작 가능한지 판단한다.
 8. Pointer Engine은 좌표, 이동, 버튼 상태만 소유한다.
-9. Interaction State Store는 hover, active, focus, typing, dragging 같은 의미 상태를 소유한다.
+9. Interaction State Store는 hover, active, focus, typing, dragging, selection 같은 의미 상태를 소유한다.
 10. Visual Layer는 실제 interaction state와 분리된다.
 11. Platform Adapter는 환경별 실제 API 호출을 격리한다.
 12. Capability / Fidelity는 구현체의 한계를 명시한다.
@@ -133,6 +133,8 @@ class Stuntman {
 
   scrollTo(targetOrPosition, options?)
   drag(from, to, options?)
+  selectText(targetOrRange, options?)
+  pointerSequence(sequence, options?)
 
   waitFor(condition, options?)
 
@@ -202,7 +204,7 @@ Scenario Runner는 action 내부 세부 lifecycle을 직접 실행하지 않습�
 
 기존 `Action Planner`를 대체하는 핵심 실행 계층입니다.
 
-Action Orchestrator는 `click`, `moveTo`, `typeInto`, `drag` 같은 high-level action을 안전한 lifecycle로 실행합니다.
+Action Orchestrator는 `click`, `moveTo`, `typeInto`, `drag`, `selectText` 같은 user-intent action과 `pointerSequence` 같은 transactional device action을 안전한 lifecycle로 실행합니다.
 
 담당:
 
@@ -244,6 +246,20 @@ Action Orchestrator가 있어야 다음 문제를 일관되게 처리할 수 있
 - wait timeout 발생 시 상태 정리
 - force click 허용 여부
 - 실패 시 trace span과 error context 생성
+```
+
+Public action은 기본적으로 하나의 호출이 끝나면 runtime interaction state가 정리된 상태여야 합니다.
+`pointerDown`, `pointerMove`, `pointerUp` 같은 열린 primitive는 Pointer Engine 내부 primitive로 유지하고,
+외부로 노출해야 할 때도 Action Orchestrator가 소유하는 `pointerSequence` transaction 안에서 실행합니다.
+
+```txt
+pointerDown()
+= state-opening primitive
+= 호출 종료 후에도 pressed / active / capture 상태가 남을 수 있음
+
+pointerSequence([...down, ...move, ...up])
+= single public action transaction
+= timeout / cancel / error 시 pointer up 또는 pointer cancel cleanup 보장
 ```
 
 ---
@@ -495,7 +511,8 @@ Gesture Engine은 pointer 기반 composite action을 담당합니다.
 - longPress
 - drag
 - hover settle
-- selection drag
+- text selection gesture
+- pointer sequence
 ```
 
 Gesture Engine은 Pointer Engine을 사용하지만, Pointer Engine 자체는 아닙니다.
@@ -509,6 +526,9 @@ Gesture Engine
 ```
 
 `click(target)`은 Action Orchestrator가 lifecycle을 관리하고, 실제 pointer down/up sequence는 Gesture Engine이 수행합니다.
+
+Text selection은 drag와 같은 pointer sequence를 사용할 수 있지만 drag의 하위 의미가 아닙니다.
+`drag`는 source에서 destination으로 무언가를 옮기는 intent이고, `selectText`는 document / input / editor의 selection range를 변경하는 intent입니다.
 
 ---
 
@@ -547,6 +567,7 @@ Interaction State Store가 소유하는 것:
 - focused target
 - typing target
 - dragging source/drop target
+- selection anchor/focus/range
 ```
 
 PointerState:
@@ -678,6 +699,14 @@ type InteractionStateSnapshot = {
     active: boolean
     source: TargetHandle | null
     currentDropTarget: TargetHandle | null
+  }
+
+  selection: {
+    active: boolean
+    target: TargetHandle | null
+    anchor: SelectionEndpoint | null
+    focus: SelectionEndpoint | null
+    text?: string
   }
 }
 ```
@@ -958,6 +987,10 @@ platform.dom.readActiveElement()
 platform.events.dispatchPointerDown(...)
 platform.events.dispatchClick(...)
 
+platform.selection.readSelection(...)
+platform.selection.applySelection(...)
+platform.selection.clearSelection(...)
+
 platform.state.applyHover(...)
 platform.state.applyActive(...)
 platform.state.applyFocusVisible(...)
@@ -1095,8 +1128,18 @@ type CapabilityReport = {
     | 'none'
     | 'pointer-gesture'
     | 'html5-dnd'
-    | 'editor-selection'
     | 'custom-adapter'
+
+  textSelection:
+    | 'none'
+    | 'selection-api'
+    | 'pointer-gesture'
+    | 'editor-adapter'
+    | 'native'
+
+  pointerSequence:
+    | 'none'
+    | 'transactional'
 }
 ```
 
@@ -1107,6 +1150,8 @@ type CapabilityReport = {
 아니면 DOM event를 합성하는가?
 hover/focus/active는 native인가, mirror인가?
 drag/drop은 어느 수준까지 지원하는가?
+text selection은 Selection API, pointer gesture, editor adapter 중 무엇으로 지원되는가?
+low-level pointer 재생은 transaction cleanup을 보장하는가?
 ```
 
 ---
@@ -1183,8 +1228,10 @@ UNSUPPORTED_CAPABILITY
 
 INPUT_NOT_EDITABLE
 INPUT_COMPOSITION_UNSUPPORTED
+TEXT_SELECTION_UNSUPPORTED
 
 POINTER_CAPTURE_CONFLICT
+POINTER_SEQUENCE_INCOMPLETE
 VISUAL_LAYER_HITTEST_BLOCKED
 
 WAIT_TIMEOUT
@@ -1488,6 +1535,8 @@ class Stuntman {
 
   scrollTo(targetOrPosition, options?)
   drag(from, to, options?)
+  selectText(targetOrRange, options?)
+  pointerSequence(sequence, options?)
 
   waitFor(condition, options?)
 
