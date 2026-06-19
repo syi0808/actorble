@@ -94,6 +94,12 @@ describe('sidepanel recomposition view model', () => {
       id: 'email',
       actionFamily: 'fill',
       selected: true,
+      fields: {
+        controls: {
+          textInput: true,
+          targetSlots: true,
+        },
+      },
     })
     expect(view.targetAssignment).toMatchObject({
       status: 'idle',
@@ -140,6 +146,12 @@ describe('sidepanel recomposition view model', () => {
         id: 'step-1',
         action: 'delay',
         actionFamily: 'delay',
+        fields: {
+          controls: {
+            duration: true,
+            targetSlots: false,
+          },
+        },
       },
     })
     expect(view.targetAssignment.status).toBe('unavailable')

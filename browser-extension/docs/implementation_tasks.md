@@ -629,7 +629,7 @@ src/recorder
 
 ### T27 Builder Workbench Merge
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Merge the current Steps and Step Editor surfaces into one builder
   workbench. The user should edit the selected step without context switching
   between separate cards.

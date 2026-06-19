@@ -54,8 +54,10 @@ import {
   type RecordedScenarioDraftHandoff,
 } from '../../recorder/workflow.js'
 import type {
+  ScenarioCoordinateSpace,
   ScenarioDocument,
   ScenarioLocator,
+  ScenarioPoint,
   ScenarioStep,
 } from '../../scenario/types.js'
 import { validateScenarioDocument } from '../../scenario/validate.js'
@@ -208,6 +210,10 @@ export type SidepanelStepFieldUpdate = Readonly<{
   note?: string
   input?: string
   duration?: string | number
+  waitText?: string
+  scrollX?: string | number
+  scrollY?: string | number
+  scrollCoordinateSpace?: ScenarioCoordinateSpace
   optionsJson?: string
   targetJson?: string
   fromJson?: string
@@ -302,11 +308,22 @@ export type SidepanelScenarioEditorView = Readonly<{
     note: string
     input: string
     duration: string
+    waitText: string
+    scrollX: string
+    scrollY: string
+    scrollCoordinateSpace: ScenarioCoordinateSpace | ''
     optionsJson: string
     targetJson: string
     fromJson: string
     toJson: string
     inputJson: string
+    controls: Readonly<{
+      textInput: boolean
+      duration: boolean
+      waitText: boolean
+      scrollPosition: boolean
+      targetSlots: boolean
+    }>
   }>
   issueViews: readonly SidepanelIssueView[]
   targetTab: SidepanelTargetTabView
@@ -1882,6 +1899,76 @@ function stepFieldUpdateFromInput(
     next.duration = duration.value
   }
 
+  if (update.waitText !== undefined) {
+    const input = readStepProperty(step, 'input')
+    if (!isRecord(input) || input.kind !== 'text') {
+      return failure({
+        code: 'invalid_document',
+        message: 'Wait text can only be edited for wait-for-text steps.',
+        path: ['steps', index, 'input'],
+      })
+    }
+
+    const matcher = input.value
+    next.input = {
+      ...input,
+      value: isRecord(matcher)
+        ? { ...matcher, value: update.waitText }
+        : update.waitText,
+    }
+  }
+
+  if (
+    update.scrollX !== undefined ||
+    update.scrollY !== undefined ||
+    update.scrollCoordinateSpace !== undefined
+  ) {
+    const input = readStepProperty(step, 'input')
+    if (!isScenarioPoint(input)) {
+      return failure({
+        code: 'invalid_document',
+        message: 'Scroll position can only be edited for scroll-to-position steps.',
+        path: ['steps', index, 'input'],
+      })
+    }
+
+    let nextX = input.x
+    let nextY = input.y
+    let nextCoordinateSpace = input.coordinateSpace
+
+    if (update.scrollX !== undefined) {
+      const x = parseNumberField(update.scrollX, 'Scroll X')
+      if (!x.ok) {
+        return failure({
+          ...x.issues[0],
+          path: ['steps', index, 'input', 'x'],
+        })
+      }
+      nextX = x.value
+    }
+
+    if (update.scrollY !== undefined) {
+      const y = parseNumberField(update.scrollY, 'Scroll Y')
+      if (!y.ok) {
+        return failure({
+          ...y.issues[0],
+          path: ['steps', index, 'input', 'y'],
+        })
+      }
+      nextY = y.value
+    }
+
+    if (update.scrollCoordinateSpace !== undefined) {
+      nextCoordinateSpace = update.scrollCoordinateSpace
+    }
+
+    next.input = {
+      x: nextX,
+      y: nextY,
+      ...(nextCoordinateSpace === undefined ? {} : { coordinateSpace: nextCoordinateSpace }),
+    } satisfies ScenarioPoint
+  }
+
   const jsonFields = [
     ['targetJson', 'target'],
     ['fromJson', 'from'],
@@ -1934,32 +2021,70 @@ function selectedStepFields(
       note: '',
       input: '',
       duration: '',
+      waitText: '',
+      scrollX: '',
+      scrollY: '',
+      scrollCoordinateSpace: '',
       optionsJson: '',
       targetJson: '',
       fromJson: '',
       toJson: '',
       inputJson: '',
+      controls: emptySelectedStepControls(),
     }
   }
+
+  const input = readStepProperty(step, 'input')
+  const point = isScenarioPoint(input) ? input : undefined
+  const actionFamily = actionFamilyForStep(step)
 
   return {
     id: step.id ?? '',
     action: step.action,
-    actionFamily: actionFamilyForStep(step),
+    actionFamily,
     note: step.note ?? '',
-    input: typeof readStepProperty(step, 'input') === 'string'
-      ? String(readStepProperty(step, 'input'))
+    input: typeof input === 'string'
+      ? String(input)
       : '',
     duration: typeof readStepProperty(step, 'duration') === 'number'
       ? String(readStepProperty(step, 'duration'))
       : '',
+    waitText: waitTextValue(input),
+    scrollX: point === undefined ? '' : String(point.x),
+    scrollY: point === undefined ? '' : String(point.y),
+    scrollCoordinateSpace: point?.coordinateSpace ?? '',
     optionsJson: jsonTextFor(readStepProperty(step, 'options')),
     targetJson: jsonTextFor(readStepProperty(step, 'target')),
     fromJson: jsonTextFor(readStepProperty(step, 'from')),
     toJson: jsonTextFor(readStepProperty(step, 'to')),
-    inputJson: typeof readStepProperty(step, 'input') === 'object'
-      ? jsonTextFor(readStepProperty(step, 'input'))
+    inputJson: typeof input === 'object'
+      ? jsonTextFor(input)
       : '',
+    controls: selectedStepControls(step, actionFamily, input),
+  }
+}
+
+function emptySelectedStepControls(): SidepanelScenarioEditorView['selectedStepFields']['controls'] {
+  return {
+    textInput: false,
+    duration: false,
+    waitText: false,
+    scrollPosition: false,
+    targetSlots: false,
+  }
+}
+
+function selectedStepControls(
+  step: BuilderDraftStep,
+  actionFamily: BuilderStepActionFamily,
+  input: unknown,
+): SidepanelScenarioEditorView['selectedStepFields']['controls'] {
+  return {
+    textInput: typeof input === 'string',
+    duration: actionFamily === 'delay',
+    waitText: isRecord(input) && input.kind === 'text',
+    scrollPosition: actionFamily === 'scrollToPosition' && isScenarioPoint(input),
+    targetSlots: targetSlotsForStep(step, step.id ?? 'selected').length > 0,
   }
 }
 
@@ -2105,6 +2230,14 @@ const actionFamilies = [
   'waitForText',
   'delay',
 ] as const satisfies readonly BuilderStepActionFamily[]
+
+const scenarioCoordinateSpaces = [
+  'viewport',
+  'document',
+  'screen',
+  'surface',
+  'element',
+] as const satisfies readonly ScenarioCoordinateSpace[]
 
 function actionFamilyLabel(family: BuilderStepActionFamily): string {
   switch (family) {
@@ -2371,6 +2504,35 @@ function pointSummary(value: unknown): string | undefined {
   return `${value.x}, ${value.y}`
 }
 
+function waitTextValue(input: unknown): string {
+  if (!isRecord(input) || input.kind !== 'text') {
+    return ''
+  }
+
+  const value = input.value
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return isRecord(value) && typeof value.value === 'string' ? value.value : ''
+}
+
+function isScenarioPoint(value: unknown): value is ScenarioPoint {
+  return (
+    isRecord(value) &&
+    typeof value.x === 'number' &&
+    typeof value.y === 'number' &&
+    (
+      value.coordinateSpace === undefined ||
+      isScenarioCoordinateSpace(value.coordinateSpace)
+    )
+  )
+}
+
+function isScenarioCoordinateSpace(value: unknown): value is ScenarioCoordinateSpace {
+  return typeof value === 'string' && scenarioCoordinateSpaces.includes(value as ScenarioCoordinateSpace)
+}
+
 function compactJson(value: unknown): string {
   return JSON.stringify(value)
 }
@@ -2398,6 +2560,18 @@ function parseDuration(value: string | number): ExtensionResult<number> {
   }
 
   return ok(duration)
+}
+
+function parseNumberField(value: string | number, label: string): ExtensionResult<number> {
+  const number = typeof value === 'number' ? value : Number(value.trim())
+  if (!Number.isFinite(number)) {
+    return failure({
+      code: 'invalid_document',
+      message: `${label} must be a number.`,
+    })
+  }
+
+  return ok(number)
 }
 
 function parseJsonField(

@@ -460,6 +460,120 @@ describe('sidepanel scenario editor', () => {
     expect(targetlessView.workflow.selectedTargetSlotId).toBeUndefined()
   })
 
+  it('renders selected-step structured controls and writes action-specific fields', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'structured-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'structured-document',
+      name: 'Structured document',
+      initialStepFamily: 'waitForText',
+    })
+
+    const waitTextView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(waitTextView.selectedStepFields).toMatchObject({
+      actionFamily: 'waitForText',
+      waitText: '',
+      controls: {
+        waitText: true,
+        scrollPosition: false,
+        textInput: false,
+        duration: false,
+        targetSlots: false,
+      },
+    })
+
+    const waitTextUpdate = editor.updateSelectedStepFields({
+      waitText: 'Welcome back',
+    })
+    expect(waitTextUpdate).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
+      action: 'waitFor',
+      input: {
+        kind: 'text',
+        value: 'Welcome back',
+      },
+    })
+
+    editor.updateSelectedStepActionFamily('scrollToPosition')
+    const scrollView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(scrollView.selectedStepFields).toMatchObject({
+      actionFamily: 'scrollToPosition',
+      scrollX: '0',
+      scrollY: '0',
+      scrollCoordinateSpace: 'document',
+      controls: {
+        waitText: false,
+        scrollPosition: true,
+        textInput: false,
+        duration: false,
+        targetSlots: false,
+      },
+    })
+
+    const scrollUpdate = editor.updateSelectedStepFields({
+      scrollX: '25',
+      scrollY: '40',
+      scrollCoordinateSpace: 'viewport',
+    })
+    expect(scrollUpdate).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
+      action: 'scrollTo',
+      input: {
+        x: 25,
+        y: 40,
+        coordinateSpace: 'viewport',
+      },
+    })
+
+    editor.updateSelectedStepActionFamily('fill')
+    const fillView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(fillView.selectedStepFields.controls).toMatchObject({
+      textInput: true,
+      duration: false,
+      waitText: false,
+      scrollPosition: false,
+      targetSlots: true,
+    })
+  })
+
+  it('keeps advanced JSON repair available for direct field updates', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'repair-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'repair-document',
+      name: 'Repair document',
+      initialStepFamily: 'click',
+    })
+
+    const repaired = editor.updateSelectedStepFields({
+      targetJson: JSON.stringify({
+        strategy: 'testId',
+        value: 'primary-action',
+      }),
+      optionsJson: JSON.stringify({
+        timeout: 2500,
+      }),
+    })
+
+    expect(repaired).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
+      action: 'click',
+      target: {
+        strategy: 'testId',
+        value: 'primary-action',
+      },
+      options: {
+        timeout: 2500,
+      },
+    })
+  })
+
   it('imports and exports scenarios through the storage repository', async () => {
     const imported = scenarioRecord(
       'imported-scenario',

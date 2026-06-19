@@ -65,4 +65,12 @@ describe('browser extension scaffold', () => {
     expect(sidepanelHtml).not.toContain('id="document-title"')
     expect(sidepanelHtml).not.toContain('id="recording-title"')
   })
+
+  it('uses one sidepanel builder workbench instead of separate steps and editor cards', async () => {
+    const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+
+    expect(sidepanelHtml).toContain('id="builder-workbench-title"')
+    expect(sidepanelHtml).not.toContain('id="steps-title"')
+    expect(sidepanelHtml).not.toContain('id="step-editor-title"')
+  })
 })

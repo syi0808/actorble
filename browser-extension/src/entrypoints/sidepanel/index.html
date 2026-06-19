@@ -85,75 +85,110 @@
         </div>
       </section>
 
-      <section aria-labelledby="steps-title">
+      <section id="builder-workbench" aria-labelledby="builder-workbench-title">
         <div class="section-heading">
-          <h2 id="steps-title">Steps</h2>
+          <h2 id="builder-workbench-title">Builder Workbench</h2>
           <span id="step-summary" class="summary">No step selected</span>
         </div>
-        <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
-        <div class="step-command-grid">
-          <select id="step-action-family" aria-label="Action family"></select>
-          <button id="add-step-button" type="button">Add</button>
-          <button id="insert-step-button" type="button">Insert</button>
-          <button id="duplicate-step-button" type="button">Duplicate</button>
-          <button id="move-step-up-button" type="button">Up</button>
-          <button id="move-step-down-button" type="button">Down</button>
-          <button id="delete-step-button" type="button">Delete</button>
-        </div>
-      </section>
 
-      <section aria-labelledby="step-editor-title">
-        <div class="section-heading">
-          <h2 id="step-editor-title">Step Editor</h2>
-          <button id="dry-run-button" type="button">Dry run</button>
-        </div>
-        <div class="field-grid">
-          <label class="field">
-            <span>Action</span>
-            <select id="step-action" aria-label="Selected step action"></select>
-          </label>
-          <label class="field">
-            <span>Duration</span>
-            <input id="step-duration" type="number" min="0" step="1" />
-          </label>
-        </div>
-        <label class="field">
-          <span>Note</span>
-          <input id="step-note" type="text" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span>Text input</span>
-          <input id="step-input" type="text" autocomplete="off" />
-        </label>
-        <div>
-          <span class="field-label">Target slots</span>
-          <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
-        </div>
-        <details class="advanced-repair">
-          <summary>Repair JSON</summary>
-          <label class="field">
-            <span>Target JSON</span>
-            <textarea id="step-target-json" spellcheck="false"></textarea>
-          </label>
-          <div class="field-grid">
-            <label class="field">
-              <span>From JSON</span>
-              <textarea id="step-from-json" spellcheck="false"></textarea>
-            </label>
-            <label class="field">
-              <span>To JSON</span>
-              <textarea id="step-to-json" spellcheck="false"></textarea>
-            </label>
+        <div class="builder-workbench-layout">
+          <div class="workbench-panel">
+            <div class="workbench-subheading">
+              <h3>Timeline</h3>
+            </div>
+            <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
+            <div class="step-command-grid">
+              <select id="step-action-family" aria-label="Action family"></select>
+              <button id="add-step-button" type="button">Add</button>
+              <button id="insert-step-button" type="button">Insert</button>
+              <button id="duplicate-step-button" type="button">Duplicate</button>
+              <button id="move-step-up-button" type="button">Up</button>
+              <button id="move-step-down-button" type="button">Down</button>
+              <button id="delete-step-button" type="button">Delete</button>
+            </div>
           </div>
-          <label class="field">
-            <span>Object input JSON</span>
-            <textarea id="step-input-json" spellcheck="false"></textarea>
-          </label>
-          <label class="field">
-            <span>Options JSON</span>
-            <textarea id="step-options-json" spellcheck="false"></textarea>
-          </label>
-        </details>
+
+          <div class="workbench-panel">
+            <div class="workbench-subheading">
+              <h3>Selected Step</h3>
+              <button id="dry-run-button" type="button">Dry run</button>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>Action</span>
+                <select id="step-action" aria-label="Selected step action"></select>
+              </label>
+              <label id="step-duration-field" class="field">
+                <span>Duration</span>
+                <input id="step-duration" type="number" min="0" step="1" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Note</span>
+              <input id="step-note" type="text" autocomplete="off" />
+            </label>
+            <label id="step-input-field" class="field">
+              <span>Text input</span>
+              <input id="step-input" type="text" autocomplete="off" />
+            </label>
+            <label id="step-wait-text-field" class="field">
+              <span>Wait text</span>
+              <input id="step-wait-text" type="text" autocomplete="off" />
+            </label>
+            <fieldset id="step-scroll-position-field" class="field-set">
+              <legend>Scroll position</legend>
+              <div class="scroll-position-grid">
+                <label class="field">
+                  <span>X</span>
+                  <input id="step-scroll-x" type="number" step="1" />
+                </label>
+                <label class="field">
+                  <span>Y</span>
+                  <input id="step-scroll-y" type="number" step="1" />
+                </label>
+                <label class="field">
+                  <span>Space</span>
+                  <select id="step-scroll-coordinate-space" aria-label="Scroll coordinate space">
+                    <option value="viewport">Viewport</option>
+                    <option value="document">Document</option>
+                    <option value="screen">Screen</option>
+                    <option value="surface">Surface</option>
+                    <option value="element">Element</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+            <div id="target-slot-section">
+              <span class="field-label">Target slots</span>
+              <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
+            </div>
+            <details class="advanced-repair">
+              <summary>Advanced JSON repair</summary>
+              <label class="field">
+                <span>Target JSON</span>
+                <textarea id="step-target-json" spellcheck="false"></textarea>
+              </label>
+              <div class="field-grid">
+                <label class="field">
+                  <span>From JSON</span>
+                  <textarea id="step-from-json" spellcheck="false"></textarea>
+                </label>
+                <label class="field">
+                  <span>To JSON</span>
+                  <textarea id="step-to-json" spellcheck="false"></textarea>
+                </label>
+              </div>
+              <label class="field">
+                <span>Object input JSON</span>
+                <textarea id="step-input-json" spellcheck="false"></textarea>
+              </label>
+              <label class="field">
+                <span>Options JSON</span>
+                <textarea id="step-options-json" spellcheck="false"></textarea>
+              </label>
+            </details>
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="target-picker-title">

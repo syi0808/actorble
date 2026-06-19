@@ -25,6 +25,7 @@ import {
   type SidepanelScenarioShellView,
 } from './recomposition-view-model.js'
 import type { BuilderStepActionFamily } from '../../builder/index.js'
+import type { ScenarioCoordinateSpace } from '../../scenario/types.js'
 import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
 
 const scenarioRepository = createWxtScenarioStorageRepository()
@@ -146,8 +147,19 @@ const moveStepDownButton = requiredElement<HTMLButtonElement>('#move-step-down-b
 const deleteStepButton = requiredElement<HTMLButtonElement>('#delete-step-button')
 const stepAction = requiredElement<HTMLSelectElement>('#step-action')
 const stepNote = requiredElement<HTMLInputElement>('#step-note')
+const stepInputField = requiredElement<HTMLElement>('#step-input-field')
 const stepInput = requiredElement<HTMLInputElement>('#step-input')
+const stepDurationField = requiredElement<HTMLElement>('#step-duration-field')
 const stepDuration = requiredElement<HTMLInputElement>('#step-duration')
+const stepWaitTextField = requiredElement<HTMLElement>('#step-wait-text-field')
+const stepWaitText = requiredElement<HTMLInputElement>('#step-wait-text')
+const stepScrollPositionField = requiredElement<HTMLElement>('#step-scroll-position-field')
+const stepScrollX = requiredElement<HTMLInputElement>('#step-scroll-x')
+const stepScrollY = requiredElement<HTMLInputElement>('#step-scroll-y')
+const stepScrollCoordinateSpace = requiredElement<HTMLSelectElement>(
+  '#step-scroll-coordinate-space',
+)
+const targetSlotSection = requiredElement<HTMLElement>('#target-slot-section')
 const targetSlotList = requiredElement<HTMLUListElement>('#target-slot-list')
 const stepTargetJson = requiredElement<HTMLTextAreaElement>('#step-target-json')
 const stepFromJson = requiredElement<HTMLTextAreaElement>('#step-from-json')
@@ -324,6 +336,28 @@ stepInput.addEventListener('input', () => {
 
 stepDuration.addEventListener('input', () => {
   editor.updateSelectedStepFields({ duration: stepDuration.value })
+  render(editor.getSnapshot())
+})
+
+stepWaitText.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ waitText: stepWaitText.value })
+  render(editor.getSnapshot())
+})
+
+stepScrollX.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ scrollX: stepScrollX.value })
+  render(editor.getSnapshot())
+})
+
+stepScrollY.addEventListener('input', () => {
+  editor.updateSelectedStepFields({ scrollY: stepScrollY.value })
+  render(editor.getSnapshot())
+})
+
+stepScrollCoordinateSpace.addEventListener('change', () => {
+  editor.updateSelectedStepFields({
+    scrollCoordinateSpace: stepScrollCoordinateSpace.value as ScenarioCoordinateSpace,
+  })
   render(editor.getSnapshot())
 })
 
@@ -510,6 +544,11 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(stepNote, view.selectedStepFields.note)
   setInputValue(stepInput, view.selectedStepFields.input)
   setInputValue(stepDuration, view.selectedStepFields.duration)
+  setInputValue(stepWaitText, view.selectedStepFields.waitText)
+  setInputValue(stepScrollX, view.selectedStepFields.scrollX)
+  setInputValue(stepScrollY, view.selectedStepFields.scrollY)
+  setSelectValue(stepScrollCoordinateSpace, view.selectedStepFields.scrollCoordinateSpace)
+  renderSelectedStepControlVisibility(view.selectedStepFields.controls)
   setInputValue(stepTargetJson, view.selectedStepFields.targetJson)
   setInputValue(stepFromJson, view.selectedStepFields.fromJson)
   setInputValue(stepToJson, view.selectedStepFields.toJson)
@@ -722,6 +761,16 @@ function renderTargetSlotList(rows: readonly SidepanelTargetSlotRowView[]): void
     item.append(button)
     targetSlotList.append(item)
   }
+}
+
+function renderSelectedStepControlVisibility(
+  controls: ReturnType<typeof createSidepanelScenarioEditorView>['selectedStepFields']['controls'],
+): void {
+  stepInputField.hidden = !controls.textInput
+  stepDurationField.hidden = !controls.duration
+  stepWaitTextField.hidden = !controls.waitText
+  stepScrollPositionField.hidden = !controls.scrollPosition
+  targetSlotSection.hidden = !controls.targetSlots
 }
 
 function renderIssues(issues: readonly Readonly<{ path: string; message: string }>[]): void {

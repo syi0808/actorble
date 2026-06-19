@@ -45,6 +45,7 @@ main {
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
 }
@@ -56,6 +57,10 @@ h1 {
 
 h2 {
   font-size: 14px;
+}
+
+h3 {
+  font-size: 12px;
 }
 
 section {
@@ -74,11 +79,27 @@ section p {
 }
 
 .section-heading,
-.toolbar {
+.toolbar,
+.workbench-subheading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.builder-workbench-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.workbench-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workbench-subheading {
+  min-height: 34px;
 }
 
 .scenario-shell-status,
@@ -237,7 +258,8 @@ button[data-pending="true"] {
 
 .field,
 .field-grid,
-.step-command-grid {
+.step-command-grid,
+.field-set {
   display: grid;
   gap: 6px;
 }
@@ -252,6 +274,27 @@ button[data-pending="true"] {
 
 .field-grid {
   grid-template-columns: minmax(0, 1fr) minmax(96px, 0.45fr);
+}
+
+.scroll-position-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.field-set {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field-set legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .compact-textarea {
@@ -632,5 +675,12 @@ dd {
 
   .primary {
     color: #09211b;
+  }
+}
+
+@media (min-width: 760px) {
+  .builder-workbench-layout {
+    grid-template-columns: minmax(240px, 0.9fr) minmax(280px, 1.1fr);
+    align-items: start;
   }
 }
