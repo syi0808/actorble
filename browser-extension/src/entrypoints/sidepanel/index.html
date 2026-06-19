@@ -55,7 +55,6 @@
           <button id="record-button" type="button">Record</button>
           <button id="run-button" type="button" class="primary">Run</button>
         </div>
-        <span id="validation-summary" class="summary">Idle</span>
         <div id="recorded-draft-review" class="recorded-draft-review" hidden>
           <dl class="recorded-draft-fields">
             <div>
@@ -229,35 +228,96 @@
         </div>
       </section>
 
-      <section aria-labelledby="validation-title">
-        <div class="section-heading">
-          <h2 id="validation-title">Validation</h2>
+      <section id="debug-drawer" class="debug-drawer" aria-labelledby="debug-drawer-title">
+        <div class="section-heading debug-drawer-heading">
+          <div class="debug-drawer-title-group">
+            <h2 id="debug-drawer-title">Debug</h2>
+            <span id="debug-drawer-summary" class="summary">Ready</span>
+          </div>
+          <button
+            id="debug-drawer-toggle"
+            type="button"
+            aria-controls="debug-drawer-panel"
+            aria-expanded="false"
+          >
+            Show debug
+          </button>
         </div>
-        <ul id="issue-list" class="issue-list" aria-live="polite"></ul>
-      </section>
+        <div id="debug-drawer-panel" class="debug-drawer-panel" hidden>
+          <div id="debug-drawer-tabs" class="debug-drawer-tabs" role="tablist" aria-label="Debug views">
+            <button type="button" role="tab" data-debug-view="validation">Validation</button>
+            <button type="button" role="tab" data-debug-view="locator">Locator</button>
+            <button type="button" role="tab" data-debug-view="run-trace">Run trace</button>
+            <button type="button" role="tab" data-debug-view="failure">Failure</button>
+          </div>
 
-      <section aria-labelledby="run-title">
-        <div class="section-heading">
-          <h2 id="run-title">Run</h2>
+          <div class="debug-panel" data-debug-panel="validation">
+            <dl class="debug-fields">
+              <div>
+                <dt>Summary</dt>
+                <dd id="debug-validation-summary">Idle</dd>
+              </div>
+            </dl>
+            <ul id="debug-validation-issues" class="issue-list" aria-live="polite"></ul>
+          </div>
+
+          <div class="debug-panel" data-debug-panel="locator" hidden>
+            <dl class="debug-fields">
+              <div>
+                <dt>Status</dt>
+                <dd id="debug-locator-status">No preview</dd>
+              </div>
+              <div>
+                <dt>Issue</dt>
+                <dd id="debug-locator-issues">None</dd>
+              </div>
+            </dl>
+            <ul
+              id="debug-locator-candidates"
+              class="debug-locator-candidates"
+              aria-label="Debug locator candidates"
+            ></ul>
+          </div>
+
+          <div class="debug-panel" data-debug-panel="run-trace" hidden>
+            <dl class="debug-fields">
+              <div>
+                <dt>Run</dt>
+                <dd id="debug-run-id">None</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd id="debug-run-status">Idle</dd>
+              </div>
+              <div>
+                <dt>Summary</dt>
+                <dd id="debug-run-summary">No active run</dd>
+              </div>
+              <div>
+                <dt>Latest event</dt>
+                <dd id="debug-trace-feedback">No trace events</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="debug-panel" data-debug-panel="failure" hidden>
+            <dl class="debug-fields">
+              <div>
+                <dt>Failure</dt>
+                <dd id="debug-failure-detail">None</dd>
+              </div>
+              <div>
+                <dt>Step</dt>
+                <dd id="debug-failure-step">None</dd>
+              </div>
+              <div>
+                <dt>Event</dt>
+                <dd id="debug-failure-event">None</dd>
+              </div>
+            </dl>
+            <pre id="debug-failure-details-json" class="debug-json">None</pre>
+          </div>
         </div>
-        <dl class="run-fields">
-          <div>
-            <dt>Run</dt>
-            <dd id="run-id">None</dd>
-          </div>
-          <div>
-            <dt>Summary</dt>
-            <dd id="run-summary">No active run</dd>
-          </div>
-          <div>
-            <dt>Latest event</dt>
-            <dd id="trace-feedback">No trace events</dd>
-          </div>
-          <div>
-            <dt>Failure</dt>
-            <dd id="failure-detail">None</dd>
-          </div>
-        </dl>
       </section>
     </main>
     <script type="module" src="./main.ts"></script>

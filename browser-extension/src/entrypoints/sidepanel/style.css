@@ -87,6 +87,75 @@ section p {
   gap: 8px;
 }
 
+.debug-drawer[data-attention="true"] {
+  border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning) 72%, transparent);
+}
+
+.debug-drawer-heading {
+  align-items: start;
+}
+
+.debug-drawer-title-group {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.debug-drawer-title-group .summary {
+  text-align: left;
+}
+
+.debug-drawer-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.debug-drawer-panel[hidden] {
+  display: none;
+}
+
+.debug-drawer-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.debug-drawer-tabs button {
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.debug-drawer-tabs button[data-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.debug-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.debug-panel[hidden] {
+  display: none;
+}
+
+.debug-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.debug-fields div {
+  display: grid;
+  gap: 3px;
+}
+
 .builder-workbench-layout {
   display: grid;
   gap: 12px;
@@ -620,6 +689,68 @@ button[data-pending="true"] {
   overflow-wrap: anywhere;
 }
 
+.debug-locator-candidates {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.debug-locator-candidates:empty::before {
+  color: var(--muted);
+  content: "No locator diagnostics";
+  font-size: 13px;
+}
+
+.debug-locator-candidates li {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.debug-locator-candidates li[data-status="unique"] {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.debug-locator-candidates li[data-status="ambiguous"],
+.debug-locator-candidates li[data-status="zero-match"] {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+}
+
+.debug-locator-candidates li[data-status="error"] {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+}
+
+.debug-locator-label {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.debug-locator-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.debug-json {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font:
+    12px / 1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+}
+
 .status-pill {
   padding: 3px 8px;
   border: 1px solid var(--border);
@@ -720,7 +851,8 @@ dd {
     background: #171d24;
   }
 
-  .locator-preview-list li {
+  .locator-preview-list li,
+  .debug-locator-candidates li {
     background: #171d24;
   }
 

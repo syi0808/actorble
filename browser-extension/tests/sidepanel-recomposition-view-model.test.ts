@@ -11,6 +11,7 @@ import {
 import { failure, ok, type ExtensionResult } from '../src/shared/result.js'
 import type {
   ScenarioJsonExport,
+  ScenarioRecordInput,
   ScenarioRecord,
 } from '../src/storage/index.js'
 import {
@@ -157,6 +158,34 @@ describe('sidepanel recomposition view model', () => {
     expect(view.targetAssignment.status).toBe('unavailable')
     expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer')
     expect(editor.getSnapshot().draftDocument).not.toHaveProperty('selectedTargetSlot')
+  })
+
+  it('honors manual debug drawer expansion and active view without changing document state', async () => {
+    const { editor } = createTestEditor()
+    await editor.refresh()
+
+    const expandedView = viewFor(editor, {
+      debugDrawer: {
+        expanded: true,
+        activeView: 'run-trace',
+      },
+    })
+    const collapsedView = viewFor(editor, {
+      debugDrawer: {
+        expanded: false,
+        activeView: 'locator',
+      },
+    })
+
+    expect(expandedView.debugDrawer).toMatchObject({
+      expanded: true,
+      activeView: 'run-trace',
+    })
+    expect(collapsedView.debugDrawer).toMatchObject({
+      expanded: false,
+      activeView: 'locator',
+    })
+    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer')
   })
 
   it('renders the selected target slot and target picker progress in assignment state', async () => {
@@ -402,6 +431,65 @@ describe('sidepanel recomposition view model', () => {
     })
   })
 
+  it('surfaces locator diagnostics in the collapsed debug drawer by default', async () => {
+    const { editor } = createTestEditor()
+    await editor.refresh()
+
+    const view = viewFor(editor, {
+      locatorPreview: {
+        status: 'failed',
+        candidates: [],
+        issues: [
+          {
+            code: 'inspector_error',
+            message: 'Could not inspect locator candidates.',
+          },
+        ],
+      },
+    })
+
+    expect(view.debugDrawer).toMatchObject({
+      expanded: false,
+      activeView: 'locator',
+      attention: true,
+      views: {
+        locator: {
+          status: 'failed',
+          summary: 'Preview failed',
+          issueSummary: 'Could not inspect locator candidates.',
+        },
+      },
+    })
+  })
+
+  it('keeps debug drawer state out of saved scenario documents', async () => {
+    const { editor, saves } = createTestEditor({ scenarios: [] })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'drawer-state-document',
+      name: 'Drawer state document',
+      initialStepFamily: 'delay',
+    })
+
+    const view = viewFor(editor, {
+      debugDrawer: {
+        expanded: true,
+        activeView: 'failure',
+      },
+    })
+    const result = await editor.saveDraft()
+
+    expect(view.debugDrawer).toMatchObject({
+      expanded: true,
+      activeView: 'failure',
+    })
+    expect(result).toMatchObject({ ok: true })
+    expect(saves).toHaveLength(1)
+    expect(JSON.stringify(saves[0].document)).not.toContain('debugDrawer')
+    expect(JSON.stringify(saves[0].document)).not.toContain('activeView')
+    expect(JSON.stringify(saves[0].document)).not.toContain('expanded')
+  })
+
   it('surfaces content readiness failures in the scenario shell', async () => {
     const { editor } = createTestEditor({
       sendResponse(message) {
@@ -455,6 +543,7 @@ type TestEditorOptions = Readonly<{
 function createTestEditor(options: TestEditorOptions = {}) {
   let scenarios = [...(options.scenarios ?? [newestScenario, olderScenario])]
   const sent: ActorbleExtensionMessage[] = []
+  const saves: ScenarioRecordInput[] = []
 
   const client: SidepanelScenarioEditorClient = {
     async listScenarios() {
@@ -476,6 +565,7 @@ function createTestEditor(options: TestEditorOptions = {}) {
       return ok(next)
     },
     async saveScenario(input) {
+      saves.push(input)
       const record = scenarioRecord(
         input.id ?? input.document.id ?? 'generated-scenario',
         input.name ?? input.document.name ?? 'Untitled scenario',
@@ -521,7 +611,7 @@ function createTestEditor(options: TestEditorOptions = {}) {
     ...(options.createStepId === undefined ? {} : { createStepId: options.createStepId }),
   })
 
-  return { editor, sent }
+  return { editor, sent, saves }
 }
 
 function viewFor(

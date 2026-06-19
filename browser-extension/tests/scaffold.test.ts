@@ -83,4 +83,18 @@ describe('browser extension scaffold', () => {
     expect(sidepanelHtml).not.toContain('id="target-picker-title"')
     expect(sidepanelHtml).not.toContain('id="locator-preview-title"')
   })
+
+  it('uses a collapsible debug drawer instead of primary validation and run cards', async () => {
+    const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+
+    expect(sidepanelHtml).toContain('id="debug-drawer-title"')
+    expect(sidepanelHtml).toContain('id="debug-drawer-toggle"')
+    expect(sidepanelHtml).toContain('id="debug-drawer-panel"')
+    expect(sidepanelHtml).toContain('id="debug-validation-issues"')
+    expect(sidepanelHtml).toContain('id="debug-locator-issues"')
+    expect(sidepanelHtml).toContain('id="debug-run-summary"')
+    expect(sidepanelHtml).toContain('id="debug-failure-detail"')
+    expect(sidepanelHtml).not.toContain('id="validation-title"')
+    expect(sidepanelHtml).not.toContain('id="run-title"')
+  })
 })

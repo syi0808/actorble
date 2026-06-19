@@ -695,7 +695,7 @@ src/recorder
 
 ### T30 Collapsible Debug Drawer
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Move locator preview diagnostics, validation details, run trace, and
   failure detail into a collapsible debug drawer so debugging information does
   not dominate the default builder flow.

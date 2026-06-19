@@ -7,7 +7,6 @@ import {
   createTargetPicker,
 } from '../../inspector/target-picker.js'
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
-import type { TraceRunDisplayView } from '../../trace/index.js'
 import {
   createSidepanelScenarioEditor,
   createSidepanelScenarioEditorView,
@@ -17,6 +16,9 @@ import {
 } from './scenario-editor.js'
 import {
   createSidepanelRecompositionViewModel,
+  type SidepanelDebugDrawerState,
+  type SidepanelDebugDrawerView,
+  type SidepanelDebugDrawerViewModel,
   type SidepanelLocatorPreviewView,
   type SidepanelScenarioShellView,
   type SidepanelTargetAssignmentView,
@@ -94,6 +96,7 @@ const locatorPreviewer = createLocatorPreviewer({
 }, {
   targetTabId,
 })
+let debugDrawerState: SidepanelDebugDrawerState = {}
 
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
@@ -172,13 +175,25 @@ const targetPickerStopButton = requiredElement<HTMLButtonElement>('#target-picke
 const locatorPreviewStatus = requiredElement<HTMLElement>('#locator-preview-status')
 const locatorPreviewList = requiredElement<HTMLUListElement>('#locator-preview-list')
 const locatorPreviewIssues = requiredElement<HTMLElement>('#locator-preview-issues')
-const validationSummary = requiredElement<HTMLElement>('#validation-summary')
-const issueList = requiredElement<HTMLUListElement>('#issue-list')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
-const runId = requiredElement<HTMLElement>('#run-id')
-const runSummaryOutput = requiredElement<HTMLElement>('#run-summary')
-const traceFeedback = requiredElement<HTMLElement>('#trace-feedback')
-const failureDetail = requiredElement<HTMLElement>('#failure-detail')
+const debugDrawer = requiredElement<HTMLElement>('#debug-drawer')
+const debugDrawerSummary = requiredElement<HTMLElement>('#debug-drawer-summary')
+const debugDrawerToggle = requiredElement<HTMLButtonElement>('#debug-drawer-toggle')
+const debugDrawerPanel = requiredElement<HTMLElement>('#debug-drawer-panel')
+const debugDrawerTabs = requiredElement<HTMLElement>('#debug-drawer-tabs')
+const debugValidationSummary = requiredElement<HTMLElement>('#debug-validation-summary')
+const debugValidationIssues = requiredElement<HTMLUListElement>('#debug-validation-issues')
+const debugLocatorStatus = requiredElement<HTMLElement>('#debug-locator-status')
+const debugLocatorIssues = requiredElement<HTMLElement>('#debug-locator-issues')
+const debugLocatorCandidates = requiredElement<HTMLUListElement>('#debug-locator-candidates')
+const debugRunId = requiredElement<HTMLElement>('#debug-run-id')
+const debugRunStatus = requiredElement<HTMLElement>('#debug-run-status')
+const debugRunSummary = requiredElement<HTMLElement>('#debug-run-summary')
+const debugTraceFeedback = requiredElement<HTMLElement>('#debug-trace-feedback')
+const debugFailureDetail = requiredElement<HTMLElement>('#debug-failure-detail')
+const debugFailureStep = requiredElement<HTMLElement>('#debug-failure-step')
+const debugFailureEvent = requiredElement<HTMLElement>('#debug-failure-event')
+const debugFailureDetailsJson = requiredElement<HTMLElement>('#debug-failure-details-json')
 
 for (const section of document.querySelectorAll<HTMLElement>('section')) {
   section.tabIndex = 0
@@ -212,6 +227,10 @@ scenarioFile.addEventListener('change', () => {
 })
 
 validateButton.addEventListener('click', () => {
+  debugDrawerState = {
+    ...debugDrawerState,
+    activeView: 'validation',
+  }
   editor.validateDraft()
   render(editor.getSnapshot())
 })
@@ -435,9 +454,40 @@ locatorPreviewList.addEventListener('click', (event) => {
   render(editor.getSnapshot())
 })
 
+debugDrawerToggle.addEventListener('click', () => {
+  debugDrawerState = {
+    ...debugDrawerState,
+    expanded: !(debugDrawerState.expanded ?? false),
+  }
+  render(editor.getSnapshot())
+})
+
+debugDrawerTabs.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-debug-view]',
+  )
+  const view = button?.dataset.debugView
+  if (!isDebugDrawerView(view)) {
+    return
+  }
+
+  debugDrawerState = {
+    expanded: true,
+    activeView: view,
+  }
+  render(editor.getSnapshot())
+})
+
 browser.runtime.onMessage.addListener((message) => {
   const editorHandled = editor.ingestMessage(message)
   const pickerHandled = targetPicker.ingestMessage(message)
+
+  if (editorHandled && message?.kind === 'runtime:status' && message.payload?.status === 'failed') {
+    debugDrawerState = {
+      ...debugDrawerState,
+      activeView: 'failure',
+    }
+  }
 
   if (editorHandled || pickerHandled) {
     render(editor.getSnapshot())
@@ -504,6 +554,13 @@ async function runLocatorPreviewAction(action: () => Promise<unknown>): Promise<
   const operation = action()
   render(editor.getSnapshot())
   await operation
+  const preview = locatorPreviewer.getSnapshot()
+  if (preview.status === 'failed' || preview.issues.length > 0) {
+    debugDrawerState = {
+      ...debugDrawerState,
+      activeView: 'locator',
+    }
+  }
   render(editor.getSnapshot())
 }
 
@@ -547,6 +604,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
     editor: snapshot,
     targetPicker: targetPicker.getSnapshot(),
     locatorPreview: locatorPreviewer.getSnapshot(),
+    debugDrawer: debugDrawerState,
   })
   const shell = recomposedView.scenarioShell
   const targetAssignment = recomposedView.targetAssignment
@@ -577,14 +635,10 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(stepToJson, view.selectedStepFields.toJson)
   setInputValue(stepInputJson, view.selectedStepFields.inputJson)
   setInputValue(stepOptionsJson, view.selectedStepFields.optionsJson)
-  validationSummary.textContent = view.validationSummary
-  renderIssues(view.issueViews)
   renderStatus(snapshot)
   renderRecordStatus(shell, snapshot)
   renderRecordedDraftReview(view, snapshot)
-  runSummaryOutput.textContent = view.runSummary
-  traceFeedback.textContent = latestEventSummary(view.traceView)
-  failureDetail.textContent = failureSummary(view.traceView)
+  renderDebugDrawer(recomposedView.debugDrawer)
 
   scenarioSelect.disabled = shell.pendingAction !== null || shell.scenarioOptions.length === 0
   scenarioFile.disabled = shell.buttons.import.disabled
@@ -674,6 +728,65 @@ function renderLocatorPreviewCandidates(
     content.append(label, match)
     item.append(content, button)
     locatorPreviewList.append(item)
+  }
+}
+
+function renderDebugDrawer(view: SidepanelDebugDrawerViewModel): void {
+  debugDrawer.dataset.expanded = view.expanded ? 'true' : 'false'
+  debugDrawer.dataset.attention = view.attention ? 'true' : 'false'
+  debugDrawerSummary.textContent = debugDrawerSummaryText(view)
+  debugDrawerToggle.textContent = view.expanded ? 'Hide debug' : 'Show debug'
+  debugDrawerToggle.setAttribute('aria-expanded', view.expanded ? 'true' : 'false')
+  debugDrawerPanel.hidden = !view.expanded
+
+  for (const tab of debugDrawerTabs.querySelectorAll<HTMLButtonElement>('button[data-debug-view]')) {
+    const selected = tab.dataset.debugView === view.activeView
+    tab.dataset.selected = selected ? 'true' : 'false'
+    tab.setAttribute('aria-selected', selected ? 'true' : 'false')
+    tab.tabIndex = selected ? 0 : -1
+  }
+
+  for (const panel of debugDrawerPanel.querySelectorAll<HTMLElement>('[data-debug-panel]')) {
+    panel.hidden = panel.dataset.debugPanel !== view.activeView
+  }
+
+  debugValidationSummary.textContent = view.views.validation.summary
+  renderIssues(debugValidationIssues, view.views.validation.issues)
+
+  debugLocatorStatus.textContent = view.views.locator.summary
+  debugLocatorIssues.textContent = view.views.locator.issueSummary
+  renderDebugLocatorCandidates(view.views.locator.candidates)
+
+  debugRunId.textContent = view.views.runTrace.runId ?? 'None'
+  debugRunStatus.textContent = capitalize(view.views.runTrace.status ?? 'idle')
+  debugRunSummary.textContent = view.views.runTrace.summary
+  debugTraceFeedback.textContent = latestDebugEventSummary(view.views.runTrace)
+
+  debugFailureDetail.textContent = view.views.failure.message ?? 'None'
+  debugFailureStep.textContent = view.views.failure.stepId ?? 'None'
+  debugFailureEvent.textContent = view.views.failure.eventName ?? 'None'
+  debugFailureDetailsJson.textContent = view.views.failure.details === undefined
+    ? 'None'
+    : JSON.stringify(view.views.failure.details, null, 2)
+}
+
+function renderDebugLocatorCandidates(
+  candidates: readonly LocatorPreviewCandidateView[],
+): void {
+  debugLocatorCandidates.replaceChildren()
+
+  for (const candidate of candidates) {
+    const item = document.createElement('li')
+    const label = document.createElement('span')
+    const detail = document.createElement('span')
+
+    item.dataset.status = candidate.status
+    label.className = 'debug-locator-label'
+    label.textContent = candidate.label
+    detail.className = 'debug-locator-detail'
+    detail.textContent = `${candidate.matchSummary} · ${candidate.status}`
+    item.append(label, detail)
+    debugLocatorCandidates.append(item)
   }
 }
 
@@ -799,8 +912,11 @@ function renderSelectedStepControlVisibility(
   targetSlotSection.hidden = !controls.targetSlots
 }
 
-function renderIssues(issues: readonly Readonly<{ path: string; message: string }>[]): void {
-  issueList.replaceChildren()
+function renderIssues(
+  list: HTMLUListElement,
+  issues: readonly Readonly<{ path: string; message: string }>[],
+): void {
+  list.replaceChildren()
 
   for (const issue of issues) {
     const item = document.createElement('li')
@@ -812,7 +928,7 @@ function renderIssues(issues: readonly Readonly<{ path: string; message: string 
     message.textContent = issue.message
     item.title = `${issue.path}: ${issue.message}`
     item.append(path, message)
-    issueList.append(item)
+    list.append(item)
   }
 }
 
@@ -820,7 +936,6 @@ function renderStatus(snapshot: SidepanelScenarioEditorSnapshot): void {
   const status = snapshot.currentRun?.status ?? 'idle'
   statusPill.textContent = capitalize(status)
   statusPill.dataset.status = status
-  runId.textContent = snapshot.currentRun?.runId ?? 'None'
 }
 
 function renderTargetTabStatus(
@@ -845,30 +960,36 @@ function renderRecordStatus(
   recordStatus.dataset.status = status
 }
 
-function latestEventSummary(traceView: TraceRunDisplayView | undefined): string {
-  const event = traceView?.latestEvent
-  if (event === undefined) {
+function latestDebugEventSummary(
+  traceView: SidepanelDebugDrawerViewModel['views']['runTrace'],
+): string {
+  if (traceView.latestEventName === undefined) {
     return 'No trace events'
   }
 
   return [
-    event.name,
-    event.stepId === undefined ? undefined : `step ${event.stepId}`,
-    event.message,
+    traceView.latestEventName,
+    traceView.latestEventMessage,
   ].filter((part) => part !== undefined && part.length > 0).join(' · ')
 }
 
-function failureSummary(traceView: TraceRunDisplayView | undefined): string {
-  const failure = traceView?.failure
-  if (failure === undefined) {
-    return 'None'
+function debugDrawerSummaryText(view: SidepanelDebugDrawerViewModel): string {
+  if (view.views.failure.message !== undefined) {
+    return 'Run failure'
   }
 
-  return [
-    failure.message,
-    failure.stepId === undefined ? undefined : `step ${failure.stepId}`,
-    failure.eventName,
-  ].filter((part) => part !== undefined && part.length > 0).join(' · ')
+  if (view.views.validation.issueCount > 0) {
+    const count = view.views.validation.issueCount
+    return `${count} validation issue${count === 1 ? '' : 's'}`
+  }
+
+  if (view.views.locator.issueSummary !== 'None') {
+    return 'Locator issue'
+  }
+
+  return view.views.runTrace.eventCount > 0
+    ? view.views.runTrace.summary
+    : view.views.validation.summary
 }
 
 function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
@@ -931,6 +1052,13 @@ function setSelectValue(element: HTMLSelectElement, value: string): void {
 
 function selectedActionFamily(): BuilderStepActionFamily {
   return (stepActionFamily.value || 'click') as BuilderStepActionFamily
+}
+
+function isDebugDrawerView(value: string | undefined): value is SidepanelDebugDrawerView {
+  return value === 'validation' ||
+    value === 'locator' ||
+    value === 'run-trace' ||
+    value === 'failure'
 }
 
 function downloadFile(filename: string, content: string, mimeType: string): void {
