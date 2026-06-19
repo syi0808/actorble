@@ -1,5 +1,8 @@
 import { createActorble } from '@actorble/browser'
 import { browser } from 'wxt/browser'
+import {
+  createAsyncExtensionMessageListener,
+} from '../../messaging/async-message-listener.js'
 import { isExtensionMessageOfKind } from '../../messaging/index.js'
 import { createContentInspectorHost, createDomInspectorAdapter } from './inspector-host.js'
 import { createContentLocatorPreviewHost } from './locator-preview-host.js'
@@ -54,7 +57,7 @@ export default defineContentScript({
       url: globalThis.location.href,
     })
 
-    browser.runtime.onMessage.addListener((message) => {
+    browser.runtime.onMessage.addListener(createAsyncExtensionMessageListener((message) => {
       if (isExtensionMessageOfKind(message, 'content:ready')) {
         return readinessHost.handleMessage(message)
       }
@@ -78,7 +81,7 @@ export default defineContentScript({
       }
 
       return runtimeHost.handleMessage(message)
-    })
+    }))
 
     void readinessHost.emitReady()
   },
