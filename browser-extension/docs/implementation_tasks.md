@@ -26,6 +26,10 @@ inspector, message routing, run control, trace display를 소유한다.
   entrypoint boundary 뒤에 둔다.
 - Recorder는 sensitive data handling을 명시적으로 다룬다. password value를
   조용히 저장하지 않고 masking 또는 omission을 허용한다.
+- Side panel은 기능 카드 집합이 아니라 scenario shell, builder workbench,
+  target assignment, recorded draft review, debug drawer로 구성한다.
+- Side panel UI state, selected target slot, locator candidates, validation
+  drawer state, trace view는 scenario document에 저장하지 않는다.
 
 ## Dependency Map
 
@@ -39,11 +43,12 @@ src/entrypoints/popup
   -> short-lived run/record/panel controls
 
 src/entrypoints/sidepanel
-  -> scenario workflow builder composition
+  -> scenario shell and metadata lifecycle
+  -> scenario builder workbench
   -> storage repository
-  -> target slot inspector and locator preview
-  -> recorded draft review
-  -> trace display
+  -> inline target assignment and locator candidates
+  -> recorded draft review inside builder flow
+  -> collapsible validation/locator/run debug drawer
 
 src/entrypoints/background
   -> messaging contracts
@@ -578,6 +583,162 @@ src/recorder
   - Manual or automated browser verification captures failures for routing,
     inspector write-back, recorder draft review, and run feedback.
 
+### T25 Side Panel Recomposition View Model
+
+- Status: [ ] Not started
+- Briefing: Introduce a side panel view model that reflects the new information
+  architecture before replacing markup. This separates product structure from
+  DOM wiring and prevents the old card layout from leaking into the redesigned
+  UI.
+- Dependencies: T20, T21, T23, ADR
+  `2026-06-19-browser-extension-sidepanel-recomposition`.
+- Completion criteria:
+  - View state is grouped as scenario shell, builder workbench, target
+    assignment, recorded draft review, and debug drawer.
+  - Document, Recording, Target Picker, Locator Preview, Validation, and Run are
+    no longer modeled as peer primary cards.
+  - Button disabled/pending state is derived from the authoring session,
+    target picker, locator preview, record, and run state without duplicating
+    authority.
+  - Debug drawer starts collapsed by default and can expose validation, locator,
+    run trace, and failure detail views.
+- Test expectations:
+  - Vitest covers empty session, saved scenario, dirty draft, selected step with
+    target slot, active recording, recorded draft review, validation error, and
+    failed run view models.
+
+### T26 Scenario Shell And Metadata Lifecycle
+
+- Status: [ ] Not started
+- Briefing: Replace the separate Scenarios and Document cards with one scenario
+  shell. Scenario metadata, persistence, import/export, record, and run are part
+  of the current scenario lifecycle.
+- Dependencies: T25.
+- Completion criteria:
+  - Scenario selection, new scenario, name, description, dirty/saved status,
+    target tab readiness, import/export, save, record, and run are presented in
+    one scenario shell.
+  - The Document card is removed from the primary UI.
+  - Scenario metadata edits continue to preserve unedited document properties.
+  - Record and run controls surface conflict, pending, unsupported page,
+    permission, and content readiness states in the shell.
+- Test expectations:
+  - Vitest covers scenario shell rendering, metadata update, save disabled
+    states, import/export command wiring, record/run pending states, and
+    content-not-ready error display.
+
+### T27 Builder Workbench Merge
+
+- Status: [ ] Not started
+- Briefing: Merge the current Steps and Step Editor surfaces into one builder
+  workbench. The user should edit the selected step without context switching
+  between separate cards.
+- Dependencies: T25, T26.
+- Completion criteria:
+  - Step list/timeline and selected step editor render as one workbench.
+  - Add, insert, duplicate, delete, move up, and move down controls are placed
+    near the step list or selected step context they affect.
+  - Action family selection and action-specific structured fields update the
+    selected step through builder operations.
+  - Targetless actions do not show target controls.
+  - Advanced JSON repair remains available as a collapsed secondary control,
+    not the primary editing path.
+- Test expectations:
+  - Vitest covers step operation rendering, selected-step editing, action family
+    changes, targetless action display, invalid step highlighting, and advanced
+    repair field update behavior.
+
+### T28 Inline Target Assignment
+
+- Status: [ ] Not started
+- Briefing: Move Target Picker and Locator Preview into selected-step target
+  assignment. Target picking starts from a concrete target slot and writes back
+  only to that slot.
+- Dependencies: T21, T25, T27.
+- Completion criteria:
+  - Target-bearing steps show `Set target` or equivalent controls inside the
+    selected step editor for each writable target slot.
+  - Drag exposes from/to target slots; waitFor target and scrollTo target expose
+    their action-specific slots.
+  - Inspector launch is disabled when no writable target slot is available.
+  - Locator candidates appear in the target assignment flow after selection.
+  - Choosing a unique candidate writes the locator into the correlated target
+    slot and refreshes validation state.
+  - Standalone Target Picker and Locator Preview cards are removed from the
+    default primary UI.
+- Test expectations:
+  - Vitest covers inspector start payload correlation, locator preview context,
+    write-back for step target, drag from, drag to, waitFor target, and scroll
+    target, plus disabled launch for targetless actions.
+
+### T29 Recording Review Inside Builder Flow
+
+- Status: [ ] Not started
+- Briefing: Treat recording as a primary input path for the builder rather than
+  a detached card. Recording status belongs to the scenario shell, and recorded
+  output belongs to builder review.
+- Dependencies: T23, T25, T26, T27.
+- Completion criteria:
+  - Recording start/stop is controlled from the scenario shell.
+  - Active recording is visible as a persistent builder state while the user
+    interacts with the page.
+  - Empty recording stops show a user-facing empty recording state without
+    mutating the current draft.
+  - Recorded draft review appears in the builder flow with source event count,
+    validation status, sensitive input confirmation, and explicit replace,
+    append, save as new, export, and discard actions.
+  - Recorded draft actions do not silently overwrite the current scenario.
+- Test expectations:
+  - Vitest covers active recording shell state, empty recording display,
+    recorded draft review rendering, replace, append, discard, save as new,
+    export, and sensitive input confirmation blocking.
+
+### T30 Collapsible Debug Drawer
+
+- Status: [ ] Not started
+- Briefing: Move locator preview diagnostics, validation details, run trace, and
+  failure detail into a collapsible debug drawer so debugging information does
+  not dominate the default builder flow.
+- Dependencies: T10, T12, T25, T28.
+- Completion criteria:
+  - Debug drawer is collapsed by default for normal authoring.
+  - Drawer exposes validation issues, locator diagnostics, run status, latest
+    trace event, and failure detail.
+  - Validation or run failure can open or highlight the drawer without changing
+    scenario document state.
+  - Debug drawer state is UI-only and is not saved with scenario documents.
+  - Existing trace and validation semantics are preserved.
+- Test expectations:
+  - Vitest covers default collapsed state, manual expand/collapse, validation
+    issue rendering, locator diagnostic rendering, failed run rendering, and
+    confirmation that drawer state is not included in saved documents.
+
+### T31 Side Panel Recomposition Verification
+
+- Status: [ ] Not started
+- Briefing: Verify the recomposed side panel as an end-to-end authoring service
+  surface. This task closes the UI rewrite by removing stale card assumptions
+  and proving the primary scenario flow works.
+- Dependencies: T26, T27, T28, T29, T30.
+- Completion criteria:
+  - The default side panel no longer presents Document, Recording, Target
+    Picker, Locator Preview, Validation, and Run as peer primary cards.
+  - A user can create a scenario, edit metadata, add a target-bearing step, pick
+    a target, choose a locator, dry-run the step, save, run the scenario, and
+    inspect debug details from the drawer.
+  - A user can record a short interaction, review the draft, append or replace
+    steps, and save without losing the existing draft unexpectedly.
+  - Responsive side panel layout keeps controls usable in narrow extension
+    widths without text overlap.
+  - Removed or renamed DOM ids, tests, and view helpers no longer reference the
+    old primary card structure except in migration notes or advanced repair
+    flows.
+- Test expectations:
+  - Vitest covers the recomposed view flow and command wiring.
+  - `pnpm test`, `pnpm typecheck`, and `pnpm build` pass.
+  - Manual browser verification covers target picking, recording review,
+    per-step dry run, scenario run, and debug drawer failure display.
+
 ## First Vertical Slice
 
 The completed initial vertical slice is T1 through T6:
@@ -603,7 +764,7 @@ Acceptance criteria:
 - The UI displays at least running, completed, and failed statuses with `runId`
   correlation.
 
-## Redesign Vertical Slice
+## Completed Builder Vertical Slice
 
 The first redesign slice is T18 through T21:
 
@@ -628,6 +789,32 @@ Acceptance criteria:
 - The dry-run path does not depend on `frameId: 0` unless the frame is known.
 - Validation and trace feedback appear in the same builder workflow.
 
+## Side Panel Recomposition Vertical Slice
+
+The first recomposition slice is T25 through T28:
+
+```txt
+side panel view model
+-> scenario shell renders current draft metadata
+-> builder workbench renders selected step
+-> click step exposes target slot
+-> Set target launches inspector with target slot correlation
+-> locator preview returns candidates
+-> chosen locator writes into the target slot
+-> validation updates the selected step
+```
+
+Acceptance criteria:
+
+- A user can create a new draft scenario from the recomposed side panel.
+- The first step can be changed to a target-bearing action and edited in the
+  builder workbench.
+- Target picking is launched from the selected step target field, not a
+  standalone card.
+- Locator preview selection writes back to the correlated target slot.
+- Validation status updates without opening the debug drawer unless the user
+  expands it or an error requires attention.
+
 ## Execution Checklist
 
 - Before each task, add or update focused Vitest coverage for the behavior being
@@ -643,5 +830,9 @@ Acceptance criteria:
 - Include `frameId` only for known frame correlations.
 - Treat unsupported pages, missing permissions, cross-origin frame limits, and
   content-script readiness as user-visible states.
+- Keep the side panel default UI centered on scenario shell, builder workbench,
+  target assignment, recorded draft review, and a collapsed debug drawer.
+- Do not reintroduce Document, Target Picker, Locator Preview, Validation, or
+  Run as peer primary cards in the side panel.
 - Run `pnpm test`, `pnpm typecheck`, and `pnpm build` before marking an
   implementation task completed.

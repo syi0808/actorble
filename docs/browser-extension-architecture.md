@@ -87,7 +87,10 @@ WXT가 extension manifest를 생성하므로 source `manifest.json`은 두지 �
 entrypoint-specific code는 `src/entrypoints` 아래에 두고, workflow builder처럼
 테스트 가능한 authoring logic은 entrypoint 밖의 feature module에 둡니다.
 
-Related decision: `docs/adr/2026-06-18-browser-extension-workflow-builder.md`.
+Related decisions:
+
+- `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
+- `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
 
 ## 4. Runtime Components
 
@@ -154,6 +157,47 @@ TargetSlot
 
 inspector와 locator preview는 target slot이 선택된 상태에서만 primary authoring
 flow에 진입합니다. standalone inspector는 diagnostics 용도로만 허용합니다.
+
+#### Side Panel Information Architecture
+
+side panel은 기능 카드를 병렬로 나열하지 않고, scenario lifecycle과 builder 작업을
+중심으로 구성합니다.
+
+```txt
+Scenario shell
+-> Scenario builder workbench
+-> Target assignment interaction
+-> Recorded draft review
+-> Collapsible debug drawer
+```
+
+Scenario shell은 기존 Document card를 대체합니다. scenario 선택, 생성, 이름과
+설명 편집, dirty/saved 상태, target tab readiness, import/export, save, record,
+run은 하나의 scenario lifecycle control로 노출합니다. document metadata는 scenario
+metadata로 취급하고, 별도 primary card로 분리하지 않습니다.
+
+Scenario builder workbench는 step list와 selected step editor를 같은 작업면에
+둡니다. step add/insert/duplicate/delete/reorder, action family 선택, action별
+structured field editing, per-step dry run은 선택된 step 맥락 안에서 동작합니다.
+Steps와 Step Editor는 별도 primary card가 아닙니다.
+
+Target assignment는 selected step editor 내부의 target field control입니다. target이
+필요한 action만 `Set target` interaction을 활성화합니다. drag는 from/to, waitFor는
+wait target, scrollTo target은 scroll target처럼 action-specific slot을 명시합니다.
+target picker UI는 standalone card가 아니라 해당 slot을 채우는 버튼과 진행 상태입니다.
+선택된 locator candidate는 항상 correlated target slot에 기록합니다.
+
+Recording은 builder의 primary input path입니다. record start/stop은 scenario shell에서
+제공하고, stop 후 draft가 있으면 builder review surface에 표시합니다. recorded draft는
+현재 draft를 조용히 덮어쓰지 않고 replace, append, save as new, export, discard 중
+명시적 사용자 선택으로만 반영합니다. empty recording과 sensitive input confirmation은
+review surface에서 처리합니다.
+
+Locator preview, validation details, run trace, failure detail은 debugging information으로
+취급합니다. 기본 상태는 접힌 debug drawer이며, validation failure나 run failure처럼
+사용자의 다음 행동에 필요한 경우에만 열거나 강조할 수 있습니다. Debug drawer는
+authoring flow를 보조하지만 scenario 생성, step editing, target setting의 primary
+surface가 아닙니다.
 
 ### Background Service Worker
 
@@ -364,10 +408,11 @@ recorder는 sensitive data handling을 명시적으로 다뤄야 합니다.
 ## 10. Delivery Phases
 
 1. active tab routing과 content readiness를 안정화하고 frame correlation 정책 정리
-2. side panel scenario workflow builder와 authoring session model 도입
-3. target slot 기반 inspector와 locator preview를 builder에 통합
-4. navigation-safe recorder event buffering과 recorded draft review 도입
-5. step dry-run, scenario run, trace display를 builder action flow에 결합
-6. popup을 short-lived run/record control과 side panel handoff에 한정
-7. scenario JSON에서 TypeScript code export 유지
-8. optional DevTools trace panel 유지
+2. card-first side panel shell을 scenario shell, builder workbench, debug drawer로 재구성
+3. side panel scenario workflow builder와 authoring session model 도입
+4. target slot 기반 inspector와 locator preview를 selected step editor에 통합
+5. navigation-safe recorder event buffering과 recorded draft review 도입
+6. step dry-run, scenario run, trace display를 builder action flow에 결합
+7. popup을 short-lived run/record control과 side panel handoff에 한정
+8. scenario JSON에서 TypeScript code export 유지
+9. optional DevTools trace panel 유지
