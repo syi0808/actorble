@@ -46,7 +46,7 @@ extension recorder and schema support
 
 ### TSPS-01 Selection Endpoint PoC
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Validate whether one `selectText` endpoint model can represent ordinary document text, `input`, `textarea`, `contenteditable`, editor-like surfaces, iframe, and shadow root boundaries. This task decides what can be stable and what must remain capability-gated.
 - Dependencies: Architecture docs and ADR only.
 - Completion criteria:
