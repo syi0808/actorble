@@ -20,6 +20,10 @@ import {
   type SidepanelScenarioEditorSnapshot,
   type SidepanelTargetSlotRowView,
 } from './scenario-editor.js'
+import {
+  createSidepanelRecompositionViewModel,
+  type SidepanelScenarioShellView,
+} from './recomposition-view-model.js'
 import type { BuilderStepActionFamily } from '../../builder/index.js'
 import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
 
@@ -98,6 +102,8 @@ const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
 const exportFormat = requiredElement<HTMLSelectElement>('#export-format')
 const workflowStatus = requiredElement<HTMLElement>('#workflow-status')
 const scenarioSummary = requiredElement<HTMLElement>('#scenario-summary')
+const scenarioShellIssue = requiredElement<HTMLElement>('#scenario-shell-issue')
+const targetTabStatus = requiredElement<HTMLElement>('#target-tab-status')
 const createScenarioButton = requiredElement<HTMLButtonElement>('#create-scenario-button')
 const scenarioName = requiredElement<HTMLInputElement>('#scenario-name')
 const scenarioDescription = requiredElement<HTMLTextAreaElement>('#scenario-description')
@@ -421,6 +427,7 @@ browser.runtime.onMessage.addListener((message) => {
 render(editor.getSnapshot())
 void runAction(async () => {
   await editor.refresh()
+  await editor.refreshTargetTabState()
   await editor.loadRecordedDraft(launchParams.recordedDraftId)
 })
 
@@ -481,13 +488,21 @@ async function exportSelectedScenario(): Promise<void> {
 
 function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   const view = createSidepanelScenarioEditorView(snapshot)
+  const recomposedView = createSidepanelRecompositionViewModel({
+    editor: snapshot,
+    targetPicker: targetPicker.getSnapshot(),
+    locatorPreview: locatorPreviewer.getSnapshot(),
+  })
+  const shell = recomposedView.scenarioShell
 
-  workflowStatus.textContent = view.workflow.summary
-  renderScenarioOptions(view.scenarioOptions, view.selectedScenarioId)
+  workflowStatus.textContent = shell.summary
+  renderScenarioOptions(shell.scenarioOptions, shell.selectedScenarioId)
   renderActionFamilyOptions(view.actionFamilyOptions, view.selectedStepFields.actionFamily)
-  scenarioSummary.textContent = documentSummary(snapshot)
-  setInputValue(scenarioName, view.documentFields.name)
-  setInputValue(scenarioDescription, view.documentFields.description)
+  scenarioSummary.textContent = shell.summary
+  renderTargetTabStatus(shell.targetTab)
+  renderShellIssue(shell.issueSummary)
+  setInputValue(scenarioName, shell.metadata.name)
+  setInputValue(scenarioDescription, shell.metadata.description)
   renderStepList(view.stepRows)
   renderTargetSlotList(view.targetSlotRows)
   stepSummary.textContent = selectedStepSummary(snapshot)
@@ -503,7 +518,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   validationSummary.textContent = view.validationSummary
   renderIssues(view.issueViews)
   renderStatus(snapshot)
-  recordStatus.textContent = recordSummary(snapshot)
+  renderRecordStatus(shell, snapshot)
   renderRecordedDraftReview(view, snapshot)
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
@@ -511,21 +526,21 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   renderTargetPicker(view)
   renderLocatorPreview()
 
-  scenarioSelect.disabled = snapshot.pendingAction !== null || view.scenarioOptions.length === 0
-  scenarioFile.disabled = view.buttons.import.disabled
-  exportFormat.disabled = view.buttons.export.disabled
-  applyButtonView(createScenarioButton, view.buttons.create)
+  scenarioSelect.disabled = shell.pendingAction !== null || shell.scenarioOptions.length === 0
+  scenarioFile.disabled = shell.buttons.import.disabled
+  exportFormat.disabled = shell.buttons.export.disabled
+  applyButtonView(createScenarioButton, shell.buttons.create)
   applyButtonView(addStepButton, view.buttons.addStep)
   applyButtonView(insertStepButton, view.buttons.insertStep)
   applyButtonView(duplicateStepButton, view.buttons.duplicateStep)
   applyButtonView(moveStepUpButton, view.buttons.moveStepUp)
   applyButtonView(moveStepDownButton, view.buttons.moveStepDown)
   applyButtonView(deleteStepButton, view.buttons.deleteStep)
-  applyButtonView(validateButton, view.buttons.validate)
-  applyButtonView(saveButton, view.buttons.save)
-  applyButtonView(exportButton, view.buttons.export)
-  applyButtonView(runButton, view.buttons.run)
-  applyButtonView(recordButton, view.buttons.record)
+  applyButtonView(validateButton, shell.buttons.validate)
+  applyButtonView(saveButton, shell.buttons.save)
+  applyButtonView(exportButton, shell.buttons.export)
+  applyButtonView(runButton, shell.buttons.run)
+  applyButtonView(recordButton, shell.buttons.record)
   applyButtonView(dryRunButton, view.buttons.dryRun)
 }
 
@@ -731,6 +746,28 @@ function renderStatus(snapshot: SidepanelScenarioEditorSnapshot): void {
   statusPill.textContent = capitalize(status)
   statusPill.dataset.status = status
   runId.textContent = snapshot.currentRun?.runId ?? 'None'
+}
+
+function renderTargetTabStatus(
+  targetTab: SidepanelScenarioShellView['targetTab'],
+): void {
+  targetTabStatus.textContent = targetTab.summary
+  targetTabStatus.dataset.status = targetTab.status
+}
+
+function renderShellIssue(issueSummary: string): void {
+  const hasIssue = issueSummary !== 'None'
+  scenarioShellIssue.hidden = !hasIssue
+  scenarioShellIssue.textContent = hasIssue ? issueSummary : ''
+}
+
+function renderRecordStatus(
+  shell: SidepanelScenarioShellView,
+  snapshot: SidepanelScenarioEditorSnapshot,
+): void {
+  const status = shell.recordStatus ?? 'idle'
+  recordStatus.textContent = recordSummary(snapshot)
+  recordStatus.dataset.status = status
 }
 
 function latestEventSummary(traceView: TraceRunDisplayView | undefined): string {

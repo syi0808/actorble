@@ -874,6 +874,7 @@ describe('background orchestration', () => {
       createExtensionMessage({
         kind: 'popup:get-state',
         payload: {
+          tabId: activeTab.id,
           frameId: 0,
           scenarioId: 'scenario-1',
         },

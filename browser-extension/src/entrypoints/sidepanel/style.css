@@ -81,6 +81,31 @@ section p {
   gap: 8px;
 }
 
+.scenario-shell-status,
+.scenario-shell-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.scenario-shell-toolbar {
+  justify-content: flex-start;
+}
+
+.shell-issue {
+  padding: 8px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+  color: var(--danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.shell-issue[hidden] {
+  display: none;
+}
+
 .summary {
   min-width: 0;
   color: var(--muted);
@@ -508,14 +533,29 @@ button[data-pending="true"] {
 }
 
 .status-pill[data-status="running"],
+.status-pill[data-status="recording"],
 .status-pill[data-status="completed"] {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   color: var(--accent-strong);
   background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 
+.status-pill[data-status="ready"] {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.status-pill[data-status="unknown"],
+.status-pill[data-status="checking"] {
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--panel-strong);
+}
+
 .status-pill[data-status="paused"],
-.status-pill[data-status="stopped"] {
+.status-pill[data-status="stopped"],
+.status-pill[data-status="blocked"] {
   border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 12%, var(--panel));

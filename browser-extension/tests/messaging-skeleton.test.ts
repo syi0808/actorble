@@ -280,6 +280,7 @@ const validMessages = [
   {
     kind: 'popup:get-state',
     payload: {
+      tabId: 7,
       frameId: 0,
       scenarioId: 'scenario-1',
     },
@@ -613,6 +614,15 @@ describe('messaging skeleton contracts', () => {
   })
 
   it('rejects popup state messages with invalid optional fields', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          tabId: '7',
+        },
+      }),
+    ).toBe(false)
+
     expect(
       isActorbleExtensionMessage({
         kind: 'popup:get-state',

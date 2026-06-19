@@ -8,7 +8,7 @@ import {
   type ScenarioDocument,
   type ScenarioTargetTextStep,
 } from '../src/scenario/types.js'
-import { ok, type ExtensionResult } from '../src/shared/result.js'
+import { failure, ok, type ExtensionResult } from '../src/shared/result.js'
 import type {
   ScenarioJsonExport,
   ScenarioRecord,
@@ -81,6 +81,10 @@ describe('sidepanel recomposition view model', () => {
       status: 'saved',
       dirty: false,
       selectedScenarioId: 'newest-scenario',
+      targetTab: {
+        status: 'unknown',
+        summary: 'Tab not checked',
+      },
       metadata: {
         name: 'Browser login flow',
         description: '',
@@ -383,6 +387,43 @@ describe('sidepanel recomposition view model', () => {
           selectable: false,
         },
       ],
+    })
+  })
+
+  it('surfaces content readiness failures in the scenario shell', async () => {
+    const { editor } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'scenario:run') {
+          return failure({
+            code: 'content_not_ready',
+            message: 'Content script is not ready for tab 7.',
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const result = await editor.runSelectedScenario()
+    const view = viewFor(editor)
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'content_not_ready',
+        },
+      ],
+    })
+    expect(view.scenarioShell).toMatchObject({
+      issueSummary: 'Content script is not ready for tab 7.',
+      buttons: {
+        run: {
+          disabled: false,
+          pending: false,
+        },
+      },
     })
   })
 })

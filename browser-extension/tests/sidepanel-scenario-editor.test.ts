@@ -199,6 +199,98 @@ describe('sidepanel scenario editor', () => {
     await operation
   })
 
+  it('loads target tab readiness for the scenario shell lifecycle controls', async () => {
+    const { editor, sent } = createTestEditor({
+      targetTabId: 7,
+      sendResponse(message) {
+        if (message.kind === 'popup:get-state') {
+          return ok({
+            kind: 'popup:state',
+            activeTab: {
+              ready: true,
+              tabId: 7,
+              frameId: 0,
+              url: 'http://localhost:3000/login',
+            },
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const readiness = await editor.refreshTargetTabState()
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+
+    expect(readiness).toMatchObject({
+      ok: true,
+      value: {
+        status: 'ready',
+        tabId: 7,
+        frameId: 0,
+      },
+    })
+    expect(sent.at(-1)).toEqual(createExtensionMessage({
+      kind: 'popup:get-state',
+      payload: {
+        tabId: 7,
+        scenarioId: 'newest-scenario',
+      },
+    }))
+    expect(view.targetTab).toMatchObject({
+      status: 'ready',
+      tone: 'ready',
+      summary: 'Tab ready',
+      tabId: 7,
+      url: 'http://localhost:3000/login',
+    })
+    expect(view.buttons.run.disabled).toBe(false)
+    expect(view.buttons.record.disabled).toBe(false)
+  })
+
+  it('keeps run and record disabled when target tab readiness is blocked', async () => {
+    const { editor } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'popup:get-state') {
+          return ok({
+            kind: 'popup:state',
+            activeTab: {
+              ready: false,
+              issue: {
+                code: 'permission_denied',
+                message: 'Actorble does not have permission for https://example.test.',
+              },
+            },
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    const readiness = await editor.refreshTargetTabState()
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+
+    expect(readiness).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'permission_denied',
+        },
+      ],
+    })
+    expect(view.targetTab).toMatchObject({
+      status: 'blocked',
+      tone: 'blocked',
+      summary: 'Actorble does not have permission for https://example.test.',
+    })
+    expect(view.buttons.run.disabled).toBe(true)
+    expect(view.buttons.record.disabled).toBe(true)
+    expect(view.buttons.save.disabled).toBe(false)
+  })
+
   it('saves structured edits while preserving unedited document properties', async () => {
     const { editor, updates } = createTestEditor()
     await editor.refresh()
@@ -1031,6 +1123,7 @@ type TestEditorOptions = Readonly<{
   createDryRunId?: () => string
   createRecordId?: () => string
   createStepId?: () => string
+  targetTabId?: number
   sendResponse?:
     | ExtensionResult<unknown>
     | Promise<ExtensionResult<unknown>>
@@ -1131,6 +1224,7 @@ function createTestEditor(options: TestEditorOptions = {}) {
     createDryRunId: options.createDryRunId ?? (() => 'dry-run-1'),
     createRecordId: options.createRecordId ?? (() => 'record-1'),
     ...(options.createStepId === undefined ? {} : { createStepId: options.createStepId }),
+    ...(options.targetTabId === undefined ? {} : { targetTabId: options.targetTabId }),
   })
 
   return { editor, sent, updates, saves, imports, exports }

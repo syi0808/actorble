@@ -46,11 +46,13 @@ export type SidepanelScenarioShellView = Readonly<{
   status: SidepanelWorkflowView['status']
   summary: string
   dirty: boolean
+  issueSummary: string
   selectedScenarioId?: string
   selectedStepId?: string
   selectedTargetSlotId?: string
   scenarioOptions: SidepanelScenarioEditorView['scenarioOptions']
   metadata: SidepanelScenarioEditorView['documentFields']
+  targetTab: SidepanelScenarioEditorView['targetTab']
   pendingAction: SidepanelScenarioEditorSnapshot['pendingAction']
   message?: string
   runId?: string
@@ -185,11 +187,13 @@ function scenarioShellView(
     status: editorView.workflow.status,
     summary: editorView.workflow.summary,
     dirty: editorView.workflow.dirty,
+    issueSummary: issueSummary(snapshot.issues),
     selectedScenarioId: editorView.selectedScenarioId,
     selectedStepId: editorView.workflow.selectedStepId,
     selectedTargetSlotId: editorView.workflow.selectedTargetSlotId,
     scenarioOptions: editorView.scenarioOptions,
     metadata: editorView.documentFields,
+    targetTab: editorView.targetTab,
     pendingAction: snapshot.pendingAction,
     message: snapshot.message,
     runId: snapshot.currentRun?.runId,

@@ -609,7 +609,7 @@ src/recorder
 
 ### T26 Scenario Shell And Metadata Lifecycle
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Replace the separate Scenarios and Document cards with one scenario
   shell. Scenario metadata, persistence, import/export, record, and run are part
   of the current scenario lifecycle.

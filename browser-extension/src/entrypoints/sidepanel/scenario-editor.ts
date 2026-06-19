@@ -123,6 +123,20 @@ export type SidepanelRecordCommandReceipt = Readonly<{
   emptyRecording?: RecordedEmptyRecordingState
 }>
 
+export type SidepanelTargetTabState =
+  | Readonly<{ status: 'unknown' }>
+  | Readonly<{ status: 'checking' }>
+  | Readonly<{
+      status: 'ready'
+      tabId: number
+      frameId?: number
+      url?: string
+    }>
+  | Readonly<{
+      status: 'blocked'
+      issue: ExtensionIssue
+    }>
+
 export type SidepanelRecordedDraftReview = Readonly<{
   draftId: string
   sessionId: string
@@ -151,6 +165,7 @@ export type SidepanelScenarioEditorSnapshot = Readonly<{
   issues: readonly ExtensionIssue[]
   currentRun?: SidepanelScenarioRunReceipt
   currentRecord?: SidepanelRecordSession
+  targetTab: SidepanelTargetTabState
   recordedDraftReview?: SidepanelRecordedDraftReview
   trace: TraceDisplayState
   currentTrace: TraceRunDisplayView | undefined
@@ -221,6 +236,16 @@ export type SidepanelButtonView = Readonly<{
   pending: boolean
 }>
 
+export type SidepanelTargetTabView = Readonly<{
+  status: SidepanelTargetTabState['status']
+  tone: 'unknown' | 'checking' | 'ready' | 'blocked'
+  summary: string
+  tabId?: number
+  frameId?: number
+  url?: string
+  issue?: SidepanelIssueView
+}>
+
 export type SidepanelWorkflowView = Readonly<{
   status: 'empty' | 'saved' | 'draft' | 'running' | 'recording'
   dirty: boolean
@@ -284,6 +309,7 @@ export type SidepanelScenarioEditorView = Readonly<{
     inputJson: string
   }>
   issueViews: readonly SidepanelIssueView[]
+  targetTab: SidepanelTargetTabView
   validationSummary: string
   recordedDraftReview?: SidepanelRecordedDraftReviewView
   runSummary: string
@@ -308,6 +334,7 @@ export type SidepanelScenarioEditorView = Readonly<{
 
 export type SidepanelScenarioEditor = Readonly<{
   refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>>
+  refreshTargetTabState(): Promise<ExtensionResult<SidepanelTargetTabState>>
   createScenario(input?: CreateScenarioInput): ExtensionResult<SidepanelScenarioEditorSnapshot>
   selectScenario(id: string): void
   selectStep(index: number): void
@@ -390,6 +417,55 @@ export function createSidepanelScenarioEditor(
     syncSnapshotFromSession({ pendingAction: null })
 
     return loaded.ok ? ok(snapshot) : failure(loaded.issues)
+  }
+
+  async function refreshTargetTabState(): Promise<ExtensionResult<SidepanelTargetTabState>> {
+    syncSnapshotFromSession({
+      targetTab: { status: 'checking' },
+    })
+
+    let response: unknown
+    try {
+      response = await client.sendMessage(createExtensionMessage({
+        kind: 'popup:get-state',
+        payload: {
+          ...(targetTabId === undefined ? {} : { tabId: targetTabId }),
+          ...optionalFrameId(frameId),
+          ...optionalScenarioId(snapshot.selectedScenarioId),
+        },
+      }))
+    } catch (error) {
+      return setTargetTabIssue({
+        code: 'routing_error',
+        message: `Target tab readiness could not be loaded: ${describeUnknownError(error)}`,
+      })
+    }
+
+    const responseResult = readExtensionResult(response)
+    if (responseResult === null) {
+      return setTargetTabIssue({
+        code: 'unsupported_message',
+        message: 'Target tab readiness response was not understood.',
+      })
+    }
+
+    if (!responseResult.ok) {
+      return setTargetTabIssue(responseResult.issues[0] ?? {
+        code: 'routing_error',
+        message: 'Target tab readiness could not be resolved.',
+      })
+    }
+
+    const targetTab = targetTabStateFromBackground(responseResult.value)
+    if (targetTab === null) {
+      return setTargetTabIssue({
+        code: 'unsupported_message',
+        message: 'Target tab readiness response was not understood.',
+      })
+    }
+
+    syncSnapshotFromSession({ targetTab })
+    return targetTab.status === 'blocked' ? failure(targetTab.issue) : ok(targetTab)
   }
 
   function createScenario(
@@ -1399,6 +1475,15 @@ export function createSidepanelScenarioEditor(
     return failure(issue)
   }
 
+  function setTargetTabIssue(issue: ExtensionIssue): ExtensionResult<SidepanelTargetTabState> {
+    const targetTab = {
+      status: 'blocked',
+      issue,
+    } satisfies SidepanelTargetTabState
+    syncSnapshotFromSession({ targetTab })
+    return failure(issue)
+  }
+
   function applyRecordReceipt(receipt: SidepanelRecordCommandReceipt): void {
     const record = receipt.session ?? {
       type: 'record',
@@ -1577,6 +1662,7 @@ export function createSidepanelScenarioEditor(
 
   return {
     refresh,
+    refreshTargetTabState,
     createScenario,
     selectScenario,
     selectStep,
@@ -1620,6 +1706,8 @@ export function createSidepanelScenarioEditorView(
   const step = selectedStep(snapshot)
   const recordActive = snapshot.currentRecord?.status === 'recording'
   const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
+  const targetTabBlocksCommands =
+    snapshot.targetTab.status === 'checking' || snapshot.targetTab.status === 'blocked'
   const hasStep = step !== undefined
   const selectedStepIndex = snapshot.selectedStepIndex
 
@@ -1642,6 +1730,7 @@ export function createSidepanelScenarioEditorView(
       path: formatIssuePath(issue.path ?? []),
       message: issue.message,
     })),
+    targetTab: targetTabView(snapshot.targetTab),
     validationSummary: validationSummary(snapshot),
     recordedDraftReview: recordedDraftReviewView(snapshot, anyPending, hasDocument),
     runSummary: runSummary(snapshot),
@@ -1705,17 +1794,19 @@ export function createSidepanelScenarioEditorView(
       },
       run: {
         label: 'Run',
-        disabled: anyPending || !hasDocument,
+        disabled: anyPending || !hasDocument || recordActive || targetTabBlocksCommands,
         pending: snapshot.pendingAction === 'run',
       },
       dryRun: {
         label: 'Dry run',
-        disabled: anyPending || step === undefined,
+        disabled: anyPending || recordActive || step === undefined || targetTabBlocksCommands,
         pending: snapshot.pendingAction === 'dry-run',
       },
       record: {
         label: recordActive ? 'Stop recording' : 'Record',
-        disabled: anyPending || (!recordActive && runActive),
+        disabled: recordActive
+          ? anyPending
+          : anyPending || runActive || targetTabBlocksCommands,
         pending:
           snapshot.pendingAction === 'record:start' ||
           snapshot.pendingAction === 'record:stop',
@@ -2162,6 +2253,42 @@ function validationSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   return snapshot.draftDocument === undefined ? 'No scenario selected' : 'Ready'
 }
 
+function targetTabView(targetTab: SidepanelTargetTabState): SidepanelTargetTabView {
+  switch (targetTab.status) {
+    case 'unknown':
+      return {
+        status: targetTab.status,
+        tone: 'unknown',
+        summary: 'Tab not checked',
+      }
+    case 'checking':
+      return {
+        status: targetTab.status,
+        tone: 'checking',
+        summary: 'Checking tab',
+      }
+    case 'ready':
+      return {
+        status: targetTab.status,
+        tone: 'ready',
+        summary: 'Tab ready',
+        tabId: targetTab.tabId,
+        ...(targetTab.frameId === undefined ? {} : { frameId: targetTab.frameId }),
+        ...(targetTab.url === undefined ? {} : { url: targetTab.url }),
+      }
+    case 'blocked':
+      return {
+        status: targetTab.status,
+        tone: 'blocked',
+        summary: targetTab.issue.message,
+        issue: {
+          path: formatIssuePath(targetTab.issue.path ?? []),
+          message: targetTab.issue.message,
+        },
+      }
+  }
+}
+
 function runSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   if (snapshot.currentRun !== undefined) {
     return snapshot.currentTrace?.summary ?? `${capitalize(snapshot.currentRun.status)} ${
@@ -2452,6 +2579,7 @@ function emptySnapshot(trace: TraceDisplayState): SidepanelScenarioEditorSnapsho
     dirty: false,
     pendingAction: null,
     issues: [],
+    targetTab: { status: 'unknown' },
     trace,
     currentTrace: undefined,
   }
@@ -2510,17 +2638,62 @@ function stringProperty(record: Readonly<Record<string, unknown>>, key: string):
   return undefined
 }
 
-function readExtensionResult(value: unknown): ExtensionResult<unknown> | null {
+function targetTabStateFromBackground(value: unknown): SidepanelTargetTabState | null {
+  if (!isRecord(value) || value.kind !== 'popup:state' || !isRecord(value.activeTab)) {
+    return null
+  }
+
+  const activeTab = value.activeTab
+  if (activeTab.ready === true) {
+    if (typeof activeTab.tabId !== 'number') {
+      return null
+    }
+
+    return {
+      status: 'ready',
+      tabId: activeTab.tabId,
+      ...(typeof activeTab.frameId === 'number' ? { frameId: activeTab.frameId } : {}),
+      ...(typeof activeTab.url === 'string' ? { url: activeTab.url } : {}),
+    }
+  }
+
+  if (activeTab.ready === false) {
+    const issue = extensionIssueFromUnknown(activeTab.issue)
+    return issue === null
+      ? null
+      : {
+          status: 'blocked',
+          issue,
+        }
+  }
+
+  return null
+}
+
+function extensionIssueFromUnknown(value: unknown): ExtensionIssue | null {
+  if (!isRecord(value) || typeof value.code !== 'string' || typeof value.message !== 'string') {
+    return null
+  }
+
+  return {
+    code: value.code as ExtensionIssue['code'],
+    message: value.message,
+    ...(Array.isArray(value.path) ? { path: value.path as ExtensionIssue['path'] } : {}),
+    ...(isRecord(value.details) ? { details: value.details } : {}),
+  }
+}
+
+function readExtensionResult<TValue = unknown>(value: unknown): ExtensionResult<TValue> | null {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
     return null
   }
 
   if (value.ok === true && 'value' in value) {
-    return value as ExtensionResult<unknown>
+    return value as ExtensionResult<TValue>
   }
 
   if (value.ok === false && Array.isArray(value.issues)) {
-    return value as ExtensionResult<unknown>
+    return value as ExtensionResult<TValue>
   }
 
   return null
@@ -2558,6 +2731,10 @@ function correlationFromReceipt(
 
 function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
   return frameId === undefined ? {} : { frameId }
+}
+
+function optionalScenarioId(scenarioId: string | undefined): Readonly<{ scenarioId?: string }> {
+  return scenarioId === undefined ? {} : { scenarioId }
 }
 
 function statusSnapshotFrom(

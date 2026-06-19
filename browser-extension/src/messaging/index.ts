@@ -256,6 +256,7 @@ export type ContentReadyMessage = ExtensionMessage<
 export type PopupGetStateMessage = ExtensionMessage<
   'popup:get-state',
   Readonly<{
+    tabId?: number
     frameId?: number
     scenarioId?: string
   }>
@@ -426,7 +427,11 @@ function isPayloadForKind(
         isOptionalContentReadyCapabilities(payload.capabilities)
       )
     case 'popup:get-state':
-      return isOptionalFiniteNumber(payload.frameId) && isOptionalString(payload.scenarioId)
+      return (
+        isOptionalFiniteNumber(payload.tabId) &&
+        isOptionalFiniteNumber(payload.frameId) &&
+        isOptionalString(payload.scenarioId)
+      )
   }
 }
 

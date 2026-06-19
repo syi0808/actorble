@@ -57,4 +57,12 @@ describe('browser extension scaffold', () => {
 
     expect(contentScript).toContain("matches: ['http://*/*', 'https://*/*']")
   })
+
+  it('uses one sidepanel scenario shell instead of document and recording cards', async () => {
+    const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+
+    expect(sidepanelHtml).toContain('id="scenario-shell-title"')
+    expect(sidepanelHtml).not.toContain('id="document-title"')
+    expect(sidepanelHtml).not.toContain('id="recording-title"')
+  })
 })

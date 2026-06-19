@@ -14,18 +14,32 @@
         <span id="workflow-status" class="summary">Loading</span>
       </header>
 
-      <section aria-labelledby="library-title">
+      <section id="scenario-shell" aria-labelledby="scenario-shell-title">
         <div class="section-heading">
-          <h2 id="library-title">Scenarios</h2>
+          <h2 id="scenario-shell-title">Scenario</h2>
           <span id="scenario-summary" class="summary">Loading</span>
         </div>
+        <div class="scenario-shell-status">
+          <span id="target-tab-status" class="status-pill" data-status="unknown">Tab not checked</span>
+          <span id="record-status" class="status-pill" data-status="idle">Not recording</span>
+          <span id="status-pill" class="status-pill" data-status="idle">Idle</span>
+        </div>
+        <p id="scenario-shell-issue" class="shell-issue" hidden></p>
         <label class="field">
           <span>Saved scenario</span>
           <select id="scenario-select" aria-label="Saved scenario">
             <option>Loading scenarios</option>
           </select>
         </label>
-        <div class="toolbar">
+        <label class="field">
+          <span>Name</span>
+          <input id="scenario-name" type="text" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <textarea id="scenario-description" class="compact-textarea"></textarea>
+        </label>
+        <div class="scenario-shell-toolbar">
           <button id="create-scenario-button" type="button">New</button>
           <label class="file-button">
             <input id="scenario-file" type="file" accept="application/json,.json" />
@@ -36,37 +50,12 @@
             <option value="typescript">TypeScript</option>
           </select>
           <button id="export-button" type="button">Export</button>
-        </div>
-      </section>
-
-      <section aria-labelledby="document-title">
-        <div class="section-heading">
-          <h2 id="document-title">Document</h2>
-          <span id="validation-summary" class="summary">Idle</span>
-        </div>
-        <label class="field">
-          <span>Name</span>
-          <input id="scenario-name" type="text" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span>Description</span>
-          <textarea id="scenario-description" class="compact-textarea"></textarea>
-        </label>
-        <div class="toolbar">
           <button id="validate-button" type="button">Validate</button>
           <button id="save-button" type="button">Save</button>
+          <button id="record-button" type="button">Record</button>
           <button id="run-button" type="button" class="primary">Run</button>
         </div>
-      </section>
-
-      <section aria-labelledby="recording-title">
-        <div class="section-heading">
-          <h2 id="recording-title">Recording</h2>
-          <span id="record-status" class="summary">Not recording</span>
-        </div>
-        <div class="toolbar">
-          <button id="record-button" type="button">Record</button>
-        </div>
+        <span id="validation-summary" class="summary">Idle</span>
         <div id="recorded-draft-review" class="recorded-draft-review" hidden>
           <dl class="recorded-draft-fields">
             <div>
@@ -212,7 +201,6 @@
       <section aria-labelledby="run-title">
         <div class="section-heading">
           <h2 id="run-title">Run</h2>
-          <span id="status-pill" class="status-pill" data-status="idle">Idle</span>
         </div>
         <dl class="run-fields">
           <div>

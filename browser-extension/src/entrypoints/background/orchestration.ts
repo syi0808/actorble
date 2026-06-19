@@ -298,7 +298,12 @@ export function createBackgroundOrchestrator(
   async function getPopupState(
     message: PopupGetStateMessage,
   ): Promise<ExtensionResult<BackgroundPopupState>> {
-    const target = await resolveActiveTarget(message.payload.frameId)
+    const target = message.payload.tabId === undefined
+      ? await resolveActiveTarget(message.payload.frameId)
+      : await resolveTargetTab({
+          tabId: message.payload.tabId,
+          ...optionalFrameId(message.payload.frameId),
+        })
 
     if (!target.ok) {
       return ok({
