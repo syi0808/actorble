@@ -38,27 +38,32 @@ export type ScenarioRoleLocator = Readonly<{
   role: string
   name?: ScenarioTextMatcher
   includeHidden?: boolean
+  matchIndex?: number
 }>
 
 export type ScenarioTextLocator = Readonly<{
   strategy: 'text'
   text: ScenarioTextMatcher
+  matchIndex?: number
 }>
 
 export type ScenarioLabelLocator = Readonly<{
   strategy: 'label'
   label: ScenarioTextMatcher
+  matchIndex?: number
 }>
 
 export type ScenarioTestIdLocator = Readonly<{
   strategy: 'testId'
   value: string
   attribute?: string
+  matchIndex?: number
 }>
 
 export type ScenarioCssLocator = Readonly<{
   strategy: 'css'
   selector: string
+  matchIndex?: number
 }>
 
 export type ScenarioPointLocator = Readonly<{

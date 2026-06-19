@@ -38,6 +38,8 @@ export type BrowserRuntimeCompileResult = ExtensionResult<BrowserRuntimeCompilat
 
 export type BrowserRuntimeLocatorCompileResult = ExtensionResult<BrowserRuntimeLocator>
 
+const ACTORBLE_BROWSER_PLATFORM_KEY = 'actorble.browser'
+
 export function compileScenarioLocatorToBrowserRuntime(
   locator: ScenarioLocator,
   path: ExtensionIssuePath = [],
@@ -415,7 +417,7 @@ function compileTarget(
   issues: ExtensionIssue[],
 ): BrowserRuntimeLocator | null {
   if (isTargetGroup(target)) {
-    rejectPlatformExtensions(target.platform, [...path, 'platform'], issues)
+    rejectUnsupportedTargetPlatformExtensions(target.platform, [...path, 'platform'], issues)
 
     // Runtime scenarios currently accept one TargetLike, so target groups use
     // their primary locator until fallback and strict semantics are representable.
@@ -443,7 +445,11 @@ function compileLocator(
 ): BrowserRuntimeLocator | null {
   switch (locator.strategy) {
     case 'css':
-      return { kind: 'css', selector: locator.selector }
+      return {
+        kind: 'css',
+        selector: locator.selector,
+        ...matchIndexProperty(locator.matchIndex),
+      }
     case 'role': {
       const name =
         locator.name === undefined
@@ -460,6 +466,7 @@ function compileLocator(
         ...(name === undefined ? {} : { name: name.value }),
         ...(name?.exact === undefined ? {} : { exact: name.exact }),
         ...(locator.includeHidden === undefined ? {} : { includeHidden: locator.includeHidden }),
+        ...matchIndexProperty(locator.matchIndex),
       }
     }
     case 'text': {
@@ -471,6 +478,7 @@ function compileLocator(
             kind: 'text',
             value: value.value,
             ...(value.exact === undefined ? {} : { exact: value.exact }),
+            ...matchIndexProperty(locator.matchIndex),
           }
     }
     case 'label': {
@@ -482,6 +490,7 @@ function compileLocator(
             kind: 'label',
             value: value.value,
             ...(value.exact === undefined ? {} : { exact: value.exact }),
+            ...matchIndexProperty(locator.matchIndex),
           }
     }
     case 'testId':
@@ -489,6 +498,7 @@ function compileLocator(
         kind: 'testId',
         value: locator.value,
         ...(locator.attribute === undefined ? {} : { attribute: locator.attribute }),
+        ...matchIndexProperty(locator.matchIndex),
       }
     case 'point':
       return {
@@ -670,21 +680,47 @@ function rejectPlatformExtensions(
   path: ExtensionIssuePath,
   issues: ExtensionIssue[],
 ): void {
-  const extensionKeys = platform === undefined ? [] : Object.keys(platform)
+  rejectUnsupportedPlatformExtensions(platform, path, issues, [])
+}
 
-  if (extensionKeys.length === 0) {
+function rejectUnsupportedTargetPlatformExtensions(
+  platform: ScenarioPlatformExtensions | undefined,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+): void {
+  rejectUnsupportedPlatformExtensions(platform, path, issues, [ACTORBLE_BROWSER_PLATFORM_KEY])
+}
+
+function rejectUnsupportedPlatformExtensions(
+  platform: ScenarioPlatformExtensions | undefined,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+  supportedPlatformExtensions: readonly string[],
+): void {
+  const extensionKeys = platform === undefined ? [] : Object.keys(platform)
+  const unsupportedExtensionKeys = extensionKeys.filter((key) => (
+    !supportedPlatformExtensions.includes(key)
+  ))
+
+  if (unsupportedExtensionKeys.length === 0) {
     return
   }
 
   issues.push({
     code: 'unsupported_platform_extension',
-    message: `Unsupported scenario platform extension${extensionKeys.length === 1 ? '' : 's'}: ${extensionKeys.join(', ')}.`,
+    message: `Unsupported scenario platform extension${unsupportedExtensionKeys.length === 1 ? '' : 's'}: ${unsupportedExtensionKeys.join(', ')}.`,
     path,
     details: {
-      platformExtensions: extensionKeys,
-      supportedPlatformExtensions: [],
+      platformExtensions: unsupportedExtensionKeys,
+      supportedPlatformExtensions,
     },
   })
+}
+
+function matchIndexProperty(
+  matchIndex: number | undefined,
+): Readonly<{ matchIndex?: number }> {
+  return matchIndex === undefined ? {} : { matchIndex }
 }
 
 function stepIdentity(step: ScenarioStep): Readonly<{ id?: string }> {

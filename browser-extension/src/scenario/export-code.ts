@@ -229,15 +229,21 @@ function serializeLocator(
   path: readonly (string | number)[],
 ): string {
   switch (locator.kind) {
-    case 'css':
+    case 'css': {
       state.usedLocatorFactories.add('css')
-      return `css(${stringLiteral(locator.selector)})`
+      const options = inlineOptions(optionalInlineEntry('matchIndex', locator.matchIndex))
+
+      return options === undefined
+        ? `css(${stringLiteral(locator.selector)})`
+        : `css(${stringLiteral(locator.selector)}, ${options})`
+    }
     case 'role': {
       state.usedLocatorFactories.add('role')
       const options = inlineOptions([
         ...optionalInlineEntry('name', locator.name),
         ...optionalInlineEntry('exact', locator.exact),
         ...optionalInlineEntry('includeHidden', locator.includeHidden),
+        ...optionalInlineEntry('matchIndex', locator.matchIndex),
       ])
 
       return options === undefined
@@ -246,7 +252,10 @@ function serializeLocator(
     }
     case 'text': {
       state.usedLocatorFactories.add('text')
-      const options = inlineOptions(optionalInlineEntry('exact', locator.exact))
+      const options = inlineOptions([
+        ...optionalInlineEntry('exact', locator.exact),
+        ...optionalInlineEntry('matchIndex', locator.matchIndex),
+      ])
 
       return options === undefined
         ? `text(${serializeInlineValue(locator.value, [...path, 'value'])})`
@@ -254,7 +263,10 @@ function serializeLocator(
     }
     case 'label': {
       state.usedLocatorFactories.add('label')
-      const options = inlineOptions(optionalInlineEntry('exact', locator.exact))
+      const options = inlineOptions([
+        ...optionalInlineEntry('exact', locator.exact),
+        ...optionalInlineEntry('matchIndex', locator.matchIndex),
+      ])
 
       return options === undefined
         ? `label(${serializeInlineValue(locator.value, [...path, 'value'])})`
@@ -262,7 +274,10 @@ function serializeLocator(
     }
     case 'testId': {
       state.usedLocatorFactories.add('testId')
-      const options = inlineOptions(optionalInlineEntry('attribute', locator.attribute))
+      const options = inlineOptions([
+        ...optionalInlineEntry('attribute', locator.attribute),
+        ...optionalInlineEntry('matchIndex', locator.matchIndex),
+      ])
 
       return options === undefined
         ? `testId(${stringLiteral(locator.value)})`

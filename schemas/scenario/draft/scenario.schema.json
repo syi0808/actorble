@@ -169,6 +169,10 @@
         },
         "includeHidden": {
           "type": "boolean"
+        },
+        "matchIndex": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -182,6 +186,10 @@
         },
         "text": {
           "$ref": "#/$defs/textMatcher"
+        },
+        "matchIndex": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -195,6 +203,10 @@
         },
         "label": {
           "$ref": "#/$defs/textMatcher"
+        },
+        "matchIndex": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -211,6 +223,10 @@
         },
         "attribute": {
           "$ref": "#/$defs/nonEmptyString"
+        },
+        "matchIndex": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -224,6 +240,10 @@
         },
         "selector": {
           "$ref": "#/$defs/nonEmptyString"
+        },
+        "matchIndex": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

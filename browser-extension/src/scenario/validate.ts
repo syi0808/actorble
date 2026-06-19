@@ -28,11 +28,11 @@ const rootKeys = new Set([
 ])
 
 const locatorKeysByStrategy = {
-  css: new Set(['strategy', 'selector']),
-  role: new Set(['strategy', 'role', 'name', 'includeHidden']),
-  text: new Set(['strategy', 'text']),
-  label: new Set(['strategy', 'label']),
-  testId: new Set(['strategy', 'value', 'attribute']),
+  css: new Set(['strategy', 'selector', 'matchIndex']),
+  role: new Set(['strategy', 'role', 'name', 'includeHidden', 'matchIndex']),
+  text: new Set(['strategy', 'text', 'matchIndex']),
+  label: new Set(['strategy', 'label', 'matchIndex']),
+  testId: new Set(['strategy', 'value', 'attribute', 'matchIndex']),
   point: new Set(['strategy', 'point']),
 } as const
 
@@ -290,25 +290,30 @@ function validateLocator(
     case 'css':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.css, path, issues)
       validateNonEmptyString(locator.selector, [...path, 'selector'], issues)
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
       return
     case 'role':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.role, path, issues)
       validateNonEmptyString(locator.role, [...path, 'role'], issues)
       validateTextMatcher(locator.name, [...path, 'name'], issues, true)
       validateOptionalBoolean(locator.includeHidden, [...path, 'includeHidden'], issues)
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
       return
     case 'text':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.text, path, issues)
       validateTextMatcher(locator.text, [...path, 'text'], issues)
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
       return
     case 'label':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.label, path, issues)
       validateTextMatcher(locator.label, [...path, 'label'], issues)
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
       return
     case 'testId':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.testId, path, issues)
       validateNonEmptyString(locator.value, [...path, 'value'], issues)
       validateOptionalNonEmptyString(locator.attribute, [...path, 'attribute'], issues)
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
       return
     case 'point':
       rejectUnexpectedProperties(locator, locatorKeysByStrategy.point, path, issues)
