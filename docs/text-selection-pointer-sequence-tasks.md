@@ -74,7 +74,7 @@ extension recorder and schema support
 
 ### TSPS-03 Platform Selection Adapter
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Implement browser platform selection read/apply/clear operations behind adapter boundaries so engines do not call DOM selection APIs directly.
 - Dependencies: TSPS-02.
 - Completion criteria:

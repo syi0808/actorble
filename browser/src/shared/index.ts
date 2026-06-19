@@ -538,6 +538,37 @@ export interface DomWritePort {
 
 export interface DomPort extends DomReadPort, DomWritePort {}
 
+export type TextSelectionSurface = 'document-text' | 'input' | 'textarea' | 'contenteditable'
+
+export type TextSelectionStrategy = 'selection-api' | 'input-range-api'
+
+export type PlatformTextSelectionEndpoint = Readonly<{
+  target: Node | HTMLInputElement | HTMLTextAreaElement
+  offset: number
+}>
+
+export type PlatformTextSelectionRange = Readonly<{
+  anchor: PlatformTextSelectionEndpoint
+  focus: PlatformTextSelectionEndpoint
+}>
+
+export type PlatformTextSelectionSnapshot = Readonly<{
+  surface: TextSelectionSurface
+  strategy: TextSelectionStrategy
+  selectedText: string
+  anchorNode: Node | HTMLInputElement | HTMLTextAreaElement | null
+  focusNode: Node | HTMLInputElement | HTMLTextAreaElement | null
+  anchorOffset: number
+  focusOffset: number
+  collapsed: boolean
+}>
+
+export interface SelectionPort {
+  readSelection(target?: Node | HTMLInputElement | HTMLTextAreaElement): PlatformTextSelectionSnapshot
+  applySelection(range: PlatformTextSelectionRange): PlatformTextSelectionSnapshot
+  clearSelection(target?: Node | HTMLInputElement | HTMLTextAreaElement): PlatformTextSelectionSnapshot
+}
+
 export type PointerEventDescriptor = Readonly<{
   type: 'pointermove' | 'pointerdown' | 'pointerup' | 'pointercancel'
   target: Element
@@ -608,6 +639,7 @@ export interface StylePort {
 
 export interface PlatformAdapterPort {
   readonly dom: DomPort
+  readonly selection: SelectionPort
   readonly events: EventDispatchPort
   readonly state: StateApplyPort
   readonly style: StylePort
