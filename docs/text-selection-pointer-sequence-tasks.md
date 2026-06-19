@@ -60,7 +60,7 @@ extension recorder and schema support
 
 ### TSPS-02 Runtime Shared Contracts
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add runtime contracts for selection endpoints, selection options, pointer sequence steps, capability fields, and error codes without wiring behavior yet.
 - Dependencies: TSPS-01.
 - Completion criteria:

@@ -75,6 +75,8 @@ export type ActorbleErrorCode =
   | 'ACTION_TIMEOUT'
   | 'ACTION_CANCELLED'
   | 'INTERACTABILITY_FAILED'
+  | 'TEXT_SELECTION_UNSUPPORTED'
+  | 'POINTER_SEQUENCE_INCOMPLETE'
   | 'PLATFORM_UNSUPPORTED'
 
 export type ActorbleErrorDetails = Readonly<Record<string, unknown>>
@@ -419,6 +421,52 @@ export type DragOptions = OperationOptions &
   Readonly<{
     force?: boolean
   }>
+
+export type TextSelectionEndpoint = Readonly<{
+  target: TargetLike
+  offset?: number
+  point?: Point
+}>
+
+export type TextSelectionTarget =
+  | TargetLike
+  | Readonly<{
+      anchor: TextSelectionEndpoint
+      focus: TextSelectionEndpoint
+    }>
+
+export type SelectTextOptions = OperationOptions
+
+export type PointerSequenceMoveStep = Readonly<{
+  type: 'move'
+  to: Point
+  duration?: DurationMs
+}>
+
+export type PointerSequenceDownStep = Readonly<{
+  type: 'down'
+  button?: PointerButtonName
+}>
+
+export type PointerSequenceUpStep = Readonly<{
+  type: 'up'
+  button?: PointerButtonName
+}>
+
+export type PointerSequencePauseStep = Readonly<{
+  type: 'pause'
+  duration: DurationMs
+}>
+
+export type PointerSequenceStep =
+  | PointerSequenceMoveStep
+  | PointerSequenceDownStep
+  | PointerSequenceUpStep
+  | PointerSequencePauseStep
+
+export type PointerSequence = readonly PointerSequenceStep[]
+
+export type PointerSequenceOptions = OperationOptions
 
 export type WaitOptions = OperationOptions
 

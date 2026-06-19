@@ -15,6 +15,8 @@ describe('BrowserCapabilityFidelityReporter', () => {
       crossOriginFrame: false,
       closedShadowRoot: false,
       dragAndDrop: 'pointer-gesture',
+      textSelection: 'selection-api',
+      pointerSequence: 'transactional',
     })
 
     expect(reporter.getFidelity()).toEqual({
@@ -48,6 +50,8 @@ describe('BrowserCapabilityFidelityReporter', () => {
       pseudoState: 'mirror',
       trustedEvents: false,
       dragAndDrop: 'pointer-gesture',
+      textSelection: 'selection-api',
+      pointerSequence: 'transactional',
     })
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',

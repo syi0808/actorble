@@ -539,6 +539,43 @@ type TypeOptions = OperationOptions & {
 
 Use `focusStrategy: 'none'` only when the target is already focused.
 
+### Text selection contracts
+
+```ts
+type TextSelectionEndpoint = {
+  target: TargetLike
+  offset?: number
+  point?: Point
+}
+
+type TextSelectionTarget =
+  | TargetLike
+  | {
+      anchor: TextSelectionEndpoint
+      focus: TextSelectionEndpoint
+    }
+
+type SelectTextOptions = OperationOptions
+```
+
+The browser runtime exposes these contracts before selection behavior is wired.
+Independent `pointerDown` and `pointerUp` scenario steps are not part of the
+public scenario contract.
+
+### Pointer sequence contracts
+
+```ts
+type PointerSequenceStep =
+  | { type: 'move'; to: Point; duration?: DurationMs }
+  | { type: 'down'; button?: PointerButtonName }
+  | { type: 'up'; button?: PointerButtonName }
+  | { type: 'pause'; duration: DurationMs }
+
+type PointerSequence = readonly PointerSequenceStep[]
+
+type PointerSequenceOptions = OperationOptions
+```
+
 ## WaitCondition
 
 ```ts
@@ -585,6 +622,8 @@ type CapabilityReport = {
   crossOriginFrame: boolean
   closedShadowRoot: boolean
   dragAndDrop: DragAndDropCapability
+  textSelection: TextSelectionCapability
+  pointerSequence: PointerSequenceCapability
 }
 ```
 
@@ -617,4 +656,4 @@ function actorbleError(
 ): ActorbleError
 ```
 
-`ActorbleErrorCode` currently includes `NOT_IMPLEMENTED`, `TARGET_NOT_FOUND`, `TARGET_AMBIGUOUS`, `TARGET_STALE`, `TARGET_DETACHED`, `ACTION_TIMEOUT`, `ACTION_CANCELLED`, `INTERACTABILITY_FAILED`, and `PLATFORM_UNSUPPORTED`.
+`ActorbleErrorCode` currently includes `NOT_IMPLEMENTED`, `TARGET_NOT_FOUND`, `TARGET_AMBIGUOUS`, `TARGET_STALE`, `TARGET_DETACHED`, `ACTION_TIMEOUT`, `ACTION_CANCELLED`, `INTERACTABILITY_FAILED`, `TEXT_SELECTION_UNSUPPORTED`, `POINTER_SEQUENCE_INCOMPLETE`, and `PLATFORM_UNSUPPORTED`.

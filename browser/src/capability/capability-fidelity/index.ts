@@ -13,6 +13,13 @@ export type DragAndDropCapability =
   | 'html5-dnd'
   | 'editor-selection'
   | 'custom-adapter'
+export type TextSelectionCapability =
+  | 'none'
+  | 'selection-api'
+  | 'pointer-gesture'
+  | 'editor-adapter'
+  | 'native'
+export type PointerSequenceCapability = 'none' | 'transactional'
 
 export type InputFidelity =
   | 'visual-only'
@@ -52,6 +59,8 @@ export type CapabilityReport = Readonly<{
   crossOriginFrame: boolean
   closedShadowRoot: boolean
   dragAndDrop: DragAndDropCapability
+  textSelection: TextSelectionCapability
+  pointerSequence: PointerSequenceCapability
 }>
 
 export type FidelityReport = Readonly<{
@@ -108,6 +117,8 @@ const browserCapabilityReport: CapabilityReport = {
   crossOriginFrame: false,
   closedShadowRoot: false,
   dragAndDrop: 'pointer-gesture',
+  textSelection: 'selection-api',
+  pointerSequence: 'transactional',
 }
 
 const browserVisualOverlayDisabled: VisualOverlayFidelity = {

@@ -44,6 +44,22 @@ describe('shared primitives', () => {
     expect(error.cause).toBe(reason)
   })
 
+  it('creates selection and pointer-sequence specific errors', () => {
+    expect(actorbleError('TEXT_SELECTION_UNSUPPORTED', 'Selection is unsupported.', {
+      details: { capability: 'textSelection' },
+    })).toMatchObject({
+      code: 'TEXT_SELECTION_UNSUPPORTED',
+      details: { capability: 'textSelection' },
+    })
+
+    expect(actorbleError('POINTER_SEQUENCE_INCOMPLETE', 'Pointer sequence ended while pressed.', {
+      details: { pressedButtons: ['primary'] },
+    })).toMatchObject({
+      code: 'POINTER_SEQUENCE_INCOMPLETE',
+      details: { pressedButtons: ['primary'] },
+    })
+  })
+
 })
 
 describe('shared boundary', () => {
