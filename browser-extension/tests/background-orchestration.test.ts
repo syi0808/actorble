@@ -734,8 +734,9 @@ describe('background orchestration', () => {
 
   it('routes locator preview requests to content and returns the preview result', async () => {
     const activeTab = await createActiveTab()
-    const candidates = createLocatorCandidates({
+    const target = {
       tagName: 'button',
+      documentOrderIndex: 6,
       role: 'button',
       ariaLabel: 'Sign in',
       rect: {
@@ -744,7 +745,8 @@ describe('background orchestration', () => {
         width: 100,
         height: 32,
       },
-    })
+    } as const
+    const candidates = createLocatorCandidates(target)
     const previewResult = {
       tabId: activeTab.id,
       frameId: 0,
@@ -773,6 +775,7 @@ describe('background orchestration', () => {
         tabId: activeTab.id,
         frameId: 0,
         scenarioId: 'scenario-1',
+        target,
         candidates,
       },
     })

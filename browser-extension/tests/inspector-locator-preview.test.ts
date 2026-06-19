@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  autoApplyTargetFromPreview,
   createLocatorCandidates,
   createLocatorPreviewCandidateViews,
   createLocatorPreviewer,
@@ -115,6 +116,106 @@ describe('inspector locator preview', () => {
     ])
   })
 
+  it('builds an auto-apply target from the selected ambiguous match index', () => {
+    const [roleCandidate] = createLocatorCandidates({
+      ...pickedTarget,
+      documentOrderIndex: 12,
+    })
+    if (roleCandidate === undefined) {
+      throw new Error('Expected role candidate.')
+    }
+
+    const result = autoApplyTargetFromPreview({
+      status: 'ready',
+      target: {
+        ...pickedTarget,
+        documentOrderIndex: 12,
+      },
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit-step',
+      },
+      candidates: [
+        {
+          ...roleCandidate,
+          matchCount: 3,
+          strict: false,
+          status: 'ambiguous',
+          selectedMatchIndex: 2,
+        },
+      ],
+      issues: [],
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        targetSlot: {
+          kind: 'step-target',
+          stepId: 'submit-step',
+        },
+        candidate: {
+          id: 'role-1',
+        },
+        target: {
+          kind: 'target',
+          strict: true,
+          locators: [
+            {
+              strategy: 'role',
+              role: 'button',
+              matchIndex: 2,
+            },
+          ],
+          platform: {
+            'actorble.browser': {
+              inspector: {
+                documentOrderIndex: 12,
+                candidateId: 'role-1',
+                selectedMatchIndex: 2,
+              },
+            },
+          },
+        },
+      },
+    })
+  })
+
+  it('does not auto-apply when no candidate matches the selected element', () => {
+    const [roleCandidate] = createLocatorCandidates(pickedTarget)
+    if (roleCandidate === undefined) {
+      throw new Error('Expected role candidate.')
+    }
+
+    const result = autoApplyTargetFromPreview({
+      status: 'ready',
+      target: pickedTarget,
+      targetSlot: {
+        kind: 'step-target',
+        stepId: 'submit-step',
+      },
+      candidates: [
+        {
+          ...roleCandidate,
+          matchCount: 2,
+          strict: false,
+          status: 'ambiguous',
+        },
+      ],
+      issues: [],
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'inspector_error',
+          message: 'Selected element could not be matched by locator candidates.',
+        },
+      ],
+    })
+  })
+
   it('delegates preview checks through the extension messaging boundary', async () => {
     const sent: ActorbleExtensionMessage[] = []
     const previewer = createLocatorPreviewer(createPreviewClient(sent))
@@ -141,6 +242,7 @@ describe('inspector locator preview', () => {
       payload: {
         tabId: 7,
         scenarioId: 'scenario-1',
+        target: pickedTarget,
       },
     })
     expect(sent[0]).toEqual(
@@ -149,6 +251,7 @@ describe('inspector locator preview', () => {
         payload: {
           tabId: 7,
           scenarioId: 'scenario-1',
+          target: pickedTarget,
           candidates: createLocatorCandidates(pickedTarget),
         },
       }),

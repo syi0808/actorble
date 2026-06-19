@@ -227,6 +227,18 @@ const validMessages = [
       tabId: 7,
       frameId: 0,
       scenarioId: 'scenario-1',
+      target: {
+        tagName: 'button',
+        documentOrderIndex: 8,
+        role: 'button',
+        ariaLabel: 'Sign in',
+        rect: {
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 32,
+        },
+      },
       candidates: [
         {
           id: 'role-1',

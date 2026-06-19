@@ -5,7 +5,11 @@ import {
   type InspectorTargetSlotCorrelation,
   type RequiredTabCorrelation,
 } from '../messaging/index.js'
-import type { ScenarioLocator, ScenarioPointLocator } from '../scenario/types.js'
+import type {
+  ScenarioLocator,
+  ScenarioPointLocator,
+  ScenarioTargetGroup,
+} from '../scenario/types.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../shared/result.js'
 
 export type LocatorCandidate = Readonly<{
@@ -25,6 +29,7 @@ export type LocatorPreviewCandidateStatus =
 export type LocatorPreviewCandidate = LocatorCandidate &
   Readonly<{
     matchCount: number
+    selectedMatchIndex?: number
     strict: boolean
     status: LocatorPreviewCandidateStatus
     message?: string
@@ -34,6 +39,7 @@ export type LocatorPreviewRequest = RequiredTabCorrelation &
   Readonly<{
     scenarioId?: string
     targetSlot?: InspectorTargetSlotCorrelation
+    target: InspectorTargetMetadata
     candidates: readonly LocatorCandidate[]
   }>
 
@@ -86,6 +92,7 @@ export type LocatorPreviewer = Readonly<{
     input?: string | LocatorPreviewContext,
   ): Promise<ExtensionResult<LocatorPreviewResult>>
   clear(): void
+  reportIssue(issue: ExtensionIssue): void
   getSnapshot(): LocatorPreviewSnapshot
 }>
 
@@ -260,6 +267,7 @@ export function createLocatorPreviewer(
         ...(frameId === undefined ? {} : { frameId }),
         ...(context.scenarioId === undefined ? {} : { scenarioId: context.scenarioId }),
         ...(context.targetSlot === undefined ? {} : { targetSlot: context.targetSlot }),
+        target,
         candidates,
       },
     })
@@ -313,6 +321,15 @@ export function createLocatorPreviewer(
     snapshot = idleSnapshot()
   }
 
+  function reportIssue(issue: ExtensionIssue): void {
+    snapshot = {
+      ...snapshot,
+      status: 'failed',
+      issues: [issue],
+      message: undefined,
+    }
+  }
+
   function getSnapshot(): LocatorPreviewSnapshot {
     return snapshot
   }
@@ -334,8 +351,42 @@ export function createLocatorPreviewer(
   return {
     previewTarget,
     clear,
+    reportIssue,
     getSnapshot,
   }
+}
+
+export function autoApplyTargetFromPreview(
+  snapshot: LocatorPreviewSnapshot,
+): ExtensionResult<Readonly<{
+  targetSlot: InspectorTargetSlotCorrelation
+  target: ScenarioTargetGroup
+  candidate: LocatorPreviewCandidate
+}>> {
+  if (snapshot.targetSlot === undefined) {
+    return failure({
+      code: 'inspector_error',
+      message: 'No target slot is available for auto-apply.',
+    })
+  }
+
+  const candidate = snapshot.candidates.find((current) => (
+    current.selectedMatchIndex !== undefined &&
+    (current.status === 'unique' || current.status === 'ambiguous')
+  ))
+
+  if (candidate === undefined) {
+    return failure({
+      code: 'inspector_error',
+      message: 'Selected element could not be matched by locator candidates.',
+    })
+  }
+
+  return ok({
+    targetSlot: snapshot.targetSlot,
+    target: targetGroupFromSelectedCandidate(snapshot, candidate),
+    candidate,
+  })
 }
 
 function idleSnapshot(): LocatorPreviewSnapshot {
@@ -435,6 +486,50 @@ function readLocatorPreviewResponse(
   }
 
   return null
+}
+
+function targetGroupFromSelectedCandidate(
+  snapshot: LocatorPreviewSnapshot,
+  candidate: LocatorPreviewCandidate,
+): ScenarioTargetGroup {
+  return {
+    kind: 'target',
+    strict: true,
+    locators: [locatorForSelectedMatch(candidate)],
+    platform: {
+      'actorble.browser': {
+        inspector: {
+          ...(snapshot.target?.documentOrderIndex === undefined
+            ? {}
+            : { documentOrderIndex: snapshot.target.documentOrderIndex }),
+          candidateId: candidate.id,
+          selectedMatchIndex: candidate.selectedMatchIndex,
+        },
+      },
+    },
+  }
+}
+
+function locatorForSelectedMatch(candidate: LocatorPreviewCandidate): ScenarioLocator {
+  const selectedMatchIndex = candidate.selectedMatchIndex
+  if (
+    selectedMatchIndex === undefined ||
+    candidate.matchCount <= 1 ||
+    !locatorSupportsMatchIndex(candidate.locator)
+  ) {
+    return candidate.locator
+  }
+
+  return {
+    ...candidate.locator,
+    matchIndex: selectedMatchIndex,
+  }
+}
+
+function locatorSupportsMatchIndex(
+  locator: ScenarioLocator,
+): locator is Exclude<ScenarioLocator, ScenarioPointLocator> {
+  return locator.strategy !== 'point'
 }
 
 function matchSummary(candidate: LocatorPreviewCandidate): string {

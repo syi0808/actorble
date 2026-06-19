@@ -2,6 +2,7 @@ import {
   addStep as addBuilderStep,
   appendDraftSteps as appendBuilderDraftSteps,
   assignLocatorToTargetSlot,
+  assignTargetToTargetSlot,
   clearTargetSlot,
   createScenario as createBuilderScenario,
   createScenarioAuthoringSession,
@@ -59,6 +60,7 @@ import type {
   ScenarioLocator,
   ScenarioPoint,
   ScenarioStep,
+  ScenarioTarget,
 } from '../../scenario/types.js'
 import { validateScenarioDocument } from '../../scenario/validate.js'
 import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
@@ -371,6 +373,10 @@ export type SidepanelScenarioEditor = Readonly<{
   applyLocatorToTargetSlot(
     slot: BuilderTargetSlot,
     locator: ScenarioLocator,
+  ): ExtensionResult<ScenarioDocument>
+  applyTargetToTargetSlot(
+    slot: BuilderTargetSlot,
+    target: ScenarioTarget,
   ): ExtensionResult<ScenarioDocument>
   applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument>
   validateDraft(): ExtensionResult<ScenarioDocument>
@@ -714,6 +720,30 @@ export function createSidepanelScenarioEditor(
     session = withDefaultTargetSlot(assigned.value)
     externalIssues = []
     syncSnapshotFromSession({ message: 'Locator applied' })
+
+    return scenarioDocumentResultFromSession()
+  }
+
+  function applyTargetToTargetSlot(
+    slot: BuilderTargetSlot,
+    target: ScenarioTarget,
+  ): ExtensionResult<ScenarioDocument> {
+    if (session.draftDocument === undefined) {
+      return setIssue({
+        code: 'invalid_document',
+        message: 'Select a scenario before applying a target.',
+      })
+    }
+
+    const assigned = assignTargetToTargetSlot(session, slot, target)
+    if (!assigned.ok) {
+      setExternalIssues(assigned.issues, { message: undefined })
+      return failure(assigned.issues)
+    }
+
+    session = withDefaultTargetSlot(assigned.value)
+    externalIssues = []
+    syncSnapshotFromSession({ message: 'Target applied' })
 
     return scenarioDocumentResultFromSession()
   }
@@ -1693,6 +1723,7 @@ export function createSidepanelScenarioEditor(
     updateDocumentFields,
     updateSelectedStepFields,
     applyLocatorToTargetSlot,
+    applyTargetToTargetSlot,
     applyLocatorToSelectedStep,
     validateDraft,
     saveDraft,

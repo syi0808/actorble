@@ -3,7 +3,10 @@ import type {
   ActorbleFacadeOptions,
 } from '@actorble/browser'
 import { isExtensionMessageOfKind } from '../../messaging/index.js'
-import type { ActorbleExtensionMessageByKind } from '../../messaging/index.js'
+import type {
+  ActorbleExtensionMessageByKind,
+  InspectorTargetMetadata,
+} from '../../messaging/index.js'
 import {
   compileScenarioLocatorToBrowserRuntime,
 } from '../../scenario/compile-to-browser-runtime.js'
@@ -24,6 +27,11 @@ export type ContentLocatorPreviewHostOptions = Readonly<{
 }>
 
 type LocatorPreviewMessage = ActorbleExtensionMessageByKind<'locator:preview'>
+type DomLikeElement = Readonly<{
+  ownerDocument: Readonly<{
+    querySelectorAll(selector: string): Iterable<unknown> | ArrayLike<unknown>
+  }>
+}>
 
 export function createContentLocatorPreviewHost(
   options: ContentLocatorPreviewHostOptions,
@@ -81,7 +89,7 @@ export function createContentLocatorPreviewHost(
 
 async function previewCandidate(
   actorble: ContentLocatorPreviewActorble,
-  _message: LocatorPreviewMessage,
+  message: LocatorPreviewMessage,
   candidate: LocatorPreviewMessage['payload']['candidates'][number],
   index: number,
 ): Promise<LocatorPreviewCandidate> {
@@ -103,10 +111,12 @@ async function previewCandidate(
   try {
     const matches = await actorble.resolveAll(runtimeLocator.value, { strict: false })
     const matchCount = matches.length
+    const selectedMatchIndex = selectedMatchIndexForTarget(message.payload.target, matches)
 
     return {
       ...candidate,
       matchCount,
+      ...(selectedMatchIndex === undefined ? {} : { selectedMatchIndex }),
       strict: matchCount === 1,
       status: statusForMatchCount(matchCount),
     }
@@ -119,6 +129,54 @@ async function previewCandidate(
       message: describeUnknownError(error),
     }
   }
+}
+
+function selectedMatchIndexForTarget(
+  target: InspectorTargetMetadata,
+  matches: readonly unknown[],
+): number | undefined {
+  if (target.documentOrderIndex === undefined) {
+    return undefined
+  }
+
+  const matchIndex = matches.findIndex((match) => {
+    if (!isElementTargetHandle(match)) {
+      return false
+    }
+
+    return documentOrderIndexForElement(match.element) === target.documentOrderIndex
+  })
+
+  return matchIndex < 0 ? undefined : matchIndex
+}
+
+function isElementTargetHandle(value: unknown): value is Readonly<{ element: DomLikeElement }> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'element' in value &&
+    isDomLikeElement((value as Readonly<{ element?: unknown }>).element)
+  )
+}
+
+function isDomLikeElement(value: unknown): value is DomLikeElement {
+  const ownerDocument = (value as Readonly<{
+    ownerDocument?: Readonly<{ querySelectorAll?: unknown }>
+  }> | null)?.ownerDocument
+
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'ownerDocument' in value &&
+    typeof ownerDocument === 'object' &&
+    ownerDocument !== null &&
+    typeof ownerDocument.querySelectorAll === 'function'
+  )
+}
+
+function documentOrderIndexForElement(element: DomLikeElement): number | undefined {
+  const index = Array.from(element.ownerDocument.querySelectorAll('*')).indexOf(element)
+  return index < 0 ? undefined : index
 }
 
 function statusForMatchCount(matchCount: number): LocatorPreviewCandidate['status'] {

@@ -427,6 +427,72 @@ describe('sidepanel scenario editor', () => {
     })
   })
 
+  it('writes auto-applied inspector targets with browser metadata into the correlated target slot', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'slot-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'slot-document',
+      name: 'Slot document',
+      initialStepFamily: 'click',
+    })
+
+    const assigned = editor.applyTargetToTargetSlot({
+      kind: 'step-target',
+      stepId: 'slot-step',
+    }, {
+      kind: 'target',
+      strict: true,
+      locators: [
+        {
+          strategy: 'role',
+          role: 'button',
+          name: {
+            value: 'Save',
+            match: 'exact',
+          },
+          matchIndex: 1,
+        },
+      ],
+      platform: {
+        'actorble.browser': {
+          inspector: {
+            documentOrderIndex: 18,
+            candidateId: 'role-1',
+            selectedMatchIndex: 1,
+          },
+        },
+      },
+    })
+
+    expect(assigned).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
+      action: 'click',
+      target: {
+        kind: 'target',
+        strict: true,
+        locators: [
+          {
+            strategy: 'role',
+            role: 'button',
+            matchIndex: 1,
+          },
+        ],
+        platform: {
+          'actorble.browser': {
+            inspector: {
+              documentOrderIndex: 18,
+              candidateId: 'role-1',
+              selectedMatchIndex: 1,
+            },
+          },
+        },
+      },
+    })
+  })
+
   it('writes locator selections into every action-specific target assignment slot and refreshes validation', async () => {
     const { editor } = createTestEditor({
       scenarios: [],

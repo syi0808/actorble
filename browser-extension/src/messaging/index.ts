@@ -87,6 +87,7 @@ export type InspectorTargetRect = Readonly<{
 export type InspectorTargetMetadata = Readonly<{
   tagName: string
   rect: InspectorTargetRect
+  documentOrderIndex?: number
   frameUrl?: string
   id?: string
   classes?: readonly string[]
@@ -220,6 +221,7 @@ export type LocatorPreviewMessage = ExtensionMessage<
     Readonly<{
       scenarioId?: string
       targetSlot?: InspectorTargetSlotCorrelation
+      target: InspectorTargetMetadata
       candidates: readonly LocatorPreviewCandidateMessage[]
     }>
 >
@@ -405,6 +407,7 @@ function isPayloadForKind(
         hasRequiredTabCorrelation(payload) &&
         isOptionalString(payload.scenarioId) &&
         isOptionalInspectorTargetSlotCorrelation(payload.targetSlot) &&
+        isInspectorTargetMetadata(payload.target) &&
         Array.isArray(payload.candidates) &&
         payload.candidates.length > 0 &&
         payload.candidates.every(isLocatorPreviewCandidate)
@@ -762,6 +765,7 @@ function isInspectorTargetMetadata(value: unknown): value is InspectorTargetMeta
     isFiniteNumber(value.rect.y) &&
     isFiniteNumber(value.rect.width) &&
     isFiniteNumber(value.rect.height) &&
+    isOptionalInteger(value.documentOrderIndex, 0) &&
     isOptionalString(value.frameUrl) &&
     isOptionalString(value.id) &&
     isOptionalStringArray(value.classes) &&
@@ -800,24 +804,30 @@ function isScenarioLocator(value: unknown): value is ScenarioLocator {
 
   switch (value.strategy) {
     case 'css':
-      return typeof value.selector === 'string' && value.selector.length > 0
+      return (
+        typeof value.selector === 'string' &&
+        value.selector.length > 0 &&
+        isOptionalInteger(value.matchIndex, 0)
+      )
     case 'role':
       return (
         typeof value.role === 'string' &&
         value.role.length > 0 &&
         isOptionalScenarioTextMatcher(value.name) &&
-        isOptionalBoolean(value.includeHidden)
+        isOptionalBoolean(value.includeHidden) &&
+        isOptionalInteger(value.matchIndex, 0)
       )
     case 'text':
-      return isScenarioTextMatcher(value.text)
+      return isScenarioTextMatcher(value.text) && isOptionalInteger(value.matchIndex, 0)
     case 'label':
-      return isScenarioTextMatcher(value.label)
+      return isScenarioTextMatcher(value.label) && isOptionalInteger(value.matchIndex, 0)
     case 'testId':
       return (
         typeof value.value === 'string' &&
         value.value.length > 0 &&
         (value.attribute === undefined ||
-          (typeof value.attribute === 'string' && value.attribute.length > 0))
+          (typeof value.attribute === 'string' && value.attribute.length > 0)) &&
+        isOptionalInteger(value.matchIndex, 0)
       )
     case 'point':
       return isScenarioPoint(value.point)
@@ -878,6 +888,11 @@ function isScenarioPoint(value: unknown): boolean {
 
 function isOptionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === 'boolean'
+}
+
+function isOptionalInteger(value: unknown, minimum: number): boolean {
+  return value === undefined ||
+    (typeof value === 'number' && Number.isInteger(value) && value >= minimum)
 }
 
 function isOptionalStringArray(value: unknown): boolean {

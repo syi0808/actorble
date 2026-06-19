@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createContentInspectorHost,
+  describeDomInspectorElement,
   type ContentInspectorAdapter,
   type ContentInspectorPointerEvent,
 } from '../src/entrypoints/content/inspector-host.js'
@@ -11,6 +12,22 @@ import {
 } from '../src/messaging/index.js'
 
 describe('content inspector host', () => {
+  it('describes selected elements with a document-order index', () => {
+    const dom = createFakeDocumentOrder([
+      { tagName: 'main', id: '', textContent: 'First Second' },
+      { tagName: 'button', id: 'first', textContent: 'First' },
+      { tagName: 'button', id: 'second', textContent: 'Second' },
+    ])
+    const second = dom.elements[2]
+
+    const metadata = describeDomInspectorElement(
+      second as unknown as Element,
+      fakeWindow() as unknown as Window,
+    )
+
+    expect(metadata.documentOrderIndex).toBe(2)
+  })
+
   it('highlights hovered elements and returns a start receipt', async () => {
     const adapter = createFakeAdapter()
     const host = createContentInspectorHost({
@@ -166,6 +183,23 @@ describe('content inspector host', () => {
 
 type FakeElement = Readonly<{ key: string }>
 
+type FakeDomElement = Readonly<{
+  tagName: string
+  id: string
+  classList: readonly string[]
+  textContent: string
+  ownerDocument: Readonly<{
+    querySelectorAll(selector: string): readonly FakeDomElement[]
+  }>
+  getBoundingClientRect(): Readonly<{
+    x: number
+    y: number
+    width: number
+    height: number
+  }>
+  getAttribute(name: string): string | null
+}>
+
 const targetMetadata = {
   tagName: 'button',
   id: 'submit',
@@ -253,6 +287,48 @@ function createFakeAdapter() {
   }
 
   return adapter
+}
+
+function createFakeDocumentOrder(
+  inputs: readonly Readonly<{ tagName: string; id: string; textContent: string }>[],
+): Readonly<{ elements: readonly FakeDomElement[] }> {
+  const elements: FakeDomElement[] = []
+  const ownerDocument = {
+    querySelectorAll() {
+      return elements
+    },
+  }
+
+  for (const input of inputs) {
+    elements.push({
+      tagName: input.tagName.toUpperCase(),
+      id: input.id,
+      classList: [],
+      textContent: input.textContent,
+      ownerDocument,
+      getBoundingClientRect() {
+        return {
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 24,
+        }
+      },
+      getAttribute() {
+        return null
+      },
+    })
+  }
+
+  return { elements }
+}
+
+function fakeWindow(): Readonly<{ location: Readonly<{ href: string }> }> {
+  return {
+    location: {
+      href: 'http://localhost.test/page',
+    },
+  }
 }
 
 type KeyboardEventLike = Readonly<{

@@ -370,6 +370,7 @@ export function describeDomInspectorElement(
       width: rect.width,
       height: rect.height,
     },
+    ...optionalNumber('documentOrderIndex', documentOrderIndexForElement(element)),
     ...(win.location?.href === undefined ? {} : { frameUrl: win.location.href }),
     ...optionalString('id', element.id),
     ...(classes.length === 0 ? {} : { classes }),
@@ -381,6 +382,11 @@ export function describeDomInspectorElement(
     ...optionalString('href', hrefForElement(element, win)),
     ...optionalString('text', text),
   }
+}
+
+function documentOrderIndexForElement(element: Element): number | undefined {
+  const index = Array.from(element.ownerDocument.querySelectorAll('*')).indexOf(element)
+  return index < 0 ? undefined : index
 }
 
 function createOverlay(doc: Document): HTMLElement {
@@ -470,6 +476,17 @@ function optionalString<TKey extends string>(
   }
 
   return { [key]: value } as Readonly<Record<TKey, string>>
+}
+
+function optionalNumber<TKey extends string>(
+  key: TKey,
+  value: number | undefined,
+): Readonly<Record<TKey, number>> | Readonly<Record<string, never>> {
+  if (value === undefined) {
+    return {}
+  }
+
+  return { [key]: value } as Readonly<Record<TKey, number>>
 }
 
 function compactText(value: string, limit: number): string | undefined {

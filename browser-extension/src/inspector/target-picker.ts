@@ -344,6 +344,7 @@ export function normalizePickedTargetMetadata(
       width: target.rect.width,
       height: target.rect.height,
     },
+    ...(target.documentOrderIndex === undefined ? {} : { documentOrderIndex: target.documentOrderIndex }),
     ...(target.frameUrl === undefined ? {} : { frameUrl: target.frameUrl }),
     ...(target.id === undefined ? {} : { id: target.id }),
     ...(target.classes === undefined ? {} : { classes: target.classes.slice(0, 8) }),

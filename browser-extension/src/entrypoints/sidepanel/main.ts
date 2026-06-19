@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser'
 import {
+  autoApplyTargetFromPreview,
   createLocatorPreviewer,
   type LocatorPreviewCandidateView,
 } from '../../inspector/locator-preview.js'
@@ -496,12 +497,35 @@ browser.runtime.onMessage.addListener((message) => {
   if (pickerHandled) {
     const selected = targetPicker.getSnapshot().selected
     if (selected?.targetSlot !== undefined) {
-      void runLocatorPreviewAction(() => (
-        locatorPreviewer.previewTarget(selected.target, {
+      void runLocatorPreviewAction(async () => {
+        const preview = await locatorPreviewer.previewTarget(selected.target, {
           scenarioId: selected.scenarioId ?? editor.getSnapshot().selectedScenarioId,
           targetSlot: selected.targetSlot,
         })
-      ))
+        if (!preview.ok) {
+          return
+        }
+
+        const autoApplied = autoApplyTargetFromPreview(locatorPreviewer.getSnapshot())
+        if (!autoApplied.ok) {
+          locatorPreviewer.reportIssue(autoApplied.issues[0] ?? {
+            code: 'inspector_error',
+            message: 'Selected element could not be applied to the target slot.',
+          })
+          return
+        }
+
+        const applied = editor.applyTargetToTargetSlot(
+          autoApplied.value.targetSlot,
+          autoApplied.value.target,
+        )
+        if (!applied.ok) {
+          locatorPreviewer.reportIssue(applied.issues[0] ?? {
+            code: 'invalid_document',
+            message: 'Selected element could not be applied to the target slot.',
+          })
+        }
+      })
     }
   }
 })

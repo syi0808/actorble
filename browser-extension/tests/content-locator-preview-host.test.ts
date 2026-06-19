@@ -13,6 +13,47 @@ import {
 } from '../src/messaging/index.js'
 
 describe('content locator preview host', () => {
+  it('reports the selected match index for ambiguous locator candidates', async () => {
+    const buttons = createFakeDocumentOrder(2)
+    const targetElement = buttons[1]
+    if (targetElement === undefined) {
+      throw new Error('Expected target button.')
+    }
+    const actorble = createActorblePreviewFacade({
+      testId: buttons.map((element) => ({ element })),
+    })
+    const host = createContentLocatorPreviewHost({
+      createActorble: () => actorble,
+    })
+    const documentOrderIndex = buttons.indexOf(targetElement)
+    const testIdCandidate = createLocatorCandidates({
+      ...target,
+      documentOrderIndex,
+    }).find((candidate) => candidate.strategy === 'testId')
+    if (testIdCandidate === undefined) {
+      throw new Error('Expected testId candidate.')
+    }
+
+    const result = await host.handleMessage(previewMessage([testIdCandidate], {
+      ...target,
+      documentOrderIndex,
+    }))
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        candidates: [
+          {
+            strategy: 'testId',
+            matchCount: 2,
+            status: 'ambiguous',
+            selectedMatchIndex: 1,
+          },
+        ],
+      },
+    })
+  })
+
   it('counts matches through Actorble resolveAll and reports strictness per candidate', async () => {
     const actorble = createActorblePreviewFacade({
       role: 1,
@@ -108,20 +149,24 @@ const target = {
   },
 } satisfies InspectorTargetMetadata
 
-function previewMessage(candidates: readonly LocatorCandidate[]) {
+function previewMessage(
+  candidates: readonly LocatorCandidate[],
+  selectedTarget: InspectorTargetMetadata = target,
+) {
   return createExtensionMessage({
     kind: 'locator:preview',
     payload: {
       tabId: 7,
       frameId: 0,
       scenarioId: 'scenario-1',
+      target: selectedTarget,
       candidates,
     },
   })
 }
 
 function createActorblePreviewFacade(
-  countsByKind: Readonly<Record<string, number | Error>>,
+  countsByKind: Readonly<Record<string, number | Error | readonly unknown[]>>,
 ): ContentLocatorPreviewActorble {
   const resolveAll = vi.fn(async (locator: Readonly<{ kind: string }>) => {
     const countOrError = countsByKind[locator.kind] ?? 0
@@ -129,11 +174,39 @@ function createActorblePreviewFacade(
       throw countOrError
     }
 
-    return Array.from({ length: countOrError }, (_, index) => ({ id: `${locator.kind}-${index}` }))
+    if (typeof countOrError !== 'number') {
+      return countOrError
+    }
+
+    return Array.from(
+      { length: countOrError },
+      (_, index) => ({ id: `${locator.kind}-${index}` }),
+    )
   })
 
   return {
     resolveAll: resolveAll as unknown as ContentLocatorPreviewActorble['resolveAll'],
     destroy: vi.fn(),
   }
+}
+
+type FakeDomElement = Readonly<{
+  ownerDocument: Readonly<{
+    querySelectorAll(selector: string): readonly FakeDomElement[]
+  }>
+}>
+
+function createFakeDocumentOrder(count: number): readonly FakeDomElement[] {
+  const elements: FakeDomElement[] = []
+  const ownerDocument = {
+    querySelectorAll() {
+      return elements
+    },
+  }
+
+  for (let index = 0; index < count; index += 1) {
+    elements.push({ ownerDocument })
+  }
+
+  return elements
 }
