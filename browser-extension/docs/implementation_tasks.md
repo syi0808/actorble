@@ -585,7 +585,7 @@ src/recorder
 
 ### T25 Side Panel Recomposition View Model
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Introduce a side panel view model that reflects the new information
   architecture before replacing markup. This separates product structure from
   DOM wiring and prevents the old card layout from leaking into the redesigned
