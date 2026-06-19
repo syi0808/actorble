@@ -265,6 +265,7 @@ function targetAssignmentView(
     buttons: {
       start: {
         ...pickerView.buttons.start,
+        label: 'Set selected target',
         disabled: pickerView.buttons.start.disabled || unavailable || editorPending,
       },
       stop: {

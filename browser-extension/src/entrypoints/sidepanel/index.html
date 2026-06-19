@@ -158,9 +158,47 @@
                 </label>
               </div>
             </fieldset>
-            <div id="target-slot-section">
-              <span class="field-label">Target slots</span>
+            <div
+              id="target-slot-section"
+              class="target-assignment-panel"
+              aria-labelledby="target-assignment-title"
+            >
+              <div class="target-assignment-heading">
+                <span id="target-assignment-title" class="field-label">Target assignment</span>
+                <span id="target-picker-status" class="summary">Idle</span>
+              </div>
               <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
+              <dl class="target-assignment-fields">
+                <div>
+                  <dt>Selected</dt>
+                  <dd id="target-picker-selected">No target selected</dd>
+                </div>
+                <div>
+                  <dt>Picker issue</dt>
+                  <dd id="target-picker-issues">None</dd>
+                </div>
+              </dl>
+              <div class="toolbar">
+                <button id="target-picker-start-button" type="button">Set selected target</button>
+                <button id="target-picker-stop-button" type="button">Stop</button>
+              </div>
+              <div class="locator-assignment-panel">
+                <div class="target-assignment-heading">
+                  <span class="field-label">Locator candidates</span>
+                  <span id="locator-preview-status" class="summary">No preview</span>
+                </div>
+                <ul
+                  id="locator-preview-list"
+                  class="locator-preview-list"
+                  aria-label="Locator candidates"
+                ></ul>
+                <dl class="target-assignment-fields">
+                  <div>
+                    <dt>Preview issue</dt>
+                    <dd id="locator-preview-issues">None</dd>
+                  </div>
+                </dl>
+              </div>
             </div>
             <details class="advanced-repair">
               <summary>Advanced JSON repair</summary>
@@ -189,41 +227,6 @@
             </details>
           </div>
         </div>
-      </section>
-
-      <section aria-labelledby="target-picker-title">
-        <div class="section-heading">
-          <h2 id="target-picker-title">Target Picker</h2>
-          <span id="target-picker-status" class="summary">Idle</span>
-        </div>
-        <dl class="target-picker-fields">
-          <div>
-            <dt>Selected</dt>
-            <dd id="target-picker-selected">No target selected</dd>
-          </div>
-          <div>
-            <dt>Issue</dt>
-            <dd id="target-picker-issues">None</dd>
-          </div>
-        </dl>
-        <div class="toolbar">
-          <button id="target-picker-start-button" type="button">Pick target</button>
-          <button id="target-picker-stop-button" type="button">Stop</button>
-        </div>
-      </section>
-
-      <section aria-labelledby="locator-preview-title">
-        <div class="section-heading">
-          <h2 id="locator-preview-title">Locator Preview</h2>
-          <span id="locator-preview-status" class="summary">No preview</span>
-        </div>
-        <ul id="locator-preview-list" class="locator-preview-list" aria-label="Locator candidates"></ul>
-        <dl class="locator-preview-fields">
-          <div>
-            <dt>Issue</dt>
-            <dd id="locator-preview-issues">None</dd>
-          </div>
-        </dl>
       </section>
 
       <section aria-labelledby="validation-title">

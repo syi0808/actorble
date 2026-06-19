@@ -7,6 +7,7 @@ import {
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
+  type ScenarioLocator,
   type ScenarioTargetTextStep,
 } from '../src/scenario/types.js'
 import type { ScenarioCodeExport } from '../src/scenario/export-code.js'
@@ -420,6 +421,76 @@ describe('sidepanel scenario editor', () => {
                 },
               ],
             },
+          },
+        ],
+      },
+    })
+  })
+
+  it('writes locator selections into every action-specific target assignment slot and refreshes validation', async () => {
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => 'slot-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'slot-document',
+      name: 'Slot document',
+      initialStepFamily: 'click',
+    })
+
+    const stepTarget = editor.applyLocatorToTargetSlot({
+      kind: 'step-target',
+      stepId: 'slot-step',
+    }, testIdLocator('primary-target'))
+    editor.updateSelectedStepActionFamily('drag')
+    const dragFrom = editor.applyLocatorToTargetSlot({
+      kind: 'drag-from',
+      stepId: 'slot-step',
+    }, testIdLocator('drag-source'))
+    const afterDragFrom = editor.getSnapshot()
+    const dragTo = editor.applyLocatorToTargetSlot({
+      kind: 'drag-to',
+      stepId: 'slot-step',
+    }, testIdLocator('drop-zone'))
+    editor.updateSelectedStepActionFamily('waitForVisible')
+    const waitTarget = editor.applyLocatorToTargetSlot({
+      kind: 'waitFor-target',
+      stepId: 'slot-step',
+    }, testIdLocator('wait-target'))
+    editor.updateSelectedStepActionFamily('scrollToTarget')
+    const scrollTarget = editor.applyLocatorToTargetSlot({
+      kind: 'scrollTo-target',
+      stepId: 'slot-step',
+    }, testIdLocator('scroll-target'))
+
+    expect(stepTarget).toMatchObject({ ok: true })
+    expect(dragFrom).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          path: ['steps', 0, 'to', 'locators'],
+        },
+      ],
+    })
+    expect(afterDragFrom.draftDocument?.steps[0]).toMatchObject({
+      action: 'drag',
+      from: targetWithTestId('drag-source'),
+    })
+    expect(dragTo).toMatchObject({ ok: true })
+    expect(waitTarget).toMatchObject({ ok: true })
+    expect(scrollTarget).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      issues: [],
+      selectedTargetSlot: {
+        kind: 'scrollTo-target',
+        stepId: 'slot-step',
+      },
+      draftDocument: {
+        steps: [
+          {
+            action: 'scrollTo',
+            target: targetWithTestId('scroll-target'),
           },
         ],
       },
@@ -1442,5 +1513,25 @@ function recordedDraft(
         },
       ],
     } satisfies ScenarioDocument,
+  }
+}
+
+function testIdLocator(value: string): ScenarioLocator {
+  return {
+    strategy: 'testId',
+    value,
+  }
+}
+
+function targetWithTestId(value: string) {
+  return {
+    kind: 'target',
+    strict: true,
+    locators: [
+      {
+        strategy: 'testId',
+        value,
+      },
+    ],
   }
 }

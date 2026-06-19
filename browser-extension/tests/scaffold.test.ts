@@ -73,4 +73,14 @@ describe('browser extension scaffold', () => {
     expect(sidepanelHtml).not.toContain('id="steps-title"')
     expect(sidepanelHtml).not.toContain('id="step-editor-title"')
   })
+
+  it('inlines target assignment instead of standalone target picker and locator preview cards', async () => {
+    const sidepanelHtml = await readFile('src/entrypoints/sidepanel/index.html', 'utf8')
+
+    expect(sidepanelHtml).toContain('id="target-assignment-title"')
+    expect(sidepanelHtml).toContain('id="target-picker-start-button"')
+    expect(sidepanelHtml).toContain('id="locator-preview-list"')
+    expect(sidepanelHtml).not.toContain('id="target-picker-title"')
+    expect(sidepanelHtml).not.toContain('id="locator-preview-title"')
+  })
 })

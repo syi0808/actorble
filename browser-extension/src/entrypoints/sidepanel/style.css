@@ -428,11 +428,41 @@ button[data-pending="true"] {
   text-transform: capitalize;
 }
 
+.target-assignment-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel-strong) 55%, var(--panel));
+}
+
+.target-assignment-panel[hidden] {
+  display: none;
+}
+
+.target-assignment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.locator-assignment-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .target-slot-list {
   display: grid;
   gap: 6px;
   min-height: 30px;
-  margin: 6px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -443,7 +473,14 @@ button[data-pending="true"] {
   font-size: 13px;
 }
 
-.target-slot-list button {
+.target-slot-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, auto);
+  gap: 6px;
+  align-items: stretch;
+}
+
+.target-slot-select {
   display: grid;
   grid-template-columns: minmax(74px, 0.4fr) minmax(0, 1fr) auto;
   gap: 8px;
@@ -454,12 +491,19 @@ button[data-pending="true"] {
   text-align: left;
 }
 
-.target-slot-list button[data-selected="true"] {
+.target-slot-command {
+  align-content: center;
+  justify-content: center;
+  min-width: 90px;
+  padding-inline: 8px;
+}
+
+.target-slot-select[data-selected="true"] {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 9%, var(--panel));
 }
 
-.target-slot-list button[data-validation="invalid"] {
+.target-slot-select[data-validation="invalid"] {
   border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
 }
 
@@ -481,6 +525,17 @@ button[data-pending="true"] {
 .target-slot-status {
   color: var(--muted);
   text-transform: capitalize;
+}
+
+.target-assignment-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.target-assignment-fields div {
+  display: grid;
+  gap: 3px;
 }
 
 .advanced-repair {
@@ -610,17 +665,13 @@ button[data-pending="true"] {
   background: color-mix(in srgb, var(--danger) 12%, var(--panel));
 }
 
-.run-fields,
-.target-picker-fields,
-.locator-preview-fields {
+.run-fields {
   display: grid;
   gap: 10px;
   margin: 0;
 }
 
-.run-fields div,
-.target-picker-fields div,
-.locator-preview-fields div {
+.run-fields div {
   display: grid;
   gap: 3px;
 }

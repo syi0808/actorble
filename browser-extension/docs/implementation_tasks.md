@@ -650,7 +650,7 @@ src/recorder
 
 ### T28 Inline Target Assignment
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Move Target Picker and Locator Preview into selected-step target
   assignment. Target picking starts from a concrete target slot and writes back
   only to that slot.

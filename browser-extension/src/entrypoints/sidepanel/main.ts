@@ -1,14 +1,10 @@
 import { browser } from 'wxt/browser'
 import {
-  createLocatorPreviewCandidateViews,
   createLocatorPreviewer,
   type LocatorPreviewCandidateView,
-  type LocatorPreviewSnapshot,
-  type LocatorPreviewStatus,
 } from '../../inspector/locator-preview.js'
 import {
   createTargetPicker,
-  createTargetPickerView,
 } from '../../inspector/target-picker.js'
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
 import type { TraceRunDisplayView } from '../../trace/index.js'
@@ -18,11 +14,12 @@ import {
   type SidepanelButtonView,
   type SidepanelActionFamilyOptionView,
   type SidepanelScenarioEditorSnapshot,
-  type SidepanelTargetSlotRowView,
 } from './scenario-editor.js'
 import {
   createSidepanelRecompositionViewModel,
+  type SidepanelLocatorPreviewView,
   type SidepanelScenarioShellView,
+  type SidepanelTargetAssignmentView,
 } from './recomposition-view-model.js'
 import type { BuilderStepActionFamily } from '../../builder/index.js'
 import type { ScenarioCoordinateSpace } from '../../scenario/types.js'
@@ -387,6 +384,14 @@ stepOptionsJson.addEventListener('change', () => {
 })
 
 targetSlotList.addEventListener('click', (event) => {
+  const startButton = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-target-slot-start-id]',
+  )
+  if (startButton != null) {
+    void startTargetAssignment(startButton.dataset.targetSlotStartId)
+    return
+  }
+
   const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
     'button[data-target-slot-id]',
   )
@@ -403,12 +408,7 @@ dryRunButton.addEventListener('click', () => {
 })
 
 targetPickerStartButton.addEventListener('click', () => {
-  const snapshot = editor.getSnapshot()
-  locatorPreviewer.clear()
-  void runTargetPickerAction(() => targetPicker.start({
-    scenarioId: snapshot.selectedScenarioId,
-    targetSlot: snapshot.selectedTargetSlot,
-  }))
+  void startTargetAssignment()
 })
 
 targetPickerStopButton.addEventListener('click', () => {
@@ -429,9 +429,7 @@ locatorPreviewList.addEventListener('click', (event) => {
   }
 
   const targetSlot = locatorPreviewer.getSnapshot().targetSlot
-  if (targetSlot === undefined) {
-    editor.applyLocatorToSelectedStep(candidate.locator)
-  } else {
+  if (targetSlot !== undefined) {
     editor.applyLocatorToTargetSlot(targetSlot, candidate.locator)
   }
   render(editor.getSnapshot())
@@ -447,7 +445,7 @@ browser.runtime.onMessage.addListener((message) => {
 
   if (pickerHandled) {
     const selected = targetPicker.getSnapshot().selected
-    if (selected !== undefined) {
+    if (selected?.targetSlot !== undefined) {
       void runLocatorPreviewAction(() => (
         locatorPreviewer.previewTarget(selected.target, {
           scenarioId: selected.scenarioId ?? editor.getSnapshot().selectedScenarioId,
@@ -464,6 +462,29 @@ void runAction(async () => {
   await editor.refreshTargetTabState()
   await editor.loadRecordedDraft(launchParams.recordedDraftId)
 })
+
+async function startTargetAssignment(slotId?: string): Promise<void> {
+  if (slotId !== undefined) {
+    const selected = editor.selectTargetSlot(slotId)
+    if (!selected.ok) {
+      render(editor.getSnapshot())
+      return
+    }
+  }
+
+  const snapshot = editor.getSnapshot()
+  const targetSlot = snapshot.selectedTargetSlot
+  if (targetSlot === undefined) {
+    render(snapshot)
+    return
+  }
+
+  locatorPreviewer.clear()
+  await runTargetPickerAction(() => targetPicker.start({
+    scenarioId: snapshot.selectedScenarioId,
+    targetSlot,
+  }))
+}
 
 async function runAction(action: () => Promise<unknown>): Promise<void> {
   const operation = action()
@@ -528,6 +549,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
     locatorPreview: locatorPreviewer.getSnapshot(),
   })
   const shell = recomposedView.scenarioShell
+  const targetAssignment = recomposedView.targetAssignment
 
   workflowStatus.textContent = shell.summary
   renderScenarioOptions(shell.scenarioOptions, shell.selectedScenarioId)
@@ -538,7 +560,6 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(scenarioName, shell.metadata.name)
   setInputValue(scenarioDescription, shell.metadata.description)
   renderStepList(view.stepRows)
-  renderTargetSlotList(view.targetSlotRows)
   stepSummary.textContent = selectedStepSummary(snapshot)
   setSelectValue(stepAction, view.selectedStepFields.actionFamily)
   setInputValue(stepNote, view.selectedStepFields.note)
@@ -549,6 +570,8 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(stepScrollY, view.selectedStepFields.scrollY)
   setSelectValue(stepScrollCoordinateSpace, view.selectedStepFields.scrollCoordinateSpace)
   renderSelectedStepControlVisibility(view.selectedStepFields.controls)
+  renderTargetSlotList(targetAssignment)
+  renderTargetAssignment(targetAssignment)
   setInputValue(stepTargetJson, view.selectedStepFields.targetJson)
   setInputValue(stepFromJson, view.selectedStepFields.fromJson)
   setInputValue(stepToJson, view.selectedStepFields.toJson)
@@ -562,8 +585,6 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   runSummaryOutput.textContent = view.runSummary
   traceFeedback.textContent = latestEventSummary(view.traceView)
   failureDetail.textContent = failureSummary(view.traceView)
-  renderTargetPicker(view)
-  renderLocatorPreview()
 
   scenarioSelect.disabled = shell.pendingAction !== null || shell.scenarioOptions.length === 0
   scenarioFile.disabled = shell.buttons.import.disabled
@@ -613,26 +634,19 @@ function renderRecordedDraftReview(
   applyButtonView(recordedDraftExportButton, review.buttons.export)
 }
 
-function renderTargetPicker(
-  editorView: ReturnType<typeof createSidepanelScenarioEditorView>,
-): void {
-  const view = createTargetPickerView(targetPicker.getSnapshot())
-  targetPickerStatus.textContent = view.statusSummary
-  targetPickerSelected.textContent = view.selectedSummary
-  targetPickerIssues.textContent = view.issueSummary
+function renderTargetAssignment(view: SidepanelTargetAssignmentView): void {
+  targetPickerStatus.textContent = view.picker.statusSummary
+  targetPickerSelected.textContent = view.picker.selectedSummary
+  targetPickerIssues.textContent = view.picker.issueSummary
   applyButtonView(targetPickerStartButton, view.buttons.start)
   applyButtonView(targetPickerStopButton, view.buttons.stop)
-  targetPickerStartButton.disabled =
-    targetPickerStartButton.disabled ||
-    editorView.workflow.selectedTargetSlotId === undefined ||
-    editorView.workflow.status === 'empty'
+  renderLocatorPreview(view.locatorPreview)
 }
 
-function renderLocatorPreview(): void {
-  const snapshot = locatorPreviewer.getSnapshot()
-  locatorPreviewStatus.textContent = locatorPreviewStatusSummary(snapshot)
-  locatorPreviewIssues.textContent = issueSummary(snapshot.issues)
-  renderLocatorPreviewCandidates(createLocatorPreviewCandidateViews(snapshot.candidates))
+function renderLocatorPreview(view: SidepanelLocatorPreviewView): void {
+  locatorPreviewStatus.textContent = view.summary
+  locatorPreviewIssues.textContent = view.issueSummary
+  renderLocatorPreviewCandidates(view.candidates)
 }
 
 function renderLocatorPreviewCandidates(
@@ -737,20 +751,28 @@ function renderStepList(rows: ReturnType<typeof createSidepanelScenarioEditorVie
   }
 }
 
-function renderTargetSlotList(rows: readonly SidepanelTargetSlotRowView[]): void {
+function renderTargetSlotList(assignment: SidepanelTargetAssignmentView): void {
   targetSlotList.replaceChildren()
 
-  for (const row of rows) {
+  for (const row of assignment.slots) {
     const item = document.createElement('li')
     const button = document.createElement('button')
+    const command = document.createElement('button')
     const title = document.createElement('span')
     const detail = document.createElement('span')
     const status = document.createElement('span')
 
     button.type = 'button'
+    button.className = 'target-slot-select'
     button.dataset.targetSlotId = row.id
     button.dataset.selected = row.selected ? 'true' : 'false'
     button.dataset.validation = row.validationStatus
+    command.type = 'button'
+    command.className = 'target-slot-command'
+    command.textContent = targetSlotCommandLabel(row.summary)
+    command.disabled = assignment.buttons.start.disabled
+    command.dataset.pending = assignment.buttons.start.pending ? 'true' : 'false'
+    command.dataset.targetSlotStartId = row.id
     title.className = 'target-slot-title'
     title.textContent = row.label
     detail.className = 'target-slot-detail'
@@ -758,9 +780,13 @@ function renderTargetSlotList(rows: readonly SidepanelTargetSlotRowView[]): void
     status.className = 'target-slot-status'
     status.textContent = row.validationStatus
     button.append(title, detail, status)
-    item.append(button)
+    item.append(button, command)
     targetSlotList.append(item)
   }
+}
+
+function targetSlotCommandLabel(summary: string): string {
+  return summary === 'no locators' || summary === 'current' ? 'Set target' : 'Change target'
 }
 
 function renderSelectedStepControlVisibility(
@@ -860,36 +886,6 @@ function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   }
 
   return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
-}
-
-function locatorPreviewStatusSummary(snapshot: LocatorPreviewSnapshot): string {
-  if (snapshot.status === 'ready') {
-    const count = snapshot.candidates.length
-    return `${count} candidate${count === 1 ? '' : 's'}`
-  }
-
-  return locatorPreviewStatusLabel(snapshot.status)
-}
-
-function locatorPreviewStatusLabel(status: LocatorPreviewStatus): string {
-  switch (status) {
-    case 'idle':
-      return 'No preview'
-    case 'previewing':
-      return 'Previewing'
-    case 'ready':
-      return 'Ready'
-    case 'failed':
-      return 'Preview failed'
-  }
-}
-
-function issueSummary(
-  issues: readonly Readonly<{ message: string }>[],
-): string {
-  return issues.length === 0
-    ? 'None'
-    : issues.map((issue) => issue.message).join(' · ')
 }
 
 function applyButtonView(button: HTMLButtonElement, view: SidepanelButtonView): void {
