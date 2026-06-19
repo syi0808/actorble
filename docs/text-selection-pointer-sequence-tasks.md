@@ -36,6 +36,7 @@ browser runtime support
   -> browser-extension recorder raw event capture
   -> browser-extension event-to-step normalization
   -> browser-extension builder review and target-slot UI
+  -> browser example page for controlled verification
 
 extension recorder and schema support
   -> end-to-end manual verification
@@ -211,13 +212,29 @@ extension recorder and schema support
   - Builder model tests cover target slot availability, recorded draft review operations, and validation issue placement.
   - Side panel tests or model tests cover `selectText` draft display and merge behavior.
 
-### TSPS-13 End-To-End Verification
+### TSPS-13 Controlled Example Page
+
+- Status: [ ] Not started
+- Briefing: Add a browser example page that intentionally exercises text selection, editable selection, drag-like movement, click disambiguation, and recorder replay verification on deterministic targets.
+- Dependencies: TSPS-05, TSPS-07, TSPS-12.
+- Completion criteria:
+  - `browser/example` includes a new example focused on selection and pointer sequence behavior.
+  - Example is linked from the browser example index and follows existing example structure, shared styles, and build conventions.
+  - Page includes deterministic selectors or test ids for ordinary text, `textarea`, contenteditable, and controls that distinguish click from selection or drag.
+  - Example exposes visible state or status updates that make manual replay verification unambiguous.
+  - Example does not import extension internals or encode recorder-specific UI state.
+- Test expectations:
+  - Run browser example typecheck/build commands after adding the page.
+  - Add smoke coverage if the existing browser example smoke framework can cover the new page without broad harness changes.
+  - Document manual steps for selecting text and confirming replay-visible state.
+
+### TSPS-14 End-To-End Verification
 
 - Status: [ ] Not started
 - Briefing: Verify the first real workflow from browser action through extension recording and replay on a controlled page.
-- Dependencies: TSPS-05, TSPS-07, TSPS-09, TSPS-11, TSPS-12.
+- Dependencies: TSPS-05, TSPS-07, TSPS-09, TSPS-11, TSPS-12, TSPS-13.
 - Completion criteria:
-  - Manual scenario records a text selection and does not produce a click-only draft.
+  - Manual scenario records a text selection on the controlled example page and does not produce a click-only draft.
   - Recorded draft can be reviewed, saved/exported, compiled, and replayed.
   - Runtime trace shows `selectText` or `pointerSequence` with cleanup-safe lifecycle events.
   - Unsupported surfaces produce capability or validation errors rather than misleading steps.
@@ -252,4 +269,5 @@ After this slice passes, add schema/compiler support and then recorder normaliza
 - [ ] Keep extension compiler free of runtime semantic decisions.
 - [ ] Preserve navigation-safe recorder buffering and tab/frame/run correlation.
 - [ ] Apply sensitive data policy to selected text.
+- [ ] Use the controlled example page for manual recorder/replay verification.
 - [ ] Update this document's task statuses only when repository evidence proves completion.
