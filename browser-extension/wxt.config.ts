@@ -3,6 +3,7 @@ import { defineConfig } from 'wxt'
 export default defineConfig({
   srcDir: 'src',
   manifestVersion: 3,
+  modules: ['@wxt-dev/module-react'],
   manifest: ({ browser }) => ({
     name: 'Actorble',
     short_name: 'Actorble',

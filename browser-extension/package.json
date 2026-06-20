@@ -27,9 +27,16 @@
     "@actorble/browser": "file:../browser",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "lucide": "^1.21.0"
+    "lucide": "^1.21.0",
+    "lucide-react": "^1.21.0",
+    "radix-ui": "^1.6.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.2.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "wxt": "^0.20.26"
