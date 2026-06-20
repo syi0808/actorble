@@ -356,9 +356,19 @@ Task selector: ${taskSelector}
 
 Ground yourself in the repo before asking questions. Read the task entry, relevant architecture docs, existing source/tests, and git status.
 
-Ask the user via request_user_input if any meaningful decision exists. Ask even if there is only one question. Do not auto-resolve recommended options.
+Question gate:
+- Treat the task document, architecture docs, ADRs, and existing code as the decision source of truth. Resolve choices from those sources before asking.
+- Ask the user via request_user_input only when a high-impact decision remains unresolved after grounding. High-impact means public API/schema shape, compatibility or privacy policy, cross-task semantics, user-visible workflow, or task scope that changes acceptance criteria.
+- Do not ask about low-impact implementation details, test placement, helper names, fixture style, or choices where existing repo patterns clearly imply one answer. Make a conservative assumption and record it in the plan.
+- If the unresolved choice should have been decided during task writing, label it as a task-doc gap in the question and explain which source failed to decide it. Batch related blockers into one question set.
 
-If no user decision is needed, produce one decision-complete <proposed_plan> block. The plan must specify the task id, intended behavior, files or modules likely touched, tests to add/run, verification command, completion-status update, and conventional commit intent.
+Expert delegation gate:
+- If subagent tools are available, use at most one read-only expert subagent during planning only when it is likely to prevent a high-impact user question or avoid a costly wrong plan.
+- Delegate only for current external fact-checks, browser/platform/library behavior research, security/privacy review, cross-package architecture design, or nontrivial verification strategy. Do not delegate routine repo search, helper names, test placement, local implementation details, or questions that existing docs/code already answer.
+- Give the subagent a narrow persona and question, pass raw paths or artifacts, and ask for evidence and a recommendation. Do not ask the subagent to edit files or make the user decision.
+- In the proposed plan, record any expert used, the question asked, evidence considered, and how it affected the plan. If no expert was used, omit this section.
+
+If no high-impact unresolved user decision remains, produce one decision-complete <proposed_plan> block. The plan must specify the task id, intended behavior, files or modules likely touched, tests to add/run, verification command, completion-status update, conventional commit intent, and a Decisions and Assumptions section that lists choices resolved from source material plus conservative assumptions made without asking.
 
 Do not mutate files in this planning turn.`;
 }
@@ -911,6 +921,26 @@ function selfTest(): void {
   }
   if (extractCommitMessage("", "TSPS-04") !== "chore(actorble): complete TSPS-04") {
     fail("self-test failed to build fallback commit message");
+  }
+  const planningPrompt = buildPlanningPrompt(
+    {
+      taskDoc: "tasks.md",
+      task: "next",
+      cwd: "/tmp",
+      checkAppServer: false,
+      selfTest: false,
+      once: false,
+      maxTasks: 100,
+      parentCommit: true,
+    },
+    "T1",
+  );
+  if (
+    !planningPrompt.includes("Question gate") ||
+    !planningPrompt.includes("high-impact decision") ||
+    !planningPrompt.includes("Expert delegation gate")
+  ) {
+    fail("self-test failed to include planning question gate");
   }
 
   emit({ state: "SELF_TEST_OK" });

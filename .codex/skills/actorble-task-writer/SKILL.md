@@ -20,10 +20,13 @@ Use this skill to turn Actorble architecture and scaffold structure into impleme
    - Give each task a stable ID.
    - Include an explicit completion status line.
    - Include briefing, dependencies, completion criteria, and test expectations.
+   - Include decision constraints for scope, public API/schema shape, fallback policy, sensitive-data policy, and verification depth whenever those choices could otherwise be asked during execution.
+   - Include an `Ask only if` note for genuine execution-discovered blockers; write `None expected` when the task is fully decision-ready.
+   - Include an `Expert preflight` note only when fact-check, research, security/privacy review, cross-package design, or verification strategy needs a specialist before execution; write `None expected` otherwise.
    - Keep task boundaries small enough for TDD and review.
 4. Keep the document implementation-neutral.
    - Define behavior and boundaries, not full code designs.
-   - Avoid over-specifying schemas or fallback policy unless needed to prevent mistakes.
+   - Avoid over-specifying internals, but do specify schema/API/fallback policy when leaving it open would force the implementer to ask.
 5. Highlight the first vertical slice.
    - Identify the smallest behavior that proves the module graph works end to end.
 

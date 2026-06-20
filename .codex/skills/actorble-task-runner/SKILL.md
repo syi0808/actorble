@@ -15,6 +15,9 @@ Use this skill to execute one Actorble implementation task at a time with clear 
    - Inspect `git status --short` and preserve unrelated user changes.
 2. Clarify only high-impact ambiguity.
    - Ask when goal, scope, success criteria, public API, or compatibility constraints are unclear after exploration.
+   - Resolve decisions from the task document, architecture docs, ADRs, and existing code before asking.
+   - Treat missing pre-task decisions as task-document gaps; ask only if the gap changes public behavior, compatibility, privacy policy, cross-task semantics, user workflow, or acceptance criteria.
+   - Use read-only expert subagents only for strict evidence gaps that could otherwise force a high-impact user question or cause a costly wrong implementation.
    - If ambiguity is low impact, make a conservative assumption and report it.
 3. Execute with TDD.
    - Add or update the failing Vitest case first.
