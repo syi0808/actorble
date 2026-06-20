@@ -1811,7 +1811,7 @@ export function createSidepanelScenarioEditorView(
         pending: false,
       },
       validate: {
-        label: 'Validate',
+        label: 'Check scenario',
         disabled: anyPending || !hasDocument,
         pending: snapshot.pendingAction === 'validate',
       },
@@ -1836,7 +1836,7 @@ export function createSidepanelScenarioEditorView(
         pending: snapshot.pendingAction === 'run',
       },
       dryRun: {
-        label: 'Dry run',
+        label: 'Test step',
         disabled: anyPending || recordActive || step === undefined || targetTabBlocksCommands,
         pending: snapshot.pendingAction === 'dry-run',
       },

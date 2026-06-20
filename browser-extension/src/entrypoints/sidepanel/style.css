@@ -1,22 +1,4 @@
-:root {
-  color-scheme: light dark;
-  --bg: #f6f7f8;
-  --surface: #ffffff;
-  --surface-soft: #eef1f4;
-  --surface-strong: #e5e9ee;
-  --text: #15181d;
-  --muted: #5d6876;
-  --border: #d5dce4;
-  --accent: #0f766e;
-  --accent-strong: #0b5f59;
-  --accent-soft: #e2f5f0;
-  --blue: #2f6fed;
-  --danger: #bd322b;
-  --warning: #956100;
-  --radius: 8px;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
+@import "../../ui/tokens.css";
 
 * {
   box-sizing: border-box;
@@ -44,8 +26,48 @@ main {
   background: var(--bg);
 }
 
+.brand-lockup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--actorble-mint) 44%, var(--border));
+  border-radius: 8px;
+  background: var(--actorble-ink);
+}
+
+.brand-mark-mint,
+.brand-mark-amber {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  height: 4px;
+  border-radius: 999px;
+  transform-origin: center;
+}
+
+.brand-mark-mint {
+  top: 11px;
+  background: var(--actorble-mint);
+  transform: rotate(35deg);
+}
+
+.brand-mark-amber {
+  top: 18px;
+  background: var(--actorble-amber);
+  transform: rotate(-35deg);
+}
+
 .eyebrow {
-  grid-column: 1 / -1;
   margin: 0 0 4px;
   color: var(--accent);
   font-size: 11px;
@@ -912,8 +934,14 @@ button[data-icon-only="true"] {
 }
 
 .debug-drawer-panel[hidden],
-.debug-panel[hidden] {
+.debug-panel[hidden],
+.debug-panel[data-state="inactive"] {
   display: none;
+}
+
+.debug-tabs-root {
+  display: grid;
+  gap: 10px;
 }
 
 .debug-drawer-tabs {
@@ -927,7 +955,8 @@ button[data-icon-only="true"] {
   padding-inline: 8px;
 }
 
-.debug-drawer-tabs button[data-selected="true"] {
+.debug-drawer-tabs button[data-selected="true"],
+.debug-drawer-tabs button[data-state="active"] {
   border-color: var(--accent);
   color: var(--accent-strong);
   background: var(--accent-soft);
@@ -1078,21 +1107,6 @@ dd {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17191c;
-    --surface: #20242a;
-    --surface-soft: #292f37;
-    --surface-strong: #343c46;
-    --text: #eef2f6;
-    --muted: #a9b4c0;
-    --border: #3a4654;
-    --accent: #63cdb7;
-    --accent-strong: #8ee0cf;
-    --accent-soft: #173b36;
-    --danger: #ffb4ab;
-    --warning: #e7bd6f;
-  }
-
   input,
   select,
   textarea,
