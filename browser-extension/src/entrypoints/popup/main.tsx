@@ -4,9 +4,8 @@ import { browser } from 'wxt/browser'
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
 import {
   Button,
-  BrandMark,
+  BrandWordmark,
   Field,
-  IconButton,
   Select,
   UiProvider,
 } from '../../ui/components.js'
@@ -65,6 +64,8 @@ function PopupApp(): ReactElement {
   const [panelMessage, setPanelMessage] = useState<string | undefined>()
   const view = createPopupRunControlsView(snapshot)
   const statusMessage = panelMessage ?? view.statusMessage
+  const showStatus = panelMessage !== undefined || view.statusTone !== 'ready'
+  const statusItems = popupStatusItems(snapshot, view)
 
   const renderSnapshot = useCallback(() => {
     setSnapshot(controls.getSnapshot())
@@ -144,26 +145,17 @@ function PopupApp(): ReactElement {
       <main>
         <header className="app-header">
           <div className="brand-lockup">
-            <BrandMark />
-            <div>
-              <p className="eyebrow">Actorble</p>
-              <h1>Quick run</h1>
-            </div>
+            <BrandWordmark />
+            <h1>Quick run</h1>
           </div>
-          <IconButton
-            disabled={panelPending}
-            icon="panel-right"
-            label="Open panel"
-            onClick={() => void openSidePanel()}
-            pending={panelPending}
-            variant="subtle"
-          />
         </header>
 
-        <section className="tab-status" aria-label="Current tab status">
-          <span className="status-dot" data-tone={view.statusTone} aria-hidden="true" />
-          <span>{statusMessage}</span>
-        </section>
+        {showStatus ? (
+          <section className="tab-status" aria-label="Current tab status">
+            <span className="status-dot" data-tone={view.statusTone} aria-hidden="true" />
+            <span>{statusMessage}</span>
+          </section>
+        ) : null}
 
         <Field label="Scenario">
           <Select
@@ -185,20 +177,16 @@ function PopupApp(): ReactElement {
           </Select>
         </Field>
 
-        <dl className="run-fields" aria-label="Run status">
-          <div>
-            <dt>Last run</dt>
-            <dd>{view.lastRunText}</dd>
-          </div>
-          <div>
-            <dt>Current run</dt>
-            <dd>{view.currentRunText}</dd>
-          </div>
-          <div>
-            <dt>Recording</dt>
-            <dd>{view.recordText}</dd>
-          </div>
-        </dl>
+        {statusItems.length === 0 ? null : (
+          <dl className="run-fields" aria-label="Run status">
+            {statusItems.map((item) => (
+              <div key={item.label}>
+                <dt>{item.label}</dt>
+                <dd>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
         <div className="primary-action" aria-label="Primary action">
           <Button
@@ -238,6 +226,15 @@ function PopupApp(): ReactElement {
           >
             {view.buttons.record.label}
           </Button>
+          <Button
+            disabled={panelPending}
+            icon="panel-right"
+            onClick={() => void openSidePanel()}
+            pending={panelPending}
+            variant="subtle"
+          >
+            Open panel
+          </Button>
         </div>
 
         {isActiveRunStatus(snapshot.currentRun?.status) ? (
@@ -269,6 +266,27 @@ function PopupApp(): ReactElement {
       </main>
     </UiProvider>
   )
+}
+
+function popupStatusItems(
+  snapshot: PopupRunControlsSnapshot,
+  view: ReturnType<typeof createPopupRunControlsView>,
+): readonly Readonly<{ label: string; value: string }>[] {
+  const items: Readonly<{ label: string; value: string }>[] = []
+
+  if (snapshot.currentRun !== undefined) {
+    items.push({ label: 'Current run', value: view.currentRunText })
+  }
+
+  if (snapshot.currentRecord !== undefined) {
+    items.push({ label: 'Recording', value: view.recordText })
+  }
+
+  if (view.lastRunText !== 'No scenario selected' && view.lastRunText !== 'No runs yet') {
+    items.push({ label: 'Last run', value: view.lastRunText })
+  }
+
+  return items
 }
 
 function isActiveRunStatus(status: string | undefined): boolean {

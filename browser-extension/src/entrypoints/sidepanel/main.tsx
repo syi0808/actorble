@@ -22,8 +22,9 @@ import {
 import { createWxtScenarioStorageRepository } from '../../storage/index.js'
 import {
   Button,
-  BrandMark,
+  BrandWordmark,
   Field,
+  OverflowMenu,
   Select,
   StatusPill,
   TextInput,
@@ -140,7 +141,6 @@ function SidepanelApp(): ReactElement {
   const [, forceRender] = useState(0)
   const [debugDrawerState, setDebugDrawerState] = useState<SidepanelDebugDrawerState>({})
   const [selectedActionFamily, setSelectedActionFamily] = useState<BuilderStepActionFamily>('click')
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('json')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const snapshot = editor.getSnapshot()
   const editorView = createSidepanelScenarioEditorView(snapshot)
@@ -232,8 +232,8 @@ function SidepanelApp(): ReactElement {
       }
     }
   }, [runAction])
-  const exportSelectedScenario = useCallback(async (): Promise<void> => {
-    if (exportFormat === 'typescript') {
+  const exportSelectedScenario = useCallback(async (format: ExportFormat): Promise<void> => {
+    if (format === 'typescript') {
       const exported = editor.exportSelectedCode()
       if (exported.ok) {
         downloadFile(exported.value.filename, exported.value.source, 'text/typescript')
@@ -249,7 +249,7 @@ function SidepanelApp(): ReactElement {
       downloadFile(exported.value.filename, exported.value.jsonText, 'application/json')
     }
     refreshView()
-  }, [exportFormat, refreshView])
+  }, [refreshView])
 
   useEffect(() => {
     const listener = (message: unknown): void => {
@@ -322,9 +322,8 @@ function SidepanelApp(): ReactElement {
   return (
     <UiProvider>
       <main>
-        <AppHeader summary={recomposedView.scenarioShell.summary} />
+        <AppHeader />
         <ScenarioShell
-          exportFormat={exportFormat}
           fileInputRef={fileInputRef}
           onCreate={() => {
             editor.createScenario({
@@ -333,8 +332,7 @@ function SidepanelApp(): ReactElement {
             })
             refreshView()
           }}
-          onExport={() => void exportSelectedScenario()}
-          onExportFormatChange={setExportFormat}
+          onExport={(format) => void exportSelectedScenario(format)}
           onImport={(file) => void importSelectedFile(file)}
           onMetadataChange={(update) => {
             editor.updateDocumentFields(update)
@@ -474,31 +472,21 @@ function SidepanelApp(): ReactElement {
   )
 }
 
-function AppHeader({
-  summary,
-}: Readonly<{
-  summary: string
-}>): ReactElement {
+function AppHeader(): ReactElement {
   return (
     <header className="app-header">
       <div className="brand-lockup">
-        <BrandMark />
-        <div>
-          <p className="eyebrow">Actorble</p>
-          <h1>Scenario Builder</h1>
-        </div>
+        <BrandWordmark />
+        <h1>Scenario builder</h1>
       </div>
-      <span className="summary">{summary}</span>
     </header>
   )
 }
 
 function ScenarioShell({
-  exportFormat,
   fileInputRef,
   onCreate,
   onExport,
-  onExportFormatChange,
   onImport,
   onMetadataChange,
   onRecord,
@@ -512,11 +500,9 @@ function ScenarioShell({
   shell,
   snapshot,
 }: Readonly<{
-  exportFormat: ExportFormat
   fileInputRef: RefObject<HTMLInputElement | null>
   onCreate(): void
-  onExport(): void
-  onExportFormatChange(format: ExportFormat): void
+  onExport(format: ExportFormat): void
   onImport(file: File | undefined): void
   onMetadataChange(update: Readonly<{ name?: string; description?: string }>): void
   onRecord(): void
@@ -530,19 +516,15 @@ function ScenarioShell({
   shell: SidepanelScenarioShellView
   snapshot: SidepanelScenarioEditorSnapshot
 }>): ReactElement {
+  const activityItems = scenarioActivityItems(shell, snapshot)
+  const recordActive = snapshot.currentRecord?.status === 'recording'
+
   return (
     <section id="scenario-shell" className="scenario-shell" aria-labelledby="scenario-shell-title">
       <div className="scenario-shell-top">
         <div className="section-heading">
           <h2 id="scenario-shell-title">Scenario</h2>
-          <span className="summary">{shell.summary}</span>
-        </div>
-        <div className="scenario-shell-status">
-          <StatusPill status={shell.targetTab.status}>{shell.targetTab.summary}</StatusPill>
-          <StatusPill status={shell.recordStatus ?? 'idle'}>{recordSummary(snapshot)}</StatusPill>
-          <StatusPill status={snapshot.currentRun?.status ?? 'idle'}>
-            {capitalize(snapshot.currentRun?.status ?? 'idle')}
-          </StatusPill>
+          {shell.dirty ? <span className="summary">Unsaved changes</span> : null}
         </div>
       </div>
       {shell.issueSummary === 'None' ? null : (
@@ -582,51 +564,82 @@ function ScenarioShell({
         </Field>
       </div>
       <div className="scenario-shell-toolbar">
-        <ViewButton icon="plus" onClick={onCreate} variant="secondary" view={shell.buttons.create}>
-          New
-        </ViewButton>
-        <label className="file-button">
-          <input
-            ref={fileInputRef}
-            accept="application/json,.json"
-            disabled={shell.buttons.import.disabled}
-            onChange={(event) => onImport(event.currentTarget.files?.[0])}
-            type="file"
-          />
-          <CommandIcon name="file-up" />
-          <span className="button-label">Import</span>
-        </label>
-        <Select
-          aria-label="Export format"
-          className="compact-select"
-          disabled={shell.buttons.export.disabled}
-          onChange={(event) => onExportFormatChange(event.currentTarget.value as ExportFormat)}
-          value={exportFormat}
-        >
-          <option value="json">JSON</option>
-          <option value="typescript">TypeScript</option>
-        </Select>
-        <ViewButton icon="download" onClick={onExport} variant="secondary" view={shell.buttons.export}>
-          Export
-        </ViewButton>
-        <ViewButton icon="check" onClick={onValidate} variant="secondary" view={shell.buttons.validate}>
-          Check scenario
-        </ViewButton>
+        <input
+          ref={fileInputRef}
+          accept="application/json,.json"
+          className="hidden-file-input"
+          disabled={shell.buttons.import.disabled}
+          onChange={(event) => onImport(event.currentTarget.files?.[0])}
+          type="file"
+        />
+        {recordActive ? (
+          <ViewButton
+            icon="square"
+            onClick={onRecord}
+            variant="danger"
+            view={shell.buttons.record}
+          >
+            {shell.buttons.record.label}
+          </ViewButton>
+        ) : (
+          <ViewButton icon="play" onClick={onRun} variant="primary" view={shell.buttons.run}>
+            {shell.buttons.run.label}
+          </ViewButton>
+        )}
         <ViewButton icon="save" onClick={onSave} variant="secondary" view={shell.buttons.save}>
           Save
         </ViewButton>
-        <ViewButton
-          icon={snapshot.currentRecord?.status === 'recording' ? 'square' : 'record'}
-          onClick={onRecord}
-          variant={snapshot.currentRecord?.status === 'recording' ? 'danger' : 'secondary'}
-          view={shell.buttons.record}
-        >
-          {shell.buttons.record.label}
-        </ViewButton>
-        <ViewButton icon="play" onClick={onRun} variant="primary" view={shell.buttons.run}>
-          {shell.buttons.run.label}
-        </ViewButton>
+        <OverflowMenu
+          items={[
+            {
+              label: 'New scenario',
+              icon: 'plus',
+              disabled: shell.buttons.create.disabled,
+              onSelect: onCreate,
+            },
+            {
+              label: 'Check scenario',
+              icon: 'check',
+              disabled: shell.buttons.validate.disabled,
+              onSelect: onValidate,
+            },
+            {
+              label: 'Record',
+              icon: 'record',
+              disabled: shell.buttons.record.disabled || recordActive,
+              onSelect: onRecord,
+            },
+            {
+              label: 'Import',
+              icon: 'file-up',
+              disabled: shell.buttons.import.disabled,
+              onSelect: () => fileInputRef.current?.click(),
+            },
+            {
+              label: 'Export JSON',
+              icon: 'download',
+              disabled: shell.buttons.export.disabled,
+              onSelect: () => onExport('json'),
+            },
+            {
+              label: 'Export TypeScript',
+              icon: 'download',
+              disabled: shell.buttons.export.disabled,
+              onSelect: () => onExport('typescript'),
+            },
+          ]}
+        />
       </div>
+      {activityItems.length === 0 ? null : (
+        <dl className="scenario-activity" aria-label="Scenario activity">
+          {activityItems.map((item) => (
+            <div key={item.label}>
+              <dt>{item.label}</dt>
+              <dd>{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <RecordedDraftReview
         onAction={onRecordedDraftAction}
         onSensitiveConfirm={onSensitiveConfirm}
@@ -683,15 +696,29 @@ function RecordedDraftReview({
         <ViewButton icon="plus" onClick={() => onAction('append')} variant="secondary" view={review.buttons.append}>
           Append
         </ViewButton>
-        <ViewButton icon="trash" onClick={() => onAction('discard')} variant="danger" view={review.buttons.discard}>
-          Discard
-        </ViewButton>
-        <ViewButton icon="save" onClick={() => onAction('save-as-new')} variant="secondary" view={review.buttons.saveAsNew}>
-          Save as new
-        </ViewButton>
-        <ViewButton icon="download" onClick={() => onAction('export')} variant="secondary" view={review.buttons.export}>
-          Export draft
-        </ViewButton>
+        <OverflowMenu
+          items={[
+            {
+              label: 'Save as new',
+              icon: 'save',
+              disabled: review.buttons.saveAsNew.disabled,
+              onSelect: () => onAction('save-as-new'),
+            },
+            {
+              label: 'Export draft',
+              icon: 'download',
+              disabled: review.buttons.export.disabled,
+              onSelect: () => onAction('export'),
+            },
+            {
+              label: 'Discard',
+              icon: 'trash',
+              danger: true,
+              disabled: review.buttons.discard.disabled,
+              onSelect: () => onAction('discard'),
+            },
+          ]}
+        />
       </div>
     </div>
   )
@@ -739,12 +766,15 @@ function BuilderWorkbench({
   workbench: SidepanelBuilderWorkbenchView
 }>): ReactElement {
   const selected = workbench.selectedStep
+  const selectedSummary = selectedStepSummary(snapshot)
 
   return (
     <section id="builder-workbench" aria-labelledby="builder-workbench-title">
       <div className="section-heading builder-heading">
         <h2 id="builder-workbench-title">Workflow</h2>
-        <span className="summary">{selectedStepSummary(snapshot)}</span>
+        {selectedSummary === '' ? null : (
+          <span className="summary">{selectedSummary}</span>
+        )}
       </div>
 
       <div className="builder-workbench-layout">
@@ -773,39 +803,35 @@ function BuilderWorkbench({
             <ViewButton icon="play" onClick={onTestStep} variant="secondary" view={workbench.buttons.dryRun}>
               Test step
             </ViewButton>
-            <ViewButton icon="copy" onClick={onDuplicateStep} variant="secondary" view={workbench.buttons.duplicateStep}>
-              Duplicate
-            </ViewButton>
-            <ViewButton
-              icon="arrow-up"
-              iconOnly
-              onClick={() => onMoveStep(-1)}
-              tooltip="Move step up"
-              variant="subtle"
-              view={workbench.buttons.moveStepUp}
-            >
-              Move step up
-            </ViewButton>
-            <ViewButton
-              icon="arrow-down"
-              iconOnly
-              onClick={() => onMoveStep(1)}
-              tooltip="Move step down"
-              variant="subtle"
-              view={workbench.buttons.moveStepDown}
-            >
-              Move step down
-            </ViewButton>
-            <ViewButton
-              icon="trash"
-              iconOnly
-              onClick={onDeleteStep}
-              tooltip="Delete step"
-              variant="danger"
-              view={workbench.buttons.deleteStep}
-            >
-              Delete step
-            </ViewButton>
+            <OverflowMenu
+              items={[
+                {
+                  label: 'Duplicate',
+                  icon: 'copy',
+                  disabled: workbench.buttons.duplicateStep.disabled,
+                  onSelect: onDuplicateStep,
+                },
+                {
+                  label: 'Move up',
+                  icon: 'arrow-up',
+                  disabled: workbench.buttons.moveStepUp.disabled,
+                  onSelect: () => onMoveStep(-1),
+                },
+                {
+                  label: 'Move down',
+                  icon: 'arrow-down',
+                  disabled: workbench.buttons.moveStepDown.disabled,
+                  onSelect: () => onMoveStep(1),
+                },
+                {
+                  label: 'Delete',
+                  icon: 'trash',
+                  danger: true,
+                  disabled: workbench.buttons.deleteStep.disabled,
+                  onSelect: onDeleteStep,
+                },
+              ]}
+            />
           </div>
 
           <StepInspector
@@ -962,16 +988,14 @@ function SelectedStepHero({
 }>): ReactElement {
   if (selected === undefined) {
     return (
-      <div className="selected-step-hero">
+      <div className="selected-step-hero empty-step-hero">
         <span className="step-hero-icon" aria-hidden="true">
           <CommandIcon name="plus" />
         </span>
         <div className="selected-step-copy">
-          <p className="panel-caption">Selected step</p>
-          <h3>No step selected</h3>
-          <p className="properties-summary">Select a step in the workflow or add a new action.</p>
+          <h3>Add a step</h3>
+          <p className="properties-summary">Choose an action from the workflow.</p>
         </div>
-        <StatusPill status="idle">Idle</StatusPill>
       </div>
     )
   }
@@ -1219,7 +1243,9 @@ function TargetSlotList({
           >
             <span className="target-slot-title">{row.label}</span>
             <span className="target-slot-detail">{row.summary}</span>
-            <span className="target-slot-status">{row.validationStatus}</span>
+            <span className="target-slot-status">
+              {row.validationStatus === 'valid' ? 'Ready' : 'Needs attention'}
+            </span>
           </button>
           <ViewButton
             className="target-slot-command"
@@ -1576,10 +1602,42 @@ function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
 }
 
+function scenarioActivityItems(
+  shell: SidepanelScenarioShellView,
+  snapshot: SidepanelScenarioEditorSnapshot,
+): readonly Readonly<{ label: string; value: string }>[] {
+  const items: Readonly<{ label: string; value: string }>[] = []
+
+  if (shell.targetTab.status === 'checking' || shell.targetTab.status === 'blocked') {
+    items.push({ label: 'Target', value: shell.targetTab.summary })
+  }
+
+  if (snapshot.currentRun !== undefined) {
+    items.push({
+      label: 'Run',
+      value: snapshot.currentTrace?.summary ?? capitalize(snapshot.currentRun.status),
+    })
+  }
+
+  if (snapshot.currentRecord !== undefined) {
+    items.push({ label: 'Recording', value: recordSummary(snapshot) })
+  }
+
+  if (
+    shell.message !== undefined &&
+    shell.message.length > 0 &&
+    !items.some((item) => item.value === shell.message)
+  ) {
+    items.push({ label: 'Message', value: shell.message })
+  }
+
+  return items
+}
+
 function selectedStepSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   const step = snapshot.draftDocument?.steps[snapshot.selectedStepIndex]
   return step === undefined
-    ? 'No step selected'
+    ? ''
     : `Step ${snapshot.selectedStepIndex + 1} · ${formatActionLabel(step.action)}`
 }
 

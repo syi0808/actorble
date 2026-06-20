@@ -9,7 +9,7 @@ body {
 
 main {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 14px;
 }
 
@@ -21,52 +21,15 @@ main {
 }
 
 .brand-lockup {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-mark {
-  position: relative;
   display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  overflow: hidden;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--actorble-mint) 44%, var(--border));
-  background: var(--actorble-ink);
+  min-width: 0;
+  gap: 4px;
 }
 
-.brand-mark-mint,
-.brand-mark-amber {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  height: 4px;
-  border-radius: 999px;
-  transform-origin: center;
-}
-
-.brand-mark-mint {
-  top: 10px;
-  background: var(--actorble-mint);
-  transform: rotate(35deg);
-}
-
-.brand-mark-amber {
-  top: 17px;
-  background: var(--actorble-amber);
-  transform: rotate(-35deg);
-}
-
-.eyebrow {
-  margin: 0 0 2px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+.brand-wordmark {
+  display: block;
+  width: 116px;
+  height: auto;
 }
 
 h1 {
@@ -109,9 +72,8 @@ h1 {
   display: grid;
   gap: 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 select {
@@ -125,7 +87,6 @@ select {
   background: var(--surface);
   font: inherit;
   font-size: 13px;
-  text-transform: none;
 }
 
 .run-fields {
@@ -143,9 +104,8 @@ select {
 
 dt {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 dd {
@@ -161,6 +121,10 @@ dd {
 .run-control-bar {
   display: grid;
   gap: 8px;
+}
+
+.secondary-actions {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .run-control-bar {
@@ -185,7 +149,7 @@ button {
   background: var(--surface);
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
