@@ -91,6 +91,7 @@ Related decisions:
 
 - `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
 - `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
+- `docs/adr/2026-06-20-browser-extension-product-ui-composition.md`
 - `docs/adr/2026-06-19-inspector-match-index-targeting.md`
 - `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`
 
@@ -108,6 +109,30 @@ popup은 짧은 control에 집중합니다.
 
 popup lifetime과 focus behavior는 multi-step editing에 맞지 않으므로 full builder
 workflow를 popup이 소유하지 않습니다.
+
+#### Popup Information Architecture
+
+popup은 builder의 축소판이 아니라 quick-run remote입니다. 기본 화면은 현재 탭이
+실행 가능한지, 어떤 scenario가 선택되었는지, 지금 실행 또는 녹화를 시작할 수
+있는지만 보여줍니다.
+
+```txt
+Current tab readiness
+-> Scenario selector
+-> Primary run command
+-> Secondary record and open panel commands
+-> Active run command bar when needed
+```
+
+`Run`은 선택된 scenario가 있고 target tab이 ready일 때 기본 primary command입니다.
+`Record`는 scenario 생성 입력 경로이므로 secondary command로 남기되, recording 중에는
+`Stop recording` 상태로 전환합니다. `Pause`, `Resume`, `Stop` 같은 active-run
+command는 실행 중일 때만 command bar에 표시합니다. Side panel 열기는 editing
+handoff이므로 icon button 또는 낮은 무게의 secondary command로 취급합니다.
+
+popup은 세부 diagnostics, JSON repair, step editing, locator candidate review를
+노출하지 않습니다. 오류가 사용자의 다음 행동에 필요하면 한 줄 상태와 side panel
+handoff로 연결합니다.
 
 ### Side Panel
 
@@ -168,17 +193,22 @@ side panel은 기능 카드를 병렬로 나열하지 않고, scenario lifecycle
 중심으로 구성합니다.
 
 ```txt
-Scenario shell
--> Scenario builder workbench
--> Target assignment interaction
+Sticky scenario shell
+-> Builder workbench
+   -> Timeline
+   -> Selected step editor
+      -> Action fields
+      -> Inline target assignment
 -> Recorded draft review
--> Collapsible debug drawer
+-> Collapsible diagnostics drawer
 ```
 
 Scenario shell은 기존 Document card를 대체합니다. scenario 선택, 생성, 이름과
 설명 편집, dirty/saved 상태, target tab readiness, import/export, save, record,
 run은 하나의 scenario lifecycle control로 노출합니다. document metadata는 scenario
-metadata로 취급하고, 별도 primary card로 분리하지 않습니다.
+metadata로 취급하고, 별도 primary card로 분리하지 않습니다. Shell은 scroll 중에도
+작업 맥락과 primary command를 잃지 않도록 side panel 상단의 sticky workbar로 둘 수
+있습니다.
 
 Scenario builder workbench는 step list와 selected step editor를 같은 작업면에
 둡니다. step add/insert/duplicate/delete/reorder, action family 선택, action별
@@ -192,7 +222,9 @@ target picker UI는 standalone card가 아니라 해당 slot을 채우는 버튼
 inspector에서 요소를 선택하면 extension은 locator candidate를 preview하고, 선택된
 요소와 매칭되는 최상위 candidate를 correlated target slot에 즉시 기록합니다.
 candidate가 여러 요소에 매칭되면 browser locator의 0-based `matchIndex`로 선택
-요소를 disambiguate합니다.
+요소를 disambiguate합니다. Locator candidates는 정상 authoring flow에서 기본 노출하지
+않고, ambiguous 또는 failed 상태일 때만 compact chooser 또는 diagnostics drawer에
+표시합니다.
 
 Recording은 builder의 primary input path입니다. record start/stop은 scenario shell에서
 제공하고, stop 후 draft가 있으면 builder review surface에 표시합니다. recorded draft는
@@ -211,6 +243,25 @@ Locator preview, validation details, run trace, failure detail은 debugging info
 사용자의 다음 행동에 필요한 경우에만 열거나 강조할 수 있습니다. Debug drawer는
 authoring flow를 보조하지만 scenario 생성, step editing, target setting의 primary
 surface가 아닙니다.
+
+#### Extension UI System
+
+Extension entrypoints share a small product UI system instead of styling each
+button and panel independently.
+
+- Commands use explicit hierarchy: primary, secondary, subtle, and danger.
+- Icon-only controls require accessible labels and tooltips.
+- Text buttons are reserved for high-clarity commands; repeated utility
+  controls such as move, delete, run, pause, stop, import, export, and panel
+  handoff should use a familiar icon with concise text or an icon-only affordance.
+- Status is shown with compact badges or inline field state, not with separate
+  status cards.
+- Repeated items such as steps, locator candidates, and recorded draft choices
+  may use rows or compact cards. Top-level page sections should not all render as
+  equal floating cards.
+- Advanced JSON repair, locator diagnostics, validation details, run trace, and
+  failure payloads belong behind disclosure controls unless they are required for
+  the next user action.
 
 ### Background Service Worker
 

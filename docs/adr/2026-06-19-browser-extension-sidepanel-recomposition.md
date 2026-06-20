@@ -1,6 +1,6 @@
 # ADR 2026-06-19: Browser Extension Side Panel Recomposition
 
-Status: Proposed
+Status: Accepted
 Date: 2026-06-19
 
 ## Context
