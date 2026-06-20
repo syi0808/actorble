@@ -21,6 +21,9 @@ export default defineConfig({
         webSearch: fileURLToPath(
           new URL('web-search/index.html', import.meta.url),
         ),
+        selectionPointerSequence: fileURLToPath(
+          new URL('selection-pointer-sequence/index.html', import.meta.url),
+        ),
       },
     },
   },

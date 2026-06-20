@@ -214,7 +214,7 @@ extension recorder and schema support
 
 ### TSPS-13 Controlled Example Page
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add a browser example page that intentionally exercises text selection, editable selection, drag-like movement, click disambiguation, and recorder replay verification on deterministic targets.
 - Dependencies: TSPS-05, TSPS-07, TSPS-12.
 - Completion criteria:

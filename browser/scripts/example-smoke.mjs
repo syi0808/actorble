@@ -82,6 +82,12 @@ try {
   await openUtilityPanel(page, 'task-utility-panel')
   await runCurrentScenario(page, 'Scheduler scenario complete')
   await expectSchedulerScenarioComplete(page)
+
+  await page.goto(new URL('selection-pointer-sequence/', baseUrl).toString())
+  await expectPageTitle(page, 'Selection and pointer sequence')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await runCurrentScenario(page, 'Selection scenario complete')
+  await expectSelectionPointerSequenceComplete(page)
 } catch (error) {
   throw await withPageDiagnostics(error, page)
 } finally {
@@ -94,6 +100,7 @@ async function expectIndexLinks(page) {
   await expectLink(page, '#open-form-filling', '/form-filling/')
   await expectLink(page, '#open-web-search', '/web-search/')
   await expectLink(page, '#open-appointment-scheduler', '/appointment-scheduler/')
+  await expectLink(page, '#open-selection-pointer-sequence', '/selection-pointer-sequence/')
 }
 
 async function expectLink(page, selector, hrefSuffix) {
@@ -242,6 +249,13 @@ async function expectState(page, selector, expected) {
   )
 }
 
+async function expectText(page, selector, expected) {
+  await page.waitForFunction(
+    ({ selector, expected }) => document.querySelector(selector)?.textContent === expected,
+    { selector, expected },
+  )
+}
+
 async function expectFidelityRuntime(page, runtime) {
   await expectCapabilityRow(page, '#fidelity-output', 'runtime', runtime)
 }
@@ -314,6 +328,29 @@ async function expectSchedulerScenarioComplete(page) {
     'action.fill',
     'action.drag',
     'action.clickCurrent',
+  ])
+}
+
+async function expectSelectionPointerSequenceComplete(page) {
+  await expectState(page, '#selection-status', 'complete')
+  await expectState(page, '#selection-click-target', 'clicked')
+  await expectState(page, '#selection-drop-target', 'dropped')
+  await expectState(page, '#pointer-pad', 'complete')
+  await expectText(page, '#document-selection-output', 'selection text')
+  await expectText(page, '#textarea-selection-output', 'textarea range')
+  await expectText(page, '#editor-selection-output', 'editable note')
+  await expectEventLogIncludes(page, [
+    'clickTarget.click',
+    'dragSource.pointerdown',
+    'dropTarget.pointerup',
+    'pointerPad.pointerdown',
+    'pointerPad.pointerup',
+  ])
+  await expectTraceIncludes(page, [
+    'action.selectText',
+    'action.click',
+    'action.drag',
+    'action.pointerSequence',
   ])
 }
 

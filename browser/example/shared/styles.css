@@ -335,7 +335,8 @@ label {
 .github-workspace,
 .form-workspace,
 .search-workspace,
-.scheduler-workspace {
+.scheduler-workspace,
+.selection-workspace {
   display: grid;
   gap: 14px;
   padding: 14px;
@@ -352,6 +353,10 @@ label {
 
 .scheduler-workspace {
   grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr) minmax(260px, 0.4fr);
+}
+
+.selection-workspace {
+  grid-template-columns: minmax(260px, 0.95fr) minmax(260px, 0.85fr) minmax(240px, 0.55fr);
 }
 
 .surface-panel {
@@ -510,9 +515,169 @@ label {
 
 .outcome-strip[data-state="submitted"],
 .outcome-strip[data-state="open"],
+.outcome-strip[data-state="complete"],
 #github-outcome[data-state="issue-open"] {
   border-left-color: #2f9d64;
   background: #f1fbf4;
+}
+
+.selection-copy-panel p {
+  margin: 0;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+  color: #263242;
+  line-height: 1.55;
+}
+
+.editable-note {
+  min-height: 86px;
+  border: 1px solid #cbd4df;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: #263242;
+  line-height: 1.45;
+}
+
+.editable-note:focus {
+  border-color: #2f6fed;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.18);
+}
+
+.gesture-panel {
+  min-height: 360px;
+}
+
+.selection-click-target {
+  min-height: 48px;
+}
+
+.selection-click-target[data-state="clicked"] {
+  border-color: #2f9d64;
+  background: #f1fbf4;
+  color: #1e6b3d;
+}
+
+.selection-drag-lane {
+  display: grid;
+  grid-template-columns: minmax(108px, 0.7fr) minmax(128px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.selection-drag-source,
+.selection-drop-target {
+  display: grid;
+  min-height: 86px;
+  place-items: center;
+  border-radius: 8px;
+  padding: 12px;
+  font-weight: 850;
+}
+
+.selection-drag-source {
+  cursor: grab;
+}
+
+.selection-drag-source[data-actorble-dragging] {
+  border-color: #2f9d64;
+  background: #f1fbf4;
+  cursor: grabbing;
+}
+
+.selection-drop-target {
+  border: 1px dashed #aab5c3;
+  background: #f8fafc;
+  color: #344256;
+}
+
+.selection-drop-target[data-state="dropped"] {
+  border-style: solid;
+  border-color: #2f9d64;
+  background: #f1fbf4;
+  color: #1e6b3d;
+}
+
+.pointer-pad {
+  position: relative;
+  display: grid;
+  min-height: 154px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #b7c2d1;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(47, 111, 237, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(47, 111, 237, 0.08) 1px, transparent 1px),
+    #fbfcfe;
+  background-size: 24px 24px;
+  color: #344256;
+  font-weight: 850;
+  user-select: none;
+}
+
+.pointer-pad span {
+  position: relative;
+  z-index: 1;
+}
+
+.pointer-pad i {
+  position: absolute;
+  left: 24%;
+  top: 46%;
+  width: 52%;
+  height: 2px;
+  background: #2f6fed;
+  transform: rotate(9deg);
+  transform-origin: left center;
+}
+
+.pointer-pad i::before,
+.pointer-pad i::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #2f6fed;
+}
+
+.pointer-pad i::before {
+  left: 0;
+}
+
+.pointer-pad i::after {
+  right: 0;
+}
+
+.pointer-pad[data-state="pressed"] {
+  border-color: #7a4b12;
+  background-color: #fff8ec;
+}
+
+.pointer-pad[data-state="complete"] {
+  border-color: #2f9d64;
+  background-color: #f1fbf4;
+}
+
+.selection-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+}
+
+.selection-summary div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
 }
 
 .scenario-form {
@@ -1026,6 +1191,7 @@ dd {
   .form-workspace,
   .search-workspace,
   .scheduler-workspace,
+  .selection-workspace,
   .schedule-heading {
     grid-template-columns: 1fr;
   }
@@ -1059,10 +1225,12 @@ dd {
   .search-box,
   .patient-search-form,
   .action-grid,
+  .selection-drag-lane,
   .repo-header,
   .issue-row,
   .submission-summary div,
-  .capability-rows div {
+  .capability-rows div,
+  .selection-summary div {
     grid-template-columns: 1fr;
   }
 
