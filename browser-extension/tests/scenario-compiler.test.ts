@@ -509,12 +509,98 @@ describe('compileToBrowserRuntime', () => {
     })
   })
 
-  it('keeps selectText draft compilation deferred to TSPS-09', () => {
+  it('compiles selectText draft steps into browser runtime selection steps', () => {
+    const compilation = compile(
+      scenario([
+        {
+          id: 'select-all',
+          action: 'selectText',
+          target: { strategy: 'css', selector: '#copy' },
+          options: { timeout: 1000 },
+        },
+        {
+          id: 'select-range',
+          action: 'selectText',
+          target: {
+            anchor: {
+              target: { strategy: 'css', selector: '#copy' },
+              offset: 2,
+            },
+            focus: {
+              target: { strategy: 'testId', value: 'editor' },
+              offset: 8,
+            },
+          },
+        },
+      ]),
+    )
+
+    expect(compilation.scenario.steps).toEqual([
+      {
+        id: 'select-all',
+        action: 'selectText',
+        target: { kind: 'css', selector: '#copy' },
+        options: { timeout: 1000 },
+      },
+      {
+        id: 'select-range',
+        action: 'selectText',
+        target: {
+          anchor: {
+            target: { kind: 'css', selector: '#copy' },
+            offset: 2,
+          },
+          focus: {
+            target: { kind: 'testId', value: 'editor' },
+            offset: 8,
+          },
+        },
+      },
+    ])
+  })
+
+  it('rejects selectText when runtime capabilities do not support text selection', () => {
     const result = compileToBrowserRuntime(
       scenario([
         {
           action: 'selectText',
           target: { strategy: 'css', selector: '#copy' },
+        },
+      ]),
+      {
+        capabilities: {
+          textSelection: 'none',
+        },
+      },
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          code: 'compiler_error',
+          path: ['steps', 0],
+          details: {
+            action: 'selectText',
+            capability: 'textSelection',
+            actual: 'none',
+            supported: ['selection-api', 'pointer-gesture', 'editor-adapter', 'native'],
+          },
+        },
+      ],
+    })
+  })
+
+  it('rejects options unsupported by selectText runtime steps', () => {
+    const result = compileToBrowserRuntime(
+      scenario([
+        {
+          action: 'selectText',
+          target: { strategy: 'css', selector: '#copy' },
+          options: {
+            timeout: 1000,
+            duration: 20,
+          },
         },
       ]),
     )
@@ -524,7 +610,12 @@ describe('compileToBrowserRuntime', () => {
       issues: [
         {
           code: 'compiler_error',
-          path: ['steps', 0],
+          path: ['steps', 0, 'options', 'duration'],
+          details: {
+            action: 'selectText',
+            option: 'duration',
+            supportedOptions: ['timeout'],
+          },
         },
       ],
     })

@@ -158,7 +158,7 @@ extension recorder and schema support
 
 ### TSPS-09 Extension Compiler Support
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Map new draft actions to `@actorble/browser` runtime actions while keeping runtime semantics inside the browser package.
 - Dependencies: TSPS-07, TSPS-08.
 - Completion criteria:

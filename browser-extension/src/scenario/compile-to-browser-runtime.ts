@@ -1,11 +1,14 @@
 import type {
+  CapabilityReport as BrowserRuntimeCapabilityReport,
   Locator as BrowserRuntimeLocator,
   RunOptions as BrowserRunOptions,
   Scenario as BrowserRuntimeScenario,
   ScenarioStep as BrowserRuntimeScenarioStep,
   ScrollPosition as BrowserRuntimeScrollPosition,
+  TextSelectionTarget as BrowserRuntimeTextSelectionTarget,
   WaitCondition as BrowserRuntimeWaitCondition,
 } from '@actorble/browser'
+import { createCapabilityFidelityReporter } from '@actorble/browser'
 import {
   failure,
   ok,
@@ -24,6 +27,7 @@ import {
   type ScenarioTarget,
   type ScenarioTargetGroup,
   type ScenarioTextMatcher,
+  type ScenarioTextSelectionTarget,
   type ScenarioWaitCondition,
 } from './types.js'
 
@@ -38,7 +42,22 @@ export type BrowserRuntimeCompileResult = ExtensionResult<BrowserRuntimeCompilat
 
 export type BrowserRuntimeLocatorCompileResult = ExtensionResult<BrowserRuntimeLocator>
 
+export type BrowserRuntimeCompileContext = Readonly<{
+  capabilities?: Partial<BrowserRuntimeCapabilityReport>
+}>
+
+type ResolvedBrowserRuntimeCompileContext = Readonly<{
+  capabilities: BrowserRuntimeCapabilityReport
+}>
+
 const ACTORBLE_BROWSER_PLATFORM_KEY = 'actorble.browser'
+const DEFAULT_BROWSER_RUNTIME_CAPABILITIES = createCapabilityFidelityReporter().getCapabilities()
+const supportedTextSelectionCapabilities = [
+  'selection-api',
+  'pointer-gesture',
+  'editor-adapter',
+  'native',
+] as const
 
 export function compileScenarioLocatorToBrowserRuntime(
   locator: ScenarioLocator,
@@ -52,6 +71,7 @@ export function compileScenarioLocatorToBrowserRuntime(
 
 export function compileToBrowserRuntime(
   document: ScenarioDocument,
+  context: BrowserRuntimeCompileContext = {},
 ): BrowserRuntimeCompileResult {
   const schemaVersion = readProperty(document, 'schemaVersion')
 
@@ -69,9 +89,10 @@ export function compileToBrowserRuntime(
 
   const issues: ExtensionIssue[] = []
   rejectPlatformExtensions(document.platform, ['platform'], issues)
+  const resolvedContext = resolveCompileContext(context)
 
   const steps = document.steps
-    .map((step, index) => compileStep(step, index, issues))
+    .map((step, index) => compileStep(step, index, issues, resolvedContext))
     .filter((step): step is BrowserRuntimeScenarioStep => step !== null)
 
   if (issues.length > 0) {
@@ -121,6 +142,7 @@ const fillOptionKeys = ['timeout', 'clear'] as const
 const pressOptionKeys = ['timeout', 'delay'] as const
 const scrollOptionKeys = ['timeout', 'behavior'] as const
 const dragOptionKeys = ['timeout', 'duration', 'motion', 'force'] as const
+const selectTextOptionKeys = ['timeout'] as const
 const waitOptionKeys = ['timeout'] as const
 
 type BrowserRuntimeStepOptions = Readonly<Record<string, unknown>>
@@ -155,6 +177,7 @@ function compileStep(
   step: ScenarioStep,
   index: number,
   issues: ExtensionIssue[],
+  context: ResolvedBrowserRuntimeCompileContext,
 ): BrowserRuntimeScenarioStep | null {
   const path: ExtensionIssuePath = ['steps', index]
 
@@ -374,6 +397,26 @@ function compileStep(
             ...optionsProperty(options),
           })
     }
+    case 'selectText': {
+      validateSelectTextCapability([...path], issues, context)
+      const target = compileTextSelectionTarget(step.target, [...path, 'target'], issues)
+      const options = compileOptions(
+        step.options,
+        selectTextOptionKeys,
+        [...path, 'options'],
+        step.action,
+        issues,
+      )
+
+      return target === null
+        ? null
+        : asRuntimeStep({
+            ...stepIdentity(step),
+            action: step.action,
+            target,
+            ...optionsProperty(options),
+          })
+    }
     case 'waitFor': {
       const input = compileWaitCondition(step.input, [...path, 'input'], issues)
       const options = compileOptions(
@@ -409,6 +452,32 @@ function compileStep(
   )
 
   return null
+}
+
+function compileTextSelectionTarget(
+  target: ScenarioTextSelectionTarget,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+): BrowserRuntimeTextSelectionTarget | null {
+  if (isTextSelectionRangeTarget(target)) {
+    const anchorTarget = compileTarget(target.anchor.target, [...path, 'anchor', 'target'], issues)
+    const focusTarget = compileTarget(target.focus.target, [...path, 'focus', 'target'], issues)
+
+    return anchorTarget === null || focusTarget === null
+      ? null
+      : {
+          anchor: {
+            target: anchorTarget,
+            offset: target.anchor.offset,
+          },
+          focus: {
+            target: focusTarget,
+            offset: target.focus.offset,
+          },
+        }
+  }
+
+  return compileTarget(target, path, issues)
 }
 
 function compileTarget(
@@ -731,6 +800,42 @@ function optionsProperty(
   options: BrowserRuntimeStepOptions | undefined,
 ): Readonly<{ options?: BrowserRuntimeStepOptions }> {
   return options === undefined ? {} : { options }
+}
+
+function resolveCompileContext(
+  context: BrowserRuntimeCompileContext,
+): ResolvedBrowserRuntimeCompileContext {
+  return {
+    capabilities: {
+      ...DEFAULT_BROWSER_RUNTIME_CAPABILITIES,
+      ...context.capabilities,
+    },
+  }
+}
+
+function validateSelectTextCapability(
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+  context: ResolvedBrowserRuntimeCompileContext,
+): void {
+  if (context.capabilities.textSelection !== 'none') {
+    return
+  }
+
+  issues.push(
+    compilerIssue('Runtime text selection capability is not supported.', path, {
+      action: 'selectText',
+      capability: 'textSelection',
+      actual: context.capabilities.textSelection,
+      supported: supportedTextSelectionCapabilities,
+    }),
+  )
+}
+
+function isTextSelectionRangeTarget(
+  target: ScenarioTextSelectionTarget,
+): target is Extract<ScenarioTextSelectionTarget, Readonly<{ anchor: unknown; focus: unknown }>> {
+  return 'anchor' in target && 'focus' in target
 }
 
 function asRuntimeStep(step: BrowserRuntimeScenarioStep): BrowserRuntimeScenarioStep {
