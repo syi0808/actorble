@@ -41,7 +41,10 @@ import {
 } from '../src/messaging/index.js'
 import {
   createRecorderEventCapturePort,
+  type RecorderClickEvent,
   type RecorderEventCaptureAdapter,
+  type RecorderPointerEvent,
+  type RecorderSelectionSnapshot,
   type RecorderTextEvent,
 } from '../src/recorder/event-capture.js'
 import {
@@ -472,6 +475,112 @@ describe('workflow verification harness', () => {
       },
     })
   })
+
+  it('verifies recorded text selection review, save, compile, and replay', async () => {
+    const harness = await createWorkflowHarness()
+
+    await createTargetedWorkflowDraft(harness)
+    const recordStart = await harness.editor.startRecording()
+    harness.recorderAdapter.dispatchSelectionGesture()
+    await flushAsyncWork()
+    const recordStop = await harness.editor.stopRecording()
+
+    expect(recordStart).toMatchObject({ ok: true })
+    expect(recordStop).toMatchObject({
+      ok: true,
+      value: {
+        recordedDraft: {
+          sourceEventCount: 4,
+          document: {
+            steps: [
+              {
+                action: 'selectText',
+              },
+            ],
+          },
+        },
+      },
+    })
+    expect(recordStop.ok && JSON.stringify(recordStop.value.recordedDraft?.document)).not.toContain(
+      'selectedText',
+    )
+    expect(recordStop.ok && recordStop.value.recordedDraft?.document.steps).not.toEqual([
+      expect.objectContaining({ action: 'click' }),
+    ])
+    expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
+      summary: '4 source events · valid',
+      buttons: {
+        append: {
+          disabled: false,
+        },
+        export: {
+          disabled: false,
+        },
+      },
+    })
+
+    const exported = harness.editor.exportRecordedDraft()
+    const appended = harness.editor.appendRecordedDraftSteps()
+    const saved = await harness.editor.saveDraft()
+
+    expect(exported).toMatchObject({
+      ok: true,
+      value: {
+        document: {
+          steps: [
+            {
+              action: 'selectText',
+            },
+          ],
+        },
+      },
+    })
+    expect(appended).toMatchObject({ ok: true })
+    expect(saved).toMatchObject({ ok: true })
+    expect(harness.saves[0].document.steps.at(-1)).toMatchObject({
+      action: 'selectText',
+      target: {
+        locators: expect.arrayContaining([
+          {
+            strategy: 'testId',
+            value: 'copy-block',
+          },
+        ]),
+      },
+    })
+
+    const run = await harness.editor.runSelectedScenario()
+    await flushAsyncWork()
+
+    expect(run).toMatchObject({ ok: true })
+    expect(harness.runtimeRuns.at(-1)).toMatchObject({
+      id: 'workflow-scenario',
+      steps: [
+        { action: 'delay' },
+        { action: 'click' },
+        { action: 'selectText' },
+      ],
+    })
+    expect(harness.contentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'trace:event',
+          payload: expect.objectContaining({
+            event: expect.objectContaining({
+              name: 'action.selectText',
+            }),
+          }),
+        }),
+      ]),
+    )
+    expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
+      views: {
+        runTrace: {
+          status: 'completed',
+        },
+      },
+    })
+  })
 })
 
 type WorkflowHarnessOptions = Readonly<{
@@ -796,7 +905,7 @@ function scenarioRecord(
   }
 }
 
-type FixtureElement = 'submit' | 'email'
+type FixtureElement = 'submit' | 'email' | 'copy'
 
 const submitTarget = {
   tagName: 'button',
@@ -828,6 +937,20 @@ const emailTarget = {
     y: 96,
     width: 140,
     height: 32,
+  },
+} as const
+
+const copyTarget = {
+  tagName: 'p',
+  id: 'copy',
+  testId: 'copy-block',
+  text: 'Controlled selection text',
+  frameUrl: FIXTURE_URL,
+  rect: {
+    x: 24,
+    y: 160,
+    width: 320,
+    height: 36,
   },
 } as const
 
@@ -878,11 +1001,18 @@ function createFixtureInspectorAdapter() {
 
 function createFixtureRecorderAdapter() {
   const element = 'email' satisfies FixtureElement
+  const selectionElement = 'copy' satisfies FixtureElement
   let value = ''
+  let selectedText = ''
+  let click: ((event: RecorderClickEvent<FixtureElement>) => void) | undefined
   let input: ((event: RecorderTextEvent<FixtureElement>) => void) | undefined
+  let pointerDown: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined
+  let pointerUp: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined
+  let selectionChange: (() => void) | undefined
 
   return {
-    onClick() {
+    onClick(listener) {
+      click = listener
       return () => {}
     },
     onInput(listener) {
@@ -892,16 +1022,19 @@ function createFixtureRecorderAdapter() {
     onChange() {
       return () => {}
     },
-    onPointerDown() {
+    onPointerDown(listener) {
+      pointerDown = listener
       return () => {}
     },
     onPointerMove() {
       return () => {}
     },
-    onPointerUp() {
+    onPointerUp(listener) {
+      pointerUp = listener
       return () => {}
     },
-    onSelectionChange() {
+    onSelectionChange(listener) {
+      selectionChange = listener
       return () => {}
     },
     onDragStart() {
@@ -913,16 +1046,19 @@ function createFixtureRecorderAdapter() {
     onPagehide() {
       return () => {}
     },
-    describeElement() {
-      return emailTarget
+    describeElement(nextElement) {
+      return recorderTargetFor(nextElement)
     },
     readElementValue() {
       return value
     },
     readSelection() {
       return {
-        selectedText: '',
-      }
+        selectedText,
+        activeTarget: selectionElement,
+        anchorTarget: selectionElement,
+        focusTarget: selectionElement,
+      } satisfies RecorderSelectionSnapshot<FixtureElement>
     },
     sensitiveInputReason() {
       return null
@@ -931,8 +1067,55 @@ function createFixtureRecorderAdapter() {
       value = nextValue
       input?.({ target: element })
     },
+    dispatchSelectionGesture() {
+      selectedText = 'Controlled selection text'
+      pointerDown?.(recorderPointerEvent(selectionElement, {
+        clientX: 32,
+        clientY: 172,
+        buttons: 1,
+      }))
+      selectionChange?.()
+      pointerUp?.(recorderPointerEvent(selectionElement, {
+        clientX: 156,
+        clientY: 172,
+        buttons: 0,
+      }))
+      click?.({
+        target: selectionElement,
+        clientX: 156,
+        clientY: 172,
+        button: 0,
+      })
+    },
   } satisfies RecorderEventCaptureAdapter<FixtureElement> & {
     dispatchInput(nextValue: string): void
+    dispatchSelectionGesture(): void
+  }
+}
+
+function recorderTargetFor(element: FixtureElement) {
+  switch (element) {
+    case 'submit':
+      return submitTarget
+    case 'email':
+      return emailTarget
+    case 'copy':
+      return copyTarget
+  }
+}
+
+function recorderPointerEvent(
+  target: FixtureElement,
+  input: Pick<RecorderPointerEvent<FixtureElement>, 'clientX' | 'clientY' | 'buttons'>,
+): RecorderPointerEvent<FixtureElement> {
+  return {
+    target,
+    clientX: input.clientX,
+    clientY: input.clientY,
+    button: 0,
+    buttons: input.buttons,
+    pointerId: 1,
+    pointerType: 'mouse',
   }
 }
 
@@ -969,6 +1152,13 @@ function createRuntimeActorble(
         throw new Error('Workflow target missing.')
       }
 
+      for (const step of scenario.steps) {
+        if (step.action === 'selectText') {
+          trace?.appendEvent(`action.${step.action}`, {
+            stepId: step.id,
+          })
+        }
+      }
       trace?.appendEvent('workflow:run', {
         stepCount: scenario.steps.length,
       })

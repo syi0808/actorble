@@ -230,7 +230,7 @@ extension recorder and schema support
 
 ### TSPS-14 End-To-End Verification
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Verify the first real workflow from browser action through extension recording and replay on a controlled page.
 - Dependencies: TSPS-05, TSPS-07, TSPS-09, TSPS-11, TSPS-12, TSPS-13.
 - Completion criteria:
@@ -243,6 +243,10 @@ extension recorder and schema support
   - Run `cd browser-extension && pnpm test`.
   - Run typecheck/build commands for any package whose public contracts or schema changed.
   - Document manual verification notes in the task completion update.
+- Verification notes:
+  - Added workflow-harness coverage for recording a pointer selection window, reviewing the resulting `selectText` draft, exporting/appending/saving it, compiling it to browser runtime steps, replaying it, and observing `action.selectText` trace evidence.
+  - Verified the controlled `browser/example/selection-pointer-sequence/` page through `pnpm example:smoke`; the scenario exercises document text selection, textarea/contenteditable selection, click/drag distinction, and a closed `pointerSequence`.
+  - Unsupported or deferred pointer fallback remains gated by schema/compiler support, so ambiguous pointer windows do not produce misleading draft steps.
 
 ## First Vertical Slice
 
