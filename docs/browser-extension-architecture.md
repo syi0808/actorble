@@ -92,6 +92,7 @@ Related decisions:
 - `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
 - `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
 - `docs/adr/2026-06-20-browser-extension-product-ui-composition.md`
+- `docs/adr/2026-06-20-browser-extension-workflow-builder-ux.md`
 - `docs/adr/2026-06-19-inspector-match-index-targeting.md`
 - `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`
 
@@ -214,6 +215,40 @@ Scenario builder workbench는 step list와 selected step editor를 같은 작업
 둡니다. step add/insert/duplicate/delete/reorder, action family 선택, action별
 structured field editing, per-step dry run은 선택된 step 맥락 안에서 동작합니다.
 Steps와 Step Editor는 별도 primary card가 아닙니다.
+
+#### Workflow Builder Behavior
+
+Builder는 scenario document 편집 폼이 아니라 ordered workflow authoring surface입니다.
+사용자는 다음 동작을 통해 scenario를 작성합니다.
+
+```txt
+Choose or create scenario
+-> Add an action from an action palette
+-> Select a step in the flow
+-> Configure that step in the properties inspector
+-> Assign required targets from the step context
+-> Validate or dry-run the selected step
+-> Reorder, duplicate, or remove steps from the selected step context
+-> Save or run the scenario
+```
+
+Step flow는 scenario의 순서를 보여주는 primary navigation입니다. 각 step은 action,
+순서, target/input 요약, validation state, selected state를 함께 보여야 합니다.
+사용자가 flow item을 선택하면 properties inspector는 해당 step의 action-specific
+fields, target slots, run controls, repair controls를 보여줍니다.
+
+Action 추가는 raw select와 add button 조합이 아니라 action palette 동작입니다. Palette는
+사용 가능한 action family를 보여주고, 선택된 family로 새 step을 추가하거나 현재 step
+뒤에 삽입합니다. Raw select는 keyboard and fallback control로 남길 수 있지만 primary
+authoring interaction은 palette입니다.
+
+Step reorder, duplicate, delete는 global toolbar가 아니라 selected step context action으로
+취급합니다. 이 동작은 선택된 workflow step을 기준으로 draft session을 변경합니다.
+step이 선택되지 않은 상태에서는 삭제나 위치 변경 command를 비활성화합니다.
+
+Step validation과 run feedback은 영향을 받은 step에 먼저 붙습니다. Diagnostics drawer는
+세부 정보를 보여줄 수 있지만, flow item과 inspector field state가 다음에 봐야 할
+문제를 먼저 표시해야 합니다.
 
 Target assignment는 selected step editor 내부의 target field control입니다. target이
 필요한 action만 `Set target` interaction을 활성화합니다. drag는 from/to, waitFor는
