@@ -1,0 +1,4 @@
+interface:
+  display_name: "Actorble UI Design Review"
+  short_description: "Review Actorble UI hierarchy and polish"
+  default_prompt: "Use $actorble-ui-design-review to review and improve Actorble UI against the product design heuristics."
