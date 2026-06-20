@@ -69,6 +69,8 @@ export type InspectorTargetSlotKind =
   | 'step-target'
   | 'drag-from'
   | 'drag-to'
+  | 'selection-anchor'
+  | 'selection-focus'
   | 'waitFor-target'
   | 'scrollTo-target'
 
@@ -502,6 +504,8 @@ function isInspectorTargetSlotKind(value: unknown): value is InspectorTargetSlot
       value === 'step-target' ||
       value === 'drag-from' ||
       value === 'drag-to' ||
+      value === 'selection-anchor' ||
+      value === 'selection-focus' ||
       value === 'waitFor-target' ||
       value === 'scrollTo-target'
     )

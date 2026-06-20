@@ -200,7 +200,7 @@ extension recorder and schema support
 
 ### TSPS-12 Builder Review And Target Slots
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Update extension authoring/review flow for `selectText` targets and recorder drafts without making UI state part of the scenario document.
 - Dependencies: TSPS-08, TSPS-11.
 - Completion criteria:

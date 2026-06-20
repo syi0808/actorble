@@ -307,6 +307,11 @@ describe('builder authoring session', () => {
         issuePath: ['steps', 0, 'from', 'locators'],
       },
       {
+        family: 'selectText',
+        expected: { action: 'selectText', target: emptyTarget() },
+        issuePath: ['steps', 0, 'target', 'locators'],
+      },
+      {
         family: 'waitForVisible',
         expected: { action: 'waitFor', input: { kind: 'visible', target: emptyTarget() } },
         issuePath: ['steps', 0, 'input', 'target', 'locators'],
@@ -399,6 +404,7 @@ describe('builder authoring session', () => {
       expectedSlots: readonly string[]
     }>[] = [
       { family: 'click', expectedSlots: ['step-target'] },
+      { family: 'selectText', expectedSlots: ['step-target'] },
       { family: 'drag', expectedSlots: ['drag-from', 'drag-to'] },
       { family: 'waitForVisible', expectedSlots: ['waitFor-target'] },
       { family: 'scrollToTarget', expectedSlots: ['scrollTo-target'] },
@@ -446,6 +452,11 @@ describe('builder authoring session', () => {
       kind: 'scrollTo-target',
       stepId: 'slot-step',
     }, testIdLocator('scroll-target')))
+    const selectStep = unwrap(updateStepActionFamily(withScrollTarget, 'slot-step', 'selectText'))
+    const withSelectTarget = unwrap(assignLocatorToTargetSlot(selectStep, {
+      kind: 'step-target',
+      stepId: 'slot-step',
+    }, testIdLocator('selection-target')))
 
     expect(withStepTarget.draftDocument?.steps[0]).toMatchObject({
       target: targetWithLocator('primary-target'),
@@ -463,6 +474,63 @@ describe('builder authoring session', () => {
     expect(withScrollTarget.draftDocument?.steps[0]).toMatchObject({
       target: targetWithLocator('scroll-target'),
     })
+    expect(withSelectTarget.draftDocument?.steps[0]).toMatchObject({
+      action: 'selectText',
+      target: targetWithLocator('selection-target'),
+    })
+  })
+
+  it('supports text selection endpoint target slots without storing UI state', () => {
+    const session = createScenarioAuthoringSession({
+      createScenarioId: () => 'selection-document',
+      createStepId: () => 'selection-step',
+    })
+    const created = unwrap(createScenario(session, {
+      initialStepFamily: 'selectText',
+    }))
+    const ranged = unwrap(updateStepFields(created, 'selection-step', {
+      target: {
+        anchor: {
+          target: emptyTarget(),
+          offset: 2,
+        },
+        focus: {
+          target: emptyTarget(),
+          offset: 8,
+        },
+      },
+    }))
+
+    expect(
+      listTargetSlotsForStep(ranged.draftDocument?.steps[0] ?? neverStep(), 'selection-step')
+        .map((slot) => slot.kind),
+    ).toEqual(['selection-anchor', 'selection-focus'])
+
+    const withAnchor = unwrap(assignLocatorToTargetSlot(ranged, {
+      kind: 'selection-anchor',
+      stepId: 'selection-step',
+    }, testIdLocator('selection-anchor')))
+    const withFocus = unwrap(assignLocatorToTargetSlot(withAnchor, {
+      kind: 'selection-focus',
+      stepId: 'selection-step',
+    }, testIdLocator('selection-focus')))
+
+    expect(withFocus.draftDocument?.steps[0]).toMatchObject({
+      action: 'selectText',
+      target: {
+        anchor: {
+          target: targetWithLocator('selection-anchor'),
+          offset: 2,
+        },
+        focus: {
+          target: targetWithLocator('selection-focus'),
+          offset: 8,
+        },
+      },
+    })
+    expect(withFocus.issues).toEqual([])
+    expect(JSON.stringify(withFocus.draftDocument)).not.toContain('selectedTargetSlot')
+    expect(JSON.stringify(withFocus.draftDocument)).not.toContain('selection-anchor:selection-step')
   })
 
   it('keeps run and record state in the authoring session, not the scenario document', () => {
@@ -547,4 +615,8 @@ function targetWithLocator(value: string) {
     strict: true,
     locators: [testIdLocator(value)],
   }
+}
+
+function neverStep(): never {
+  throw new Error('Expected draft step.')
 }

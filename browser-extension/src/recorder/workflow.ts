@@ -4,6 +4,13 @@ import {
   type ScenarioDocument,
 } from '../scenario/types.js'
 
+export type RecordedSelectedTextWarning = Readonly<{
+  stepId?: string
+  reason?: string
+  message: string
+  requiresConfirmation: boolean
+}>
+
 export type RecordedScenarioDraftHandoff = RequiredTabCorrelation &
   Readonly<{
     draftId: string
@@ -13,6 +20,7 @@ export type RecordedScenarioDraftHandoff = RequiredTabCorrelation &
     createdAt: number
     scenarioId?: string
     runId?: string
+    selectedTextWarnings?: readonly RecordedSelectedTextWarning[]
   }>
 
 export type RecordedEmptyRecordingState = RequiredTabCorrelation &

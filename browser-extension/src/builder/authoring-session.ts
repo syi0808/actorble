@@ -38,6 +38,8 @@ export type BuilderTargetSlot =
   | Readonly<{ kind: 'step-target'; stepId: string }>
   | Readonly<{ kind: 'drag-from'; stepId: string }>
   | Readonly<{ kind: 'drag-to'; stepId: string }>
+  | Readonly<{ kind: 'selection-anchor'; stepId: string }>
+  | Readonly<{ kind: 'selection-focus'; stepId: string }>
   | Readonly<{ kind: 'waitFor-target'; stepId: string }>
   | Readonly<{ kind: 'scrollTo-target'; stepId: string }>
 
@@ -602,6 +604,13 @@ export function listTargetSlotsForStep(
     case 'typeInto':
     case 'fill':
       return [{ kind: 'step-target', stepId }]
+    case 'selectText':
+      return isTextSelectionEndpointTarget(step.target)
+        ? [
+            { kind: 'selection-anchor', stepId },
+            { kind: 'selection-focus', stepId },
+          ]
+        : [{ kind: 'step-target', stepId }]
     case 'drag':
       return [
         { kind: 'drag-from', stepId },
@@ -1022,10 +1031,14 @@ function slotCanWrite(step: BuilderDraftStep, slot: BuilderTargetSlot | undefine
 
   switch (slot.kind) {
     case 'step-target':
-      return ['click', 'moveTo', 'doubleClick', 'focus', 'typeInto', 'fill'].includes(step.action)
+      return ['click', 'moveTo', 'doubleClick', 'focus', 'typeInto', 'fill'].includes(step.action) ||
+        (step.action === 'selectText' && !isTextSelectionEndpointTarget(step.target))
     case 'drag-from':
     case 'drag-to':
       return step.action === 'drag'
+    case 'selection-anchor':
+    case 'selection-focus':
+      return step.action === 'selectText' && isTextSelectionEndpointTarget(step.target)
     case 'waitFor-target':
       return step.action === 'waitFor' && isTargetWaitCondition(step.input)
     case 'scrollTo-target':
@@ -1055,6 +1068,32 @@ function writeTargetToSlot(
         ...step,
         to: target,
       }
+    case 'selection-anchor':
+    case 'selection-focus': {
+      const selectionTarget = isTextSelectionEndpointTarget(step.target)
+        ? step.target
+        : {
+            anchor: {
+              target: emptyTargetGroup(),
+              offset: 0,
+            },
+            focus: {
+              target: emptyTargetGroup(),
+              offset: 0,
+            },
+          }
+      const endpointKey = slot.kind === 'selection-anchor' ? 'anchor' : 'focus'
+      return {
+        ...step,
+        target: {
+          ...selectionTarget,
+          [endpointKey]: {
+            ...selectionTarget[endpointKey],
+            target,
+          },
+        },
+      }
+    }
     case 'waitFor-target':
       return {
         ...step,
@@ -1068,6 +1107,21 @@ function writeTargetToSlot(
 
 function isTargetWaitCondition(value: unknown): boolean {
   return isRecord(value) && (value.kind === 'visible' || value.kind === 'hidden')
+}
+
+function isTextSelectionEndpointTarget(
+  value: unknown,
+): value is Readonly<{
+  anchor: Readonly<{ target: ScenarioTarget; offset: number }>
+  focus: Readonly<{ target: ScenarioTarget; offset: number }>
+}> {
+  return (
+    isRecord(value) &&
+    isRecord(value.anchor) &&
+    isRecord(value.focus) &&
+    hasOwn(value.anchor, 'target') &&
+    hasOwn(value.focus, 'target')
+  )
 }
 
 function actionFamilyForStep(step: BuilderDraftStep): BuilderStepActionFamily {

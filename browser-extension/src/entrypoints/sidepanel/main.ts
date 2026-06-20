@@ -697,11 +697,11 @@ function renderRecordedDraftReview(
     return
   }
 
-  const sensitiveInputCount = snapshot.recordedDraftReview?.sensitiveInputCount ?? 0
+  const hasSensitiveReviewItems = review.sensitiveSummary !== 'No sensitive inputs'
   recordedDraftSummary.textContent = review.summary
   recordedDraftValidation.textContent = review.validationSummary
   recordedDraftSensitive.textContent = review.sensitiveSummary
-  recordedDraftSensitiveConfirm.disabled = sensitiveInputCount === 0
+  recordedDraftSensitiveConfirm.disabled = !hasSensitiveReviewItems
   if (document.activeElement !== recordedDraftSensitiveConfirm) {
     recordedDraftSensitiveConfirm.checked = review.sensitiveInputsConfirmed
   }

@@ -8,6 +8,7 @@ import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
   type ScenarioLocator,
+  type ScenarioSelectTextStep,
   type ScenarioTargetTextStep,
 } from '../src/scenario/types.js'
 import type { ScenarioCodeExport } from '../src/scenario/export-code.js'
@@ -590,6 +591,50 @@ describe('sidepanel scenario editor', () => {
       expect.objectContaining({ id: 'scrollTo-target:slot-step', selected: true }),
     ])
 
+    editor.updateSelectedStepActionFamily('selectText')
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
+      expect.objectContaining({
+        id: 'step-target:slot-step',
+        label: 'Target',
+        selected: true,
+      }),
+    ])
+
+    editor.updateSelectedStepFields({
+      targetJson: JSON.stringify({
+        anchor: {
+          target: {
+            kind: 'target',
+            strict: true,
+            locators: [],
+          },
+          offset: 1,
+        },
+        focus: {
+          target: {
+            kind: 'target',
+            strict: true,
+            locators: [],
+          },
+          offset: 5,
+        },
+      }),
+    })
+    expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
+      expect.objectContaining({
+        id: 'selection-anchor:slot-step',
+        label: 'Selection anchor',
+        selected: true,
+        validationStatus: 'invalid',
+      }),
+      expect.objectContaining({
+        id: 'selection-focus:slot-step',
+        label: 'Selection focus',
+        selected: false,
+        validationStatus: 'invalid',
+      }),
+    ])
+
     editor.updateSelectedStepActionFamily('waitForText')
     const targetlessView = createSidepanelScenarioEditorView(editor.getSnapshot())
 
@@ -673,6 +718,27 @@ describe('sidepanel scenario editor', () => {
       waitText: false,
       scrollPosition: false,
       targetSlots: true,
+    })
+
+    editor.updateSelectedStepActionFamily('selectText')
+    const selectTextView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(selectTextView.actionFamilyOptions).toEqual(
+      expect.arrayContaining([
+        {
+          value: 'selectText',
+          label: 'Select text',
+        },
+      ]),
+    )
+    expect(selectTextView.selectedStepFields).toMatchObject({
+      actionFamily: 'selectText',
+      controls: {
+        textInput: false,
+        duration: false,
+        waitText: false,
+        scrollPosition: false,
+        targetSlots: true,
+      },
     })
   })
 
@@ -1062,6 +1128,73 @@ describe('sidepanel scenario editor', () => {
     expect(updates[0].update.document?.steps).toHaveLength(originalStepCount + 1)
   })
 
+  it('reviews, exports, appends, replaces, and discards recorded selectText drafts', async () => {
+    const { editor, updates } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok(recordedSelectTextDraft('record-selection-1'))
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+    const originalStepCount = editor.getSnapshot().draftDocument?.steps.length ?? 0
+
+    await editor.loadRecordedDraft('record-selection-1')
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+    const exported = editor.exportRecordedDraft()
+    const appended = editor.appendRecordedDraftSteps()
+    const saved = await editor.saveDraft()
+
+    expect(view.recordedDraftReview).toMatchObject({
+      summary: '1 source event · valid',
+      buttons: {
+        append: { disabled: false },
+        replace: { disabled: false },
+        export: { disabled: false },
+      },
+    })
+    expect(exported).toMatchObject({
+      ok: true,
+      value: {
+        document: {
+          steps: [
+            {
+              action: 'selectText',
+            },
+          ],
+        },
+      },
+    })
+    expect(appended).toMatchObject({ ok: true })
+    expect(saved).toMatchObject({ ok: true })
+    expect(updates[0].update.document?.steps).toHaveLength(originalStepCount + 1)
+    expect(updates[0].update.document?.steps.at(-1)).toMatchObject({
+      id: 'recorded-select-text',
+      action: 'selectText',
+      target: {
+        strategy: 'testId',
+        value: 'copy-block',
+      },
+    })
+    expect(JSON.stringify(updates[0].update.document)).not.toContain('selectedTextWarnings')
+
+    await editor.loadRecordedDraft('record-selection-1')
+    const discarded = editor.discardRecordedDraft()
+    await editor.loadRecordedDraft('record-selection-1')
+    const replaced = editor.replaceWithRecordedDraft()
+
+    expect(discarded).toMatchObject({ ok: true })
+    expect(replaced).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-select-text',
+        action: 'selectText',
+      }),
+    ])
+  })
+
   it('saves a reviewed recorded draft as a new scenario without replacing the current draft first', async () => {
     const { editor, saves } = createTestEditor({
       sendResponse(message) {
@@ -1146,6 +1279,68 @@ describe('sidepanel scenario editor', () => {
     expect(saved).toMatchObject({ ok: true })
     expect(saves).toHaveLength(1)
     expect(editor.getSnapshot().recordedDraftReview).toBeUndefined()
+  })
+
+  it('requires confirmation for sensitive selected text warnings without storing them in documents', async () => {
+    const { editor, saves } = createTestEditor({
+      sendResponse(message) {
+        if (message.kind === 'record:draft:get') {
+          return ok({
+            ...recordedSelectTextDraft('record-selection-sensitive-1'),
+            selectedTextWarnings: [
+              {
+                stepId: 'recorded-select-text',
+                reason: 'secret_like_field',
+                message: 'Selected text may contain sensitive content.',
+                requiresConfirmation: true,
+              },
+            ],
+          })
+        }
+
+        return ok({ contentReady: true })
+      },
+    })
+    await editor.refresh()
+
+    await editor.loadRecordedDraft('record-selection-sensitive-1')
+    const initialView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    const exportedBlocked = editor.exportRecordedDraft()
+    const appendBlocked = editor.appendRecordedDraftSteps()
+    editor.confirmRecordedDraftSensitiveInputs(true)
+    const saved = await editor.saveRecordedDraftAsNew()
+
+    expect(initialView.recordedDraftReview).toMatchObject({
+      sensitiveSummary: '1 sensitive selection requires confirmation',
+      buttons: {
+        append: { disabled: true },
+        export: { disabled: true },
+        saveAsNew: { disabled: true },
+      },
+    })
+    expect(exportedBlocked).toMatchObject({
+      ok: false,
+      issues: [
+        expect.objectContaining({
+          code: 'recorder_error',
+          message: 'Confirm sensitive recorded inputs before saving the recorded draft.',
+        }),
+      ],
+    })
+    expect(appendBlocked).toMatchObject({
+      ok: false,
+      issues: [
+        expect.objectContaining({
+          code: 'recorder_error',
+        }),
+      ],
+    })
+    expect(saved).toMatchObject({ ok: true })
+    expect(saves).toHaveLength(1)
+    expect(JSON.stringify(saves[0].document)).not.toContain('selectedTextWarnings')
+    expect(JSON.stringify(saves[0].document)).not.toContain(
+      'Selected text may contain sensitive content',
+    )
   })
 
   it('loads a cached recorder draft by handoff id for review', async () => {
@@ -1579,6 +1774,32 @@ function recordedDraft(
         },
       ],
     } satisfies ScenarioDocument,
+  }
+}
+
+function recordedSelectTextDraft(draftId: string) {
+  return {
+    draftId,
+    sessionId: draftId,
+    tabId: 7,
+    frameId: 0,
+    scenarioId: 'newest-scenario',
+    runId: draftId,
+    sourceEventCount: 1,
+    createdAt: 1_700_000_000_000,
+    document: {
+      schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
+      steps: [
+        {
+          id: 'recorded-select-text',
+          action: 'selectText',
+          target: {
+            strategy: 'testId',
+            value: 'copy-block',
+          },
+        },
+      ],
+    } satisfies ScenarioDocument & { steps: readonly ScenarioSelectTextStep[] },
   }
 }
 

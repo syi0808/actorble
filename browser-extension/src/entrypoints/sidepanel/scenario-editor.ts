@@ -52,6 +52,7 @@ import {
 import {
   documentWithRecordedDraftDefaults,
   type RecordedEmptyRecordingState,
+  type RecordedSelectedTextWarning,
   type RecordedScenarioDraftHandoff,
 } from '../../recorder/workflow.js'
 import type {
@@ -154,6 +155,7 @@ export type SidepanelRecordedDraftReview = Readonly<{
   validationStatus: 'valid' | 'invalid'
   validationIssues: readonly ExtensionIssue[]
   sensitiveInputCount: number
+  selectedTextWarnings: readonly RecordedSelectedTextWarning[]
   sensitiveInputsConfirmed: boolean
 }>
 
@@ -922,25 +924,12 @@ export function createSidepanelScenarioEditor(
   }
 
   function exportRecordedDraft(): ExtensionResult<ScenarioJsonExport> {
-    const review = recordedDraftReview
-    if (review === undefined) {
-      return setIssue({
-        code: 'recorder_error',
-        message: 'No recorded draft is available to export.',
-      })
+    const ready = recordedDraftReadyForSave('export')
+    if (!ready.ok) {
+      return failure(ready.issues)
     }
 
-    const validation = validateRecordedDraftReview(review)
-    if (!validation.ok) {
-      externalIssues = validation.issues
-      syncSnapshotFromSession({
-        pendingAction: null,
-        message: undefined,
-      })
-      return failure(validation.issues)
-    }
-
-    const id = validation.value.id ?? `recorded-${review.draftId}`
+    const id = ready.value.document.id ?? `recorded-${ready.value.review.draftId}`
     externalIssues = []
     syncSnapshotFromSession({
       pendingAction: null,
@@ -950,8 +939,8 @@ export function createSidepanelScenarioEditor(
     return ok({
       id,
       filename: `${filenameBase(id)}.json`,
-      jsonText: `${JSON.stringify(validation.value, null, 2)}\n`,
-      document: validation.value,
+      jsonText: `${JSON.stringify(ready.value.document, null, 2)}\n`,
+      document: ready.value.document,
     })
   }
 
@@ -1066,7 +1055,7 @@ export function createSidepanelScenarioEditor(
 
     recordedDraftReview = {
       ...review,
-      sensitiveInputsConfirmed: review.sensitiveInputCount > 0 && confirmed,
+      sensitiveInputsConfirmed: sensitiveReviewItemCount(review) > 0 && confirmed,
     }
     externalIssues = []
     syncSnapshotFromSession({
@@ -1475,7 +1464,7 @@ export function createSidepanelScenarioEditor(
   }
 
   function recordedDraftReadyForSave(
-    _action: 'replace' | 'append' | 'save',
+    _action: 'replace' | 'append' | 'save' | 'export',
   ): ExtensionResult<Readonly<{
     review: SidepanelRecordedDraftReview
     document: ScenarioDocument
@@ -1578,6 +1567,7 @@ export function createSidepanelScenarioEditor(
       validationStatus: validation.ok ? 'valid' : 'invalid',
       validationIssues: validation.ok ? [] : validation.issues,
       sensitiveInputCount: countSensitiveRecordedInputs(reviewDocument),
+      selectedTextWarnings: draft.selectedTextWarnings ?? [],
       sensitiveInputsConfirmed: false,
     }
 
@@ -1872,12 +1862,33 @@ function validateRecordedDraftReview(
 function recordedDraftNeedsSensitiveConfirmation(
   review: SidepanelRecordedDraftReview,
 ): boolean {
-  return review.sensitiveInputCount > 0 && !review.sensitiveInputsConfirmed
+  return sensitiveReviewItemCount(review) > 0 && !review.sensitiveInputsConfirmed
 }
 
 function sensitiveReviewSummary(review: SidepanelRecordedDraftReview): string {
-  if (review.sensitiveInputCount === 0) {
+  const selectedTextWarningCount = sensitiveSelectedTextWarningCount(review)
+  if (review.sensitiveInputCount === 0 && selectedTextWarningCount === 0) {
     return 'No sensitive inputs'
+  }
+
+  if (review.sensitiveInputCount === 0) {
+    const count = `${selectedTextWarningCount} sensitive selection${
+      selectedTextWarningCount === 1 ? '' : 's'
+    }`
+    return review.sensitiveInputsConfirmed
+      ? `${count} confirmed`
+      : `${count} requires confirmation`
+  }
+
+  if (selectedTextWarningCount > 0) {
+    const count = `${review.sensitiveInputCount} sensitive input${
+      review.sensitiveInputCount === 1 ? '' : 's'
+    } and ${selectedTextWarningCount} sensitive selection${
+      selectedTextWarningCount === 1 ? '' : 's'
+    }`
+    return review.sensitiveInputsConfirmed
+      ? `${count} confirmed`
+      : `${count} requires confirmation`
   }
 
   const count = `${review.sensitiveInputCount} sensitive input${
@@ -1886,6 +1897,14 @@ function sensitiveReviewSummary(review: SidepanelRecordedDraftReview): string {
   return review.sensitiveInputsConfirmed
     ? `${count} confirmed`
     : `${count} requires confirmation`
+}
+
+function sensitiveReviewItemCount(review: SidepanelRecordedDraftReview): number {
+  return review.sensitiveInputCount + sensitiveSelectedTextWarningCount(review)
+}
+
+function sensitiveSelectedTextWarningCount(review: SidepanelRecordedDraftReview): number {
+  return review.selectedTextWarnings.filter((warning) => warning.requiresConfirmation).length
 }
 
 function countSensitiveRecordedInputs(document: BuilderDraftDocument): number {
@@ -2210,7 +2229,7 @@ function recordedDraftReviewView(
       },
       export: {
         label: 'Export draft',
-        disabled: anyPending || invalid,
+        disabled: mergeDisabled,
         pending: false,
       },
     },
@@ -2256,6 +2275,7 @@ const actionFamilies = [
   'scrollToTarget',
   'scrollToPosition',
   'drag',
+  'selectText',
   'waitForVisible',
   'waitForHidden',
   'waitForText',
@@ -2280,6 +2300,8 @@ function actionFamilyLabel(family: BuilderStepActionFamily): string {
       return 'Scroll to target'
     case 'scrollToPosition':
       return 'Scroll position'
+    case 'selectText':
+      return 'Select text'
     case 'waitForVisible':
       return 'Wait visible'
     case 'waitForHidden':
@@ -2327,6 +2349,10 @@ function targetSlotLabel(slot: BuilderTargetSlot): string {
       return 'Drag from'
     case 'drag-to':
       return 'Drag to'
+    case 'selection-anchor':
+      return 'Selection anchor'
+    case 'selection-focus':
+      return 'Selection focus'
     case 'waitFor-target':
       return 'Wait target'
     case 'scrollTo-target':
@@ -2343,6 +2369,14 @@ function targetSlotSummary(step: BuilderDraftStep, slot: BuilderTargetSlot): str
       return targetSummary(readStepProperty(step, 'from'))
     case 'drag-to':
       return targetSummary(readStepProperty(step, 'to'))
+    case 'selection-anchor':
+    case 'selection-focus': {
+      const target = readStepProperty(step, 'target')
+      const endpoint = isRecord(target)
+        ? target[slot.kind === 'selection-anchor' ? 'anchor' : 'focus']
+        : undefined
+      return isRecord(endpoint) ? targetSummary(endpoint.target) : 'current'
+    }
     case 'waitFor-target': {
       const input = readStepProperty(step, 'input')
       return isRecord(input) ? targetSummary(input.target) : 'current'
@@ -2400,6 +2434,10 @@ function targetSlotPath(slot: BuilderTargetSlot): readonly string[] {
       return ['from']
     case 'drag-to':
       return ['to']
+    case 'selection-anchor':
+      return ['target', 'anchor', 'target']
+    case 'selection-focus':
+      return ['target', 'focus', 'target']
     case 'waitFor-target':
       return ['input', 'target']
   }
