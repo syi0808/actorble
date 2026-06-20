@@ -34,6 +34,9 @@ flow는 플랫폼 전반에서 동일해야 합니다.
 
 Decision history: `docs/adr/2026-06-20-actorble-ui-system.md`.
 
+Polish heuristics decision history:
+`docs/adr/2026-06-21-actorble-ui-polish-heuristics.md`.
+
 ## 2. Product Principles
 
 ### Scenario-first
@@ -111,6 +114,29 @@ sections, platform storytelling은 landing-specific composition을 사용할 수
 Accessibility는 별도의 엄격한 기준을 아직 정의하지 않습니다. Native UI kit이나
 headless library가 제공하는 keyboard, focus, role, labeling behavior를 기본으로
 사용하고, Actorble UI가 그것을 훼손하지 않아야 합니다.
+
+### Deliberate product polish
+
+Actorble UI should avoid generic high-noise product styling. Visual hierarchy
+must come from importance, proximity, scale, and grouping before decorative
+emphasis.
+
+Rules:
+
+```txt
+- Use actual Actorble SVG symbol and wordmark assets; do not redraw them in CSS.
+- Use sentence case for labels, badges, tabs, and menu items.
+- Avoid full-uppercase brand text or labels unless the asset itself contains it.
+- Badge and pill text should be regular or medium weight, not bold.
+- Do not combine rounded containers with single-side border emphasis.
+- Do not show idle/default status as top-level content.
+- Do not repeat low-value counts such as "0 saved" in first-view chrome.
+- Empty states should invite the next action without overexplaining the absence.
+```
+
+When a command group needs more than three visible actions, keep the primary
+action and frequent context action visible, then place lower-priority commands
+in an overflow menu near the content they affect.
 
 ## 3. Token Model
 
@@ -200,9 +226,13 @@ product title       20-28, semibold/bold
 section title       16-20, semibold/bold
 body                13-15, regular
 caption             12-13, regular/medium
-label               11-12, bold, uppercase only when dense scanning helps
+label               11-12, regular/medium, sentence case by default
 monospace           platform monospace, diagnostics and JSON only
 ```
+
+Product UI labels use sentence case by default. Uppercase labels are reserved
+for rare dense diagnostic surfaces where scanning benefits clearly outweigh the
+extra visual noise.
 
 Product app typography should not scale directly with viewport width. Landing
 pages may use larger editorial display sizes as long as component text remains
@@ -349,6 +379,9 @@ danger     failed, error, invalid
 Status cards are discouraged. Use inline field state, row state, or compact
 badges unless the status itself is the main content.
 
+Badge text should use regular or medium type. Do not use bold badge text as the
+main visual differentiator; rely on placement, icon, border, and semantic color.
+
 ### Tabs
 
 Use tabs for peer diagnostic or detail views, such as validation, locator, run
@@ -372,6 +405,15 @@ Default disclosed surfaces:
 
 Toolbar groups commands for the current surface. Toolbar commands must follow
 the command hierarchy and should wrap cleanly in narrow panels.
+
+Toolbar rules:
+
+```txt
+- Prefer one primary command and at most two visible secondary commands.
+- Put maintenance commands such as import, export, duplicate, move, delete, and
+  diagnostics handoff into overflow when the group becomes crowded.
+- Do not hide the user's next required action in overflow.
+```
 
 ## 6. Product Components
 
