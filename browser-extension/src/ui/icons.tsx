@@ -6,6 +6,7 @@ import {
   Circle,
   Copy,
   Download,
+  Ellipsis,
   Eye,
   EyeOff,
   FileUp,
@@ -34,6 +35,7 @@ export type CommandIconName =
   | 'check'
   | 'copy'
   | 'download'
+  | 'more'
   | 'eye'
   | 'eye-off'
   | 'file-up'
@@ -64,6 +66,7 @@ const icons = {
   check: Check,
   copy: Copy,
   download: Download,
+  more: Ellipsis,
   eye: Eye,
   'eye-off': EyeOff,
   'file-up': FileUp,

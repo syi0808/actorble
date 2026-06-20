@@ -7,10 +7,25 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react'
-import { Tooltip } from 'radix-ui'
+import { DropdownMenu, Tooltip } from 'radix-ui'
 import { CommandIcon, type CommandIconName } from './icons.js'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger'
+
+export type OverflowMenuItem = Readonly<{
+  label: string
+  icon?: CommandIconName
+  disabled?: boolean
+  danger?: boolean
+  onSelect(): void
+}>
+
+const actorbleLogoUrl = new URL('./assets/actorble-logo.svg', import.meta.url).href
+const actorbleWordmarkUrl = new URL('./assets/actorble-wordmark.svg', import.meta.url).href
+const actorbleWordmarkLightUrl = new URL(
+  './assets/actorble-wordmark-light.svg',
+  import.meta.url,
+).href
 
 export function UiProvider({
   children,
@@ -108,10 +123,20 @@ export function IconButton(
 
 export function BrandMark(): ReactElement {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <span className="brand-mark-mint" />
-      <span className="brand-mark-amber" />
-    </span>
+    <img className="brand-symbol" src={actorbleLogoUrl} alt="" aria-hidden="true" />
+  )
+}
+
+export function BrandWordmark({
+  className = 'brand-wordmark',
+}: Readonly<{
+  className?: string
+}>): ReactElement {
+  return (
+    <picture>
+      <source srcSet={actorbleWordmarkLightUrl} media="(prefers-color-scheme: dark)" />
+      <img className={className} src={actorbleWordmarkUrl} alt="Actorble" />
+    </picture>
   )
 }
 
@@ -167,6 +192,38 @@ export function StatusPill({
     <span className={classNames('status-pill', className)} data-status={status}>
       {children}
     </span>
+  )
+}
+
+export function OverflowMenu({
+  items,
+  label = 'More actions',
+}: Readonly<{
+  items: readonly OverflowMenuItem[]
+  label?: string
+}>): ReactElement {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <IconButton icon="more" label={label} variant="subtle" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="ui-menu" align="end" sideOffset={6}>
+          {items.map((item) => (
+            <DropdownMenu.Item
+              key={item.label}
+              className="ui-menu-item"
+              data-danger={item.danger ? 'true' : 'false'}
+              disabled={item.disabled}
+              onSelect={() => item.onSelect()}
+            >
+              {item.icon === undefined ? null : <CommandIcon name={item.icon} />}
+              <span>{item.label}</span>
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 

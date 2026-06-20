@@ -67,3 +67,41 @@
 .ui-tooltip-arrow {
   fill: var(--surface);
 }
+
+.ui-menu {
+  z-index: 1000;
+  display: grid;
+  min-width: 180px;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 16px 38px rgb(16 20 24 / 18%);
+}
+
+.ui-menu-item {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  outline: none;
+  cursor: default;
+}
+
+.ui-menu-item[data-highlighted] {
+  background: var(--surface-soft);
+}
+
+.ui-menu-item[data-disabled] {
+  color: var(--disabled);
+}
+
+.ui-menu-item[data-danger="true"] {
+  color: var(--danger);
+}
