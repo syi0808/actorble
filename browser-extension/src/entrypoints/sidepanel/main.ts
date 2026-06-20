@@ -27,6 +27,12 @@ import {
 import type { BuilderStepActionFamily } from '../../builder/index.js'
 import type { ScenarioCoordinateSpace } from '../../scenario/types.js'
 import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
+import {
+  applyCommandButtonView,
+  createCommandIcon,
+  renderCommandButtonContent,
+  type CommandButtonChrome,
+} from '../shared/command-button.js'
 
 const scenarioRepository = createWxtScenarioStorageRepository()
 const launchParams = sidepanelLaunchParamsFromUrl(window.location.href)
@@ -101,6 +107,7 @@ let debugDrawerState: SidepanelDebugDrawerState = {}
 
 const scenarioSelect = requiredElement<HTMLSelectElement>('#scenario-select')
 const scenarioFile = requiredElement<HTMLInputElement>('#scenario-file')
+const scenarioFileButton = requiredElement<HTMLElement>('.file-button')
 const exportFormat = requiredElement<HTMLSelectElement>('#export-format')
 const workflowStatus = requiredElement<HTMLElement>('#workflow-status')
 const scenarioSummary = requiredElement<HTMLElement>('#scenario-summary')
@@ -176,6 +183,7 @@ const targetPickerStopButton = requiredElement<HTMLButtonElement>('#target-picke
 const locatorPreviewStatus = requiredElement<HTMLElement>('#locator-preview-status')
 const locatorPreviewList = requiredElement<HTMLUListElement>('#locator-preview-list')
 const locatorPreviewIssues = requiredElement<HTMLElement>('#locator-preview-issues')
+const locatorAssignmentPanel = requiredElement<HTMLElement>('#locator-assignment-panel')
 const statusPill = requiredElement<HTMLElement>('#status-pill')
 const debugDrawer = requiredElement<HTMLElement>('#debug-drawer')
 const debugDrawerSummary = requiredElement<HTMLElement>('#debug-drawer-summary')
@@ -199,6 +207,8 @@ const debugFailureDetailsJson = requiredElement<HTMLElement>('#debug-failure-det
 for (const section of document.querySelectorAll<HTMLElement>('section')) {
   section.tabIndex = 0
 }
+
+scenarioFileButton.prepend(createCommandIcon('file-up'))
 
 scenarioSelect.addEventListener('change', () => {
   editor.selectScenario(scenarioSelect.value)
@@ -667,19 +677,65 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   scenarioSelect.disabled = shell.pendingAction !== null || shell.scenarioOptions.length === 0
   scenarioFile.disabled = shell.buttons.import.disabled
   exportFormat.disabled = shell.buttons.export.disabled
-  applyButtonView(createScenarioButton, shell.buttons.create)
-  applyButtonView(addStepButton, view.buttons.addStep)
-  applyButtonView(insertStepButton, view.buttons.insertStep)
-  applyButtonView(duplicateStepButton, view.buttons.duplicateStep)
-  applyButtonView(moveStepUpButton, view.buttons.moveStepUp)
-  applyButtonView(moveStepDownButton, view.buttons.moveStepDown)
-  applyButtonView(deleteStepButton, view.buttons.deleteStep)
-  applyButtonView(validateButton, shell.buttons.validate)
-  applyButtonView(saveButton, shell.buttons.save)
-  applyButtonView(exportButton, shell.buttons.export)
-  applyButtonView(runButton, shell.buttons.run)
-  applyButtonView(recordButton, shell.buttons.record)
-  applyButtonView(dryRunButton, view.buttons.dryRun)
+  applyButtonView(createScenarioButton, shell.buttons.create, {
+    icon: 'plus',
+    variant: 'secondary',
+  })
+  applyButtonView(addStepButton, view.buttons.addStep, {
+    icon: 'plus',
+    label: 'Add',
+    variant: 'primary',
+  })
+  applyButtonView(insertStepButton, view.buttons.insertStep, {
+    icon: 'plus',
+    variant: 'secondary',
+  })
+  applyButtonView(duplicateStepButton, view.buttons.duplicateStep, {
+    icon: 'copy',
+    variant: 'secondary',
+  })
+  applyButtonView(moveStepUpButton, view.buttons.moveStepUp, {
+    icon: 'arrow-up',
+    iconOnly: true,
+    tooltip: 'Move step up',
+    variant: 'subtle',
+  })
+  applyButtonView(moveStepDownButton, view.buttons.moveStepDown, {
+    icon: 'arrow-down',
+    iconOnly: true,
+    tooltip: 'Move step down',
+    variant: 'subtle',
+  })
+  applyButtonView(deleteStepButton, view.buttons.deleteStep, {
+    icon: 'trash',
+    iconOnly: true,
+    tooltip: 'Delete step',
+    variant: 'danger',
+  })
+  applyButtonView(validateButton, shell.buttons.validate, {
+    icon: 'check',
+    variant: 'secondary',
+  })
+  applyButtonView(saveButton, shell.buttons.save, {
+    icon: 'save',
+    variant: 'secondary',
+  })
+  applyButtonView(exportButton, shell.buttons.export, {
+    icon: 'download',
+    variant: 'secondary',
+  })
+  applyButtonView(runButton, shell.buttons.run, {
+    icon: 'play',
+    variant: 'primary',
+  })
+  applyButtonView(recordButton, shell.buttons.record, {
+    icon: snapshot.currentRecord?.status === 'recording' ? 'square' : 'record',
+    variant: snapshot.currentRecord?.status === 'recording' ? 'danger' : 'secondary',
+  })
+  applyButtonView(dryRunButton, view.buttons.dryRun, {
+    icon: 'play',
+    variant: 'secondary',
+  })
 }
 
 function renderRecordedDraftReview(
@@ -705,25 +761,51 @@ function renderRecordedDraftReview(
   if (document.activeElement !== recordedDraftSensitiveConfirm) {
     recordedDraftSensitiveConfirm.checked = review.sensitiveInputsConfirmed
   }
-  applyButtonView(recordedDraftReplaceButton, review.buttons.replace)
-  applyButtonView(recordedDraftAppendButton, review.buttons.append)
-  applyButtonView(recordedDraftDiscardButton, review.buttons.discard)
-  applyButtonView(recordedDraftSaveNewButton, review.buttons.saveAsNew)
-  applyButtonView(recordedDraftExportButton, review.buttons.export)
+  applyButtonView(recordedDraftReplaceButton, review.buttons.replace, {
+    icon: 'check',
+    variant: 'primary',
+  })
+  applyButtonView(recordedDraftAppendButton, review.buttons.append, {
+    icon: 'plus',
+    variant: 'secondary',
+  })
+  applyButtonView(recordedDraftDiscardButton, review.buttons.discard, {
+    icon: 'trash',
+    variant: 'danger',
+  })
+  applyButtonView(recordedDraftSaveNewButton, review.buttons.saveAsNew, {
+    icon: 'save',
+    variant: 'secondary',
+  })
+  applyButtonView(recordedDraftExportButton, review.buttons.export, {
+    icon: 'download',
+    variant: 'secondary',
+  })
 }
 
 function renderTargetAssignment(view: SidepanelTargetAssignmentView): void {
   targetPickerStatus.textContent = view.picker.statusSummary
   targetPickerSelected.textContent = view.picker.selectedSummary
   targetPickerIssues.textContent = view.picker.issueSummary
-  applyButtonView(targetPickerStartButton, view.buttons.start)
-  applyButtonView(targetPickerStopButton, view.buttons.stop)
+  applyButtonView(targetPickerStartButton, view.buttons.start, {
+    icon: 'target',
+    label: 'Pick target',
+    variant: 'secondary',
+  })
+  applyButtonView(targetPickerStopButton, view.buttons.stop, {
+    icon: 'square',
+    variant: 'danger',
+  })
   renderLocatorPreview(view.locatorPreview)
 }
 
 function renderLocatorPreview(view: SidepanelLocatorPreviewView): void {
   locatorPreviewStatus.textContent = view.summary
   locatorPreviewIssues.textContent = view.issueSummary
+  locatorAssignmentPanel.hidden =
+    view.status === 'idle' &&
+    view.candidates.length === 0 &&
+    view.issueSummary === 'None'
   renderLocatorPreviewCandidates(view.candidates)
 }
 
@@ -746,7 +828,12 @@ function renderLocatorPreviewCandidates(
     match.className = 'locator-preview-match'
     match.textContent = candidate.matchSummary
     button.type = 'button'
-    button.textContent = 'Use'
+    renderCommandButtonContent(button, {
+      icon: 'check',
+      label: 'Use',
+      iconOnly: false,
+      variant: 'secondary',
+    })
     button.disabled = !candidate.selectable
     button.dataset.locatorPreviewIndex = String(candidate.index)
     content.append(label, match)
@@ -759,7 +846,12 @@ function renderDebugDrawer(view: SidepanelDebugDrawerViewModel): void {
   debugDrawer.dataset.expanded = view.expanded ? 'true' : 'false'
   debugDrawer.dataset.attention = view.attention ? 'true' : 'false'
   debugDrawerSummary.textContent = debugDrawerSummaryText(view)
-  debugDrawerToggle.textContent = view.expanded ? 'Hide debug' : 'Show debug'
+  renderCommandButtonContent(debugDrawerToggle, {
+    icon: view.expanded ? 'arrow-up' : 'arrow-down',
+    label: view.expanded ? 'Hide diagnostics' : 'Show diagnostics',
+    iconOnly: false,
+    variant: 'subtle',
+  })
   debugDrawerToggle.setAttribute('aria-expanded', view.expanded ? 'true' : 'false')
   debugDrawerPanel.hidden = !view.expanded
 
@@ -906,7 +998,12 @@ function renderTargetSlotList(assignment: SidepanelTargetAssignmentView): void {
     button.dataset.validation = row.validationStatus
     command.type = 'button'
     command.className = 'target-slot-command'
-    command.textContent = targetSlotCommandLabel(row.summary)
+    renderCommandButtonContent(command, {
+      icon: 'target',
+      label: targetSlotCommandLabel(row.summary),
+      iconOnly: false,
+      variant: 'secondary',
+    })
     command.disabled = assignment.buttons.start.disabled
     command.dataset.pending = assignment.buttons.start.pending ? 'true' : 'false'
     command.dataset.targetSlotStartId = row.id
@@ -1033,10 +1130,12 @@ function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
 }
 
-function applyButtonView(button: HTMLButtonElement, view: SidepanelButtonView): void {
-  button.textContent = view.label
-  button.disabled = view.disabled
-  button.dataset.pending = view.pending ? 'true' : 'false'
+function applyButtonView(
+  button: HTMLButtonElement,
+  view: SidepanelButtonView,
+  chrome: CommandButtonChrome = {},
+): void {
+  applyCommandButtonView(button, view, chrome)
 }
 
 function documentSummary(snapshot: SidepanelScenarioEditorSnapshot): string {

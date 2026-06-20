@@ -26,7 +26,8 @@
   "dependencies": {
     "@actorble/browser": "file:../browser",
     "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "lucide": "^1.21.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

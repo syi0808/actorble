@@ -9,6 +9,11 @@ import {
   recordedDraftIdFromRecordStopResult,
   sidepanelPathForHandoff,
 } from './sidepanel-handoff.js'
+import {
+  applyCommandButtonView,
+  renderCommandButtonContent,
+  type CommandButtonChrome,
+} from '../shared/command-button.js'
 
 type ChromeSidePanelApi = Readonly<{
   open(options: Readonly<{ windowId?: number }>): Promise<void>
@@ -60,6 +65,7 @@ const recordButton = requiredElement<HTMLButtonElement>('#record-button')
 const pauseResumeButton = requiredElement<HTMLButtonElement>('#pause-resume-button')
 const stopButton = requiredElement<HTMLButtonElement>('#stop-button')
 const panelButton = requiredElement<HTMLButtonElement>('#panel-button')
+const runControlBar = requiredElement<HTMLElement>('#run-control-bar')
 
 scenarioSelect.addEventListener('change', () => {
   controls.selectScenario(scenarioSelect.value)
@@ -112,6 +118,13 @@ browser.runtime.onMessage.addListener((message) => {
   }
 })
 
+renderCommandButtonContent(panelButton, {
+  icon: 'panel-right',
+  iconOnly: true,
+  label: 'Open panel',
+  tooltip: 'Open scenario builder',
+  variant: 'subtle',
+})
 render(controls.getSnapshot())
 void refreshPopup()
 
@@ -143,10 +156,23 @@ function render(snapshot: PopupRunControlsSnapshot): void {
   lastRunStatus.textContent = view.lastRunText
   currentRunStatus.textContent = view.currentRunText
   recordStatus.textContent = view.recordText
-  applyButtonView(runButton, view.buttons.run)
-  applyButtonView(recordButton, view.buttons.record)
-  applyButtonView(pauseResumeButton, view.buttons.pauseResume)
-  applyButtonView(stopButton, view.buttons.stop)
+  runControlBar.hidden = !isActiveRunStatus(snapshot.currentRun?.status)
+  applyButtonView(runButton, view.buttons.run, {
+    icon: 'play',
+    variant: 'primary',
+  })
+  applyButtonView(recordButton, view.buttons.record, {
+    icon: snapshot.currentRecord?.status === 'recording' ? 'square' : 'record',
+    variant: snapshot.currentRecord?.status === 'recording' ? 'danger' : 'secondary',
+  })
+  applyButtonView(pauseResumeButton, view.buttons.pauseResume, {
+    icon: snapshot.currentRun?.status === 'paused' ? 'play' : 'pause',
+    variant: 'secondary',
+  })
+  applyButtonView(stopButton, view.buttons.stop, {
+    icon: 'square',
+    variant: 'danger',
+  })
 }
 
 function renderScenarioOptions(
@@ -175,10 +201,13 @@ function renderScenarioOptions(
 function applyButtonView(
   button: HTMLButtonElement,
   view: Readonly<{ label: string; disabled: boolean; pending: boolean }>,
+  chrome: CommandButtonChrome,
 ): void {
-  button.textContent = view.label
-  button.disabled = view.disabled
-  button.dataset.pending = view.pending ? 'true' : 'false'
+  applyCommandButtonView(button, view, chrome)
+}
+
+function isActiveRunStatus(status: string | undefined): boolean {
+  return status === 'running' || status === 'paused'
 }
 
 async function openSidePanel(

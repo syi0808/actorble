@@ -14,36 +14,40 @@
         <span id="workflow-status" class="summary">Loading</span>
       </header>
 
-      <section id="scenario-shell" aria-labelledby="scenario-shell-title">
-        <div class="section-heading">
-          <h2 id="scenario-shell-title">Scenario</h2>
-          <span id="scenario-summary" class="summary">Loading</span>
-        </div>
-        <div class="scenario-shell-status">
-          <span id="target-tab-status" class="status-pill" data-status="unknown">Tab not checked</span>
-          <span id="record-status" class="status-pill" data-status="idle">Not recording</span>
-          <span id="status-pill" class="status-pill" data-status="idle">Idle</span>
+      <section id="scenario-shell" class="scenario-shell" aria-labelledby="scenario-shell-title">
+        <div class="scenario-shell-top">
+          <div class="section-heading">
+            <h2 id="scenario-shell-title">Scenario</h2>
+            <span id="scenario-summary" class="summary">Loading</span>
+          </div>
+          <div class="scenario-shell-status">
+            <span id="target-tab-status" class="status-pill" data-status="unknown">Tab not checked</span>
+            <span id="record-status" class="status-pill" data-status="idle">Not recording</span>
+            <span id="status-pill" class="status-pill" data-status="idle">Idle</span>
+          </div>
         </div>
         <p id="scenario-shell-issue" class="shell-issue" hidden></p>
-        <label class="field">
-          <span>Saved scenario</span>
-          <select id="scenario-select" aria-label="Saved scenario">
-            <option>Loading scenarios</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Name</span>
-          <input id="scenario-name" type="text" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span>Description</span>
-          <textarea id="scenario-description" class="compact-textarea"></textarea>
-        </label>
+        <div class="scenario-metadata-grid">
+          <label class="field">
+            <span>Saved scenario</span>
+            <select id="scenario-select" aria-label="Saved scenario">
+              <option>Loading scenarios</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Name</span>
+            <input id="scenario-name" type="text" autocomplete="off" />
+          </label>
+          <label class="field description-field">
+            <span>Description</span>
+            <textarea id="scenario-description" class="compact-textarea"></textarea>
+          </label>
+        </div>
         <div class="scenario-shell-toolbar">
           <button id="create-scenario-button" type="button">New</button>
           <label class="file-button">
             <input id="scenario-file" type="file" accept="application/json,.json" />
-            Import
+            <span class="button-label">Import</span>
           </label>
           <select id="export-format" class="compact-select" aria-label="Export format">
             <option value="json">JSON</option>
@@ -85,8 +89,8 @@
       </section>
 
       <section id="builder-workbench" aria-labelledby="builder-workbench-title">
-        <div class="section-heading">
-          <h2 id="builder-workbench-title">Builder Workbench</h2>
+        <div class="section-heading builder-heading">
+          <h2 id="builder-workbench-title">Builder</h2>
           <span id="step-summary" class="summary">No step selected</span>
         </div>
 
@@ -96,7 +100,7 @@
               <h3>Timeline</h3>
             </div>
             <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
-            <div class="step-command-grid">
+            <div class="step-command-grid" aria-label="Step commands">
               <select id="step-action-family" aria-label="Action family"></select>
               <button id="add-step-button" type="button">Add</button>
               <button id="insert-step-button" type="button">Insert</button>
@@ -109,7 +113,7 @@
 
           <div class="workbench-panel">
             <div class="workbench-subheading">
-              <h3>Selected Step</h3>
+              <h3>Selected step</h3>
               <button id="dry-run-button" type="button">Dry run</button>
             </div>
             <div class="field-grid">
@@ -163,7 +167,7 @@
               aria-labelledby="target-assignment-title"
             >
               <div class="target-assignment-heading">
-                <span id="target-assignment-title" class="field-label">Target assignment</span>
+                <span id="target-assignment-title" class="field-label">Targets</span>
                 <span id="target-picker-status" class="summary">Idle</span>
               </div>
               <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
@@ -181,7 +185,7 @@
                 <button id="target-picker-start-button" type="button">Set selected target</button>
                 <button id="target-picker-stop-button" type="button">Stop</button>
               </div>
-              <div class="locator-assignment-panel">
+              <div id="locator-assignment-panel" class="locator-assignment-panel" hidden>
                 <div class="target-assignment-heading">
                   <span class="field-label">Locator candidates</span>
                   <span id="locator-preview-status" class="summary">No preview</span>
@@ -231,7 +235,7 @@
       <section id="debug-drawer" class="debug-drawer" aria-labelledby="debug-drawer-title">
         <div class="section-heading debug-drawer-heading">
           <div class="debug-drawer-title-group">
-            <h2 id="debug-drawer-title">Debug</h2>
+            <h2 id="debug-drawer-title">Diagnostics</h2>
             <span id="debug-drawer-summary" class="summary">Ready</span>
           </div>
           <button
@@ -240,7 +244,7 @@
             aria-controls="debug-drawer-panel"
             aria-expanded="false"
           >
-            Show debug
+            Show diagnostics
           </button>
         </div>
         <div id="debug-drawer-panel" class="debug-drawer-panel" hidden>
