@@ -5,15 +5,26 @@ import {
   Circle,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   FileUp,
+  Focus,
+  HandGrab,
+  Keyboard,
   PanelRight,
   Pause,
   Play,
   Plus,
   Save,
+  Scroll,
   Square,
   Target,
+  TextCursorInput,
+  Timer,
   Trash2,
+  Type,
+  MousePointerClick,
+  Move,
   createElement,
   type IconNode,
 } from 'lucide'
@@ -24,16 +35,27 @@ export type CommandIconName =
   | 'check'
   | 'copy'
   | 'download'
+  | 'eye'
+  | 'eye-off'
   | 'file-up'
+  | 'focus'
+  | 'grab'
+  | 'keyboard'
   | 'panel-right'
   | 'pause'
   | 'play'
   | 'plus'
   | 'record'
   | 'save'
+  | 'scroll'
   | 'square'
   | 'target'
+  | 'text-cursor'
+  | 'timer'
   | 'trash'
+  | 'type'
+  | 'mouse-pointer-click'
+  | 'move'
 
 export type CommandButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger'
 
@@ -57,16 +79,27 @@ const iconNodes = {
   check: Check,
   copy: Copy,
   download: Download,
+  eye: Eye,
+  'eye-off': EyeOff,
   'file-up': FileUp,
+  focus: Focus,
+  grab: HandGrab,
+  keyboard: Keyboard,
   'panel-right': PanelRight,
   pause: Pause,
   play: Play,
   plus: Plus,
   record: Circle,
   save: Save,
+  scroll: Scroll,
   square: Square,
   target: Target,
+  'text-cursor': TextCursorInput,
+  timer: Timer,
   trash: Trash2,
+  type: Type,
+  'mouse-pointer-click': MousePointerClick,
+  move: Move,
 } satisfies Readonly<Record<CommandIconName, IconNode>>
 
 export function applyCommandButtonView(

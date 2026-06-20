@@ -31,6 +31,7 @@ import {
   applyCommandButtonView,
   createCommandIcon,
   renderCommandButtonContent,
+  type CommandIconName,
   type CommandButtonChrome,
 } from '../shared/command-button.js'
 
@@ -147,6 +148,7 @@ const recordedDraftExportButton = requiredElement<HTMLButtonElement>(
 const stepList = requiredElement<HTMLUListElement>('#step-list')
 const stepSummary = requiredElement<HTMLElement>('#step-summary')
 const stepActionFamily = requiredElement<HTMLSelectElement>('#step-action-family')
+const actionPaletteList = requiredElement<HTMLElement>('#action-palette-list')
 const addStepButton = requiredElement<HTMLButtonElement>('#add-step-button')
 const insertStepButton = requiredElement<HTMLButtonElement>('#insert-step-button')
 const duplicateStepButton = requiredElement<HTMLButtonElement>('#duplicate-step-button')
@@ -154,6 +156,10 @@ const moveStepUpButton = requiredElement<HTMLButtonElement>('#move-step-up-butto
 const moveStepDownButton = requiredElement<HTMLButtonElement>('#move-step-down-button')
 const deleteStepButton = requiredElement<HTMLButtonElement>('#delete-step-button')
 const stepAction = requiredElement<HTMLSelectElement>('#step-action')
+const selectedStepIcon = requiredElement<HTMLElement>('#selected-step-icon')
+const selectedStepTitle = requiredElement<HTMLElement>('#selected-step-title')
+const selectedStepDescription = requiredElement<HTMLElement>('#selected-step-description')
+const selectedStepStatus = requiredElement<HTMLElement>('#selected-step-status')
 const stepNote = requiredElement<HTMLInputElement>('#step-note')
 const stepInputField = requiredElement<HTMLElement>('#step-input-field')
 const stepInput = requiredElement<HTMLInputElement>('#step-input')
@@ -311,8 +317,25 @@ stepList.addEventListener('click', (event) => {
   render(editor.getSnapshot())
 })
 
+actionPaletteList.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+    'button[data-action-family]',
+  )
+  if (button == null || button.disabled) {
+    return
+  }
+
+  const family = button.dataset.actionFamily as BuilderStepActionFamily | undefined
+  if (family === undefined) {
+    return
+  }
+
+  stepActionFamily.value = family
+  editor.addStep(family)
+  render(editor.getSnapshot())
+})
+
 stepActionFamily.addEventListener('change', () => {
-  editor.updateSelectedStepActionFamily(selectedActionFamily())
   render(editor.getSnapshot())
 })
 
@@ -646,6 +669,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   workflowStatus.textContent = shell.summary
   renderScenarioOptions(shell.scenarioOptions, shell.selectedScenarioId)
   renderActionFamilyOptions(view.actionFamilyOptions, view.selectedStepFields.actionFamily)
+  renderActionPalette(view.actionFamilyOptions, selectedActionFamily(), view.buttons.addStep)
   scenarioSummary.textContent = shell.summary
   renderTargetTabStatus(shell.targetTab)
   renderShellIssue(shell.issueSummary)
@@ -653,6 +677,7 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   setInputValue(scenarioDescription, shell.metadata.description)
   renderStepList(view.stepRows)
   stepSummary.textContent = selectedStepSummary(snapshot)
+  renderSelectedStepHero(view.stepRows)
   setSelectValue(stepAction, view.selectedStepFields.actionFamily)
   setInputValue(stepNote, view.selectedStepFields.note)
   setInputValue(stepInput, view.selectedStepFields.input)
@@ -683,11 +708,12 @@ function render(snapshot: SidepanelScenarioEditorSnapshot): void {
   })
   applyButtonView(addStepButton, view.buttons.addStep, {
     icon: 'plus',
-    label: 'Add',
+    label: 'Add step',
     variant: 'primary',
   })
   applyButtonView(insertStepButton, view.buttons.insertStep, {
     icon: 'plus',
+    label: 'Insert after selected',
     variant: 'secondary',
   })
   applyButtonView(duplicateStepButton, view.buttons.duplicateStep, {
@@ -954,30 +980,103 @@ function renderActionFamilyOptions(
   stepAction.disabled = selectedFamily.length === 0
 }
 
+function renderActionPalette(
+  options: readonly SidepanelActionFamilyOptionView[],
+  selectedFamily: string,
+  addStepView: SidepanelButtonView,
+): void {
+  actionPaletteList.replaceChildren()
+
+  for (const optionView of options) {
+    const button = document.createElement('button')
+    const icon = document.createElement('span')
+    const copy = document.createElement('span')
+    const label = document.createElement('span')
+    const hint = document.createElement('span')
+
+    button.type = 'button'
+    button.className = 'action-palette-item'
+    button.dataset.actionFamily = optionView.value
+    button.dataset.selected = optionView.value === selectedFamily ? 'true' : 'false'
+    button.disabled = addStepView.disabled
+    button.title = `Add ${optionView.label} step`
+    icon.className = 'action-palette-icon'
+    icon.append(createCommandIcon(actionIcon(optionView.value)))
+    copy.className = 'action-palette-copy'
+    label.className = 'action-palette-label'
+    label.textContent = optionView.label
+    hint.className = 'action-palette-hint'
+    hint.textContent = actionHint(optionView.value)
+    copy.append(label, hint)
+    button.append(icon, copy)
+    actionPaletteList.append(button)
+  }
+}
+
 function renderStepList(rows: ReturnType<typeof createSidepanelScenarioEditorView>['stepRows']): void {
   stepList.replaceChildren()
 
   for (const row of rows) {
     const item = document.createElement('li')
     const button = document.createElement('button')
+    const index = document.createElement('span')
+    const icon = document.createElement('span')
+    const content = document.createElement('span')
     const title = document.createElement('span')
     const detail = document.createElement('span')
     const status = document.createElement('span')
+    const detailText = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
 
     button.type = 'button'
+    button.className = 'step-card'
     button.dataset.stepIndex = String(row.index)
     button.dataset.selected = row.selected ? 'true' : 'false'
     button.dataset.validation = row.validationStatus
+    index.className = 'step-index'
+    index.textContent = String(row.index + 1)
+    icon.className = 'step-card-icon'
+    icon.append(createCommandIcon(actionIcon(row.action)))
+    content.className = 'step-card-main'
     title.className = 'step-title'
-    title.textContent = `${row.index + 1}. ${row.action}`
+    title.textContent = formatActionLabel(row.action)
     detail.className = 'step-detail'
-    detail.textContent = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
+    detail.textContent = detailText.length === 0 ? 'No target or input yet' : detailText
     status.className = 'step-status'
-    status.textContent = row.validationStatus
-    button.append(title, detail, status)
+    status.textContent = row.validationStatus === 'valid' ? 'Ready' : 'Needs attention'
+    content.append(title, detail)
+    button.append(index, icon, content, status)
     item.append(button)
     stepList.append(item)
   }
+}
+
+function renderSelectedStepHero(
+  rows: ReturnType<typeof createSidepanelScenarioEditorView>['stepRows'],
+): void {
+  const selected = rows.find((row) => row.selected)
+  selectedStepIcon.replaceChildren()
+
+  if (selected === undefined) {
+    selectedStepIcon.append(createCommandIcon('plus'))
+    selectedStepTitle.textContent = 'No step selected'
+    selectedStepDescription.textContent = 'Select a step in the workflow or add a new action.'
+    selectedStepStatus.textContent = 'Idle'
+    selectedStepStatus.dataset.status = 'idle'
+    return
+  }
+
+  const detailText = [selected.targetSummary, selected.inputSummary].filter(Boolean).join(' · ')
+  selectedStepIcon.append(createCommandIcon(actionIcon(selected.action)))
+  selectedStepTitle.textContent = `${selected.index + 1}. ${formatActionLabel(selected.action)}`
+  selectedStepDescription.textContent = detailText.length === 0
+    ? 'No target or input configured yet'
+    : detailText
+  selectedStepStatus.textContent = selected.validationStatus === 'valid'
+    ? 'Ready'
+    : 'Needs attention'
+  selectedStepStatus.dataset.status = selected.validationStatus === 'valid'
+    ? 'ready'
+    : 'failed'
 }
 
 function renderTargetSlotList(assignment: SidepanelTargetAssignmentView): void {
@@ -1175,6 +1274,90 @@ function setSelectValue(element: HTMLSelectElement, value: string): void {
 
 function selectedActionFamily(): BuilderStepActionFamily {
   return (stepActionFamily.value || 'click') as BuilderStepActionFamily
+}
+
+function actionIcon(action: string): CommandIconName {
+  switch (action) {
+    case 'click':
+    case 'clickCurrent':
+    case 'doubleClick':
+      return 'mouse-pointer-click'
+    case 'moveTo':
+      return 'move'
+    case 'focus':
+      return 'focus'
+    case 'type':
+    case 'typeInto':
+      return 'type'
+    case 'fill':
+      return 'text-cursor'
+    case 'press':
+      return 'keyboard'
+    case 'scrollToTarget':
+    case 'scrollToPosition':
+      return 'scroll'
+    case 'drag':
+      return 'grab'
+    case 'selectText':
+      return 'text-cursor'
+    case 'waitForVisible':
+      return 'eye'
+    case 'waitForHidden':
+      return 'eye-off'
+    case 'waitForText':
+      return 'target'
+    case 'delay':
+      return 'timer'
+    default:
+      return 'target'
+  }
+}
+
+function actionHint(action: string): string {
+  switch (action) {
+    case 'click':
+      return 'Activate an element'
+    case 'moveTo':
+      return 'Move pointer to target'
+    case 'doubleClick':
+      return 'Activate twice'
+    case 'focus':
+      return 'Focus an element'
+    case 'clickCurrent':
+      return 'Click current pointer'
+    case 'type':
+      return 'Type text'
+    case 'typeInto':
+      return 'Focus and type'
+    case 'fill':
+      return 'Set field value'
+    case 'press':
+      return 'Press keys'
+    case 'scrollToTarget':
+      return 'Reveal a target'
+    case 'scrollToPosition':
+      return 'Scroll coordinates'
+    case 'drag':
+      return 'Drag between targets'
+    case 'selectText':
+      return 'Select text range'
+    case 'waitForVisible':
+      return 'Wait until visible'
+    case 'waitForHidden':
+      return 'Wait until hidden'
+    case 'waitForText':
+      return 'Wait for text'
+    case 'delay':
+      return 'Pause the flow'
+    default:
+      return 'Add action'
+  }
+}
+
+function formatActionLabel(action: string): string {
+  return action
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (first) => first.toUpperCase())
 }
 
 function isDebugDrawerView(value: string | undefined): value is SidepanelDebugDrawerView {

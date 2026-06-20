@@ -73,6 +73,19 @@ h3 {
   font-size: 12px;
 }
 
+.panel-caption,
+.properties-summary,
+.section-kicker {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.section-kicker {
+  margin-top: 0;
+}
+
 section {
   display: grid;
   gap: 12px;
@@ -153,9 +166,19 @@ section {
 .workbench-panel {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   padding: 12px;
+}
+
+.flow-panel {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 26%),
+    var(--surface);
+}
+
+.properties-panel {
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
 }
 
 .workbench-panel + .workbench-panel {
@@ -392,8 +415,84 @@ button[data-icon-only="true"] {
     "Segoe UI", sans-serif;
 }
 
+.action-palette {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.action-palette-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  gap: 10px;
+  align-items: start;
+}
+
+.action-palette-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action-palette-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 64px;
+  align-items: center;
+  justify-content: start;
+  gap: 9px;
+  padding: 9px;
+  text-align: left;
+  background: #fbfcfd;
+}
+
+.action-palette-item[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: var(--accent-soft);
+}
+
+.action-palette-icon,
+.step-card-icon,
+.step-hero-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.action-palette-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.action-palette-copy,
+.step-card-main,
+.selected-step-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.action-palette-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.action-palette-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .step-command-grid {
-  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(74px, auto));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
 }
 
@@ -402,9 +501,10 @@ button[data-icon-only="true"] {
 }
 
 .step-list {
+  position: relative;
   display: grid;
-  gap: 6px;
-  max-height: 320px;
+  gap: 10px;
+  max-height: 420px;
   margin: 0;
   padding: 0;
   overflow: auto;
@@ -417,25 +517,60 @@ button[data-icon-only="true"] {
   font-size: 13px;
 }
 
-.step-list button {
+.step-list li {
+  position: relative;
+}
+
+.step-list li:not(:last-child)::after {
+  position: absolute;
+  top: 48px;
+  bottom: -12px;
+  left: 17px;
+  width: 2px;
+  background: color-mix(in srgb, var(--border) 78%, transparent);
+  content: "";
+}
+
+.step-card {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: minmax(74px, 0.62fr) minmax(0, 1.38fr) auto;
-  gap: 8px;
+  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
   width: 100%;
-  min-height: 42px;
-  padding: 8px;
+  min-height: 72px;
+  padding: 10px;
   text-align: left;
   background: #fbfcfd;
 }
 
-.step-list button[data-selected="true"] {
+.step-card[data-selected="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.step-list button[data-validation="invalid"] {
+.step-card[data-validation="invalid"] {
   border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+}
+
+.step-index {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.step-card-icon {
+  width: 34px;
+  height: 34px;
 }
 
 .step-title,
@@ -454,8 +589,63 @@ button[data-icon-only="true"] {
 }
 
 .step-status {
-  color: var(--muted);
-  text-transform: capitalize;
+  justify-self: end;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 11px;
+  text-transform: none;
+}
+
+.step-card[data-validation="invalid"] .step-status {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
+.selected-step-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.step-hero-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.selected-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.property-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.property-section-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.target-property-section {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .target-assignment-panel {
@@ -849,7 +1039,7 @@ dd {
 
 @media (min-width: 760px) {
   .builder-workbench-layout {
-    grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.1fr);
+    grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1.08fr);
     align-items: stretch;
   }
 
@@ -861,10 +1051,21 @@ dd {
 
 @media (max-width: 520px) {
   .scenario-metadata-grid,
+  .action-palette-heading,
+  .action-palette-list,
   .field-grid,
   .scroll-position-grid,
-  .target-slot-list li {
+  .target-slot-list li,
+  .selected-step-hero {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .step-card {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .step-card-icon {
+    display: none;
   }
 
   .scenario-shell-top {
@@ -895,7 +1096,8 @@ dd {
   input,
   select,
   textarea,
-  .step-list button,
+  .step-card,
+  .action-palette-item,
   .target-slot-select,
   .locator-preview-list li,
   .debug-locator-candidates li {

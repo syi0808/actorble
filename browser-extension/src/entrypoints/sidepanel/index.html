@@ -95,115 +95,156 @@
         </div>
 
         <div class="builder-workbench-layout">
-          <div class="workbench-panel">
+          <div class="workbench-panel flow-panel">
             <div class="workbench-subheading">
-              <h3>Timeline</h3>
+              <div>
+                <h3>Workflow</h3>
+                <p class="panel-caption">Build the scenario in execution order.</p>
+              </div>
             </div>
             <ul id="step-list" class="step-list" aria-label="Scenario steps"></ul>
-            <div class="step-command-grid" aria-label="Step commands">
-              <select id="step-action-family" aria-label="Action family"></select>
-              <button id="add-step-button" type="button">Add</button>
-              <button id="insert-step-button" type="button">Insert</button>
+            <div class="action-palette" aria-label="Action palette">
+              <div class="action-palette-heading">
+                <div>
+                  <h3>Add step</h3>
+                  <p class="panel-caption">Choose an action, then add it to the flow.</p>
+                </div>
+                <select id="step-action-family" class="compact-select" aria-label="Action family"></select>
+              </div>
+              <div id="action-palette-list" class="action-palette-list"></div>
+              <div class="step-command-grid" aria-label="Step commands">
+                <button id="add-step-button" type="button">Add</button>
+                <button id="insert-step-button" type="button">Insert</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="workbench-panel properties-panel">
+            <div class="selected-step-hero">
+              <span id="selected-step-icon" class="step-hero-icon" aria-hidden="true"></span>
+              <div class="selected-step-copy">
+                <p class="panel-caption">Selected step</p>
+                <h3 id="selected-step-title">No step selected</h3>
+                <p id="selected-step-description" class="properties-summary">Select a step to edit its properties.</p>
+              </div>
+              <span id="selected-step-status" class="status-pill" data-status="idle">Idle</span>
+            </div>
+            <div class="selected-step-actions" aria-label="Selected step actions">
+              <button id="dry-run-button" type="button">Dry run</button>
               <button id="duplicate-step-button" type="button">Duplicate</button>
               <button id="move-step-up-button" type="button">Up</button>
               <button id="move-step-down-button" type="button">Down</button>
               <button id="delete-step-button" type="button">Delete</button>
             </div>
-          </div>
 
-          <div class="workbench-panel">
-            <div class="workbench-subheading">
-              <h3>Selected step</h3>
-              <button id="dry-run-button" type="button">Dry run</button>
+            <div class="property-section">
+              <div class="property-section-heading">
+                <h3>Action</h3>
+                <span class="section-kicker">What this step does</span>
+              </div>
+              <div class="field-grid">
+                <label class="field">
+                  <span>Action</span>
+                  <select id="step-action" aria-label="Selected step action"></select>
+                </label>
+                <label id="step-duration-field" class="field">
+                  <span>Duration</span>
+                  <input id="step-duration" type="number" min="0" step="1" />
+                </label>
+              </div>
             </div>
-            <div class="field-grid">
+
+            <div class="property-section">
+              <div class="property-section-heading">
+                <h3>Inputs</h3>
+                <span class="section-kicker">Data used by the action</span>
+              </div>
               <label class="field">
-                <span>Action</span>
-                <select id="step-action" aria-label="Selected step action"></select>
+                <span>Note</span>
+                <input id="step-note" type="text" autocomplete="off" />
               </label>
-              <label id="step-duration-field" class="field">
-                <span>Duration</span>
-                <input id="step-duration" type="number" min="0" step="1" />
+              <label id="step-input-field" class="field">
+                <span>Text input</span>
+                <input id="step-input" type="text" autocomplete="off" />
               </label>
+              <label id="step-wait-text-field" class="field">
+                <span>Wait text</span>
+                <input id="step-wait-text" type="text" autocomplete="off" />
+              </label>
+              <fieldset id="step-scroll-position-field" class="field-set">
+                <legend>Scroll position</legend>
+                <div class="scroll-position-grid">
+                  <label class="field">
+                    <span>X</span>
+                    <input id="step-scroll-x" type="number" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Y</span>
+                    <input id="step-scroll-y" type="number" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Space</span>
+                    <select id="step-scroll-coordinate-space" aria-label="Scroll coordinate space">
+                      <option value="viewport">Viewport</option>
+                      <option value="document">Document</option>
+                      <option value="screen">Screen</option>
+                      <option value="surface">Surface</option>
+                      <option value="element">Element</option>
+                    </select>
+                  </label>
+                </div>
+              </fieldset>
             </div>
-            <label class="field">
-              <span>Note</span>
-              <input id="step-note" type="text" autocomplete="off" />
-            </label>
-            <label id="step-input-field" class="field">
-              <span>Text input</span>
-              <input id="step-input" type="text" autocomplete="off" />
-            </label>
-            <label id="step-wait-text-field" class="field">
-              <span>Wait text</span>
-              <input id="step-wait-text" type="text" autocomplete="off" />
-            </label>
-            <fieldset id="step-scroll-position-field" class="field-set">
-              <legend>Scroll position</legend>
-              <div class="scroll-position-grid">
-                <label class="field">
-                  <span>X</span>
-                  <input id="step-scroll-x" type="number" step="1" />
-                </label>
-                <label class="field">
-                  <span>Y</span>
-                  <input id="step-scroll-y" type="number" step="1" />
-                </label>
-                <label class="field">
-                  <span>Space</span>
-                  <select id="step-scroll-coordinate-space" aria-label="Scroll coordinate space">
-                    <option value="viewport">Viewport</option>
-                    <option value="document">Document</option>
-                    <option value="screen">Screen</option>
-                    <option value="surface">Surface</option>
-                    <option value="element">Element</option>
-                  </select>
-                </label>
-              </div>
-            </fieldset>
-            <div
-              id="target-slot-section"
-              class="target-assignment-panel"
-              aria-labelledby="target-assignment-title"
-            >
-              <div class="target-assignment-heading">
-                <span id="target-assignment-title" class="field-label">Targets</span>
-                <span id="target-picker-status" class="summary">Idle</span>
-              </div>
-              <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
-              <dl class="target-assignment-fields">
-                <div>
-                  <dt>Selected</dt>
-                  <dd id="target-picker-selected">No target selected</dd>
-                </div>
-                <div>
-                  <dt>Picker issue</dt>
-                  <dd id="target-picker-issues">None</dd>
-                </div>
-              </dl>
-              <div class="toolbar">
-                <button id="target-picker-start-button" type="button">Set selected target</button>
-                <button id="target-picker-stop-button" type="button">Stop</button>
-              </div>
-              <div id="locator-assignment-panel" class="locator-assignment-panel" hidden>
+
+            <div class="property-section target-property-section">
+              <div
+                id="target-slot-section"
+                class="target-assignment-panel"
+                aria-labelledby="target-assignment-title"
+              >
                 <div class="target-assignment-heading">
-                  <span class="field-label">Locator candidates</span>
-                  <span id="locator-preview-status" class="summary">No preview</span>
+                  <div>
+                    <span id="target-assignment-title" class="field-label">Targets</span>
+                    <p class="panel-caption">Pick page elements for this step.</p>
+                  </div>
+                  <span id="target-picker-status" class="summary">Idle</span>
                 </div>
-                <ul
-                  id="locator-preview-list"
-                  class="locator-preview-list"
-                  aria-label="Locator candidates"
-                ></ul>
+                <ul id="target-slot-list" class="target-slot-list" aria-label="Target slots"></ul>
                 <dl class="target-assignment-fields">
                   <div>
-                    <dt>Preview issue</dt>
-                    <dd id="locator-preview-issues">None</dd>
+                    <dt>Selected</dt>
+                    <dd id="target-picker-selected">No target selected</dd>
+                  </div>
+                  <div>
+                    <dt>Picker issue</dt>
+                    <dd id="target-picker-issues">None</dd>
                   </div>
                 </dl>
+                <div class="toolbar">
+                  <button id="target-picker-start-button" type="button">Set selected target</button>
+                  <button id="target-picker-stop-button" type="button">Stop</button>
+                </div>
+                <div id="locator-assignment-panel" class="locator-assignment-panel" hidden>
+                  <div class="target-assignment-heading">
+                    <span class="field-label">Locator candidates</span>
+                    <span id="locator-preview-status" class="summary">No preview</span>
+                  </div>
+                  <ul
+                    id="locator-preview-list"
+                    class="locator-preview-list"
+                    aria-label="Locator candidates"
+                  ></ul>
+                  <dl class="target-assignment-fields">
+                    <div>
+                      <dt>Preview issue</dt>
+                      <dd id="locator-preview-issues">None</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
             </div>
-            <details class="advanced-repair">
+
+            <details class="advanced-repair property-section">
               <summary>Advanced JSON repair</summary>
               <label class="field">
                 <span>Target JSON</span>
