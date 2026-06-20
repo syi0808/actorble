@@ -88,7 +88,7 @@ const github = 'https://github.com/syi0808/actorble'
               <ActorbleSymbol class="wallpaper-mark" variant="motion" />
             </div>
 
-            <section class="actorble-window" aria-label="Actorble macOS app window">
+            <section class="actorble-window" aria-label="Actorble scenario builder window">
               <div class="mac-window-bar">
                 <div class="window-dots" aria-hidden="true">
                   <span></span>
@@ -99,19 +99,93 @@ const github = 'https://github.com/syi0808/actorble'
                 <span>Local</span>
               </div>
               <div class="actorble-app-body">
-                <ActorbleSymbol class="app-symbol" />
-                <div class="app-copy">
-                  <h2>Browser scenario</h2>
-                  <p>Open Chrome and hand control to Browser Actorble.</p>
+                <div class="app-shell-head">
+                  <ActorbleSymbol class="app-symbol" />
+                  <div class="app-copy">
+                    <span class="app-eyebrow">Scenario Builder</span>
+                    <h2>Launch review</h2>
+                  </div>
+                  <span class="product-status" data-tone="ready">Ready</span>
                 </div>
-                <button
-                  class="run-browser-button"
-                  type="button"
-                  data-testid="landing-run-browser"
-                  disabled
-                >
-                  Run browser scenario
-                </button>
+
+                <div class="scenario-shell-mock">
+                  <div class="scenario-shell-copy">
+                    <span>Scenario</span>
+                    <strong>Release review handoff</strong>
+                  </div>
+                  <div class="scenario-shell-actions">
+                    <span class="product-status" data-tone="saved">Saved</span>
+                    <button
+                      class="run-browser-button"
+                      type="button"
+                      data-testid="landing-run-browser"
+                      disabled
+                    >
+                      Run scenario
+                    </button>
+                  </div>
+                </div>
+
+                <div class="workbench-mock">
+                  <div class="workflow-panel">
+                    <div class="mock-panel-heading">
+                      <h3>Workflow</h3>
+                      <span>4 steps</span>
+                    </div>
+                    <ol class="workflow-list" aria-label="Scenario workflow preview">
+                      <li data-state="complete">
+                        <span class="step-number">1</span>
+                        <div>
+                          <strong>Pick target</strong>
+                          <small>Open request card</small>
+                        </div>
+                        <span class="step-state">Ready</span>
+                      </li>
+                      <li data-state="selected">
+                        <span class="step-number">2</span>
+                        <div>
+                          <strong>Type into target</strong>
+                          <small>Review title</small>
+                        </div>
+                        <span class="step-state">Selected</span>
+                      </li>
+                      <li>
+                        <span class="step-number">3</span>
+                        <div>
+                          <strong>Check scenario</strong>
+                          <small>Owner and scope</small>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="step-number">4</span>
+                        <div>
+                          <strong>Run</strong>
+                          <small>Mark review ready</small>
+                        </div>
+                      </li>
+                    </ol>
+                  </div>
+
+                  <div class="inspector-panel">
+                    <div class="mock-panel-heading">
+                      <h3>Selected step</h3>
+                      <span class="product-status" data-tone="ready">Ready</span>
+                    </div>
+                    <div class="target-slot-preview">
+                      <span>Target</span>
+                      <strong>Review title field</strong>
+                      <small>Picked from the page</small>
+                    </div>
+                    <div class="step-field-preview">
+                      <span>Text input</span>
+                      <strong>Release review</strong>
+                    </div>
+                    <div class="diagnostics-preview">
+                      <span>Run details</span>
+                      <strong>Hidden until needed</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -144,16 +218,29 @@ const github = 'https://github.com/syi0808/actorble'
 
               <div class="browser-runtime">
                 <aside class="runtime-panel" aria-label="Browser Actorble runner">
-                  <ActorbleSymbol class="runtime-symbol" />
-                  <h2>Browser Actorble</h2>
-                  <p>Controls the page inside Chrome.</p>
+                  <div class="runtime-lockup">
+                    <ActorbleSymbol class="runtime-symbol" />
+                    <div>
+                      <span class="runtime-eyebrow">Browser extension</span>
+                      <h2>Quick run</h2>
+                    </div>
+                  </div>
+                  <div class="runtime-scenario">
+                    <span>Scenario</span>
+                    <strong>Launch review</strong>
+                    <small>Ready for this tab</small>
+                  </div>
+                  <div class="runtime-status-row">
+                    <span class="product-status" data-tone="ready">Ready</span>
+                    <span class="product-status" data-tone="saved">Saved</span>
+                  </div>
                   <button
                     class="nested-run-button"
                     type="button"
                     data-testid="landing-start-nested"
                     disabled
                   >
-                    Run nested scenario
+                    Run scenario
                   </button>
                 </aside>
 
@@ -268,14 +355,14 @@ const github = 'https://github.com/syi0808/actorble'
           </div>
 
           <div class="hero-reveal">
-            <h1 id="hero-title">Choreograph UI scenarios you can watch.</h1>
+            <h1 id="hero-title">Build UI scenarios people can watch.</h1>
             <p>
-              Actorble opens the browser, hands off to Browser Actorble, and runs
-              the next scenario inside the page.
+              Actorble keeps the scenario, workflow, target, and run state visible
+              while it controls the page.
             </p>
             <div class="hero-actions">
               <button class="button primary" type="button" data-demo-run>
-                Watch again
+                Watch scenario
               </button>
               <a class="button secondary" href={browserDocs}>Read browser docs</a>
               <a class="button ghost" href={github}>Open GitHub</a>
@@ -284,7 +371,7 @@ const github = 'https://github.com/syi0808/actorble'
 
           <div class="start-panel">
             <button class="button primary" type="button" data-demo-run>
-              Watch the demo
+              Watch scenario
             </button>
           </div>
         </div>
@@ -294,22 +381,22 @@ const github = 'https://github.com/syi0808/actorble'
         <div class="section-heading">
           <h2 id="intro-title">A scenario is more than a command.</h2>
           <p>
-            Actorble resolves the target, moves through the interface, performs the
-            action, waits for the UI to settle, and keeps the run repeatable.
+            Actorble gives every workflow a readable shape: steps, targets, checks,
+            run state, and details only when they are needed.
           </p>
         </div>
         <div class="feature-grid">
           <article>
-            <h3>Visible by default</h3>
-            <p>Interactions happen on the page, so people can understand the run without extra explanation.</p>
+            <h3>Workflow first</h3>
+            <p>Steps stay in execution order, with the selected step open beside the flow.</p>
           </article>
           <article>
-            <h3>Built for pacing</h3>
-            <p>Clicks, typing, waits, and pauses are part of the scenario instead of scattered timers.</p>
+            <h3>Targets in context</h3>
+            <p>Target picking starts from the step that needs it, not from a separate tool.</p>
           </article>
           <article>
-            <h3>Browser first</h3>
-            <p>The browser package is active now, with the same scenario shape ready for future surfaces.</p>
+            <h3>Details stay secondary</h3>
+            <p>Issues appear where they can be fixed. Run details and diagnostics stay behind disclosure.</p>
           </article>
         </div>
       </section>
@@ -318,8 +405,8 @@ const github = 'https://github.com/syi0808/actorble'
         <div class="section-heading">
           <h2 id="surfaces-title">Use it in the browser today.</h2>
           <p>
-            The current package focuses on target resolution, synthetic input, visual
-            feedback, scenario running, and interface settlement.
+            Browser comes first, with the same Actorble UI language planned for
+            future native macOS, Windows, and Linux apps.
           </p>
         </div>
         <div class="surface-grid">
@@ -343,10 +430,10 @@ const github = 'https://github.com/syi0808/actorble'
       </section>
 
       <section class="section final-cta" aria-labelledby="cta-title">
-        <h2 id="cta-title">Run a scenario people can actually follow.</h2>
+        <h2 id="cta-title">Run a scenario people can follow.</h2>
         <div class="hero-actions">
           <button class="button primary" type="button" data-demo-run>
-            Watch the demo
+            Watch scenario
           </button>
           <a class="button secondary" href={examples}>See examples</a>
           <a class="button ghost" href={github}>Open GitHub</a>
@@ -1022,9 +1109,9 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .cinematic-hero[data-scene="complete"] .desktop-stage {
-    opacity: 0.52;
+    opacity: 0.66;
     filter: brightness(1.03) saturate(0.86);
-    transform: translateY(-10vh) scale(0.78) rotateX(4deg);
+    transform: translate3d(12vw, -10vh, 0) scale(0.78) rotateX(4deg);
   }
 
   .mac-menu {
@@ -1119,7 +1206,7 @@ const github = 'https://github.com/syi0808/actorble'
   .actorble-window {
     top: 74px;
     left: clamp(22px, 4vw, 58px);
-    width: min(430px, 36vw);
+    width: min(540px, 40vw);
     border-color: rgba(51, 230, 194, 0.28);
     background:
       linear-gradient(145deg, rgba(23, 34, 44, 0.94), rgba(16, 20, 24, 0.92)),
@@ -1204,8 +1291,8 @@ const github = 'https://github.com/syi0808/actorble'
 
   .actorble-app-body {
     display: grid;
-    gap: 16px;
-    padding: 20px;
+    gap: 14px;
+    padding: 16px;
   }
 
   .app-symbol,
@@ -1215,8 +1302,25 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .app-symbol {
-    width: 46px;
-    height: 46px;
+    width: 42px;
+    height: 42px;
+  }
+
+  .app-shell-head,
+  .scenario-shell-actions,
+  .runtime-lockup,
+  .runtime-status-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .app-shell-head {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .app-copy {
+    min-width: 0;
   }
 
   .app-copy h2,
@@ -1227,16 +1331,209 @@ const github = 'https://github.com/syi0808/actorble'
     line-height: 1.08;
   }
 
-  .app-copy h2 {
-    font-size: 1.45rem;
+  .app-eyebrow,
+  .scenario-shell-copy span,
+  .runtime-eyebrow,
+  .runtime-scenario span,
+  .target-slot-preview span,
+  .step-field-preview span,
+  .diagnostics-preview span {
+    color: #9fb7ae;
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
-  .app-copy p,
-  .runtime-panel p {
-    margin: 8px 0 0;
+  .app-copy h2 {
+    margin-top: 3px;
+    overflow: hidden;
+    font-size: 1.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .product-status {
+    display: inline-flex;
+    min-height: 25px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 0 9px;
+    background: rgba(255, 255, 255, 0.08);
     color: #cfe4dc;
-    font-size: 0.94rem;
-    line-height: 1.48;
+    font-size: 0.74rem;
+    font-weight: 850;
+  }
+
+  .product-status[data-tone="ready"],
+  .product-status[data-tone="saved"] {
+    border-color: rgba(51, 230, 194, 0.34);
+    background: rgba(51, 230, 194, 0.14);
+    color: #a9f7e3;
+  }
+
+  .scenario-shell-mock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .scenario-shell-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .scenario-shell-copy strong {
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .scenario-shell-actions {
+    gap: 8px;
+  }
+
+  .workbench-mock {
+    display: grid;
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .workflow-panel,
+  .inspector-panel {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 8px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.075);
+  }
+
+  .mock-panel-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .mock-panel-heading h3 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 0.86rem;
+  }
+
+  .mock-panel-heading span:not(.product-status) {
+    color: #9fb7ae;
+    font-size: 0.76rem;
+    font-weight: 760;
+  }
+
+  .workflow-list {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .workflow-list li {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    min-height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .workflow-list li[data-state="selected"] {
+    border-color: rgba(51, 230, 194, 0.48);
+    background: rgba(51, 230, 194, 0.16);
+    box-shadow: inset 3px 0 0 var(--mint);
+  }
+
+  .workflow-list li[data-state="complete"] {
+    border-color: rgba(242, 184, 75, 0.36);
+  }
+
+  .step-number {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #dff7ee;
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+
+  .workflow-list strong,
+  .target-slot-preview strong,
+  .step-field-preview strong,
+  .diagnostics-preview strong {
+    display: block;
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 0.82rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workflow-list small,
+  .target-slot-preview small {
+    display: block;
+    overflow: hidden;
+    color: #a9c0b8;
+    font-size: 0.74rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .step-state {
+    color: #a9f7e3;
+    font-size: 0.7rem;
+    font-weight: 850;
+  }
+
+  .target-slot-preview,
+  .step-field-preview,
+  .diagnostics-preview {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .target-slot-preview {
+    border-color: rgba(51, 230, 194, 0.38);
+    background: rgba(51, 230, 194, 0.11);
+  }
+
+  .diagnostics-preview {
+    border-style: dashed;
   }
 
   .run-browser-button,
@@ -1262,6 +1559,7 @@ const github = 'https://github.com/syi0808/actorble'
     background: linear-gradient(135deg, var(--amber), #ffd872);
     color: #241700;
     box-shadow: 0 12px 26px rgba(242, 184, 75, 0.2);
+    white-space: nowrap;
   }
 
   .chrome-tab-strip {
@@ -1376,8 +1674,8 @@ const github = 'https://github.com/syi0808/actorble'
   .runtime-panel {
     display: grid;
     align-content: start;
-    gap: 15px;
-    padding: 24px;
+    gap: 14px;
+    padding: 20px;
     border-right: 1px solid rgba(8, 127, 112, 0.16);
     background:
       linear-gradient(145deg, rgba(16, 20, 24, 0.96), rgba(23, 34, 44, 0.94)),
@@ -1386,12 +1684,53 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .runtime-symbol {
-    width: 46px;
-    height: 46px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .runtime-lockup {
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .runtime-eyebrow {
+    display: block;
+    margin-bottom: 4px;
   }
 
   .runtime-panel h2 {
-    font-size: 1.3rem;
+    overflow: hidden;
+    font-size: 1.18rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-scenario {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .runtime-scenario strong {
+    overflow: hidden;
+    color: #ffffff;
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-scenario small {
+    color: #a9c0b8;
+    font-size: 0.82rem;
+  }
+
+  .runtime-status-row {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .nested-run-button {
@@ -1693,8 +2032,9 @@ const github = 'https://github.com/syi0808/actorble'
     position: absolute;
     z-index: 12;
     left: clamp(18px, 6vw, 96px);
-    right: clamp(18px, 6vw, 96px);
+    right: auto;
     bottom: clamp(40px, 9vh, 94px);
+    width: min(760px, calc(100vw - 36px));
     max-width: 760px;
     opacity: 0;
     pointer-events: none;
@@ -1729,6 +2069,13 @@ const github = 'https://github.com/syi0808/actorble'
     transform: translateY(0);
   }
 
+  .cinematic-hero[data-demo-running="false"][data-scene="ready"] .hero-reveal,
+  .cinematic-hero[data-demo-running="false"][data-scene="failed"] .hero-reveal {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
   .hero-reveal h1 {
     margin: 0;
     max-width: 760px;
@@ -1742,7 +2089,7 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   .hero-reveal p {
-    max-width: 660px;
+    max-width: min(660px, 100%);
     margin: 24px 0 0;
     color: #32433c;
     font-size: clamp(1.04rem, 1.7vw, 1.26rem);
@@ -1803,6 +2150,7 @@ const github = 'https://github.com/syi0808/actorble'
     z-index: 14;
     right: clamp(18px, 6vw, 96px);
     bottom: clamp(32px, 7vh, 72px);
+    display: none;
     opacity: 0;
     pointer-events: none;
     transition: opacity 260ms ease;
@@ -1944,11 +2292,11 @@ const github = 'https://github.com/syi0808/actorble'
 
   @media (max-width: 1180px) {
     .actorble-window {
-      width: min(380px, 40vw);
+      width: min(460px, 42vw);
     }
 
     .chrome-window {
-      width: min(790px, 66vw);
+      width: min(760px, 66vw);
     }
 
     .browser-runtime {
@@ -1981,8 +2329,8 @@ const github = 'https://github.com/syi0808/actorble'
 
     .desktop-stage {
       width: calc(100vw - 24px);
-      height: 980px;
-      min-height: 980px;
+      height: 1060px;
+      min-height: 1060px;
     }
 
     .mac-menu-left span:nth-child(n + 5),
@@ -1999,11 +2347,27 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .chrome-window {
-      top: 298px;
+      top: 386px;
       left: 18px;
       right: 18px;
       bottom: 82px;
       width: auto;
+    }
+
+    .workbench-mock {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .inspector-panel {
+      display: none;
+    }
+
+    .workflow-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .workflow-list li:nth-child(n + 3) {
+      display: none;
     }
 
     .browser-runtime {
@@ -2042,7 +2406,7 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .cinematic-hero[data-scene="complete"] .desktop-stage {
-      opacity: 0.5;
+      opacity: 0.32;
       transform: translateY(-8vh) scale(0.82);
     }
 
@@ -2079,8 +2443,8 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .desktop-stage {
-      height: 930px;
-      min-height: 930px;
+      height: 1010px;
+      min-height: 1010px;
     }
 
     .mac-menu {
@@ -2089,7 +2453,7 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .chrome-window {
-      top: 284px;
+      top: 372px;
     }
 
     .chrome-address,
@@ -2104,6 +2468,11 @@ const github = 'https://github.com/syi0808/actorble'
 
     .runtime-panel {
       grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .runtime-scenario,
+    .runtime-status-row {
+      display: none;
     }
 
     .nested-run-button {
@@ -2124,7 +2493,13 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .hero-reveal h1 {
-      font-size: clamp(3rem, 15vw, 4.8rem);
+      max-width: 11ch;
+      font-size: clamp(2.05rem, 9vw, 3.2rem);
+      line-height: 0.96;
+    }
+
+    .hero-reveal p {
+      font-size: 0.98rem;
     }
 
     .button {
@@ -2155,9 +2530,29 @@ const github = 'https://github.com/syi0808/actorble'
     }
 
     .chrome-window {
-      top: 280px;
+      top: 368px;
       left: 12px;
       right: 12px;
+    }
+
+    .scenario-shell-mock {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .scenario-shell-actions {
+      align-items: stretch;
+    }
+
+    .scenario-shell-actions .product-status {
+      display: none;
+    }
+
+    .workflow-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .workflow-list li:nth-child(n + 2) {
+      display: none;
     }
 
     .chrome-tab {
