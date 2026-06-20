@@ -185,7 +185,7 @@ extension recorder and schema support
 
 ### TSPS-11 Recorder Event Normalization
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Normalize raw event windows into stable intent steps using the architecture priority order: text input, selection, drag, click, pointer sequence fallback.
 - Dependencies: TSPS-08, TSPS-10.
 - Completion criteria:

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   RECORDER_MASKED_VALUE,
   type RawRecordedClickEvent,
+  type RawRecordedDragEvent,
   type RawRecordedTextEvent,
+  type RawRecordedPointerEvent,
+  type RawRecordedSelectionEvent,
   type RecorderTargetSnapshot,
 } from '../src/recorder/event-capture.js'
 import { normalizeRecordedEvents } from '../src/recorder/event-to-step.js'
@@ -111,6 +114,134 @@ describe('recorder event-to-step normalization', () => {
     expect(validateScenarioDocument(draft.document).ok).toBe(true)
   })
 
+  it('normalizes pointer selection windows into selectText instead of click', () => {
+    const events = [
+      pointer('down', paragraphTarget, 1000, { clientX: 20, clientY: 210, buttons: 1 }),
+      pointer('move', paragraphTarget, 1010, { clientX: 72, clientY: 210, buttons: 1 }),
+      selection(1020, {
+        selectedText: 'selectable text',
+        activeTarget: paragraphTarget,
+        anchorTarget: paragraphTarget,
+        focusTarget: paragraphTarget,
+      }),
+      pointer('up', paragraphTarget, 1030, { clientX: 72, clientY: 210, buttons: 0 }),
+      click(paragraphTarget, 1040),
+    ]
+
+    const draft = expectOk(normalizeRecordedEvents(events))
+
+    expect(draft.document.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-step-1',
+        action: 'selectText',
+      }),
+    ])
+    expect(validateScenarioDocument(draft.document).ok).toBe(true)
+
+    const target = targetGroupFor(draft.document.steps[0])
+    expect(target.description).toBe('p#copy "Selectable text block"')
+  })
+
+  it('normalizes selection changes that arrive after pointerup but before click', () => {
+    const events = [
+      pointer('down', paragraphTarget, 1000, { clientX: 20, clientY: 210, buttons: 1 }),
+      pointer('up', paragraphTarget, 1010, { clientX: 60, clientY: 210, buttons: 0 }),
+      selection(1020, {
+        selectedText: 'selected after up',
+        activeTarget: paragraphTarget,
+      }),
+      click(paragraphTarget, 1030),
+    ]
+
+    const draft = expectOk(normalizeRecordedEvents(events))
+
+    expect(draft.document.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-step-1',
+        action: 'selectText',
+      }),
+    ])
+  })
+
+  it('normalizes drag start and drop evidence into drag steps', () => {
+    const draft = expectOk(normalizeRecordedEvents([
+      drag('start', draggableTarget, 1000, { clientX: 40, clientY: 260 }),
+      pointer('move', dropzoneTarget, 1010, { clientX: 160, clientY: 270, buttons: 1 }),
+      drag('drop', dropzoneTarget, 1020, { clientX: 160, clientY: 270 }),
+    ]))
+
+    expect(draft.document.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-step-1',
+        action: 'drag',
+      }),
+    ])
+    const [step] = draft.document.steps
+    expect(step).toMatchObject({
+      from: expect.objectContaining({ description: 'div#card "Draggable card"' }),
+      to: expect.objectContaining({ description: 'div#dropzone "Drop zone"' }),
+    })
+    expect(validateScenarioDocument(draft.document).ok).toBe(true)
+  })
+
+  it('normalizes small pointer movement without selection into click steps', () => {
+    const draft = expectOk(normalizeRecordedEvents([
+      pointer('down', buttonTarget, 1000, { clientX: 12, clientY: 22, buttons: 1 }),
+      pointer('move', buttonTarget, 1010, { clientX: 14, clientY: 24, buttons: 1 }),
+      pointer('up', buttonTarget, 1020, { clientX: 15, clientY: 24, buttons: 0 }),
+    ]))
+
+    expect(draft.document.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-step-1',
+        action: 'click',
+      }),
+    ])
+    expect(validateScenarioDocument(draft.document).ok).toBe(true)
+  })
+
+  it('does not emit unsupported pointerSequence fallback for ambiguous pointer windows', () => {
+    const draft = expectOk(normalizeRecordedEvents([
+      click(buttonTarget, 1000),
+      pointer('down', paragraphTarget, 1010, { clientX: 20, clientY: 210, buttons: 1 }),
+      pointer('move', paragraphTarget, 1020, { clientX: 90, clientY: 245, buttons: 1 }),
+      pointer('up', paragraphTarget, 1030, { clientX: 90, clientY: 245, buttons: 0 }),
+    ]))
+
+    expect(draft.document.steps).toEqual([
+      expect.objectContaining({
+        id: 'recorded-step-1',
+        action: 'click',
+      }),
+    ])
+    expect(draft.document.steps).not.toEqual([
+      expect.objectContaining({ action: 'pointerSequence' }),
+    ])
+    expect(validateScenarioDocument(draft.document).ok).toBe(true)
+  })
+
+  it('keeps mixed normalized steps in event order with stable ids', () => {
+    const draft = expectOk(normalizeRecordedEvents([
+      pointer('down', buttonTarget, 1000, { clientX: 12, clientY: 22, buttons: 1 }),
+      pointer('up', buttonTarget, 1010, { clientX: 12, clientY: 22, buttons: 0 }),
+      pointer('down', paragraphTarget, 1020, { clientX: 20, clientY: 210, buttons: 1 }),
+      selection(1030, {
+        selectedText: 'selectable text',
+        activeTarget: paragraphTarget,
+      }),
+      pointer('up', paragraphTarget, 1040, { clientX: 72, clientY: 210, buttons: 0 }),
+      drag('start', draggableTarget, 1050, { clientX: 40, clientY: 260 }),
+      drag('drop', dropzoneTarget, 1060, { clientX: 160, clientY: 270 }),
+    ]))
+
+    expect(draft.document.steps.map((step) => [step.id, step.action])).toEqual([
+      ['recorded-step-1', 'click'],
+      ['recorded-step-2', 'selectText'],
+      ['recorded-step-3', 'drag'],
+    ])
+    expect(validateScenarioDocument(draft.document).ok).toBe(true)
+  })
+
   it('reports a recorder error when a target yields no valid locator candidates', () => {
     const result = normalizeRecordedEvents([
       click({
@@ -205,6 +336,42 @@ const editableTarget = {
   },
 } satisfies RecorderTargetSnapshot
 
+const paragraphTarget = {
+  tagName: 'p',
+  id: 'copy',
+  text: 'Selectable text block',
+  rect: {
+    x: 10,
+    y: 200,
+    width: 360,
+    height: 36,
+  },
+} satisfies RecorderTargetSnapshot
+
+const draggableTarget = {
+  tagName: 'div',
+  id: 'card',
+  text: 'Draggable card',
+  rect: {
+    x: 20,
+    y: 250,
+    width: 80,
+    height: 40,
+  },
+} satisfies RecorderTargetSnapshot
+
+const dropzoneTarget = {
+  tagName: 'div',
+  id: 'dropzone',
+  text: 'Drop zone',
+  rect: {
+    x: 140,
+    y: 250,
+    width: 120,
+    height: 60,
+  },
+} satisfies RecorderTargetSnapshot
+
 function click(
   target: RecorderTargetSnapshot,
   timestamp = 1000,
@@ -235,6 +402,57 @@ function text(
     value,
     ...sensitive,
     timestamp,
+  }
+}
+
+function pointer(
+  phase: RawRecordedPointerEvent['phase'],
+  target: RecorderTargetSnapshot,
+  timestamp: number,
+  input: Partial<Pick<RawRecordedPointerEvent, 'clientX' | 'clientY' | 'button' | 'buttons'>> = {},
+): RawRecordedPointerEvent {
+  return {
+    kind: 'pointer',
+    phase,
+    target,
+    timestamp,
+    clientX: input.clientX ?? target.rect.x + 1,
+    clientY: input.clientY ?? target.rect.y + 1,
+    button: input.button ?? 0,
+    buttons: input.buttons ?? 0,
+    pointerId: 1,
+    pointerType: 'mouse',
+  }
+}
+
+function selection(
+  timestamp: number,
+  input: Pick<RawRecordedSelectionEvent, 'selectedText'> &
+    Partial<Pick<RawRecordedSelectionEvent, 'activeTarget' | 'anchorTarget' | 'focusTarget'>>,
+): RawRecordedSelectionEvent {
+  return {
+    kind: 'selection',
+    timestamp,
+    selectedText: input.selectedText,
+    ...(input.activeTarget === undefined ? {} : { activeTarget: input.activeTarget }),
+    ...(input.anchorTarget === undefined ? {} : { anchorTarget: input.anchorTarget }),
+    ...(input.focusTarget === undefined ? {} : { focusTarget: input.focusTarget }),
+  }
+}
+
+function drag(
+  phase: RawRecordedDragEvent['phase'],
+  target: RecorderTargetSnapshot,
+  timestamp: number,
+  input: Pick<RawRecordedDragEvent, 'clientX' | 'clientY'>,
+): RawRecordedDragEvent {
+  return {
+    kind: 'drag',
+    phase,
+    target,
+    timestamp,
+    clientX: input.clientX,
+    clientY: input.clientY,
   }
 }
 
