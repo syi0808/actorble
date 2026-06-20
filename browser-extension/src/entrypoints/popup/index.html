@@ -7,58 +7,7 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main>
-      <header class="app-header">
-        <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">A</span>
-          <div>
-            <p class="eyebrow">Actorble</p>
-            <h1>Quick run</h1>
-          </div>
-        </div>
-        <button id="panel-button" class="icon-button" type="button">Panel</button>
-      </header>
-
-      <section class="tab-status" aria-label="Current tab status">
-        <span id="status-dot" class="status-dot" data-tone="checking" aria-hidden="true"></span>
-        <span id="status-message">Extension ready</span>
-      </section>
-
-      <label class="field">
-        <span>Scenario</span>
-        <select id="scenario-select" aria-label="Saved scenario">
-          <option>Loading scenarios</option>
-        </select>
-      </label>
-
-      <dl class="run-fields" aria-label="Run status">
-        <div>
-          <dt>Last run</dt>
-          <dd id="last-run-status">No scenario selected</dd>
-        </div>
-        <div>
-          <dt>Current run</dt>
-          <dd id="current-run-status">No active run</dd>
-        </div>
-        <div>
-          <dt>Recording</dt>
-          <dd id="record-status">Not recording</dd>
-        </div>
-      </dl>
-
-      <div class="primary-action" aria-label="Primary action">
-        <button id="run-button" type="button" class="primary">Run</button>
-      </div>
-
-      <div class="secondary-actions" aria-label="Secondary actions">
-        <button id="record-button" type="button">Record</button>
-      </div>
-
-      <div id="run-control-bar" class="run-control-bar" aria-label="Active run controls" hidden>
-        <button id="pause-resume-button" type="button">Pause</button>
-        <button id="stop-button" type="button">Stop</button>
-      </div>
-    </main>
-    <script type="module" src="./main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>
