@@ -62,6 +62,10 @@ browser-extension/
       content/
       devtools/
       devtools-panel/
+    ui/
+      tokens.css
+      components.tsx
+      icons.tsx
     scenario/
       validate.ts
       migrate.ts
@@ -93,6 +97,7 @@ Related decisions:
 - `docs/adr/2026-06-19-browser-extension-sidepanel-recomposition.md`
 - `docs/adr/2026-06-20-browser-extension-product-ui-composition.md`
 - `docs/adr/2026-06-20-browser-extension-workflow-builder-ux.md`
+- `docs/adr/2026-06-21-browser-extension-react-ui.md`
 - `docs/adr/2026-06-19-inspector-match-index-targeting.md`
 - `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`
 
@@ -227,7 +232,7 @@ Choose or create scenario
 -> Select a step in the flow
 -> Configure that step in the properties inspector
 -> Assign required targets from the step context
--> Validate or dry-run the selected step
+-> Check or test the selected step
 -> Reorder, duplicate, or remove steps from the selected step context
 -> Save or run the scenario
 ```
@@ -283,9 +288,15 @@ surface가 아닙니다.
 
 Extension entrypoints apply the cross-platform Actorble UI system defined in
 `docs/ui-system.md` instead of styling each button and panel independently.
-The extension may later use React with Headless UI or similar headless
-primitives, but the source of design truth remains the repo-level UI system
-spec.
+Browser extension product entrypoints use React with headless primitives for the
+rendering layer. WXT owns extension entrypoint bundling, React owns local UI
+composition, and framework-agnostic view models continue to own product state
+projection. The source of design truth remains the repo-level UI system spec.
+
+The extension uses unstyled headless primitives only where they improve
+interaction semantics, such as tooltip, tabs, and disclosure behavior. Native
+form controls remain acceptable for simple inputs and selects when they preserve
+keyboard and platform behavior with less code.
 
 - Commands use explicit hierarchy: primary, secondary, subtle, and danger.
 - Icon-only controls require accessible labels and tooltips.
