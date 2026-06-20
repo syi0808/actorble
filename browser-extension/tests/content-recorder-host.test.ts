@@ -10,7 +10,10 @@ import {
 import {
   createRecorderEventCapturePort,
   type RecorderClickEvent,
+  type RecorderDragEvent,
   type RecorderEventCaptureAdapter,
+  type RecorderPointerEvent,
+  type RecorderSelectionSnapshot,
 } from '../src/recorder/event-capture.js'
 
 describe('content recorder host', () => {
@@ -121,6 +124,64 @@ describe('content recorder host', () => {
     ])
   })
 
+  it('forwards pointer selection and drag raw events with recorder correlation', async () => {
+    const adapter = createFakeAdapter()
+    const sent: ActorbleExtensionMessage[] = []
+    const host = createContentRecorderHost({
+      capture: createRecorderEventCapturePort(adapter, {
+        now: createClock(6000),
+        autoFlush: false,
+        flushEvents: createRecordEventFlushSender((message) => {
+          sent.push(message)
+        }),
+      }),
+      now: () => 1000,
+    })
+
+    await host.handleMessage(startMessage())
+    adapter.dispatchPointer('down')
+    adapter.dispatchSelection({
+      selectedText: 'selected text',
+      activeTarget: adapter.target,
+      anchorTarget: adapter.target,
+      focusTarget: adapter.target,
+    })
+    adapter.dispatchDrag('start')
+    const stop = await host.handleMessage(stopMessage())
+
+    expect(stop).toMatchObject({ ok: true })
+    expect(sent).toMatchObject([
+      {
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          frameId: 0,
+          scenarioId: 'scenario-1',
+          runId: 'record-1',
+          sessionId: 'record-1',
+          reason: 'stop',
+          events: [
+            {
+              kind: 'pointer',
+              phase: 'down',
+              timestamp: 6000,
+            },
+            {
+              kind: 'selection',
+              selectedText: 'selected text',
+              timestamp: 6001,
+            },
+            {
+              kind: 'drag',
+              phase: 'start',
+              timestamp: 6002,
+            },
+          ],
+        },
+      },
+    ])
+  })
+
   it('rejects overlapping recorder sessions and mismatched stops', async () => {
     const adapter = createFakeAdapter()
     const host = createContentRecorderHost({
@@ -198,9 +259,19 @@ type FakeElement = Readonly<{ key: string }>
 function createFakeAdapter() {
   const target = { key: 'button' } satisfies FakeElement
   let click: ((event: RecorderClickEvent<FakeElement>) => void) | undefined
+  let pointerDown: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
+  let pointerMove: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
+  let pointerUp: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
+  let selectionChange: (() => void) | undefined
+  let selectionSnapshot: RecorderSelectionSnapshot<FakeElement> = {
+    selectedText: '',
+  }
+  let dragStart: ((event: RecorderDragEvent<FakeElement>) => void) | undefined
+  let drop: ((event: RecorderDragEvent<FakeElement>) => void) | undefined
   let pagehide: (() => void) | undefined
 
   const adapter = {
+    target,
     onClick(listener) {
       click = listener
       return () => {}
@@ -209,6 +280,30 @@ function createFakeAdapter() {
       return () => {}
     },
     onChange() {
+      return () => {}
+    },
+    onPointerDown(listener) {
+      pointerDown = listener
+      return () => {}
+    },
+    onPointerMove(listener) {
+      pointerMove = listener
+      return () => {}
+    },
+    onPointerUp(listener) {
+      pointerUp = listener
+      return () => {}
+    },
+    onSelectionChange(listener) {
+      selectionChange = listener
+      return () => {}
+    },
+    onDragStart(listener) {
+      dragStart = listener
+      return () => {}
+    },
+    onDrop(listener) {
+      drop = listener
       return () => {}
     },
     onPagehide(listener) {
@@ -228,6 +323,9 @@ function createFakeAdapter() {
     readElementValue() {
       return ''
     },
+    readSelection() {
+      return selectionSnapshot
+    },
     sensitiveInputReason() {
       return null
     },
@@ -239,15 +337,52 @@ function createFakeAdapter() {
         target,
       })
     },
+    dispatchPointer(phase) {
+      const listener = phase === 'down'
+        ? pointerDown
+        : phase === 'move'
+          ? pointerMove
+          : pointerUp
+      listener?.({
+        clientX: 12,
+        clientY: 18,
+        button: 0,
+        buttons: phase === 'up' ? 0 : 1,
+        pointerId: 1,
+        pointerType: 'mouse',
+        target,
+      })
+    },
+    dispatchSelection(snapshot) {
+      selectionSnapshot = snapshot
+      selectionChange?.()
+    },
+    dispatchDrag(phase) {
+      const listener = phase === 'start' ? dragStart : drop
+      listener?.({
+        clientX: 12,
+        clientY: 18,
+        target,
+      })
+    },
     dispatchPagehide() {
       pagehide?.()
     },
   } satisfies RecorderEventCaptureAdapter<FakeElement> & {
+    target: FakeElement
     dispatchClick(): void
+    dispatchPointer(phase: 'down' | 'move' | 'up'): void
+    dispatchSelection(snapshot: RecorderSelectionSnapshot<FakeElement>): void
+    dispatchDrag(phase: 'start' | 'drop'): void
     dispatchPagehide(): void
   }
 
   return adapter
+}
+
+function createClock(start: number): () => number {
+  let now = start
+  return () => now++
 }
 
 function startMessage(): ActorbleExtensionMessage {

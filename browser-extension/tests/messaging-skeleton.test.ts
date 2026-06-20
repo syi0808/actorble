@@ -105,6 +105,37 @@ const recordedEvent = {
   button: 0,
 } as const
 
+const recordedPointerEvent = {
+  kind: 'pointer',
+  phase: 'down',
+  target: recordedEvent.target,
+  timestamp: 101,
+  clientX: 12,
+  clientY: 18,
+  button: 0,
+  buttons: 1,
+  pointerId: 1,
+  pointerType: 'mouse',
+} as const
+
+const recordedSelectionEvent = {
+  kind: 'selection',
+  timestamp: 102,
+  selectedText: 'plain selected text',
+  activeTarget: recordedEvent.target,
+  anchorTarget: recordedEvent.target,
+  focusTarget: recordedEvent.target,
+} as const
+
+const recordedDragEvent = {
+  kind: 'drag',
+  phase: 'drop',
+  target: recordedEvent.target,
+  timestamp: 103,
+  clientX: 42,
+  clientY: 58,
+} as const
+
 const validMessages = [
   {
     kind: 'scenario:validate',
@@ -498,6 +529,56 @@ describe('messaging skeleton contracts', () => {
           sessionId: 'record-1',
           reason: 'incremental',
           events: [],
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('accepts expanded recorder raw event payloads', () => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          sessionId: 'record-1',
+          reason: 'incremental',
+          events: [recordedPointerEvent, recordedSelectionEvent, recordedDragEvent],
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it.each([
+    [
+      'pointer phase',
+      {
+        ...recordedPointerEvent,
+        phase: 'cancel',
+      },
+    ],
+    [
+      'selection selectedText',
+      {
+        ...recordedSelectionEvent,
+        selectedText: 123,
+      },
+    ],
+    [
+      'drag phase',
+      {
+        ...recordedDragEvent,
+        phase: 'move',
+      },
+    ],
+  ])('rejects invalid recorder %s payloads', (_case, event) => {
+    expect(
+      isActorbleExtensionMessage({
+        kind: 'record:event',
+        payload: {
+          tabId: 7,
+          sessionId: 'record-1',
+          reason: 'incremental',
+          events: [event],
         },
       }),
     ).toBe(false)

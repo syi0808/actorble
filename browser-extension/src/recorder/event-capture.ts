@@ -6,6 +6,8 @@ export type RecorderSensitiveInputPolicy = 'mask' | 'omit' | 'plain'
 export type RecorderSensitiveInputReason = 'password_type' | 'secret_like_field'
 
 export type RecorderTextEventSource = 'input' | 'change'
+export type RecorderPointerEventPhase = 'down' | 'move' | 'up'
+export type RecorderDragEventPhase = 'start' | 'drop'
 
 export const RECORDER_MASKED_VALUE = '[masked]'
 
@@ -54,7 +56,47 @@ export type RawRecordedTextEvent = Readonly<{
   timestamp: number
 }>
 
-export type RawRecordedEvent = RawRecordedClickEvent | RawRecordedTextEvent
+export type RawRecordedPointerEvent = Readonly<{
+  kind: 'pointer'
+  phase: RecorderPointerEventPhase
+  target: RecorderTargetSnapshot
+  timestamp: number
+  clientX: number
+  clientY: number
+  pageX?: number
+  pageY?: number
+  button: number
+  buttons: number
+  pointerId: number
+  pointerType: string
+}>
+
+export type RawRecordedSelectionEvent = Readonly<{
+  kind: 'selection'
+  timestamp: number
+  selectedText: string
+  activeTarget?: RecorderTargetSnapshot
+  anchorTarget?: RecorderTargetSnapshot
+  focusTarget?: RecorderTargetSnapshot
+}>
+
+export type RawRecordedDragEvent = Readonly<{
+  kind: 'drag'
+  phase: RecorderDragEventPhase
+  target: RecorderTargetSnapshot
+  timestamp: number
+  clientX: number
+  clientY: number
+  pageX?: number
+  pageY?: number
+}>
+
+export type RawRecordedEvent =
+  | RawRecordedClickEvent
+  | RawRecordedTextEvent
+  | RawRecordedPointerEvent
+  | RawRecordedSelectionEvent
+  | RawRecordedDragEvent
 
 export type RecorderEventFlushReason = 'incremental' | 'pagehide' | 'stop'
 
@@ -91,13 +133,47 @@ export type RecorderTextEvent<TElement = unknown> = Readonly<{
   target: TElement | null
 }>
 
+export type RecorderPointerEvent<TElement = unknown> = Readonly<{
+  clientX: number
+  clientY: number
+  pageX?: number
+  pageY?: number
+  button: number
+  buttons: number
+  pointerId: number
+  pointerType: string
+  target: TElement | null
+}>
+
+export type RecorderSelectionSnapshot<TElement = unknown> = Readonly<{
+  selectedText: string
+  activeTarget?: TElement | null
+  anchorTarget?: TElement | null
+  focusTarget?: TElement | null
+}>
+
+export type RecorderDragEvent<TElement = unknown> = Readonly<{
+  clientX: number
+  clientY: number
+  pageX?: number
+  pageY?: number
+  target: TElement | null
+}>
+
 export type RecorderEventCaptureAdapter<TElement = unknown> = Readonly<{
   onClick(listener: (event: RecorderClickEvent<TElement>) => void): () => void
   onInput(listener: (event: RecorderTextEvent<TElement>) => void): () => void
   onChange(listener: (event: RecorderTextEvent<TElement>) => void): () => void
+  onPointerDown(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
+  onPointerMove(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
+  onPointerUp(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
+  onSelectionChange(listener: () => void): () => void
+  onDragStart(listener: (event: RecorderDragEvent<TElement>) => void): () => void
+  onDrop(listener: (event: RecorderDragEvent<TElement>) => void): () => void
   onPagehide(listener: () => void): () => void
   describeElement(element: TElement): RecorderTargetSnapshot
   readElementValue(element: TElement): string
+  readSelection(): RecorderSelectionSnapshot<TElement>
   sensitiveInputReason(element: TElement): RecorderSensitiveInputReason | null
 }>
 
@@ -159,6 +235,12 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       adapter.onClick((event) => captureClick(active, event)),
       adapter.onInput((event) => captureText(active, 'input', event)),
       adapter.onChange((event) => captureText(active, 'change', event)),
+      adapter.onPointerDown((event) => capturePointer(active, 'down', event)),
+      adapter.onPointerMove((event) => capturePointer(active, 'move', event)),
+      adapter.onPointerUp((event) => capturePointer(active, 'up', event)),
+      adapter.onSelectionChange(() => captureSelection(active)),
+      adapter.onDragStart((event) => captureDrag(active, 'start', event)),
+      adapter.onDrop((event) => captureDrag(active, 'drop', event)),
       adapter.onPagehide(() => {
         queueFlush(active, 'pagehide')
         cleanup(active)
@@ -252,6 +334,68 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     })
   }
 
+  function capturePointer(
+    active: ActiveRecorderSession<TElement>,
+    phase: RecorderPointerEventPhase,
+    event: RecorderPointerEvent<TElement>,
+  ): void {
+    if (!isCurrent(active) || event.target === null) {
+      return
+    }
+
+    enqueueEvent(active, {
+      kind: 'pointer',
+      phase,
+      target: adapter.describeElement(event.target),
+      timestamp: getNow(),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ...(event.pageX === undefined ? {} : { pageX: event.pageX }),
+      ...(event.pageY === undefined ? {} : { pageY: event.pageY }),
+      button: event.button,
+      buttons: event.buttons,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+    })
+  }
+
+  function captureSelection(active: ActiveRecorderSession<TElement>): void {
+    if (!isCurrent(active)) {
+      return
+    }
+
+    const selection = adapter.readSelection()
+    enqueueEvent(active, {
+      kind: 'selection',
+      timestamp: getNow(),
+      selectedText: selection.selectedText,
+      ...optionalSelectionTarget(adapter, 'activeTarget', selection.activeTarget),
+      ...optionalSelectionTarget(adapter, 'anchorTarget', selection.anchorTarget),
+      ...optionalSelectionTarget(adapter, 'focusTarget', selection.focusTarget),
+    })
+  }
+
+  function captureDrag(
+    active: ActiveRecorderSession<TElement>,
+    phase: RecorderDragEventPhase,
+    event: RecorderDragEvent<TElement>,
+  ): void {
+    if (!isCurrent(active) || event.target === null) {
+      return
+    }
+
+    enqueueEvent(active, {
+      kind: 'drag',
+      phase,
+      target: adapter.describeElement(event.target),
+      timestamp: getNow(),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ...(event.pageX === undefined ? {} : { pageX: event.pageX }),
+      ...(event.pageY === undefined ? {} : { pageY: event.pageY }),
+    })
+  }
+
   function enqueueEvent(
     active: ActiveRecorderSession<TElement>,
     event: RawRecordedEvent,
@@ -324,6 +468,20 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     start,
     stop,
     dispose,
+  }
+}
+
+function optionalSelectionTarget<TElement>(
+  adapter: RecorderEventCaptureAdapter<TElement>,
+  key: 'activeTarget' | 'anchorTarget' | 'focusTarget',
+  element: TElement | null | undefined,
+): Partial<Pick<RawRecordedSelectionEvent, 'activeTarget' | 'anchorTarget' | 'focusTarget'>> {
+  if (element === undefined || element === null) {
+    return {}
+  }
+
+  return {
+    [key]: adapter.describeElement(element),
   }
 }
 

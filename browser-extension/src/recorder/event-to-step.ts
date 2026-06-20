@@ -78,6 +78,10 @@ export function normalizeRecordedEvents(
       return failure(flush.issues)
     }
 
+    if (event.kind !== 'click') {
+      continue
+    }
+
     const result = buildClickStep(event, index, nextStepId(records))
     if (!result.ok) {
       return failure(result.issues)
@@ -166,7 +170,7 @@ function buildTextStep(
 }
 
 function buildTargetGroup(
-  event: RawRecordedEvent,
+  event: RawRecordedClickEvent | RawRecordedTextEvent,
   eventIndex: number,
 ): ExtensionResult<ScenarioTargetGroup> {
   const synthesis = synthesizeLocatorCandidates({

@@ -892,6 +892,24 @@ function createFixtureRecorderAdapter() {
     onChange() {
       return () => {}
     },
+    onPointerDown() {
+      return () => {}
+    },
+    onPointerMove() {
+      return () => {}
+    },
+    onPointerUp() {
+      return () => {}
+    },
+    onSelectionChange() {
+      return () => {}
+    },
+    onDragStart() {
+      return () => {}
+    },
+    onDrop() {
+      return () => {}
+    },
     onPagehide() {
       return () => {}
     },
@@ -900,6 +918,11 @@ function createFixtureRecorderAdapter() {
     },
     readElementValue() {
       return value
+    },
+    readSelection() {
+      return {
+        selectedText: '',
+      }
     },
     sensitiveInputReason() {
       return null

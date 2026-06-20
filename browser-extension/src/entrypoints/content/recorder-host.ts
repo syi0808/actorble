@@ -10,10 +10,13 @@ import {
   createRecorderEventCapturePort,
   detectSensitiveInputReason,
   type RecorderClickEvent,
+  type RecorderDragEvent,
   type RecorderEventCaptureAdapter,
   type RecorderEventCaptureOptions,
   type RecorderEventFlush,
   type RecorderEventCapturePort,
+  type RecorderPointerEvent,
+  type RecorderSelectionSnapshot,
   type RecorderTargetSnapshot,
   type RecorderTextEvent,
 } from '../../recorder/event-capture.js'
@@ -197,6 +200,36 @@ export function createDomRecorderAdapter(
         listener(toRecorderTextEvent(event))
       })
     },
+    onPointerDown(listener) {
+      return addDocumentListener(documentRef, 'pointerdown', (event) => {
+        listener(toRecorderPointerEvent(event))
+      })
+    },
+    onPointerMove(listener) {
+      return addDocumentListener(documentRef, 'pointermove', (event) => {
+        listener(toRecorderPointerEvent(event))
+      })
+    },
+    onPointerUp(listener) {
+      return addDocumentListener(documentRef, 'pointerup', (event) => {
+        listener(toRecorderPointerEvent(event))
+      })
+    },
+    onSelectionChange(listener) {
+      return addDocumentListener(documentRef, 'selectionchange', () => {
+        listener()
+      })
+    },
+    onDragStart(listener) {
+      return addDocumentListener(documentRef, 'dragstart', (event) => {
+        listener(toRecorderDragEvent(event))
+      })
+    },
+    onDrop(listener) {
+      return addDocumentListener(documentRef, 'drop', (event) => {
+        listener(toRecorderDragEvent(event))
+      })
+    },
     onPagehide(listener) {
       const view = documentRef.defaultView
       if (view === null) {
@@ -212,6 +245,9 @@ export function createDomRecorderAdapter(
       return describeElement(element, documentRef)
     },
     readElementValue,
+    readSelection() {
+      return readSelection(documentRef)
+    },
     sensitiveInputReason(element) {
       const target = describeElement(element, documentRef)
       return detectSensitiveInputReason({
@@ -258,6 +294,47 @@ function toRecorderClickEvent(event: MouseEvent): RecorderClickEvent<Element> {
 function toRecorderTextEvent(event: Event): RecorderTextEvent<Element> {
   return {
     target: elementFromEventTarget(event.target),
+  }
+}
+
+function toRecorderPointerEvent(event: PointerEvent): RecorderPointerEvent<Element> {
+  return {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    pageX: event.pageX,
+    pageY: event.pageY,
+    button: event.button,
+    buttons: event.buttons,
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    target: elementFromEventTarget(event.target),
+  }
+}
+
+function toRecorderDragEvent(event: DragEvent): RecorderDragEvent<Element> {
+  return {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    pageX: event.pageX,
+    pageY: event.pageY,
+    target: elementFromEventTarget(event.target),
+  }
+}
+
+function readSelection(documentRef: Document): RecorderSelectionSnapshot<Element> {
+  const selection = documentRef.getSelection()
+  if (selection === null) {
+    return {
+      selectedText: '',
+      activeTarget: elementFromEventTarget(documentRef.activeElement),
+    }
+  }
+
+  return {
+    selectedText: selection.toString(),
+    activeTarget: elementFromEventTarget(documentRef.activeElement),
+    anchorTarget: elementFromEventTarget(selection.anchorNode),
+    focusTarget: elementFromEventTarget(selection.focusNode),
   }
 }
 

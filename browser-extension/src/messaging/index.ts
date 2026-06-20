@@ -560,12 +560,13 @@ function isRecordEventFlushReason(value: unknown): value is RecordEventFlushReas
 }
 
 function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
-  if (!isRecord(value) || !isRecorderTargetSnapshot(value.target) || !isFiniteNumber(value.timestamp)) {
+  if (!isRecord(value) || !isFiniteNumber(value.timestamp)) {
     return false
   }
 
   if (value.kind === 'click') {
     return (
+      isRecorderTargetSnapshot(value.target) &&
       isFiniteNumber(value.clientX) &&
       isFiniteNumber(value.clientY) &&
       isOptionalFiniteNumber(value.pageX) &&
@@ -576,6 +577,7 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
 
   if (value.kind === 'text') {
     return (
+      isRecorderTargetSnapshot(value.target) &&
       (value.source === 'input' || value.source === 'change') &&
       typeof value.value === 'string' &&
       typeof value.sensitive === 'boolean' &&
@@ -587,7 +589,46 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
     )
   }
 
+  if (value.kind === 'pointer') {
+    return (
+      (value.phase === 'down' || value.phase === 'move' || value.phase === 'up') &&
+      isRecorderTargetSnapshot(value.target) &&
+      isFiniteNumber(value.clientX) &&
+      isFiniteNumber(value.clientY) &&
+      isOptionalFiniteNumber(value.pageX) &&
+      isOptionalFiniteNumber(value.pageY) &&
+      isFiniteNumber(value.button) &&
+      isFiniteNumber(value.buttons) &&
+      isFiniteNumber(value.pointerId) &&
+      typeof value.pointerType === 'string'
+    )
+  }
+
+  if (value.kind === 'selection') {
+    return (
+      typeof value.selectedText === 'string' &&
+      isOptionalRecorderTargetSnapshot(value.activeTarget) &&
+      isOptionalRecorderTargetSnapshot(value.anchorTarget) &&
+      isOptionalRecorderTargetSnapshot(value.focusTarget)
+    )
+  }
+
+  if (value.kind === 'drag') {
+    return (
+      (value.phase === 'start' || value.phase === 'drop') &&
+      isRecorderTargetSnapshot(value.target) &&
+      isFiniteNumber(value.clientX) &&
+      isFiniteNumber(value.clientY) &&
+      isOptionalFiniteNumber(value.pageX) &&
+      isOptionalFiniteNumber(value.pageY)
+    )
+  }
+
   return false
+}
+
+function isOptionalRecorderTargetSnapshot(value: unknown): boolean {
+  return value === undefined || isRecorderTargetSnapshot(value)
 }
 
 function isRecorderTargetSnapshot(value: unknown): boolean {

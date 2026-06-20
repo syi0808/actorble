@@ -172,7 +172,7 @@ extension recorder and schema support
 
 ### TSPS-10 Recorder Raw Event Capture
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Expand content recorder capture beyond click/input/change so the normalizer can distinguish selection, drag, click, and pointer fallback windows.
 - Dependencies: Existing navigation-safe recording buffer, TSPS-08 for final output shape awareness.
 - Completion criteria:
