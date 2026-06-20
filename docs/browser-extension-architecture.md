@@ -281,8 +281,11 @@ surface가 아닙니다.
 
 #### Extension UI System
 
-Extension entrypoints share a small product UI system instead of styling each
-button and panel independently.
+Extension entrypoints apply the cross-platform Actorble UI system defined in
+`docs/ui-system.md` instead of styling each button and panel independently.
+The extension may later use React with Headless UI or similar headless
+primitives, but the source of design truth remains the repo-level UI system
+spec.
 
 - Commands use explicit hierarchy: primary, secondary, subtle, and danger.
 - Icon-only controls require accessible labels and tooltips.
@@ -297,6 +300,9 @@ button and panel independently.
 - Advanced JSON repair, locator diagnostics, validation details, run trace, and
   failure payloads belong behind disclosure controls unless they are required for
   the next user action.
+- Primary UI labels should use non-developer product language from the UI system:
+  scenario, workflow, step, action, target, check, test step, run details, and
+  issues.
 
 ### Background Service Worker
 
