@@ -365,6 +365,7 @@ export type SidepanelScenarioEditor = Readonly<{
   duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
   deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
   moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  reorderStep(stepId: string, toIndex: number): ExtensionResult<SidepanelScenarioEditorSnapshot>
   updateSelectedStepActionFamily(
     family: BuilderStepActionFamily,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot>
@@ -601,6 +602,15 @@ export function createSidepanelScenarioEditor(
       reorderBuilderStep(session, stepId, snapshot.selectedStepIndex + delta),
       { message: undefined },
     )
+  }
+
+  function reorderStep(
+    stepId: string,
+    toIndex: number,
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    return applySessionState(reorderBuilderStep(session, stepCommandIdFromViewId(session, stepId), toIndex), {
+      message: undefined,
+    })
   }
 
   function updateSelectedStepActionFamily(
@@ -1709,6 +1719,7 @@ export function createSidepanelScenarioEditor(
     duplicateSelectedStep,
     deleteSelectedStep,
     moveSelectedStep,
+    reorderStep,
     updateSelectedStepActionFamily,
     updateDocumentFields,
     updateSelectedStepFields,
@@ -2698,6 +2709,20 @@ function selectedBuilderStep(
   state: ScenarioAuthoringSessionState,
 ): BuilderDraftStep | undefined {
   return state.draftDocument?.steps[selectedStepIndexForSession(state)]
+}
+
+function stepCommandIdFromViewId(
+  state: ScenarioAuthoringSessionState,
+  stepId: string,
+): string {
+  const document = state.draftDocument
+  if (document === undefined || !/^\d+$/.test(stepId)) {
+    return stepId
+  }
+
+  return document.steps.some((step, index) => stepIdFor(step, index) === stepId)
+    ? stepId
+    : `index:${stepId}`
 }
 
 function stepIdFor(step: BuilderDraftStep, index: number): string {

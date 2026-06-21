@@ -86,13 +86,15 @@ describe('browser extension scaffold', () => {
     expectNoLegacyPeerSurfaceIds(sidepanelMain)
   })
 
-  it('uses one sidepanel builder workbench for timeline and selected-step editing', async () => {
+  it('uses one sidepanel builder workbench for inline workflow step editing', async () => {
     const sidepanelMain = await readFile('src/entrypoints/sidepanel/main.tsx', 'utf8')
     const workbench = sectionMarkup(sidepanelMain, 'builder-workbench')
 
     expect(sidepanelMain).toContain('id="builder-workbench-title"')
-    expect(workbench).toContain('StepList')
+    expect(workbench).toContain('SortableWorkflowStepCard')
+    expect(workbench).toContain('PendingWorkflowStepCard')
     expect(workbench).toContain('StepInspector')
+    expect(workbench).toContain('ActionFamilySelect')
     expect(workbench).toContain('Test step')
     expectNoLegacyPeerSurfaceIds(sidepanelMain)
   })

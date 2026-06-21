@@ -172,13 +172,8 @@ section {
     var(--surface);
 }
 
-.properties-panel {
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
-}
-
-.workbench-panel + .workbench-panel {
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 86%, var(--surface-soft));
+.inline-workflow-layout {
+  background: var(--surface);
 }
 
 .workbench-subheading {
@@ -353,7 +348,6 @@ button[data-icon-only="true"] {
 
 .field,
 .field-grid,
-.step-command-grid,
 .field-set {
   display: grid;
   gap: 6px;
@@ -398,46 +392,9 @@ button[data-icon-only="true"] {
     "Segoe UI", sans-serif;
 }
 
-.action-palette {
-  display: grid;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.action-palette-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
-  gap: 10px;
-  align-items: start;
-}
-
-.action-palette-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.action-palette-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  min-height: 64px;
-  align-items: center;
-  justify-content: start;
-  gap: 9px;
-  padding: 9px;
-  text-align: left;
-  background: #fbfcfd;
-}
-
-.action-palette-item[data-selected="true"] {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  background: var(--accent-soft);
-}
-
-.action-palette-icon,
 .step-card-icon,
-.step-hero-icon {
+.action-select-trigger-icon,
+.action-select-item-icon {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -446,48 +403,19 @@ button[data-icon-only="true"] {
   background: var(--accent-soft);
 }
 
-.action-palette-icon {
-  width: 30px;
-  height: 30px;
-}
-
-.action-palette-copy,
 .step-card-main,
-.selected-step-copy {
+.action-select-trigger-copy,
+.action-select-item-copy {
   display: grid;
   gap: 3px;
   min-width: 0;
-}
-
-.action-palette-label {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.action-palette-hint {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.step-command-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-}
-
-.step-command-grid button {
-  padding-inline: 8px;
 }
 
 .step-list {
   position: relative;
   display: grid;
   gap: 10px;
-  max-height: 420px;
+  max-height: 640px;
   margin: 0;
   padding: 0;
   overflow: auto;
@@ -506,24 +434,27 @@ button[data-icon-only="true"] {
 
 .step-list li:not(:last-child)::after {
   position: absolute;
-  top: 48px;
+  top: 58px;
   bottom: -12px;
-  left: 17px;
+  left: 42px;
   width: 2px;
   background: color-mix(in srgb, var(--border) 78%, transparent);
   content: "";
+}
+
+.workflow-step-list-item[data-dragging="true"] {
+  z-index: 3;
 }
 
 .step-card {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
   width: 100%;
-  min-height: 72px;
+  gap: 0;
   padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   text-align: left;
   background: #fbfcfd;
 }
@@ -535,6 +466,58 @@ button[data-icon-only="true"] {
 
 .step-card[data-validation="invalid"] {
   border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+}
+
+.step-card[data-validation="pending"] {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 72%, #fbfcfd);
+}
+
+.step-card-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.step-drag-handle,
+.step-drag-placeholder {
+  width: 34px;
+  min-width: 34px;
+  min-height: 56px;
+  padding: 0;
+}
+
+.step-drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  background: transparent;
+}
+
+.step-drag-handle:active {
+  cursor: grabbing;
+}
+
+.step-drag-placeholder {
+  display: block;
+}
+
+.step-card-summary {
+  display: grid;
+  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.step-card-summary:hover:not(:disabled) {
+  border-color: transparent;
 }
 
 .step-index {
@@ -585,25 +568,11 @@ button[data-icon-only="true"] {
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
-.selected-step-hero {
+.expanded-step-editor {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.empty-step-hero {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.step-hero-icon {
-  width: 42px;
-  height: 42px;
+  gap: 10px;
+  padding: 12px 0 0 42px;
 }
 
 .selected-step-actions {
@@ -611,6 +580,107 @@ button[data-icon-only="true"] {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.inline-step-actions {
+  justify-content: flex-start;
+}
+
+.workflow-add-row {
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.pending-step-summary {
+  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
+}
+
+.pending-step-section {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.action-select-trigger {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 46px;
+  justify-content: stretch;
+  gap: 9px;
+  padding: 7px 10px;
+  background: #fbfcfd;
+  text-align: left;
+}
+
+.action-select-trigger-icon,
+.action-select-item-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.action-select-trigger-label,
+.action-select-item-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.action-select-trigger-hint,
+.action-select-item-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-select-chevron {
+  align-self: center;
+  color: var(--muted);
+}
+
+.action-select-content {
+  z-index: 50;
+  min-width: var(--radix-select-trigger-width);
+  max-height: min(360px, var(--radix-select-content-available-height));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(18 24 32 / 15%);
+}
+
+.action-select-viewport {
+  padding: 6px;
+}
+
+.action-select-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  gap: 9px;
+  align-items: center;
+  min-height: 46px;
+  padding: 7px;
+  border-radius: var(--radius);
+  outline: 0;
+  cursor: pointer;
+}
+
+.action-select-item[data-highlighted] {
+  background: var(--accent-soft);
+}
+
+.action-select-item[data-state="checked"] {
+  color: var(--accent-strong);
+}
+
+.action-select-item-indicator {
+  display: grid;
+  place-items: center;
+  color: var(--accent-strong);
 }
 
 .property-section {
@@ -638,10 +708,9 @@ button[data-icon-only="true"] {
   display: grid;
   gap: 10px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .target-assignment-panel[hidden] {
@@ -1032,33 +1101,29 @@ dd {
 
 @media (min-width: 760px) {
   .builder-workbench-layout {
-    grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1.08fr);
-    align-items: stretch;
-  }
-
-  .workbench-panel + .workbench-panel {
-    border-top: 0;
-    box-shadow: -1px 0 0 var(--border);
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 520px) {
   .scenario-metadata-grid,
-  .action-palette-heading,
-  .action-palette-list,
   .field-grid,
   .scroll-position-grid,
-  .target-slot-list li,
-  .selected-step-hero {
+  .target-slot-list li {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .step-card {
+  .step-card-summary,
+  .pending-step-summary {
     grid-template-columns: 34px minmax(0, 1fr) auto;
   }
 
   .step-card-icon {
     display: none;
+  }
+
+  .expanded-step-editor {
+    padding-left: 0;
   }
 
   .scenario-shell-top {
@@ -1072,7 +1137,8 @@ dd {
   select,
   textarea,
   .step-card,
-  .action-palette-item,
+  .action-select-trigger,
+  .action-select-content,
   .target-slot-select,
   .locator-preview-list li,
   .debug-locator-candidates li {

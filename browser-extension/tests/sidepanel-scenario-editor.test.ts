@@ -178,6 +178,82 @@ describe('sidepanel scenario editor', () => {
     })
   })
 
+  it('reorders workflow steps by step id and selects the moved step', async () => {
+    const stepIds = ['first-step', 'second-step', 'third-step']
+    const { editor } = createTestEditor({
+      scenarios: [],
+      createStepId: () => stepIds.shift() ?? 'extra-step',
+    })
+    await editor.refresh()
+    editor.createScenario({
+      id: 'sortable-draft',
+      name: 'Sortable draft',
+      initialStepFamily: 'delay',
+    })
+    editor.addStep('fill')
+    editor.addStep('click')
+
+    const reordered = editor.reorderStep('third-step', 0)
+
+    expect(reordered).toMatchObject({ ok: true })
+    expect(editor.getSnapshot()).toMatchObject({
+      selectedStepId: 'third-step',
+      selectedStepIndex: 0,
+    })
+    expect(editor.getSnapshot().draftDocument?.steps.map((step) => step.id)).toEqual([
+      'third-step',
+      'first-step',
+      'second-step',
+    ])
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(view.stepRows.map((row) => row.id)).toEqual([
+      'third-step',
+      'first-step',
+      'second-step',
+    ])
+    expect(view.stepRows[0]).toMatchObject({
+      id: 'third-step',
+      selected: true,
+    })
+  })
+
+  it('reorders imported workflow steps from view ids when steps do not have ids', async () => {
+    const idlessScenario = scenarioRecord('idless-scenario', 'Idless scenario', '2026-06-17T00:04:00.000Z', {
+      schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
+      id: 'idless-scenario',
+      name: 'Idless scenario',
+      steps: [
+        {
+          action: 'delay',
+          duration: 50,
+        },
+        {
+          action: 'type',
+          input: 'hello',
+        },
+      ],
+    } as ScenarioDocument)
+    const { editor } = createTestEditor({ scenarios: [idlessScenario] })
+    await editor.refresh()
+
+    const initialView = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(initialView.stepRows.map((row) => row.id)).toEqual(['0', '1'])
+
+    const reordered = editor.reorderStep('1', 0)
+
+    expect(reordered).toMatchObject({ ok: true })
+    expect(editor.getSnapshot().draftDocument?.steps.map((step) => step.action)).toEqual([
+      'type',
+      'delay',
+    ])
+    const view = createSidepanelScenarioEditorView(editor.getSnapshot())
+    expect(view.stepRows[0]).toMatchObject({
+      id: '0',
+      action: 'type',
+      selected: true,
+    })
+  })
+
   it('renders pending run state from the workflow session', async () => {
     const { editor } = createTestEditor({
       sendResponse() {

@@ -4,12 +4,34 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
   type RefObject,
   type TextareaHTMLAttributes,
 } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Collapsible, Tabs } from 'radix-ui'
+import {
+  Collapsible,
+  Select as RadixSelect,
+  Tabs,
+} from 'radix-ui'
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { browser } from 'wxt/browser'
 import {
   autoApplyTargetFromPreview,
@@ -26,7 +48,6 @@ import {
   Field,
   OverflowMenu,
   Select,
-  StatusPill,
   TextInput,
   Textarea,
   UiProvider,
@@ -137,10 +158,14 @@ const locatorPreviewer = createLocatorPreviewer({
 
 type ExportFormat = 'json' | 'typescript'
 
+type PendingWorkflowStep = Readonly<{
+  id: 'pending-step'
+}>
+
 function SidepanelApp(): ReactElement {
   const [, forceRender] = useState(0)
   const [debugDrawerState, setDebugDrawerState] = useState<SidepanelDebugDrawerState>({})
-  const [selectedActionFamily, setSelectedActionFamily] = useState<BuilderStepActionFamily>('click')
+  const [pendingStep, setPendingStep] = useState<PendingWorkflowStep | undefined>()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const snapshot = editor.getSnapshot()
   const editorView = createSidepanelScenarioEditorView(snapshot)
@@ -150,13 +175,12 @@ function SidepanelApp(): ReactElement {
     locatorPreview: locatorPreviewer.getSnapshot(),
     debugDrawer: debugDrawerState,
   })
-  const paletteFamily = useMemo(
-    () => selectedPaletteFamily(
-      selectedActionFamily,
+  const defaultActionFamily = useMemo(
+    () => defaultWorkflowActionFamily(
       editorView.actionFamilyOptions,
       editorView.selectedStepFields.actionFamily,
     ),
-    [editorView.actionFamilyOptions, editorView.selectedStepFields.actionFamily, selectedActionFamily],
+    [editorView.actionFamilyOptions, editorView.selectedStepFields.actionFamily],
   )
   const refreshView = useCallback(() => {
     forceRender((version) => version + 1)
@@ -319,6 +343,10 @@ function SidepanelApp(): ReactElement {
     }
   }, [refreshView, runAction, runLocatorPreviewAction])
 
+  useEffect(() => {
+    setPendingStep(undefined)
+  }, [snapshot.draftDocument?.id, snapshot.selectedScenarioId])
+
   return (
     <UiProvider>
       <main>
@@ -328,8 +356,9 @@ function SidepanelApp(): ReactElement {
           onCreate={() => {
             editor.createScenario({
               name: 'Untitled scenario',
-              initialStepFamily: paletteFamily,
+              initialStepFamily: defaultActionFamily,
             })
+            setPendingStep(undefined)
             refreshView()
           }}
           onExport={(format) => void exportSelectedScenario(format)}
@@ -346,6 +375,7 @@ function SidepanelApp(): ReactElement {
           onRun={() => void runAction(() => editor.runSelectedScenario())}
           onSave={() => void runAction(() => editor.saveDraft())}
           onScenarioChange={(id) => {
+            setPendingStep(undefined)
             editor.selectScenario(id)
             refreshView()
           }}
@@ -360,7 +390,9 @@ function SidepanelApp(): ReactElement {
           review={recomposedView.recordedDraftReview}
           shell={recomposedView.scenarioShell}
           snapshot={snapshot}
+          pendingStepOpen={pendingStep !== undefined}
           onRecordedDraftAction={(action) => {
+            setPendingStep(undefined)
             switch (action) {
               case 'replace':
                 editor.replaceWithRecordedDraft()
@@ -393,11 +425,16 @@ function SidepanelApp(): ReactElement {
           }}
         />
         <BuilderWorkbench
-          actionFamily={paletteFamily}
           editorView={editorView}
-          onActionFamilyChange={setSelectedActionFamily}
-          onAddStep={(family = paletteFamily) => {
+          onAddPendingStep={() => {
+            setPendingStep({ id: 'pending-step' })
+          }}
+          onCancelPendingStep={() => {
+            setPendingStep(undefined)
+          }}
+          onCommitPendingStep={(family) => {
             editor.addStep(family)
+            setPendingStep(undefined)
             refreshView()
           }}
           onCandidateSelect={(candidate) => {
@@ -421,15 +458,16 @@ function SidepanelApp(): ReactElement {
             editor.duplicateSelectedStep()
             refreshView()
           }}
-          onInsertStep={(family = paletteFamily) => {
-            editor.insertStep(family)
-            refreshView()
-          }}
           onMoveStep={(delta) => {
             editor.moveSelectedStep(delta)
             refreshView()
           }}
+          onReorderStep={(stepId, toIndex) => {
+            editor.reorderStep(stepId, toIndex)
+            refreshView()
+          }}
           onSelectStep={(index) => {
+            setPendingStep(undefined)
             editor.selectStep(index)
             refreshView()
           }}
@@ -448,6 +486,7 @@ function SidepanelApp(): ReactElement {
           }}
           onStopTargetAssignment={() => void runTargetPickerAction(() => targetPicker.stop())}
           onTestStep={() => void runAction(() => editor.dryRunSelectedStep())}
+          pendingStep={pendingStep}
           snapshot={snapshot}
           targetAssignment={recomposedView.targetAssignment}
           workbench={recomposedView.builderWorkbench}
@@ -499,6 +538,7 @@ function ScenarioShell({
   review,
   shell,
   snapshot,
+  pendingStepOpen,
 }: Readonly<{
   fileInputRef: RefObject<HTMLInputElement | null>
   onCreate(): void
@@ -515,9 +555,13 @@ function ScenarioShell({
   review: SidepanelRecordedDraftReviewView | undefined
   shell: SidepanelScenarioShellView
   snapshot: SidepanelScenarioEditorSnapshot
+  pendingStepOpen: boolean
 }>): ReactElement {
   const activityItems = scenarioActivityItems(shell, snapshot)
   const recordActive = snapshot.currentRecord?.status === 'recording'
+  const runView = blockedButtonView(shell.buttons.run, pendingStepOpen)
+  const saveView = blockedButtonView(shell.buttons.save, pendingStepOpen)
+  const validateView = blockedButtonView(shell.buttons.validate, pendingStepOpen)
 
   return (
     <section id="scenario-shell" className="scenario-shell" aria-labelledby="scenario-shell-title">
@@ -582,11 +626,11 @@ function ScenarioShell({
             {shell.buttons.record.label}
           </ViewButton>
         ) : (
-          <ViewButton icon="play" onClick={onRun} variant="primary" view={shell.buttons.run}>
-            {shell.buttons.run.label}
+          <ViewButton icon="play" onClick={onRun} variant="primary" view={runView}>
+            {runView.label}
           </ViewButton>
         )}
-        <ViewButton icon="save" onClick={onSave} variant="secondary" view={shell.buttons.save}>
+        <ViewButton icon="save" onClick={onSave} variant="secondary" view={saveView}>
           Save
         </ViewButton>
         <OverflowMenu
@@ -600,7 +644,7 @@ function ScenarioShell({
             {
               label: 'Check scenario',
               icon: 'check',
-              disabled: shell.buttons.validate.disabled,
+              disabled: validateView.disabled,
               onSelect: onValidate,
             },
             {
@@ -725,15 +769,15 @@ function RecordedDraftReview({
 }
 
 function BuilderWorkbench({
-  actionFamily,
   editorView,
-  onActionFamilyChange,
-  onAddStep,
+  onAddPendingStep,
+  onCancelPendingStep,
   onCandidateSelect,
+  onCommitPendingStep,
   onDeleteStep,
   onDuplicateStep,
-  onInsertStep,
   onMoveStep,
+  onReorderStep,
   onSelectStep,
   onSelectTargetSlot,
   onStartTargetAssignment,
@@ -741,19 +785,20 @@ function BuilderWorkbench({
   onStepFieldChange,
   onStopTargetAssignment,
   onTestStep,
+  pendingStep,
   snapshot,
   targetAssignment,
   workbench,
 }: Readonly<{
-  actionFamily: BuilderStepActionFamily
   editorView: SidepanelScenarioEditorView
-  onActionFamilyChange(family: BuilderStepActionFamily): void
-  onAddStep(family?: BuilderStepActionFamily): void
+  onAddPendingStep(): void
+  onCancelPendingStep(): void
   onCandidateSelect(candidate: LocatorPreviewCandidateView): void
+  onCommitPendingStep(family: BuilderStepActionFamily): void
   onDeleteStep(): void
   onDuplicateStep(): void
-  onInsertStep(family?: BuilderStepActionFamily): void
   onMoveStep(delta: -1 | 1): void
+  onReorderStep(stepId: string, toIndex: number): void
   onSelectStep(index: number): void
   onSelectTargetSlot(slotId: string): void
   onStartTargetAssignment(slotId?: string): void
@@ -761,12 +806,38 @@ function BuilderWorkbench({
   onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
   onStopTargetAssignment(): void
   onTestStep(): void
+  pendingStep: PendingWorkflowStep | undefined
   snapshot: SidepanelScenarioEditorSnapshot
   targetAssignment: SidepanelTargetAssignmentView
   workbench: SidepanelBuilderWorkbenchView
 }>): ReactElement {
-  const selected = workbench.selectedStep
   const selectedSummary = selectedStepSummary(snapshot)
+  const stepIds = useMemo(
+    () => workbench.steps.map((step) => step.id),
+    [workbench.steps],
+  )
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+  const handleDragEnd = useCallback((event: DragEndEvent): void => {
+    const overId = event.over?.id
+    if (overId === undefined || event.active.id === overId) {
+      return
+    }
+
+    const toIndex = workbench.steps.findIndex((step) => step.id === String(overId))
+    if (toIndex < 0) {
+      return
+    }
+
+    onReorderStep(String(event.active.id), toIndex)
+  }, [onReorderStep, workbench.steps])
+  const disableDrag = pendingStep !== undefined || snapshot.pendingAction !== null
 
   return (
     <section id="builder-workbench" aria-labelledby="builder-workbench-title">
@@ -777,30 +848,247 @@ function BuilderWorkbench({
         )}
       </div>
 
-      <div className="builder-workbench-layout">
-        <div className="workbench-panel flow-panel">
+      <div className="builder-workbench-layout inline-workflow-layout">
+        <div className="workbench-panel flow-panel workflow-inline-panel">
           <div className="workbench-subheading">
             <div>
               <h3>Workflow</h3>
-              <p className="panel-caption">Build the scenario in execution order.</p>
+              <p className="panel-caption">Steps run in order. Drag the handle to reorder.</p>
             </div>
           </div>
-          <StepList onSelectStep={onSelectStep} rows={editorView.stepRows} />
-          <ActionPalette
-            actionFamily={actionFamily}
-            addStepView={workbench.buttons.addStep}
-            insertStepView={workbench.buttons.insertStep}
-            onActionFamilyChange={onActionFamilyChange}
-            onAddStep={onAddStep}
-            onInsertStep={onInsertStep}
-            options={workbench.actionFamilyOptions}
-          />
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={handleDragEnd}
+            sensors={sensors}
+          >
+            <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
+              <ul className="step-list workflow-step-list" aria-label="Scenario steps">
+                {workbench.steps.map((row) => (
+                  <SortableWorkflowStepCard
+                    key={row.id}
+                    actionFamilyOptions={editorView.actionFamilyOptions}
+                    disabled={disableDrag}
+                    expanded={row.selected && pendingStep === undefined}
+                    onCandidateSelect={onCandidateSelect}
+                    onDeleteStep={onDeleteStep}
+                    onDuplicateStep={onDuplicateStep}
+                    onMoveStep={onMoveStep}
+                    onSelectStep={onSelectStep}
+                    onSelectTargetSlot={onSelectTargetSlot}
+                    onStartTargetAssignment={onStartTargetAssignment}
+                    onStepActionChange={onStepActionChange}
+                    onStepFieldChange={onStepFieldChange}
+                    onStopTargetAssignment={onStopTargetAssignment}
+                    onTestStep={onTestStep}
+                    row={row}
+                    targetAssignment={targetAssignment}
+                    view={workbench}
+                  />
+                ))}
+                {pendingStep === undefined ? null : (
+                  <PendingWorkflowStepCard
+                    addStepView={workbench.buttons.addStep}
+                    nextIndex={workbench.steps.length}
+                    onActionChange={onCommitPendingStep}
+                    onCancel={onCancelPendingStep}
+                    options={workbench.actionFamilyOptions}
+                  />
+                )}
+              </ul>
+            </SortableContext>
+          </DndContext>
+          {pendingStep === undefined ? (
+            <div className="workflow-add-row">
+              <ViewButton
+                icon="plus"
+                iconOnly
+                onClick={onAddPendingStep}
+                tooltip="Add step"
+                variant="primary"
+                view={workbench.buttons.addStep}
+              >
+                Add step
+              </ViewButton>
+            </div>
+          ) : null}
         </div>
+      </div>
+    </section>
+  )
+}
 
-        <div className="workbench-panel properties-panel">
-          <SelectedStepHero selected={selected} />
-          <div className="selected-step-actions" aria-label="Selected step actions">
-            <ViewButton icon="play" onClick={onTestStep} variant="secondary" view={workbench.buttons.dryRun}>
+function SortableWorkflowStepCard({
+  actionFamilyOptions,
+  disabled,
+  expanded,
+  onCandidateSelect,
+  onDeleteStep,
+  onDuplicateStep,
+  onMoveStep,
+  onSelectStep,
+  onSelectTargetSlot,
+  onStartTargetAssignment,
+  onStepActionChange,
+  onStepFieldChange,
+  onStopTargetAssignment,
+  onTestStep,
+  row,
+  targetAssignment,
+  view,
+}: Readonly<{
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
+  disabled: boolean
+  expanded: boolean
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
+  onDeleteStep(): void
+  onDuplicateStep(): void
+  onMoveStep(delta: -1 | 1): void
+  onSelectStep(index: number): void
+  onSelectTargetSlot(slotId: string): void
+  onStartTargetAssignment(slotId?: string): void
+  onStepActionChange(family: BuilderStepActionFamily): void
+  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
+  onStopTargetAssignment(): void
+  onTestStep(): void
+  row: SidepanelStepRowView
+  targetAssignment: SidepanelTargetAssignmentView
+  view: SidepanelBuilderWorkbenchView
+}>): ReactElement {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: row.id,
+    disabled,
+  })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <li
+      ref={setNodeRef}
+      className="workflow-step-list-item"
+      data-dragging={isDragging ? 'true' : 'false'}
+      style={style}
+    >
+      <WorkflowStepCard
+        actionFamilyOptions={actionFamilyOptions}
+        dragAttributes={attributes}
+        dragDisabled={disabled}
+        dragListeners={listeners}
+        expanded={expanded}
+        onCandidateSelect={onCandidateSelect}
+        onDeleteStep={onDeleteStep}
+        onDuplicateStep={onDuplicateStep}
+        onMoveStep={onMoveStep}
+        onSelectStep={onSelectStep}
+        onSelectTargetSlot={onSelectTargetSlot}
+        onStartTargetAssignment={onStartTargetAssignment}
+        onStepActionChange={onStepActionChange}
+        onStepFieldChange={onStepFieldChange}
+        onStopTargetAssignment={onStopTargetAssignment}
+        onTestStep={onTestStep}
+        row={row}
+        targetAssignment={targetAssignment}
+        view={view}
+      />
+    </li>
+  )
+}
+
+function WorkflowStepCard({
+  actionFamilyOptions,
+  dragAttributes,
+  dragDisabled,
+  dragListeners,
+  expanded,
+  onCandidateSelect,
+  onDeleteStep,
+  onDuplicateStep,
+  onMoveStep,
+  onSelectStep,
+  onSelectTargetSlot,
+  onStartTargetAssignment,
+  onStepActionChange,
+  onStepFieldChange,
+  onStopTargetAssignment,
+  onTestStep,
+  row,
+  targetAssignment,
+  view,
+}: Readonly<{
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
+  dragAttributes: ReturnType<typeof useSortable>['attributes']
+  dragDisabled: boolean
+  dragListeners: ReturnType<typeof useSortable>['listeners']
+  expanded: boolean
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
+  onDeleteStep(): void
+  onDuplicateStep(): void
+  onMoveStep(delta: -1 | 1): void
+  onSelectStep(index: number): void
+  onSelectTargetSlot(slotId: string): void
+  onStartTargetAssignment(slotId?: string): void
+  onStepActionChange(family: BuilderStepActionFamily): void
+  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
+  onStopTargetAssignment(): void
+  onTestStep(): void
+  row: SidepanelStepRowView
+  targetAssignment: SidepanelTargetAssignmentView
+  view: SidepanelBuilderWorkbenchView
+}>): ReactElement {
+  const detailText = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
+  const selected = view.selectedStep?.id === row.id ? view.selectedStep : undefined
+
+  return (
+    <article
+      className="step-card workflow-step-card"
+      data-expanded={expanded ? 'true' : 'false'}
+      data-selected={row.selected ? 'true' : 'false'}
+      data-validation={row.validationStatus}
+    >
+      <div className="step-card-header">
+        <button
+          {...dragAttributes}
+          {...(dragListeners ?? {})}
+          aria-label={`Move step ${row.index + 1}`}
+          className="step-drag-handle"
+          disabled={dragDisabled}
+          type="button"
+        >
+          <CommandIcon name="grab" />
+        </button>
+        <button
+          className="step-card-summary"
+          onClick={() => onSelectStep(row.index)}
+          type="button"
+        >
+          <span className="step-index">{row.index + 1}</span>
+          <span className="step-card-icon">
+            <CommandIcon name={actionIcon(row.action)} />
+          </span>
+          <span className="step-card-main">
+            <span className="step-title">{formatActionLabel(row.action)}</span>
+            <span className="step-detail">
+              {detailText.length === 0 ? 'No target or input yet' : detailText}
+            </span>
+          </span>
+          <span className="step-status">
+            {row.validationStatus === 'valid' ? 'Ready' : 'Needs attention'}
+          </span>
+        </button>
+      </div>
+      {expanded && selected !== undefined ? (
+        <div className="expanded-step-editor">
+          <div className="selected-step-actions inline-step-actions" aria-label="Selected step actions">
+            <ViewButton icon="play" onClick={onTestStep} variant="secondary" view={view.buttons.dryRun}>
               Test step
             </ViewButton>
             <OverflowMenu
@@ -808,40 +1096,38 @@ function BuilderWorkbench({
                 {
                   label: 'Duplicate',
                   icon: 'copy',
-                  disabled: workbench.buttons.duplicateStep.disabled,
+                  disabled: view.buttons.duplicateStep.disabled,
                   onSelect: onDuplicateStep,
                 },
                 {
                   label: 'Move up',
                   icon: 'arrow-up',
-                  disabled: workbench.buttons.moveStepUp.disabled,
+                  disabled: view.buttons.moveStepUp.disabled,
                   onSelect: () => onMoveStep(-1),
                 },
                 {
                   label: 'Move down',
                   icon: 'arrow-down',
-                  disabled: workbench.buttons.moveStepDown.disabled,
+                  disabled: view.buttons.moveStepDown.disabled,
                   onSelect: () => onMoveStep(1),
                 },
                 {
                   label: 'Delete',
                   icon: 'trash',
                   danger: true,
-                  disabled: workbench.buttons.deleteStep.disabled,
+                  disabled: view.buttons.deleteStep.disabled,
                   onSelect: onDeleteStep,
                 },
               ]}
             />
           </div>
-
           <StepInspector
-            actionFamilyOptions={editorView.actionFamilyOptions}
-            fields={editorView.selectedStepFields}
+            actionFamilyOptions={actionFamilyOptions}
+            fields={selected.fields}
             onActionChange={onStepActionChange}
             onFieldChange={onStepFieldChange}
           />
-
-          {editorView.selectedStepFields.controls.targetSlots ? (
+          {selected.fields.controls.targetSlots ? (
             <TargetAssignment
               onCandidateSelect={onCandidateSelect}
               onSelectTargetSlot={onSelectTargetSlot}
@@ -850,174 +1136,152 @@ function BuilderWorkbench({
               view={targetAssignment}
             />
           ) : null}
-
           <AdvancedJsonRepair
-            fields={editorView.selectedStepFields}
+            fields={selected.fields}
             onFieldChange={onStepFieldChange}
           />
         </div>
-      </div>
-    </section>
+      ) : null}
+    </article>
   )
 }
 
-function StepList({
-  onSelectStep,
-  rows,
-}: Readonly<{
-  onSelectStep(index: number): void
-  rows: readonly SidepanelStepRowView[]
-}>): ReactElement {
-  return (
-    <ul className="step-list" aria-label="Scenario steps">
-      {rows.map((row) => {
-        const detailText = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
-
-        return (
-          <li key={row.id}>
-            <button
-              className="step-card"
-              data-selected={row.selected ? 'true' : 'false'}
-              data-validation={row.validationStatus}
-              onClick={() => onSelectStep(row.index)}
-              type="button"
-            >
-              <span className="step-index">{row.index + 1}</span>
-              <span className="step-card-icon">
-                <CommandIcon name={actionIcon(row.action)} />
-              </span>
-              <span className="step-card-main">
-                <span className="step-title">{formatActionLabel(row.action)}</span>
-                <span className="step-detail">
-                  {detailText.length === 0 ? 'No target or input yet' : detailText}
-                </span>
-              </span>
-              <span className="step-status">
-                {row.validationStatus === 'valid' ? 'Ready' : 'Needs attention'}
-              </span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-function ActionPalette({
-  actionFamily,
+function PendingWorkflowStepCard({
   addStepView,
-  insertStepView,
-  onActionFamilyChange,
-  onAddStep,
-  onInsertStep,
+  nextIndex,
+  onActionChange,
+  onCancel,
   options,
 }: Readonly<{
-  actionFamily: BuilderStepActionFamily
   addStepView: SidepanelButtonView
-  insertStepView: SidepanelButtonView
-  onActionFamilyChange(family: BuilderStepActionFamily): void
-  onAddStep(family?: BuilderStepActionFamily): void
-  onInsertStep(family?: BuilderStepActionFamily): void
+  nextIndex: number
+  onActionChange(family: BuilderStepActionFamily): void
+  onCancel(): void
   options: readonly SidepanelActionFamilyOptionView[]
 }>): ReactElement {
   return (
-    <div className="action-palette" aria-label="Action palette">
-      <div className="action-palette-heading">
-        <div>
-          <h3>Add step</h3>
-          <p className="panel-caption">Choose an action, then add it to the flow.</p>
+    <li className="workflow-step-list-item pending-step-list-item">
+      <article
+        className="step-card workflow-step-card pending-step-card"
+        data-expanded="true"
+        data-selected="true"
+        data-validation="pending"
+      >
+        <div className="step-card-header">
+          <span className="step-drag-placeholder" aria-hidden="true" />
+          <div className="step-card-summary pending-step-summary">
+            <span className="step-index">{nextIndex + 1}</span>
+            <span className="step-card-icon">
+              <CommandIcon name="plus" />
+            </span>
+            <span className="step-card-main">
+              <span className="step-title">New step</span>
+              <span className="step-detail">Choose an action to add it to the workflow</span>
+            </span>
+            <Button icon="trash" onClick={onCancel} variant="subtle">
+              Cancel
+            </Button>
+          </div>
         </div>
-        <Select
-          aria-label="Action family"
-          className="compact-select"
-          onChange={(event) => onActionFamilyChange(event.currentTarget.value as BuilderStepActionFamily)}
-          value={actionFamily}
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="action-palette-list">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            className="action-palette-item"
-            data-selected={option.value === actionFamily ? 'true' : 'false'}
-            disabled={addStepView.disabled}
-            onClick={() => {
-              onActionFamilyChange(option.value)
-              onAddStep(option.value)
-            }}
-            title={`Add ${option.label} step`}
-            type="button"
-          >
-            <span className="action-palette-icon">
-              <CommandIcon name={actionIcon(option.value)} />
-            </span>
-            <span className="action-palette-copy">
-              <span className="action-palette-label">{option.label}</span>
-              <span className="action-palette-hint">{actionHint(option.value)}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="step-command-grid" aria-label="Step commands">
-        <ViewButton icon="plus" onClick={() => onAddStep(actionFamily)} variant="primary" view={addStepView}>
-          Add step
-        </ViewButton>
-        <ViewButton
-          icon="plus"
-          onClick={() => onInsertStep(actionFamily)}
-          variant="secondary"
-          view={insertStepView}
-        >
-          Insert after selected
-        </ViewButton>
-      </div>
-    </div>
+        <div className="expanded-step-editor">
+          <div className="property-section pending-step-section">
+            <div className="property-section-heading">
+              <h3>Action</h3>
+              <span className="section-kicker">What this step does</span>
+            </div>
+            <Field label="Action">
+              <ActionFamilySelect
+                ariaLabel="New step action"
+                autoFocus
+                disabled={addStepView.disabled}
+                onChange={onActionChange}
+                options={options}
+                placeholder="Choose action"
+                value=""
+              />
+            </Field>
+          </div>
+        </div>
+      </article>
+    </li>
   )
 }
 
-function SelectedStepHero({
-  selected,
+function ActionFamilySelect({
+  ariaLabel,
+  autoFocus = false,
+  disabled = false,
+  onChange,
+  options,
+  placeholder = 'Choose action',
+  value,
 }: Readonly<{
-  selected: SidepanelBuilderWorkbenchView['selectedStep']
+  ariaLabel: string
+  autoFocus?: boolean
+  disabled?: boolean
+  onChange(family: BuilderStepActionFamily): void
+  options: readonly SidepanelActionFamilyOptionView[]
+  placeholder?: string
+  value: BuilderStepActionFamily | ''
 }>): ReactElement {
-  if (selected === undefined) {
-    return (
-      <div className="selected-step-hero empty-step-hero">
-        <span className="step-hero-icon" aria-hidden="true">
-          <CommandIcon name="plus" />
-        </span>
-        <div className="selected-step-copy">
-          <h3>Add a step</h3>
-          <p className="properties-summary">Choose an action from the workflow.</p>
-        </div>
-      </div>
-    )
-  }
-
-  const detailText = [selected.targetSummary, selected.inputSummary].filter(Boolean).join(' · ')
+  const selected = options.find((option) => option.value === value)
+  const triggerIcon = selected === undefined ? 'target' : actionIcon(selected.value)
 
   return (
-    <div className="selected-step-hero">
-      <span className="step-hero-icon" aria-hidden="true">
-        <CommandIcon name={actionIcon(selected.action)} />
-      </span>
-      <div className="selected-step-copy">
-        <p className="panel-caption">Selected step</p>
-        <h3>{selected.index + 1}. {formatActionLabel(selected.action)}</h3>
-        <p className="properties-summary">
-          {detailText.length === 0 ? 'No target or input configured yet' : detailText}
-        </p>
-      </div>
-      <StatusPill status={selected.validationStatus === 'valid' ? 'ready' : 'failed'}>
-        {selected.validationStatus === 'valid' ? 'Ready' : 'Needs attention'}
-      </StatusPill>
-    </div>
+    <RadixSelect.Root
+      disabled={disabled}
+      onValueChange={(nextValue) => onChange(nextValue as BuilderStepActionFamily)}
+      value={value === '' ? undefined : value}
+    >
+      <RadixSelect.Trigger
+        aria-label={ariaLabel}
+        autoFocus={autoFocus}
+        className="action-select-trigger"
+      >
+        <span className="action-select-trigger-icon">
+          <CommandIcon name={triggerIcon} />
+        </span>
+        <span className="action-select-trigger-copy">
+          <span className="action-select-trigger-label">
+            {selected?.label ?? placeholder}
+          </span>
+          <span className="action-select-trigger-hint">
+            {selected === undefined ? 'Select from available actions' : actionHint(selected.value)}
+          </span>
+        </span>
+        <CommandIcon className="action-select-chevron" name="arrow-down" />
+      </RadixSelect.Trigger>
+      <RadixSelect.Portal>
+        <RadixSelect.Content
+          className="action-select-content"
+          position="popper"
+          sideOffset={6}
+        >
+          <RadixSelect.Viewport className="action-select-viewport">
+            {options.map((option) => (
+              <RadixSelect.Item
+                key={option.value}
+                className="action-select-item"
+                value={option.value}
+              >
+                <span className="action-select-item-icon">
+                  <CommandIcon name={actionIcon(option.value)} />
+                </span>
+                <span className="action-select-item-copy">
+                  <RadixSelect.ItemText className="action-select-item-label">
+                    {option.label}
+                  </RadixSelect.ItemText>
+                  <span className="action-select-item-hint">{actionHint(option.value)}</span>
+                </span>
+                <RadixSelect.ItemIndicator className="action-select-item-indicator">
+                  <CommandIcon name="check" />
+                </RadixSelect.ItemIndicator>
+              </RadixSelect.Item>
+            ))}
+          </RadixSelect.Viewport>
+        </RadixSelect.Content>
+      </RadixSelect.Portal>
+    </RadixSelect.Root>
   )
 }
 
@@ -1041,18 +1305,13 @@ function StepInspector({
         </div>
         <div className="field-grid">
           <Field label="Action">
-            <Select
-              aria-label="Selected step action"
+            <ActionFamilySelect
+              ariaLabel="Selected step action"
               disabled={fields.actionFamily.length === 0}
-              onChange={(event) => onActionChange(event.currentTarget.value as BuilderStepActionFamily)}
+              onChange={onActionChange}
+              options={actionFamilyOptions}
               value={fields.actionFamily}
-            >
-              {actionFamilyOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            />
           </Field>
           {fields.controls.duration ? (
             <Field label="Duration">
@@ -1540,6 +1799,19 @@ function ViewButton({
   )
 }
 
+function blockedButtonView(
+  view: SidepanelButtonView,
+  blocked: boolean,
+): SidepanelButtonView {
+  return blocked
+    ? {
+        ...view,
+        disabled: true,
+        pending: false,
+      }
+    : view
+}
+
 function CommitTextarea({
   onCommit,
   value,
@@ -1565,15 +1837,10 @@ function CommitTextarea({
   )
 }
 
-function selectedPaletteFamily(
-  preferred: BuilderStepActionFamily,
+function defaultWorkflowActionFamily(
   options: readonly SidepanelActionFamilyOptionView[],
   selectedStepFamily: BuilderStepActionFamily | '',
 ): BuilderStepActionFamily {
-  if (options.some((option) => option.value === preferred)) {
-    return preferred
-  }
-
   if (selectedStepFamily !== '' && options.some((option) => option.value === selectedStepFamily)) {
     return selectedStepFamily
   }

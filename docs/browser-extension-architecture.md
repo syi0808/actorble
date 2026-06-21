@@ -228,26 +228,30 @@ Builder는 scenario document 편집 폼이 아니라 ordered workflow authoring 
 
 ```txt
 Choose or create scenario
--> Add an action from an action palette
+-> Add a pending step from the final + control
+-> Choose the action from the pending step dropdown
 -> Select a step in the flow
--> Configure that step in the properties inspector
+-> Configure that step inside the expanded selected card
 -> Assign required targets from the step context
 -> Check or test the selected step
--> Reorder, duplicate, or remove steps from the selected step context
+-> Reorder steps by drag and drop, or duplicate/remove from the selected step context
 -> Save or run the scenario
 ```
 
 Step flow는 scenario의 순서를 보여주는 primary navigation입니다. 각 step은 action,
 순서, target/input 요약, validation state, selected state를 함께 보여야 합니다.
-사용자가 flow item을 선택하면 properties inspector는 해당 step의 action-specific
-fields, target slots, run controls, repair controls를 보여줍니다.
+사용자가 flow item을 선택하면 해당 step card가 펼쳐지고 action-specific fields,
+target slots, run controls, repair controls를 같은 card 내부에 보여줍니다.
 
-Action 추가는 raw select와 add button 조합이 아니라 action palette 동작입니다. Palette는
-사용 가능한 action family를 보여주고, 선택된 family로 새 step을 추가하거나 현재 step
-뒤에 삽입합니다. Raw select는 keyboard and fallback control로 남길 수 있지만 primary
-authoring interaction은 palette입니다.
+Action 추가는 별도 card grid나 독립 Add step 영역이 아니라 workflow 마지막의 `+`
+control에서 시작합니다. `+`를 누르면 문서에 저장되지 않는 pending step card가 열리고,
+사용자는 card 내부 dropdown에서 action family를 고릅니다. dropdown은 native select
+또는 custom select일 수 있지만, primary authoring interaction은 action card 나열이
+아니라 step card 내부 action 선택입니다. Action을 선택한 뒤에만 builder draft에 실제
+step이 추가됩니다.
 
-Step reorder, duplicate, delete는 global toolbar가 아니라 selected step context action으로
+Step reorder는 workflow card의 drag handle에서 시작하는 drag and drop 동작입니다.
+Duplicate와 delete는 global toolbar가 아니라 selected step context action으로
 취급합니다. 이 동작은 선택된 workflow step을 기준으로 draft session을 변경합니다.
 step이 선택되지 않은 상태에서는 삭제나 위치 변경 command를 비활성화합니다.
 

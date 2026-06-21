@@ -65,7 +65,7 @@ App shell
 -> Scenario shell
 -> Workflow workbench
    -> Step flow
-   -> Selected step inspector
+   -> Inline selected step editor
 -> Diagnostics disclosure
 ```
 
@@ -276,7 +276,7 @@ runtime terms as the default language.
 | Saved runnable document | Scenario | Primary noun. Use "Create scenario", "Save scenario", "Run scenario". |
 | Ordered visual sequence inside a scenario | Workflow | Use for the builder area, not as a separate stored object. |
 | One item in a workflow | Step | Use "Add step", "Move step", "Test step". |
-| What a step performs | Action | Use in the action palette and step inspector. |
+| What a step performs | Action | Use in the action selector and step editor. |
 | Element or location Actorble controls | Target | Use "Pick target" and "Target". Explain as a page/app element when helpful. |
 | Page/app readiness | Ready / Blocked / Checking | Use compact status language. |
 | Scenario validation | Check | Button label should be "Check scenario", not "Validate" in primary UI. |
@@ -496,16 +496,16 @@ Export draft
 Recorded draft review must be explicit. Actorble should not silently replace a
 user's current draft after recording.
 
-### Action Palette
+### Action Selector
 
 Primary way to add a step.
 
 Rules:
 
 ```txt
-- Shows action families with icon, label, and concise hint.
-- Adds a new step or inserts after the selected step.
-- Raw select controls may remain as keyboard or fallback controls.
+- Uses a dropdown/select control, not a grid of action cards.
+- May show action icons, labels, and concise hints inside a custom select.
+- Creates the pending step only after the user chooses an action.
 ```
 
 ### Workflow Step Card
@@ -524,9 +524,9 @@ Shows:
 
 Step feedback appears here before it appears in diagnostics.
 
-### Step Inspector
+### Inline Selected Step Editor
 
-Properties panel for the selected step.
+Expanded editing area inside the selected workflow step card.
 
 Contains:
 

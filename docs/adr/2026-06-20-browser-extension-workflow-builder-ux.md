@@ -1,6 +1,6 @@
 # ADR 2026-06-20: Browser Extension Workflow Builder UX
 
-Status: Accepted
+Status: Accepted, partially superseded by ADR 2026-06-21: Browser Extension Inline Workflow Step Editing
 Date: 2026-06-20
 
 ## Context
@@ -66,3 +66,4 @@ small shared UI helpers.
 - `docs/browser-extension-architecture.md`
 - `docs/adr/2026-06-18-browser-extension-workflow-builder.md`
 - `docs/adr/2026-06-20-browser-extension-product-ui-composition.md`
+- `docs/adr/2026-06-21-browser-extension-inline-workflow-step-editing.md`
