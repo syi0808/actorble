@@ -65,6 +65,7 @@ describe('sidepanel recomposition view model', () => {
     expect(view.builderWorkbench.buttons.addStep.disabled).toBe(true)
     expect(view.targetAssignment.status).toBe('unavailable')
     expect(view.targetAssignment.buttons.start.disabled).toBe(true)
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
     expect(view.debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'validation',
@@ -112,6 +113,7 @@ describe('sidepanel recomposition view model', () => {
         },
       },
     })
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
     expect(view.targetAssignment.slots).toEqual([
       expect.objectContaining({
         id: 'step-target:email',
@@ -217,6 +219,7 @@ describe('sidepanel recomposition view model', () => {
         },
       },
     })
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
     expect(view.targetAssignment.slots).toEqual([
       expect.objectContaining({ id: 'drag-from:slot-step', selected: false }),
       expect.objectContaining({ id: 'drag-to:slot-step', selected: true }),

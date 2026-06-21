@@ -216,10 +216,10 @@ metadata로 취급하고, 별도 primary card로 분리하지 않습니다. Shel
 작업 맥락과 primary command를 잃지 않도록 side panel 상단의 sticky workbar로 둘 수
 있습니다.
 
-Scenario builder workbench는 step list와 selected step editor를 같은 작업면에
-둡니다. step add/insert/duplicate/delete/reorder, action family 선택, action별
-structured field editing, per-step dry run은 선택된 step 맥락 안에서 동작합니다.
-Steps와 Step Editor는 별도 primary card가 아닙니다.
+Scenario builder workbench는 step list 자체를 작업면으로 사용합니다.
+step add/insert/duplicate/delete/reorder, action family 선택, action별 structured field
+editing, per-step dry run은 선택된 step 맥락 안에서 동작합니다. Steps와 Step Editor는
+별도 primary card가 아니며, workflow 내부에 반복 제목이나 설명 card를 두지 않습니다.
 
 #### Workflow Builder Behavior
 
@@ -241,7 +241,8 @@ Choose or create scenario
 Step flow는 scenario의 순서를 보여주는 primary navigation입니다. 각 step은 action,
 순서, target/input 요약, validation state, selected state를 함께 보여야 합니다.
 사용자가 flow item을 선택하면 해당 step card가 펼쳐지고 action-specific fields,
-target slots, run controls, repair controls를 같은 card 내부에 보여줍니다.
+target slots, run controls, repair controls를 같은 card 내부에 보여줍니다. Selected
+state는 background fill이 아니라 border, outline, shadow 같은 구조적 강조로 표현합니다.
 
 Action 추가는 별도 card grid나 독립 Add step 영역이 아니라 workflow 마지막의 `+`
 control에서 시작합니다. `+`를 누르면 문서에 저장되지 않는 pending step card가 열리고,
@@ -260,11 +261,12 @@ Step validation과 run feedback은 영향을 받은 step에 먼저 붙습니다.
 문제를 먼저 표시해야 합니다.
 
 Target assignment는 selected step editor 내부의 target field control입니다. target이
-필요한 action만 `Set target` interaction을 활성화합니다. drag는 from/to, waitFor는
-wait target, scrollTo target은 scroll target처럼 action-specific slot을 명시합니다.
-target picker UI는 standalone card가 아니라 해당 slot을 채우는 버튼과 진행 상태입니다.
-inspector에서 요소를 선택하면 extension은 locator candidate를 preview하고, 선택된
-요소와 매칭되는 최상위 candidate를 correlated target slot에 즉시 기록합니다.
+필요한 action만 target slot row를 활성화합니다. drag는 from/to, waitFor는 wait target,
+scrollTo target은 scroll target처럼 action-specific slot을 명시합니다. Target slot row를
+누르면 해당 slot 선택과 target picking이 함께 시작됩니다. 별도 `Set target`, `Pick target`,
+`Stop` button을 같은 맥락에 중복 노출하지 않습니다. inspector에서 요소를 선택하면 content
+inspector는 overlay와 listener를 정리하고, extension은 locator candidate를 preview하고,
+선택된 요소와 매칭되는 최상위 candidate를 correlated target slot에 즉시 기록합니다.
 candidate가 여러 요소에 매칭되면 browser locator의 0-based `matchIndex`로 선택
 요소를 disambiguate합니다. Locator candidates는 정상 authoring flow에서 기본 노출하지
 않고, ambiguous 또는 failed 상태일 때만 compact chooser 또는 diagnostics drawer에

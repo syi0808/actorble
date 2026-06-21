@@ -471,10 +471,6 @@ function SidepanelApp(): ReactElement {
             editor.selectStep(index)
             refreshView()
           }}
-          onSelectTargetSlot={(slotId) => {
-            editor.selectTargetSlot(slotId)
-            refreshView()
-          }}
           onStartTargetAssignment={(slotId) => void startTargetAssignment(slotId)}
           onStepActionChange={(family) => {
             editor.updateSelectedStepActionFamily(family)
@@ -484,7 +480,6 @@ function SidepanelApp(): ReactElement {
             editor.updateSelectedStepFields(update)
             refreshView()
           }}
-          onStopTargetAssignment={() => void runTargetPickerAction(() => targetPicker.stop())}
           onTestStep={() => void runAction(() => editor.dryRunSelectedStep())}
           pendingStep={pendingStep}
           snapshot={snapshot}
@@ -779,11 +774,9 @@ function BuilderWorkbench({
   onMoveStep,
   onReorderStep,
   onSelectStep,
-  onSelectTargetSlot,
   onStartTargetAssignment,
   onStepActionChange,
   onStepFieldChange,
-  onStopTargetAssignment,
   onTestStep,
   pendingStep,
   snapshot,
@@ -800,11 +793,9 @@ function BuilderWorkbench({
   onMoveStep(delta: -1 | 1): void
   onReorderStep(stepId: string, toIndex: number): void
   onSelectStep(index: number): void
-  onSelectTargetSlot(slotId: string): void
   onStartTargetAssignment(slotId?: string): void
   onStepActionChange(family: BuilderStepActionFamily): void
   onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onStopTargetAssignment(): void
   onTestStep(): void
   pendingStep: PendingWorkflowStep | undefined
   snapshot: SidepanelScenarioEditorSnapshot
@@ -848,72 +839,60 @@ function BuilderWorkbench({
         )}
       </div>
 
-      <div className="builder-workbench-layout inline-workflow-layout">
-        <div className="workbench-panel flow-panel workflow-inline-panel">
-          <div className="workbench-subheading">
-            <div>
-              <h3>Workflow</h3>
-              <p className="panel-caption">Steps run in order. Drag the handle to reorder.</p>
-            </div>
-          </div>
-          <DndContext
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={handleDragEnd}
-            sensors={sensors}
+      <DndContext
+        collisionDetection={closestCenter}
+        modifiers={[restrictToVerticalAxis]}
+        onDragEnd={handleDragEnd}
+        sensors={sensors}
+      >
+        <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
+          <ul className="step-list workflow-step-list" aria-label="Scenario steps">
+            {workbench.steps.map((row) => (
+              <SortableWorkflowStepCard
+                key={row.id}
+                actionFamilyOptions={editorView.actionFamilyOptions}
+                disabled={disableDrag}
+                expanded={row.selected && pendingStep === undefined}
+                onCandidateSelect={onCandidateSelect}
+                onDeleteStep={onDeleteStep}
+                onDuplicateStep={onDuplicateStep}
+                onMoveStep={onMoveStep}
+                onSelectStep={onSelectStep}
+                onStartTargetAssignment={onStartTargetAssignment}
+                onStepActionChange={onStepActionChange}
+                onStepFieldChange={onStepFieldChange}
+                onTestStep={onTestStep}
+                row={row}
+                targetAssignment={targetAssignment}
+                view={workbench}
+              />
+            ))}
+            {pendingStep === undefined ? null : (
+              <PendingWorkflowStepCard
+                addStepView={workbench.buttons.addStep}
+                nextIndex={workbench.steps.length}
+                onActionChange={onCommitPendingStep}
+                onCancel={onCancelPendingStep}
+                options={workbench.actionFamilyOptions}
+              />
+            )}
+          </ul>
+        </SortableContext>
+      </DndContext>
+      {pendingStep === undefined ? (
+        <div className="workflow-add-row">
+          <ViewButton
+            icon="plus"
+            iconOnly
+            onClick={onAddPendingStep}
+            tooltip="Add step"
+            variant="primary"
+            view={workbench.buttons.addStep}
           >
-            <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
-              <ul className="step-list workflow-step-list" aria-label="Scenario steps">
-                {workbench.steps.map((row) => (
-                  <SortableWorkflowStepCard
-                    key={row.id}
-                    actionFamilyOptions={editorView.actionFamilyOptions}
-                    disabled={disableDrag}
-                    expanded={row.selected && pendingStep === undefined}
-                    onCandidateSelect={onCandidateSelect}
-                    onDeleteStep={onDeleteStep}
-                    onDuplicateStep={onDuplicateStep}
-                    onMoveStep={onMoveStep}
-                    onSelectStep={onSelectStep}
-                    onSelectTargetSlot={onSelectTargetSlot}
-                    onStartTargetAssignment={onStartTargetAssignment}
-                    onStepActionChange={onStepActionChange}
-                    onStepFieldChange={onStepFieldChange}
-                    onStopTargetAssignment={onStopTargetAssignment}
-                    onTestStep={onTestStep}
-                    row={row}
-                    targetAssignment={targetAssignment}
-                    view={workbench}
-                  />
-                ))}
-                {pendingStep === undefined ? null : (
-                  <PendingWorkflowStepCard
-                    addStepView={workbench.buttons.addStep}
-                    nextIndex={workbench.steps.length}
-                    onActionChange={onCommitPendingStep}
-                    onCancel={onCancelPendingStep}
-                    options={workbench.actionFamilyOptions}
-                  />
-                )}
-              </ul>
-            </SortableContext>
-          </DndContext>
-          {pendingStep === undefined ? (
-            <div className="workflow-add-row">
-              <ViewButton
-                icon="plus"
-                iconOnly
-                onClick={onAddPendingStep}
-                tooltip="Add step"
-                variant="primary"
-                view={workbench.buttons.addStep}
-              >
-                Add step
-              </ViewButton>
-            </div>
-          ) : null}
+            Add step
+          </ViewButton>
         </div>
-      </div>
+      ) : null}
     </section>
   )
 }
@@ -927,11 +906,9 @@ function SortableWorkflowStepCard({
   onDuplicateStep,
   onMoveStep,
   onSelectStep,
-  onSelectTargetSlot,
   onStartTargetAssignment,
   onStepActionChange,
   onStepFieldChange,
-  onStopTargetAssignment,
   onTestStep,
   row,
   targetAssignment,
@@ -945,11 +922,9 @@ function SortableWorkflowStepCard({
   onDuplicateStep(): void
   onMoveStep(delta: -1 | 1): void
   onSelectStep(index: number): void
-  onSelectTargetSlot(slotId: string): void
   onStartTargetAssignment(slotId?: string): void
   onStepActionChange(family: BuilderStepActionFamily): void
   onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onStopTargetAssignment(): void
   onTestStep(): void
   row: SidepanelStepRowView
   targetAssignment: SidepanelTargetAssignmentView
@@ -989,11 +964,9 @@ function SortableWorkflowStepCard({
         onDuplicateStep={onDuplicateStep}
         onMoveStep={onMoveStep}
         onSelectStep={onSelectStep}
-        onSelectTargetSlot={onSelectTargetSlot}
         onStartTargetAssignment={onStartTargetAssignment}
         onStepActionChange={onStepActionChange}
         onStepFieldChange={onStepFieldChange}
-        onStopTargetAssignment={onStopTargetAssignment}
         onTestStep={onTestStep}
         row={row}
         targetAssignment={targetAssignment}
@@ -1014,11 +987,9 @@ function WorkflowStepCard({
   onDuplicateStep,
   onMoveStep,
   onSelectStep,
-  onSelectTargetSlot,
   onStartTargetAssignment,
   onStepActionChange,
   onStepFieldChange,
-  onStopTargetAssignment,
   onTestStep,
   row,
   targetAssignment,
@@ -1034,11 +1005,9 @@ function WorkflowStepCard({
   onDuplicateStep(): void
   onMoveStep(delta: -1 | 1): void
   onSelectStep(index: number): void
-  onSelectTargetSlot(slotId: string): void
   onStartTargetAssignment(slotId?: string): void
   onStepActionChange(family: BuilderStepActionFamily): void
   onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onStopTargetAssignment(): void
   onTestStep(): void
   row: SidepanelStepRowView
   targetAssignment: SidepanelTargetAssignmentView
@@ -1130,9 +1099,7 @@ function WorkflowStepCard({
           {selected.fields.controls.targetSlots ? (
             <TargetAssignment
               onCandidateSelect={onCandidateSelect}
-              onSelectTargetSlot={onSelectTargetSlot}
               onStart={onStartTargetAssignment}
-              onStop={onStopTargetAssignment}
               view={targetAssignment}
             />
           ) : null}
@@ -1405,15 +1372,11 @@ function StepInspector({
 
 function TargetAssignment({
   onCandidateSelect,
-  onSelectTargetSlot,
   onStart,
-  onStop,
   view,
 }: Readonly<{
   onCandidateSelect(candidate: LocatorPreviewCandidateView): void
-  onSelectTargetSlot(slotId: string): void
   onStart(slotId?: string): void
-  onStop(): void
   view: SidepanelTargetAssignmentView
 }>): ReactElement {
   const showLocatorPanel =
@@ -1432,7 +1395,6 @@ function TargetAssignment({
           <span className="summary">{view.picker.statusSummary}</span>
         </div>
         <TargetSlotList
-          onSelectTargetSlot={onSelectTargetSlot}
           onStart={onStart}
           rows={view.slots}
           startButton={view.buttons.start}
@@ -1447,14 +1409,6 @@ function TargetAssignment({
             <dd>{view.picker.issueSummary}</dd>
           </div>
         </dl>
-        <div className="toolbar">
-          <ViewButton icon="target" onClick={() => onStart()} variant="secondary" view={view.buttons.start}>
-            Pick target
-          </ViewButton>
-          <ViewButton icon="square" onClick={onStop} variant="danger" view={view.buttons.stop}>
-            Stop
-          </ViewButton>
-        </div>
         {showLocatorPanel ? (
           <div className="locator-assignment-panel">
             <div className="target-assignment-heading">
@@ -1479,12 +1433,10 @@ function TargetAssignment({
 }
 
 function TargetSlotList({
-  onSelectTargetSlot,
   onStart,
   rows,
   startButton,
 }: Readonly<{
-  onSelectTargetSlot(slotId: string): void
   onStart(slotId?: string): void
   rows: readonly SidepanelTargetSlotRowView[]
   startButton: SidepanelButtonView
@@ -1497,24 +1449,16 @@ function TargetSlotList({
             className="target-slot-select"
             data-selected={row.selected ? 'true' : 'false'}
             data-validation={row.validationStatus}
-            onClick={() => onSelectTargetSlot(row.id)}
+            disabled={startButton.disabled}
+            onClick={() => onStart(row.id)}
             type="button"
           >
             <span className="target-slot-title">{row.label}</span>
             <span className="target-slot-detail">{row.summary}</span>
             <span className="target-slot-status">
-              {row.validationStatus === 'valid' ? 'Ready' : 'Needs attention'}
+              {startButton.pending ? 'Picking' : targetSlotCommandLabel(row.summary)}
             </span>
           </button>
-          <ViewButton
-            className="target-slot-command"
-            icon="target"
-            onClick={() => onStart(row.id)}
-            variant="secondary"
-            view={startButton}
-          >
-            {targetSlotCommandLabel(row.summary)}
-          </ViewButton>
         </li>
       ))}
     </ul>

@@ -524,6 +524,10 @@ Shows:
 
 Step feedback appears here before it appears in diagnostics.
 
+Selected state should use border, outline, or shadow. Avoid filling the whole
+selected step with accent color because the expanded card already contains
+multiple controls and field states.
+
 ### Inline Selected Step Editor
 
 Expanded editing area inside the selected workflow step card.
@@ -549,7 +553,9 @@ Rules:
 ```txt
 - Only appears for actions that need targets.
 - Uses action-specific slot names such as target, from, to, anchor, focus.
-- Starts element picking from the selected slot.
+- Starts element picking directly from the target slot row.
+- Do not duplicate separate Set target, Pick target, and Stop controls in the same local group.
+- Selecting a target in the inspector ends the active picking interaction.
 - Shows locator candidates only when selection is ambiguous, failed, or being inspected.
 ```
 

@@ -33,6 +33,20 @@ a card grid.
 Step reorder uses drag and drop from a dedicated drag handle on each persisted
 step card. Duplicate and delete remain selected-step context actions.
 
+The workflow list is rendered directly in the builder section. It does not add
+a nested workflow card with a repeated title and description.
+
+Selected steps are highlighted with border, outline, or shadow rather than a
+full accent background.
+
+Target slot rows own target picking. Clicking a slot selects that slot and
+starts picking; the side panel does not show separate Set target, Pick target,
+and Stop controls for the same action. A target click in the content inspector
+ends the active picking interaction.
+
+The side panel uses a light white/mint product tone aligned with the landing
+page while leaving shared extension tokens available for other entrypoints.
+
 ## Consequences
 
 The scenario schema, compiler, storage format, and browser runtime contract do
@@ -44,6 +58,9 @@ and test commands should not treat pending UI state as document content.
 The extension gains a focused drag-and-drop dependency for sortable workflow
 cards. The existing builder session `reorderStep` operation remains the single
 document mutation path.
+
+The target picker stop API remains available for Escape, page navigation,
+programmatic cancellation, and tests, but it is not a primary side panel button.
 
 ## Alternatives Considered
 

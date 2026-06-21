@@ -1,5 +1,26 @@
 @import "../../ui/tokens.css";
 
+:root {
+  color-scheme: light;
+  --bg: #f6fffb;
+  --surface: #ffffff;
+  --surface-soft: #eafff8;
+  --surface-strong: #e7f2ee;
+  --text: #101418;
+  --muted: #566875;
+  --border: rgb(16 20 24 / 12%);
+  --focus: #087f70;
+  --accent: #087f70;
+  --accent-strong: #065f55;
+  --accent-soft: #eafff8;
+  --accent-contrast: #ffffff;
+  --success: #087f70;
+  --warning: #8f5f00;
+  --danger: #bd322b;
+  --disabled: #8ba097;
+  --selection: #dff7f0;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -88,7 +109,6 @@ section {
 .scenario-shell-top,
 .section-heading,
 .toolbar,
-.workbench-subheading,
 .target-assignment-heading,
 .debug-drawer-heading {
   display: flex;
@@ -145,39 +165,8 @@ section {
 }
 
 #builder-workbench {
+  gap: 10px;
   padding-bottom: 14px;
-}
-
-.builder-workbench-layout {
-  display: grid;
-  min-width: 0;
-  margin: 0 16px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.workbench-panel {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px;
-}
-
-.flow-panel {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 26%),
-    var(--surface);
-}
-
-.inline-workflow-layout {
-  background: var(--surface);
-}
-
-.workbench-subheading {
-  min-height: 34px;
 }
 
 .summary {
@@ -210,7 +199,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  background: #fbfcfd;
+  background: var(--surface);
   font:
     12px / 1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
@@ -224,7 +213,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  background: #fbfcfd;
+  background: var(--surface);
   font: inherit;
   font-size: 13px;
 }
@@ -422,6 +411,10 @@ button[data-icon-only="true"] {
   list-style: none;
 }
 
+.workflow-step-list {
+  margin: 0 16px;
+}
+
 .step-list:empty::before {
   color: var(--muted);
   content: "Add a step to start";
@@ -456,12 +449,15 @@ button[data-icon-only="true"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   text-align: left;
-  background: #fbfcfd;
+  background: var(--surface);
 }
 
 .step-card[data-selected="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+  background: var(--surface);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent),
+    0 12px 28px rgb(33 48 38 / 9%);
 }
 
 .step-card[data-validation="invalid"] {
@@ -470,7 +466,14 @@ button[data-icon-only="true"] {
 
 .step-card[data-validation="pending"] {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 72%, #fbfcfd);
+  background: var(--surface);
+}
+
+.step-card[data-validation="invalid"][data-selected="true"] {
+  border-color: color-mix(in srgb, var(--danger) 68%, var(--border));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--danger) 14%, transparent),
+    0 12px 28px rgb(33 48 38 / 9%);
 }
 
 .step-card-header {
@@ -589,6 +592,7 @@ button[data-icon-only="true"] {
 .workflow-add-row {
   display: flex;
   justify-content: center;
+  margin: 0 16px;
   padding-top: 2px;
 }
 
@@ -609,7 +613,7 @@ button[data-icon-only="true"] {
   justify-content: stretch;
   gap: 9px;
   padding: 7px 10px;
-  background: #fbfcfd;
+  background: var(--surface);
   text-align: left;
 }
 
@@ -734,7 +738,6 @@ button[data-icon-only="true"] {
 
 .target-slot-list li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
   gap: 6px;
   align-items: stretch;
 }
@@ -748,17 +751,13 @@ button[data-icon-only="true"] {
   min-height: 38px;
   padding: 8px;
   text-align: left;
-  background: #fbfcfd;
-}
-
-.target-slot-command {
-  min-width: 104px;
-  padding-inline: 8px;
+  background: var(--surface);
 }
 
 .target-slot-select[data-selected="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+  background: var(--surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .target-slot-select[data-validation="invalid"] {
@@ -837,7 +836,7 @@ button[data-icon-only="true"] {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #fbfcfd;
+  background: var(--surface);
 }
 
 .locator-preview-list li {
@@ -1099,17 +1098,10 @@ dd {
   overflow-wrap: anywhere;
 }
 
-@media (min-width: 760px) {
-  .builder-workbench-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 520px) {
   .scenario-metadata-grid,
   .field-grid,
-  .scroll-position-grid,
-  .target-slot-list li {
+  .scroll-position-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1128,27 +1120,5 @@ dd {
 
   .scenario-shell-top {
     display: grid;
-  }
-
-}
-
-@media (prefers-color-scheme: dark) {
-  input,
-  select,
-  textarea,
-  .step-card,
-  .action-select-trigger,
-  .action-select-content,
-  .target-slot-select,
-  .locator-preview-list li,
-  .debug-locator-candidates li {
-    color: var(--text);
-    background: #171d24;
-  }
-
-  button[data-variant="primary"],
-  .primary,
-  button[data-pending="true"] {
-    color: #06211f;
   }
 }

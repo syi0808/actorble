@@ -124,7 +124,6 @@ export type SidepanelTargetAssignmentView = Readonly<{
   locatorPreview: SidepanelLocatorPreviewView
   buttons: Readonly<{
     start: SidepanelButtonView
-    stop: SidepanelButtonView
   }>
 }>
 
@@ -265,12 +264,8 @@ function targetAssignmentView(
     buttons: {
       start: {
         ...pickerView.buttons.start,
-        label: 'Set selected target',
+        label: 'Pick target',
         disabled: pickerView.buttons.start.disabled || unavailable || editorPending,
-      },
-      stop: {
-        ...pickerView.buttons.stop,
-        disabled: pickerView.buttons.stop.disabled || editorPending,
       },
     },
   }
