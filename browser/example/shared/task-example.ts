@@ -26,6 +26,16 @@ export type TaskExampleOptions = Readonly<{
   stageLabel: string
   stageHtml: string
   successMessage: string
+  actionLabels?: Readonly<{
+    run?: string
+    typeFirst?: string
+    clickPrimary?: string
+    reset?: string
+  }>
+  actionSuccessMessages?: Readonly<{
+    typeFirst?: string
+    clickPrimary?: string
+  }>
   bindStage(context: TaskExampleContext): void
   run(context: TaskExampleContext): Promise<void>
   typeFirstField(context: TaskExampleContext): Promise<void>
@@ -52,6 +62,16 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   let actorble: DemoActorble = createDemoActorble(feedbackMode)
   const domEvents: string[] = []
   const app = byId<HTMLDivElement>('app')
+  const actionLabels = {
+    run: options.actionLabels?.run ?? 'Run scenario',
+    typeFirst: options.actionLabels?.typeFirst ?? 'Type first field',
+    clickPrimary: options.actionLabels?.clickPrimary ?? 'Click primary',
+    reset: options.actionLabels?.reset ?? 'Reset',
+  }
+  const actionSuccessMessages = {
+    typeFirst: options.actionSuccessMessages?.typeFirst ?? 'First field typed',
+    clickPrimary: options.actionSuccessMessages?.clickPrimary ?? 'Primary click complete',
+  }
 
   app.innerHTML = `
     <main class="app-shell task-shell">
@@ -93,10 +113,10 @@ export function mountTaskExample(options: TaskExampleOptions): void {
               </div>
               <div class="result-block">
                 <div class="action-grid">
-                  <button id="run-current" data-testid="run-current" type="button">Run scenario</button>
-                  <button id="run-type-first" data-testid="run-type-first" type="button">Type first field</button>
-                  <button id="run-click-primary" data-testid="run-click-primary" type="button">Click primary</button>
-                  <button id="reset-stage" type="button">Reset</button>
+                  <button id="run-current" data-testid="run-current" type="button">${escapeHtml(actionLabels.run)}</button>
+                  <button id="run-type-first" data-testid="run-type-first" type="button">${escapeHtml(actionLabels.typeFirst)}</button>
+                  <button id="run-click-primary" data-testid="run-click-primary" type="button">${escapeHtml(actionLabels.clickPrimary)}</button>
+                  <button id="reset-stage" type="button">${escapeHtml(actionLabels.reset)}</button>
                 </div>
               </div>
             `,
@@ -205,7 +225,7 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   runTypeFirstButton.addEventListener('click', () => {
     void runWithStatus(
       runStatus,
-      'First field typed',
+      actionSuccessMessages.typeFirst,
       runTypeFirstButton,
       async () => {
         utilityPanel.collapse()
@@ -219,7 +239,7 @@ export function mountTaskExample(options: TaskExampleOptions): void {
   runClickPrimaryButton.addEventListener('click', () => {
     void runWithStatus(
       runStatus,
-      'Primary click complete',
+      actionSuccessMessages.clickPrimary,
       runClickPrimaryButton,
       async () => {
         utilityPanel.collapse()
@@ -299,7 +319,7 @@ export function mountTaskExample(options: TaskExampleOptions): void {
         : ''
 
     domEvents.unshift(`${label}.${event.type}${inputData}`)
-    domEvents.splice(80)
+    domEvents.splice(160)
     renderEvents()
   }
 

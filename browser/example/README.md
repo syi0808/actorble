@@ -15,6 +15,7 @@ Each example imports from `../src` so it reflects the local source implementatio
 - `appointment-scheduler/`: patient search, appointment drafting, calendar drag scheduling, and confirmation.
 - `web-search/`: search query entry, result loading, and result preview opening.
 - `selection-pointer-sequence/`: text selection, editable selection, click/drag disambiguation, and cleanup-safe pointer sequence replay.
+- `research-clipping/`: text selection applied to quote capture, clipping notes, and publish confirmation.
 
 The examples intentionally use only implemented APIs: target resolution through test ids, pointer movement, click, clickCurrent, doubleClick, type, typeInto, fill, press, drag, selectText, pointerSequence, custom wait, capabilities, and fidelity.
 

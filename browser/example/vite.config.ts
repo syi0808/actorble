@@ -24,6 +24,9 @@ export default defineConfig({
         selectionPointerSequence: fileURLToPath(
           new URL('selection-pointer-sequence/index.html', import.meta.url),
         ),
+        researchClipping: fileURLToPath(
+          new URL('research-clipping/index.html', import.meta.url),
+        ),
       },
     },
   },

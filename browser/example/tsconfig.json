@@ -15,6 +15,7 @@
     "form-filling/src/**/*.ts",
     "appointment-scheduler/src/**/*.ts",
     "web-search/src/**/*.ts",
-    "selection-pointer-sequence/src/**/*.ts"
+    "selection-pointer-sequence/src/**/*.ts",
+    "research-clipping/src/**/*.ts"
   ]
 }

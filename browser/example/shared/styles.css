@@ -336,6 +336,7 @@ label {
 .form-workspace,
 .search-workspace,
 .scheduler-workspace,
+.research-workspace,
 .selection-workspace {
   display: grid;
   gap: 14px;
@@ -357,6 +358,10 @@ label {
 
 .selection-workspace {
   grid-template-columns: minmax(260px, 0.95fr) minmax(260px, 0.85fr) minmax(240px, 0.55fr);
+}
+
+.research-workspace {
+  grid-template-columns: minmax(300px, 1fr) minmax(260px, 0.55fr);
 }
 
 .surface-panel {
@@ -515,10 +520,19 @@ label {
 
 .outcome-strip[data-state="submitted"],
 .outcome-strip[data-state="open"],
+.outcome-strip[data-state="selected"],
+.outcome-strip[data-state="saved"],
+.outcome-strip[data-state="published"],
 .outcome-strip[data-state="complete"],
 #github-outcome[data-state="issue-open"] {
   border-left-color: #2f9d64;
   background: #f1fbf4;
+}
+
+.outcome-strip[data-state="error"] {
+  border-left-color: #c5524a;
+  background: #fff5f4;
+  color: #9c3028;
 }
 
 .selection-copy-panel p {
@@ -678,6 +692,45 @@ label {
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
   gap: 8px;
+}
+
+.research-source-panel,
+.clipping-panel {
+  min-height: 360px;
+}
+
+.research-source-copy {
+  margin: 0;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fbfcfe;
+  color: #263242;
+  font-size: 1.04rem;
+  line-height: 1.68;
+  user-select: text;
+}
+
+.source-metadata,
+.clipping-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+}
+
+.source-metadata div,
+.clipping-summary div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.clipping-panel button {
+  width: 100%;
 }
 
 .scenario-form {
@@ -1191,6 +1244,7 @@ dd {
   .form-workspace,
   .search-workspace,
   .scheduler-workspace,
+  .research-workspace,
   .selection-workspace,
   .schedule-heading {
     grid-template-columns: 1fr;
@@ -1230,6 +1284,8 @@ dd {
   .issue-row,
   .submission-summary div,
   .capability-rows div,
+  .source-metadata div,
+  .clipping-summary div,
   .selection-summary div {
     grid-template-columns: 1fr;
   }

@@ -88,6 +88,12 @@ try {
   await openUtilityPanel(page, 'task-utility-panel')
   await runCurrentScenario(page, 'Selection scenario complete')
   await expectSelectionPointerSequenceComplete(page)
+
+  await page.goto(new URL('research-clipping/', baseUrl).toString())
+  await expectPageTitle(page, 'Research clipping')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await runCurrentScenario(page, 'Research clipping complete')
+  await expectResearchClippingComplete(page)
 } catch (error) {
   throw await withPageDiagnostics(error, page)
 } finally {
@@ -101,6 +107,7 @@ async function expectIndexLinks(page) {
   await expectLink(page, '#open-web-search', '/web-search/')
   await expectLink(page, '#open-appointment-scheduler', '/appointment-scheduler/')
   await expectLink(page, '#open-selection-pointer-sequence', '/selection-pointer-sequence/')
+  await expectLink(page, '#open-research-clipping', '/research-clipping/')
 }
 
 async function expectLink(page, selector, hrefSuffix) {
@@ -351,6 +358,31 @@ async function expectSelectionPointerSequenceComplete(page) {
     'action.click',
     'action.drag',
     'action.pointerSequence',
+  ])
+}
+
+async function expectResearchClippingComplete(page) {
+  const quote = 'visible verification before a captured quote is trusted'
+  const note = 'Use in weekly automation brief.'
+
+  await expectState(page, '#clipping-status', 'published')
+  await expectText(page, '#quote-preview-output', quote)
+  await expectText(page, '#saved-quote-output', quote)
+  await expectText(page, '#published-note-output', note)
+  await expectInputValue(page, '#quote-note', note)
+  await expectEventLogIncludes(page, [
+    'researchSource.pointerdown',
+    'researchSource.mousedown',
+    'researchSource.mouseup',
+    'saveQuote.click',
+    'quoteNote.input',
+    'publishClipping.click',
+  ])
+  await expectTraceIncludes(page, [
+    'action.selectText',
+    'action.click',
+    'action.typeInto',
+    'action.waitFor',
   ])
 }
 
