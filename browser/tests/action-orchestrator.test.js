@@ -1115,7 +1115,7 @@ describe('BrowserActionOrchestrator', () => {
     }
     selection.measureEndpoint.mockImplementation((endpoint) => ({
       x: endpoint.offset,
-      y: endpoint.offset >= 10 ? 20 : 0,
+      y: 0,
     }))
     const { orchestrator } = createHarness({
       target,
@@ -1152,20 +1152,16 @@ describe('BrowserActionOrchestrator', () => {
         }),
         expect.objectContaining({
           cursor: 'text',
-          point: { x: 10, y: 20 },
+          point: { x: 10, y: 0 },
           pressed: false,
         }),
       ]),
     )
-    expect(visualEvents).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          cursor: 'text',
-          point: { x: 5, y: 10 },
-          pressed: true,
-        }),
-      ]),
-    )
+    expect(
+      visualEvents
+        .filter((event) => event.cursor === 'text' && event.pressed)
+        .every((event) => event.point.y === 0),
+    ).toBe(true)
   })
 
   it('selectText keeps following pointer actions continuous from the selection focus', async () => {
@@ -1259,6 +1255,71 @@ describe('BrowserActionOrchestrator', () => {
       anchor: { target: textNode, offset: 0 },
       focus: { target: textNode, offset: 10 },
     })
+  })
+
+  it('selectText moves the visual cursor through wrapped line transitions', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'abcdefghij'
+    document.body.append(paragraph)
+    const target = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const selection = createSelectionDouble()
+    const timeline = createFrameTimeline(25)
+    const visualEvents = []
+    const visual = {
+      showCursor: vi.fn((request) => {
+        visualEvents.push(request)
+      }),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    selection.measureEndpoint.mockImplementation((endpoint) => {
+      if (endpoint.offset <= 5) {
+        return { x: endpoint.offset * 20, y: 0 }
+      }
+
+      return { x: (endpoint.offset - 6) * 10, y: 20 }
+    })
+    const { orchestrator } = createHarness({
+      target,
+      selection,
+      timeline,
+      visual,
+      visualFeedback: 'debug',
+    })
+
+    await expect(
+      orchestrator.selectText(
+        {
+          anchor: { target, offset: 0 },
+          focus: { target, offset: 10 },
+        },
+        { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    const pressedTextPoints = visualEvents
+      .filter((event) => event.cursor === 'text' && event.pressed)
+      .map((event) => event.point)
+
+    expect(pressedTextPoints.some((point) => point.y === 0)).toBe(true)
+    expect(pressedTextPoints.some((point) => point.y === 20)).toBe(true)
+    expect(
+      pressedTextPoints.some((point) => point.x > 0 && point.x < 100 && point.y > 0 && point.y < 20),
+    ).toBe(true)
   })
 
   it('selectText progressively expands visual gestures across text nodes', async () => {

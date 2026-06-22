@@ -244,6 +244,11 @@ type ResolvedTextSelectionRange = Readonly<{
   range: PlatformTextSelectionRange
 }>
 
+type SelectionVisualTrajectoryPoint = Readonly<{
+  point: Point
+  selectionProgress: number
+}>
+
 const emptyPointerHit: PointerHitSnapshot = {
   target: null,
   hoverChain: [],
@@ -1503,6 +1508,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       range.range.focus,
       range.secondaryTarget ?? range.primaryTarget,
     )
+    const visualTrajectory = textSelectionVisualTrajectoryForRange(
+      range.range,
+      (endpoint) => this.#selection.measureEndpoint?.(endpoint) ?? null,
+      anchorPoint,
+      focusPoint,
+    )
     const signals = new BrowserPointerSignalBus()
     const pointer = new BrowserPointerEngine({
       signals,
@@ -1520,13 +1531,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       range: PlatformTextSelectionRange
       target: TargetHandle
     }> => {
-      const selectionRange = textSelectionRangeAtProgress(range.range, progress)
+      const trajectoryState = stateAtSelectionVisualTrajectoryProgress(visualTrajectory, progress)
+      const selectionProgress = trajectoryState?.selectionProgress ?? progress
+      const selectionRange = textSelectionRangeAtProgress(range.range, selectionProgress)
       const endpoint = progress <= 0 ? selectionRange.anchor : selectionRange.focus
       const measuredPoint = this.#selection.measureEndpoint?.(endpoint)
       const target = targetForSelectionEndpoint(endpoint, range)
 
       return {
-        point: clonePoint(measuredPoint ?? fallbackPoint),
+        point: clonePoint(trajectoryState?.point ?? measuredPoint ?? fallbackPoint),
         range: selectionRange,
         target,
       }
@@ -3422,6 +3435,247 @@ function sameTextSelectionEndpoint(
   second: PlatformTextSelectionEndpoint,
 ): boolean {
   return first.target === second.target && first.offset === second.offset
+}
+
+function textSelectionVisualTrajectoryForRange(
+  range: PlatformTextSelectionRange,
+  measureEndpoint: (endpoint: PlatformTextSelectionEndpoint) => Point | null,
+  anchorPoint: Point,
+  focusPoint: Point,
+): readonly SelectionVisualTrajectoryPoint[] {
+  const sameTargetTrajectory = sameTargetSelectionVisualTrajectory(
+    range,
+    measureEndpoint,
+    anchorPoint,
+    focusPoint,
+  )
+
+  if (sameTargetTrajectory.length > 1) {
+    return sameTargetTrajectory
+  }
+
+  const domTrajectory = domTextSelectionVisualTrajectory(
+    range,
+    measureEndpoint,
+    anchorPoint,
+    focusPoint,
+  )
+
+  return domTrajectory.length > 1
+    ? domTrajectory
+    : [
+        { point: clonePoint(anchorPoint), selectionProgress: 0 },
+        { point: clonePoint(focusPoint), selectionProgress: 1 },
+      ]
+}
+
+function sameTargetSelectionVisualTrajectory(
+  range: PlatformTextSelectionRange,
+  measureEndpoint: (endpoint: PlatformTextSelectionEndpoint) => Point | null,
+  anchorPoint: Point,
+  focusPoint: Point,
+): readonly SelectionVisualTrajectoryPoint[] {
+  if (range.anchor.target !== range.focus.target) {
+    return []
+  }
+
+  const offsetDistance = range.focus.offset - range.anchor.offset
+  const offsetSteps = Math.abs(offsetDistance)
+
+  if (offsetSteps === 0) {
+    return [{ point: clonePoint(anchorPoint), selectionProgress: 0 }]
+  }
+
+  const direction = Math.sign(offsetDistance)
+  const trajectory: SelectionVisualTrajectoryPoint[] = []
+
+  for (let step = 0; step <= offsetSteps; step += 1) {
+    const offset = range.anchor.offset + direction * step
+    const measured =
+      step === 0
+        ? anchorPoint
+        : step === offsetSteps
+          ? focusPoint
+          : measureEndpoint({ target: range.anchor.target, offset })
+
+    appendTrajectoryPoint(trajectory, measured, step / offsetSteps)
+  }
+
+  return trajectory
+}
+
+function domTextSelectionVisualTrajectory(
+  range: PlatformTextSelectionRange,
+  measureEndpoint: (endpoint: PlatformTextSelectionEndpoint) => Point | null,
+  anchorPoint: Point,
+  focusPoint: Point,
+): readonly SelectionVisualTrajectoryPoint[] {
+  if (!(range.anchor.target instanceof Text) || !(range.focus.target instanceof Text)) {
+    return []
+  }
+
+  const ownerDocument = range.anchor.target.ownerDocument
+
+  if (!ownerDocument || range.focus.target.ownerDocument !== ownerDocument) {
+    return []
+  }
+
+  const domRange = ownerDocument.createRange()
+
+  try {
+    domRange.setStart(range.anchor.target, range.anchor.offset)
+    domRange.setEnd(range.focus.target, range.focus.offset)
+
+    if (domRange.collapsed && !sameTextSelectionEndpoint(range.anchor, range.focus)) {
+      return []
+    }
+
+    const textLength = domRange.toString().length
+
+    if (textLength <= 0) {
+      return [{ point: clonePoint(anchorPoint), selectionProgress: 0 }]
+    }
+
+    const trajectory: SelectionVisualTrajectoryPoint[] = []
+
+    for (let distance = 0; distance <= textLength; distance += 1) {
+      const endpoint =
+        distance === 0
+          ? range.anchor
+          : distance === textLength
+            ? range.focus
+            : domTextSelectionEndpointAtDistance(
+                domRange,
+                range.anchor,
+                range.focus,
+                distance,
+                ownerDocument,
+              )
+      const measured =
+        distance === 0
+          ? anchorPoint
+          : distance === textLength
+            ? focusPoint
+            : endpoint
+              ? measureEndpoint(endpoint)
+              : null
+
+      appendTrajectoryPoint(trajectory, measured, distance / textLength)
+    }
+
+    return trajectory
+  } catch {
+    return []
+  } finally {
+    domRange.detach()
+  }
+}
+
+function appendTrajectoryPoint(
+  trajectory: SelectionVisualTrajectoryPoint[],
+  point: Point | null,
+  selectionProgress: number,
+): void {
+  if (!point) {
+    return
+  }
+
+  const cloned = clonePoint(point)
+  const previous = trajectory.at(-1)
+
+  if (!previous || !samePoint(previous.point, cloned)) {
+    trajectory.push({
+      point: cloned,
+      selectionProgress: clampProgress(selectionProgress),
+    })
+  }
+}
+
+function stateAtSelectionVisualTrajectoryProgress(
+  trajectory: readonly SelectionVisualTrajectoryPoint[],
+  progress: number,
+): SelectionVisualTrajectoryPoint | null {
+  if (trajectory.length === 0) {
+    return null
+  }
+
+  if (trajectory.length === 1) {
+    return {
+      point: clonePoint(trajectory[0].point),
+      selectionProgress: trajectory[0].selectionProgress,
+    }
+  }
+
+  const distances = trajectorySegmentDistances(trajectory)
+  const totalDistance = distances.reduce((sum, distance) => sum + distance, 0)
+
+  if (totalDistance === 0) {
+    return {
+      point: clonePoint(trajectory[0].point),
+      selectionProgress: trajectory[0].selectionProgress,
+    }
+  }
+
+  const targetDistance = clampProgress(progress) * totalDistance
+  let consumedDistance = 0
+
+  for (let index = 1; index < trajectory.length; index += 1) {
+    const segmentDistance = distances[index - 1]
+
+    if (segmentDistance === 0) {
+      continue
+    }
+
+    if (targetDistance <= consumedDistance + segmentDistance) {
+      return interpolateTrajectoryPoint(
+        trajectory[index - 1],
+        trajectory[index],
+        (targetDistance - consumedDistance) / segmentDistance,
+      )
+    }
+
+    consumedDistance += segmentDistance
+  }
+
+  const final = trajectory[trajectory.length - 1]
+
+  return {
+    point: clonePoint(final.point),
+    selectionProgress: final.selectionProgress,
+  }
+}
+
+function trajectorySegmentDistances(
+  trajectory: readonly SelectionVisualTrajectoryPoint[],
+): readonly number[] {
+  const distances: number[] = []
+
+  for (let index = 1; index < trajectory.length; index += 1) {
+    distances.push(distanceBetweenPoints(trajectory[index - 1].point, trajectory[index].point))
+  }
+
+  return distances
+}
+
+function distanceBetweenPoints(from: Point, to: Point): number {
+  return Math.hypot(to.x - from.x, to.y - from.y)
+}
+
+function interpolateTrajectoryPoint(
+  from: SelectionVisualTrajectoryPoint,
+  to: SelectionVisualTrajectoryPoint,
+  progress: number,
+): SelectionVisualTrajectoryPoint {
+  const clampedProgress = clampProgress(progress)
+
+  return {
+    point: {
+      x: from.point.x + (to.point.x - from.point.x) * clampedProgress,
+      y: from.point.y + (to.point.y - from.point.y) * clampedProgress,
+    },
+    selectionProgress:
+      from.selectionProgress + (to.selectionProgress - from.selectionProgress) * clampedProgress,
+  }
 }
 
 function targetForSelectionEndpoint(
