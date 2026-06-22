@@ -172,7 +172,9 @@ class Stuntman {
 
 ### Text selection and pointer control
 
-Decision history: `docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`.
+Decision history:
+`docs/adr/2026-06-19-text-selection-and-pointer-sequence.md`,
+`docs/adr/2026-06-22-select-text-visual-gesture.md`.
 
 `selectText` is a user-intent action, not a drag alias. It changes the current
 document, input, textarea, contenteditable, or editor selection range. The
@@ -192,7 +194,19 @@ type TextSelectionEndpoint = {
   offset?: number
   point?: Point
 }
+
+type SelectTextOptions = OperationOptions & PointerMovementOptions
 ```
+
+`selectText` remains a selection intent action. When `duration` or `motion` is
+provided, the browser runtime performs a cleanup-safe selection visual gesture:
+it dispatches the synthetic pointer/mouse down, move, and up events that a human
+drag selection would produce, shows a pressed text cursor moving from anchor to
+focus, and progressively applies the Selection API or input range so selected
+text grows during the gesture. It does not dispatch a `click` activation for a
+drag selection. Synthetic pointer events alone do not reliably create native
+browser selection, so the Action Orchestrator owns both event dispatch and range
+application inside the same transaction.
 
 `pointerDown`, `pointerMove`, and `pointerUp` are state-opening device
 primitives. They may exist internally and may be exposed later under an
@@ -1784,12 +1798,12 @@ flowchart TD
     B --> C[resolve selection target or endpoints]
     C --> D[validate target freshness]
     D --> E[ensure surface]
-    E --> F[compute endpoint geometry if pointer gesture is needed]
+    E --> F[compute endpoint geometry if visual gesture is requested]
     F --> G[choose selection strategy]
 
     G --> H{strategy}
     H -->|selection-api| I[Platform selection applies DOM/input range]
-    H -->|pointer-gesture| J[Gesture Engine performs selection gesture]
+    H -->|visual gesture| J[Dispatch pointer/mouse drag and progressively apply range]
     H -->|editor-adapter| K[Editor adapter applies selection]
 
     I --> L[read platform selection]

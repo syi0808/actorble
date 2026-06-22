@@ -67,9 +67,11 @@ compiler는 지원하지 않는 locator, option, platform extension을 silent no
 
 `selectText` is a portable draft intent for changing text selection. A step may
 select all selectable text in a target, or provide offset-based anchor/focus
-endpoints. Draft documents store locator intent and offsets only; selected text,
-selectionchange events, pointer movement, and builder UI state are transient and
-must not be encoded in the step.
+endpoints. `timeout`, `duration`, and `motion` options follow the browser
+runtime `selectText` contract: movement options request a visual selection
+gesture, while locator intent and offsets remain the portable selection data.
+Draft documents store selected text, selectionchange events, and builder UI
+state as transient data that must not be encoded in the step.
 
 `pointerDown`, `pointerMove`, and `pointerUp` are not draft step actions.
 `pointerSequence` is deferred until recorder fallback replay proves that a

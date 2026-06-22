@@ -555,12 +555,13 @@ type TextSelectionTarget =
       focus: TextSelectionEndpoint
     }
 
-type SelectTextOptions = OperationOptions
+type SelectTextOptions = OperationOptions & PointerMovementOptions
 ```
 
-The browser runtime exposes these contracts before selection behavior is wired.
-Independent `pointerDown` and `pointerUp` scenario steps are not part of the
-public scenario contract.
+When `duration` or `motion` is provided, `selectText` dispatches a synthetic
+pointer/mouse drag selection stream, moves the text cursor visual, and
+progressively applies the selected range. Independent `pointerDown` and
+`pointerUp` scenario steps are not part of the public scenario contract.
 
 ### Pointer sequence contracts
 
