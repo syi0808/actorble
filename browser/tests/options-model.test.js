@@ -89,6 +89,9 @@ describe('browser options model', () => {
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
+    expect(resolveActionOptions('selectText')).toEqual({
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+    })
     expect(resolveActionOptions('typeInto')).toEqual({
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
     })
@@ -233,6 +236,7 @@ describe('browser options model', () => {
       delay: 5,
     })
     expect(resolveActionOptions('selectText', { actorble, run })).toEqual({
+      duration: 0,
       timeout: 50,
     })
     expect(
@@ -242,6 +246,7 @@ describe('browser options model', () => {
         options: { timeout: 5, signal },
       }),
     ).toEqual({
+      duration: 0,
       timeout: 5,
       signal,
     })

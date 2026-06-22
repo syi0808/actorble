@@ -558,10 +558,12 @@ type TextSelectionTarget =
 type SelectTextOptions = OperationOptions & PointerMovementOptions
 ```
 
-When `duration` or `motion` is provided, `selectText` dispatches a synthetic
-pointer/mouse drag selection stream, moves the text cursor visual, and
-progressively applies the selected range. Independent `pointerDown` and
-`pointerUp` scenario steps are not part of the public scenario contract.
+With default motion enabled, `selectText` dispatches a synthetic pointer/mouse
+drag selection stream, moves the text cursor visual along the selected focus
+caret, and progressively applies the selected range. Use `duration` or `motion`
+to tune the gesture, or `duration: 0` / run-level `motion: false` for immediate
+selection. Independent `pointerDown` and `pointerUp` scenario steps are not part
+of the public scenario contract.
 
 ### Pointer sequence contracts
 

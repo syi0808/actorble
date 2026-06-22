@@ -467,6 +467,7 @@ describe('BrowserScenarioRunner', () => {
         'selectText',
         selectionTarget,
         {
+          motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
           timeout: 30,
           signal: expect.any(AbortSignal),
         },

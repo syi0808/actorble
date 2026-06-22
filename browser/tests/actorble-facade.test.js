@@ -201,7 +201,10 @@ describe('Actorble facade', () => {
       ...dragOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
-    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, selectTextOptions)
+    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, {
+      ...selectTextOptions,
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+    })
     expect(orchestrator.pointerSequence).toHaveBeenCalledWith(
       pointerSequence,
       pointerSequenceOptions,
@@ -245,7 +248,10 @@ describe('Actorble facade', () => {
     })
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { duration: 25 })
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { delay: 5 })
-    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, { timeout: 30 })
+    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, {
+      motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
+      timeout: 30,
+    })
     expect(orchestrator.pointerSequence).toHaveBeenCalledWith(pointerSequence, { timeout: 40 })
   })
 
@@ -296,12 +302,14 @@ describe('Actorble facade', () => {
 
     await expect(actorble.click(locator)).resolves.toBeUndefined()
     await expect(actorble.moveTo(locator, { motion })).resolves.toBeUndefined()
+    await expect(actorble.selectText(locator)).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
       duration: 0,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { motion })
+    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, { duration: 0 })
   })
 
   it('creates a default module graph that can resolve and click through the facade', async () => {

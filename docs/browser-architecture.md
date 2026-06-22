@@ -198,12 +198,14 @@ type TextSelectionEndpoint = {
 type SelectTextOptions = OperationOptions & PointerMovementOptions
 ```
 
-`selectText` remains a selection intent action. When `duration` or `motion` is
-provided, the browser runtime performs a cleanup-safe selection visual gesture:
-it dispatches the synthetic pointer/mouse down, move, and up events that a human
+`selectText` remains a selection intent action. With the default motion policy,
+the browser runtime performs a cleanup-safe selection visual gesture: it
+dispatches the synthetic pointer/mouse down, move, and up events that a human
 drag selection would produce, shows a pressed text cursor moving from anchor to
-focus, and progressively applies the Selection API or input range so selected
-text grows during the gesture. It does not dispatch a `click` activation for a
+the current selection focus, and progressively applies the Selection API or
+input range so selected text grows during the gesture. `duration` and `motion`
+options tune this gesture, while `motion: false` or `duration: 0` keeps the
+fast immediate selection path. It does not dispatch a `click` activation for a
 drag selection. Synthetic pointer events alone do not reliably create native
 browser selection, so the Action Orchestrator owns both event dispatch and range
 application inside the same transaction.
@@ -1798,7 +1800,7 @@ flowchart TD
     B --> C[resolve selection target or endpoints]
     C --> D[validate target freshness]
     D --> E[ensure surface]
-    E --> F[compute endpoint geometry if visual gesture is requested]
+    E --> F[compute endpoint geometry when motion is enabled]
     F --> G[choose selection strategy]
 
     G --> H{strategy}

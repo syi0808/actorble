@@ -364,6 +364,7 @@ function centralizedActionDefaults(action: BrowserActionName): Record<string, un
   switch (action) {
     case 'moveTo':
     case 'drag':
+    case 'selectText':
       return { motion: BROWSER_OPTION_DEFAULTS.pointerMotion }
     case 'click':
     case 'clickCurrent':

@@ -1084,6 +1084,90 @@ describe('BrowserActionOrchestrator', () => {
     })
   })
 
+  it('selectText keeps the visual cursor on the progressively selected focus caret', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'abcdefghij'
+    document.body.append(paragraph)
+    const target = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const selection = createSelectionDouble()
+    const timeline = createFrameTimeline(50)
+    const visualEvents = []
+    const visual = {
+      showCursor: vi.fn((request) => {
+        visualEvents.push(request)
+      }),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    selection.measureEndpoint.mockImplementation((endpoint) => ({
+      x: endpoint.offset,
+      y: endpoint.offset >= 10 ? 20 : 0,
+    }))
+    const { orchestrator } = createHarness({
+      target,
+      selection,
+      timeline,
+      visual,
+      visualFeedback: 'debug',
+    })
+
+    await expect(
+      orchestrator.selectText(
+        {
+          anchor: { target, offset: 0 },
+          focus: { target, offset: 10 },
+        },
+        { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(selection.applySelection.mock.calls.map(([range]) => range.focus.offset)).toEqual(
+      expect.arrayContaining([5, 10]),
+    )
+    expect(visualEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cursor: 'text',
+          point: { x: 0, y: 0 },
+          pressed: true,
+        }),
+        expect.objectContaining({
+          cursor: 'text',
+          point: { x: 5, y: 0 },
+          pressed: true,
+        }),
+        expect.objectContaining({
+          cursor: 'text',
+          point: { x: 10, y: 20 },
+          pressed: false,
+        }),
+      ]),
+    )
+    expect(visualEvents).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cursor: 'text',
+          point: { x: 5, y: 10 },
+          pressed: true,
+        }),
+      ]),
+    )
+  })
+
   it('selectText progressively expands visual gestures across text nodes', async () => {
     const paragraph = document.createElement('p')
     const start = document.createElement('span')

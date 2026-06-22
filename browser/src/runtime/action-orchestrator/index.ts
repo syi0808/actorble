@@ -1509,17 +1509,27 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     let pressed = false
     let lastPoint = clonePoint(anchorPoint)
     let lastSnapshot: PlatformTextSelectionSnapshot | undefined
-    const dispatchTargetForSignal = (point: Point, progress: number): TargetHandle => {
-      if (progress >= 1 && range.secondaryTarget) {
-        return range.secondaryTarget
-      }
+    const selectionGestureStateAtProgress = (
+      progress: number,
+      fallbackPoint: Point,
+    ): Readonly<{
+      point: Point
+      range: PlatformTextSelectionRange
+      target: TargetHandle
+    }> => {
+      const selectionRange = textSelectionRangeAtProgress(range.range, progress)
+      const endpoint = progress <= 0 ? selectionRange.anchor : selectionRange.focus
+      const measuredPoint = this.#selection.measureEndpoint?.(endpoint)
+      const target = targetForSelectionEndpoint(endpoint, range)
 
-      return range.primaryTarget
+      return {
+        point: clonePoint(measuredPoint ?? fallbackPoint),
+        range: selectionRange,
+        target,
+      }
     }
-    const applyRangeAtProgress = (progress: number): void => {
-      lastSnapshot = this.#selection.applySelection(
-        textSelectionRangeAtProgress(range.range, progress),
-      )
+    const applyRange = (selectionRange: PlatformTextSelectionRange): void => {
+      lastSnapshot = this.#selection.applySelection(selectionRange)
     }
     const dispatchSelectionSignal = (signal: PointerSignal): void => {
       if (signal.type === 'pointer:cancelled') {
@@ -1534,46 +1544,49 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         return
       }
 
-      lastPoint = clonePoint(signal.point)
       this.#currentPointerPoint = clonePoint(signal.point)
       const progress = progressBetweenPoints(anchorPoint, focusPoint, signal.point)
-      const dispatchTarget = dispatchTargetForSignal(signal.point, progress)
+      const gestureState = selectionGestureStateAtProgress(progress, signal.point)
+      const eventPoint = gestureState.point
+      const dispatchTarget = gestureState.target
+
+      lastPoint = clonePoint(eventPoint)
 
       switch (signal.type) {
         case 'pointer:moved':
-          this.#showTextSelectionCursor(signal.point, dispatchTarget, pressed)
+          this.#showTextSelectionCursor(eventPoint, dispatchTarget, pressed)
           this.#events.dispatchPointerEvent({
             type: 'pointermove',
             target: dispatchTarget.element,
-            point: signal.point,
+            point: eventPoint,
             buttons: pressed ? ['primary'] : [],
           })
           if (pressed) {
-            applyRangeAtProgress(progress)
+            applyRange(gestureState.range)
           }
           break
         case 'pointer:down':
           pressed = true
           this.#cursorPressedButtons.add(signal.button)
-          this.#showTextSelectionCursor(signal.point, dispatchTarget, true)
+          this.#showTextSelectionCursor(eventPoint, dispatchTarget, true)
           this.#events.dispatchPointerEvent({
             type: 'pointerdown',
             target: dispatchTarget.element,
-            point: signal.point,
+            point: eventPoint,
             button: signal.button,
             buttons: [signal.button],
           })
-          applyRangeAtProgress(0)
+          applyRange(gestureState.range)
           break
         case 'pointer:up':
           pressed = false
           this.#cursorPressedButtons.delete(signal.button)
-          applyRangeAtProgress(1)
-          this.#showTextSelectionCursor(signal.point, dispatchTarget, false)
+          applyRange(gestureState.range)
+          this.#showTextSelectionCursor(eventPoint, dispatchTarget, false)
           this.#events.dispatchPointerEvent({
             type: 'pointerup',
             target: dispatchTarget.element,
-            point: signal.point,
+            point: eventPoint,
             button: signal.button,
             buttons: [],
           })
@@ -3404,6 +3417,24 @@ function sameTextSelectionEndpoint(
   second: PlatformTextSelectionEndpoint,
 ): boolean {
   return first.target === second.target && first.offset === second.offset
+}
+
+function targetForSelectionEndpoint(
+  endpoint: PlatformTextSelectionEndpoint,
+  range: ResolvedTextSelectionRange,
+): TargetHandle {
+  if (range.secondaryTarget && selectionEndpointBelongsToTarget(endpoint, range.secondaryTarget)) {
+    return range.secondaryTarget
+  }
+
+  return range.primaryTarget
+}
+
+function selectionEndpointBelongsToTarget(
+  endpoint: PlatformTextSelectionEndpoint,
+  target: TargetHandle,
+): boolean {
+  return endpoint.target === target.element || target.element.contains(endpoint.target)
 }
 
 function progressBetweenPoints(from: Point, to: Point, point: Point): number {

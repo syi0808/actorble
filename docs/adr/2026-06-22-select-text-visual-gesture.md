@@ -18,17 +18,22 @@ would not reliably create native selection in browsers.
 
 ## Decision
 
-`selectText` supports `duration` and `motion` options using the same public
-movement option model as pointer-oriented actions. When movement is requested,
-the Action Orchestrator owns an internal selection visual gesture:
+`selectText` uses the same default pointer motion policy as pointer-oriented
+actions and supports `duration` and `motion` options to tune that movement. When
+motion is enabled, the Action Orchestrator owns an internal selection visual
+gesture:
 
 - dispatch pointer/mouse down, move, and up events for the drag selection;
-- show the visual cursor as a pressed text cursor during the drag;
+- show the visual cursor as a pressed text cursor at the current selection
+  focus during the drag;
 - progressively update document, input, textarea, or contenteditable selection
   ranges during movement;
 - dispatch no click activation for drag selection;
 - close the action with the same timeout, cancellation, trace, and cleanup
   ownership as other public actions.
+
+Call-level `duration: 0` and runner-level `motion: false` keep the immediate
+Selection API or input range path without the visual gesture.
 
 The action remains an intent action. Public `pointerDown`, `pointerMove`, and
 `pointerUp` scenario steps are still not introduced.
