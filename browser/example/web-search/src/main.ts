@@ -95,12 +95,12 @@ async function runSearchScenario(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await typeSearchQuery(context)
-  await actorble.click(testId('search-submit'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',
   })
-  await actorble.click(testId('search-result-docs'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('search-result-docs'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-preview')?.dataset.state === 'open',
@@ -111,14 +111,14 @@ async function typeSearchQuery(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await actorble.moveTo(testId('search-query'), {
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 160 },
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
   })
   await actorble.typeInto(
     testId('search-query'),
     'browser automation event dispatch',
     {
-      ...clickFocusTyping(30, 5000),
+      ...clickFocusTyping(60, 5000),
     },
   )
 }
@@ -127,7 +127,7 @@ async function clickSearchPrimary(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   context.ensureInputValue('search-query', 'browser automation event dispatch')
-  await actorble.click(testId('search-submit'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',

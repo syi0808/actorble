@@ -218,15 +218,15 @@ async function selectEditorText(context: TaskExampleContext): Promise<void> {
 
 async function clickSelectionPrimary(context: TaskExampleContext): Promise<void> {
   await context.actorble().click(testId('selection-click-target'), {
-    pressDwell: 80,
+    pressDwell: 160,
     timeout: 2000,
   })
 }
 
 async function dragSelectionToken(context: TaskExampleContext): Promise<void> {
   await context.actorble().drag(testId('selection-drag-source'), testId('selection-drop-target'), {
-    duration: 320,
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
+    duration: 640,
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 640 },
     timeout: 3000,
   })
 }
@@ -236,10 +236,10 @@ async function runPointerSequence(context: TaskExampleContext): Promise<void> {
 
   await context.actorble().pointerSequence(
     [
-      { type: 'move', to: points.down, duration: 120 },
+      { type: 'move', to: points.down, duration: 240 },
       { type: 'down', button: 'primary' },
-      { type: 'pause', duration: 80 },
-      { type: 'move', to: points.up, duration: 180 },
+      { type: 'pause', duration: 160 },
+      { type: 'move', to: points.up, duration: 360 },
       { type: 'up', button: 'primary' },
     ],
     { timeout: 3000 },

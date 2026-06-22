@@ -43,8 +43,8 @@ export type TaskExampleOptions = Readonly<{
 }>
 
 const humanFocusClick = {
-  motion: { kind: 'ease', timing: 'ease-in-out', duration: 180 },
-  pressDwell: 80,
+  motion: { kind: 'ease', timing: 'ease-in-out', duration: 360 },
+  pressDwell: 160,
 } as const
 
 export function clickFocusTyping(delay: number, timeout: number): TypeOptions {
@@ -53,7 +53,7 @@ export function clickFocusTyping(delay: number, timeout: number): TypeOptions {
     timeout,
     focusStrategy: 'click',
     focusClick: humanFocusClick,
-    afterFocusDelay: 40,
+    afterFocusDelay: 80,
   }
 }
 

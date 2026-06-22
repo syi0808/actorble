@@ -129,20 +129,20 @@ async function runFormScenario(context: TaskExampleContext): Promise<void> {
 
   await typeFormFirstField(context)
   await actorble.typeInto(testId('request-email'), 'mina@example.com', {
-    ...clickFocusTyping(25, 5000),
+    ...clickFocusTyping(50, 5000),
   })
   await actorble.typeInto(testId('request-company'), 'Northstar Labs', {
-    ...clickFocusTyping(25, 5000),
+    ...clickFocusTyping(50, 5000),
   })
   await actorble.typeInto(
     testId('request-details'),
     'Please automate a browser QA pass for the new onboarding form.',
     {
-      ...clickFocusTyping(15, 7000),
+      ...clickFocusTyping(30, 7000),
     },
   )
-  await actorble.click(testId('request-copy'), { pressDwell: 80, timeout: 1500 })
-  await actorble.click(testId('request-submit'), { pressDwell: 100, timeout: 1500 })
+  await actorble.click(testId('request-copy'), { pressDwell: 160, timeout: 1500 })
+  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',
@@ -153,11 +153,11 @@ async function typeFormFirstField(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await actorble.moveTo(testId('request-name'), {
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 160 },
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
   })
   await actorble.typeInto(testId('request-name'), 'Mina Park', {
-    ...clickFocusTyping(35, 5000),
+    ...clickFocusTyping(70, 5000),
   })
 }
 
@@ -168,7 +168,7 @@ async function clickFormPrimary(context: TaskExampleContext): Promise<void> {
   context.ensureInputValue('request-email', 'mina@example.com')
   context.ensureInputValue('request-company', 'Northstar Labs')
   context.ensureInputValue('request-details', 'Please review this automated request.')
-  await actorble.click(testId('request-submit'), { pressDwell: 100, timeout: 1500 })
+  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',

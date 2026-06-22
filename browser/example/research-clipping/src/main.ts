@@ -139,8 +139,8 @@ async function selectResearchQuote(context: TaskExampleContext): Promise<void> {
     anchor: { target, offset: selectedQuoteOffset },
     focus: { target, offset: selectedQuoteOffset + selectedQuote.length },
   }, {
-    duration: 720,
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 720 },
+    duration: 1440,
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 1440 },
   })
   updateQuotePreview()
 }
@@ -150,7 +150,7 @@ async function saveResearchQuote(context: TaskExampleContext): Promise<void> {
     await selectResearchQuote(context)
   }
 
-  await context.actorble().click(testId('save-quote'), { pressDwell: 90, timeout: 1500 })
+  await context.actorble().click(testId('save-quote'), { pressDwell: 180, timeout: 1500 })
   await context.actorble().waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('clipping-status')?.dataset.state === 'saved',
@@ -159,13 +159,13 @@ async function saveResearchQuote(context: TaskExampleContext): Promise<void> {
 
 async function typeResearchNote(context: TaskExampleContext): Promise<void> {
   await context.actorble().typeInto(testId('quote-note'), noteText, {
-    ...clickFocusTyping(20, 5000),
+    ...clickFocusTyping(40, 5000),
   })
 }
 
 async function publishResearchClipping(context: TaskExampleContext): Promise<void> {
   await context.actorble().click(testId('publish-clipping'), {
-    pressDwell: 90,
+    pressDwell: 180,
     timeout: 1500,
   })
 }

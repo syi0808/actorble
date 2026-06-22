@@ -9,12 +9,12 @@ import {
 
 const defaultPatient = 'Jisoo Han'
 const defaultReason = 'Follow-up consultation'
-const humanStepPacing = 260
-const humanTypingDelay = 85
-const humanPressDelay = 140
-const humanPressDwell = 170
-const humanMoveDuration = 420
-const humanDragDuration = 520
+const humanStepPacing = 520
+const humanTypingDelay = 170
+const humanPressDelay = 280
+const humanPressDwell = 340
+const humanMoveDuration = 840
+const humanDragDuration = 1040
 const humanMoveMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanMoveDuration } as const
 const humanDragMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanDragDuration } as const
 let bindDynamicAppointmentEvents: ((target: HTMLElement) => void) | undefined
@@ -233,7 +233,7 @@ function schedulerScenario(): Scenario {
         options: clickFocusTyping(humanTypingDelay, 7000),
       },
       { action: 'press', input: 'Enter', options: { delay: humanPressDelay, timeout: 2500 } },
-      { action: 'delay', duration: 320, reason: 'let search result appear' },
+      { action: 'delay', duration: 640, reason: 'let search result appear' },
       {
         action: 'waitFor',
         input: {
@@ -252,7 +252,7 @@ function schedulerScenario(): Scenario {
           timeout: 3000,
         },
       },
-      { action: 'delay', duration: 360, reason: 'let appointment draft open' },
+      { action: 'delay', duration: 720, reason: 'let appointment draft open' },
       {
         action: 'waitFor',
         input: {
@@ -262,7 +262,7 @@ function schedulerScenario(): Scenario {
         options: { timeout: 2500 },
       },
       { action: 'fill', target: testId('appointment-reason'), input: defaultReason, options: { timeout: 2500 } },
-      { action: 'delay', duration: 620, reason: 'show appointment details before scheduling' },
+      { action: 'delay', duration: 1240, reason: 'show appointment details before scheduling' },
       {
         action: 'drag',
         from: testId('appointment-card'),
@@ -273,7 +273,7 @@ function schedulerScenario(): Scenario {
           timeout: 3500,
         },
       },
-      { action: 'delay', duration: 420, reason: 'show scheduled slot before confirmation' },
+      { action: 'delay', duration: 840, reason: 'show scheduled slot before confirmation' },
       {
         action: 'waitFor',
         input: {
@@ -288,7 +288,7 @@ function schedulerScenario(): Scenario {
         options: { duration: humanMoveDuration, motion: humanMoveMotion, timeout: 2500 },
       },
       { action: 'clickCurrent', options: { pressDwell: humanPressDwell, timeout: 2500 } },
-      { action: 'delay', duration: 320, reason: 'let confirmation state settle' },
+      { action: 'delay', duration: 640, reason: 'let confirmation state settle' },
       {
         action: 'waitFor',
         input: {

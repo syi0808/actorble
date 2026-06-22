@@ -136,18 +136,18 @@ async function runGitHubScenario(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await typeGitHubQuery(context)
-  await actorble.click(testId('github-search'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
   })
-  await actorble.click(testId('github-repo-result'), { pressDwell: 90, timeout: 1500 })
-  await actorble.click(testId('github-issues-tab'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('github-repo-result'), { pressDwell: 180, timeout: 1500 })
+  await actorble.click(testId('github-issues-tab'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-issues')?.dataset.state === 'open',
   })
-  await actorble.click(testId('github-issue-example'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('github-issue-example'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-outcome')?.dataset.state === 'issue-open',
@@ -158,11 +158,11 @@ async function typeGitHubQuery(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   await actorble.moveTo(testId('github-query'), {
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 160 },
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
   })
   await actorble.typeInto(testId('github-query'), 'actorble browser', {
-    ...clickFocusTyping(45, 5000),
+    ...clickFocusTyping(90, 5000),
   })
 }
 
@@ -170,7 +170,7 @@ async function clickGitHubPrimary(context: TaskExampleContext): Promise<void> {
   const actorble = context.actorble()
 
   context.ensureInputValue('github-query', 'actorble browser')
-  await actorble.click(testId('github-search'), { pressDwell: 90, timeout: 1500 })
+  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 })
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
