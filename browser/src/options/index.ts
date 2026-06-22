@@ -200,11 +200,11 @@ export function resolveActionOptions<TAction extends BrowserActionName>(
   resolved = mergeActionLayer(action, resolved, centralizedActionDefaults(action))
   resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, actorble.actionDefaults))
 
-  if (actorble.motion === false && isPointerAction(action)) {
+  if (actorble.motion === false && shouldDisableMotion(action, resolved)) {
     resolved = mergeActionLayer(action, resolved, { duration: 0 })
   }
 
-  if (run.motion === false && isPointerAction(action)) {
+  if (run.motion === false && shouldDisableMotion(action, resolved)) {
     resolved = mergeActionLayer(action, resolved, { duration: 0 })
   }
 
@@ -516,8 +516,20 @@ function isPointerAction(action: BrowserActionName): boolean {
     action === 'clickCurrent' ||
     action === 'doubleClick' ||
     action === 'drag' ||
+    action === 'selectText' ||
     action === 'pointerSequence'
   )
+}
+
+function shouldDisableMotion(
+  action: BrowserActionName,
+  resolved: Readonly<Record<string, unknown>>,
+): boolean {
+  if (!isPointerAction(action)) {
+    return false
+  }
+
+  return action !== 'selectText' || hasMovementOption(resolved)
 }
 
 const quietVisualFeedbackDefaults = {

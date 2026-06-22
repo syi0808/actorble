@@ -20,7 +20,11 @@ const pointSelectionTarget: TextSelectionTarget = {
   focus: { target: css('#copy'), point: { x: 96, y: 24 } },
 }
 
-const selectOptions: SelectTextOptions = { timeout: 250 }
+const selectOptions: SelectTextOptions = {
+  timeout: 250,
+  duration: 120,
+  motion: { kind: 'ease', timing: 'linear', duration: 120 },
+}
 const actorble = new Actorble()
 
 const pointerSequence: PointerSequence = [

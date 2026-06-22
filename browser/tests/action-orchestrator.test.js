@@ -261,6 +261,7 @@ function createSelectionDouble(snapshot = {}) {
       ...snapshot,
     })),
     clearSelection: vi.fn(),
+    measureEndpoint: vi.fn((endpoint) => ({ x: endpoint.offset, y: 0 })),
   }
 }
 
@@ -994,6 +995,155 @@ describe('BrowserActionOrchestrator', () => {
       anchor: { target: textNode, offset: 0 },
       focus: { target: textNode, offset: paragraph.textContent.length },
     })
+  })
+
+  it('selectText animates a human-like selection gesture when movement options are provided', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'Readable document text'
+    document.body.append(paragraph)
+    const textNode = paragraph.firstChild
+    const target = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const selection = createSelectionDouble({
+      surface: 'document-text',
+      strategy: 'selection-api',
+      selectedText: 'document',
+      anchorNode: textNode,
+      focusNode: textNode,
+      anchorOffset: 9,
+      focusOffset: 17,
+      collapsed: false,
+    })
+    const timeline = createFrameTimeline(50)
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const visualEvents = []
+    const visual = {
+      showCursor: vi.fn((request) => {
+        visualEvents.push(request)
+      }),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    const { events, orchestrator } = createHarness({
+      target,
+      selection,
+      timeline,
+      visual,
+      pointerVisual,
+      visualFeedback: 'debug',
+    })
+
+    await expect(
+      orchestrator.selectText(
+        {
+          anchor: { target, offset: 9 },
+          focus: { target, offset: 17 },
+        },
+        { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'pointermove',
+      'pointerdown',
+      'pointermove',
+      'pointermove',
+      'pointerup',
+    ])
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(selection.applySelection.mock.calls.map(([range]) => range.focus.offset)).toEqual(
+      expect.arrayContaining([13, 17]),
+    )
+    expect(selection.applySelection).toHaveBeenLastCalledWith({
+      anchor: { target: textNode, offset: 9 },
+      focus: { target: textNode, offset: 17 },
+    })
+    expect(visualEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cursor: 'text', pressed: true }),
+        expect.objectContaining({ cursor: 'text', pressed: false }),
+      ]),
+    )
+    expect(pointerVisual.setMode).toHaveBeenCalledWith({
+      kind: 'freePoint',
+      point: { x: 17, y: 0 },
+      pressed: false,
+    })
+  })
+
+  it('selectText progressively expands visual gestures across text nodes', async () => {
+    const paragraph = document.createElement('p')
+    const start = document.createElement('span')
+    const end = document.createElement('span')
+    start.id = 'copy-start'
+    end.id = 'copy-end'
+    start.textContent = 'Hello '
+    end.textContent = 'world text'
+    paragraph.append(start, end)
+    document.body.append(paragraph)
+    const startText = start.firstChild
+    const endText = end.firstChild
+    const startTarget = {
+      id: 'copy-start',
+      element: start,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy-start', description: 'span#copy-start' },
+    }
+    const endTarget = {
+      id: 'copy-end',
+      element: end,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy-end', description: 'span#copy-end' },
+    }
+    const selection = createSelectionDouble()
+    const timeline = createFrameTimeline(50)
+    selection.measureEndpoint.mockImplementation((endpoint) => {
+      if (endpoint.target === endText) {
+        return { x: 6 + endpoint.offset, y: 0 }
+      }
+
+      return { x: endpoint.offset, y: 0 }
+    })
+    const { orchestrator } = createHarness({
+      target: startTarget,
+      resolveTargets: [startTarget, endTarget],
+      selection,
+      timeline,
+    })
+
+    await expect(
+      orchestrator.selectText(
+        {
+          anchor: { target: css('#copy-start'), offset: 1 },
+          focus: { target: css('#copy-end'), offset: 4 },
+        },
+        { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(selection.applySelection.mock.calls.map(([range]) => range.focus)).toEqual(
+      expect.arrayContaining([
+        { target: startText, offset: 6 },
+        { target: endText, offset: 4 },
+      ]),
+    )
   })
 
   it('selectText propagates unsupported surface failures from the selection adapter', async () => {

@@ -176,7 +176,14 @@ type ActionPhase =
 
 type PointerPerformAction = Extract<
   ActionName,
-  'moveTo' | 'click' | 'doubleClick' | 'clickCurrent' | 'typeInto' | 'drag' | 'pointerSequence'
+  | 'moveTo'
+  | 'click'
+  | 'doubleClick'
+  | 'clickCurrent'
+  | 'typeInto'
+  | 'drag'
+  | 'selectText'
+  | 'pointerSequence'
 >
 
 type ClickDispatchState = {
@@ -1261,7 +1268,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       }
 
       phase = 'perform'
-      const snapshot = this.#selection.applySelection(range.range)
+      const snapshot = shouldAnimateTextSelection(options)
+        ? await this.#performTextSelectionGesture(range, options, span)
+        : this.#selection.applySelection(range.range)
 
       this.#store.dispatch({
         type: 'selection:synced',
@@ -1476,6 +1485,158 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       handle,
       endpoint: platformEndpointForHandleOffset(handle, endpoint.offset),
     }
+  }
+
+  async #performTextSelectionGesture(
+    range: ResolvedTextSelectionRange,
+    options: SelectTextOptions,
+    span: TraceSpanHandle,
+  ): Promise<PlatformTextSelectionSnapshot> {
+    const anchorPoint = await this.#selectionEndpointPoint(
+      range.range.anchor,
+      range.primaryTarget,
+    )
+    const focusPoint = await this.#selectionEndpointPoint(
+      range.range.focus,
+      range.secondaryTarget ?? range.primaryTarget,
+    )
+    const signals = new BrowserPointerSignalBus()
+    const pointer = new BrowserPointerEngine({
+      signals,
+      timeline: this.#timeline,
+      initialPosition: this.#currentPointerPoint ?? anchorPoint,
+    })
+    let pressed = false
+    let lastPoint = clonePoint(anchorPoint)
+    let lastSnapshot: PlatformTextSelectionSnapshot | undefined
+    const dispatchTargetForSignal = (point: Point, progress: number): TargetHandle => {
+      if (progress >= 1 && range.secondaryTarget) {
+        return range.secondaryTarget
+      }
+
+      return range.primaryTarget
+    }
+    const applyRangeAtProgress = (progress: number): void => {
+      lastSnapshot = this.#selection.applySelection(
+        textSelectionRangeAtProgress(range.range, progress),
+      )
+    }
+    const dispatchSelectionSignal = (signal: PointerSignal): void => {
+      if (signal.type === 'pointer:cancelled') {
+        this.#cursorPressedButtons.clear()
+        this.#showTextSelectionCursor(lastPoint, range.primaryTarget, false)
+        this.#events.dispatchPointerEvent({
+          type: 'pointercancel',
+          target: range.primaryTarget.element,
+          point: lastPoint,
+          buttons: [],
+        })
+        return
+      }
+
+      lastPoint = clonePoint(signal.point)
+      this.#currentPointerPoint = clonePoint(signal.point)
+      const progress = progressBetweenPoints(anchorPoint, focusPoint, signal.point)
+      const dispatchTarget = dispatchTargetForSignal(signal.point, progress)
+
+      switch (signal.type) {
+        case 'pointer:moved':
+          this.#showTextSelectionCursor(signal.point, dispatchTarget, pressed)
+          this.#events.dispatchPointerEvent({
+            type: 'pointermove',
+            target: dispatchTarget.element,
+            point: signal.point,
+            buttons: pressed ? ['primary'] : [],
+          })
+          if (pressed) {
+            applyRangeAtProgress(progress)
+          }
+          break
+        case 'pointer:down':
+          pressed = true
+          this.#cursorPressedButtons.add(signal.button)
+          this.#showTextSelectionCursor(signal.point, dispatchTarget, true)
+          this.#events.dispatchPointerEvent({
+            type: 'pointerdown',
+            target: dispatchTarget.element,
+            point: signal.point,
+            button: signal.button,
+            buttons: [signal.button],
+          })
+          applyRangeAtProgress(0)
+          break
+        case 'pointer:up':
+          pressed = false
+          this.#cursorPressedButtons.delete(signal.button)
+          applyRangeAtProgress(1)
+          this.#showTextSelectionCursor(signal.point, dispatchTarget, false)
+          this.#events.dispatchPointerEvent({
+            type: 'pointerup',
+            target: dispatchTarget.element,
+            point: signal.point,
+            button: signal.button,
+            buttons: [],
+          })
+          break
+      }
+    }
+    const subscription = signals.subscribe(dispatchSelectionSignal)
+
+    span.event('selection-gesture:started', {
+      action: 'selectText',
+      anchorPoint,
+      focusPoint,
+      animated: true,
+    })
+
+    try {
+      await this.#withPointerPerformTimeout(
+        'selectText',
+        pointerMovementOptions(options),
+        async (performOptions) => {
+          await pointer.moveTo(anchorPoint, { ...operationOptions(performOptions), duration: 0 })
+          await pointer.down('primary')
+          await pointer.moveTo(focusPoint, performOptions)
+          await pointer.up('primary')
+        },
+      )
+    } catch (error) {
+      if (pressed) {
+        await pointer.cancel()
+      }
+
+      throw error
+    } finally {
+      subscription.dispose()
+      this.#cursorPressedButtons.clear()
+    }
+
+    span.event('selection-gesture:completed', {
+      action: 'selectText',
+      anchorPoint,
+      focusPoint,
+    })
+
+    return lastSnapshot ?? this.#selection.applySelection(range.range)
+  }
+
+  async #selectionEndpointPoint(
+    endpoint: PlatformTextSelectionEndpoint,
+    target: TargetHandle,
+  ): Promise<Point> {
+    const measured = this.#selection.measureEndpoint?.(endpoint)
+
+    if (measured) {
+      return measured
+    }
+
+    const snapshot = await this.#geometry.snapshot(target)
+
+    if (snapshot.clickablePoint.ok) {
+      return clonePoint(snapshot.clickablePoint.point)
+    }
+
+    return clonePoint(snapshot.center)
   }
 
   #currentPointerContextOrThrow(span: TraceSpanHandle): CurrentPointerContext {
@@ -2411,6 +2572,33 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     })
   }
 
+  #showTextSelectionCursor(point: Point, target: TargetHandle, pressed: boolean): void {
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
+      return
+    }
+
+    const visualPoint = clonePoint(point)
+
+    this.#tryVisual('showCursor', () =>
+      this.#visual.showCursor({
+        point: visualPoint,
+        cursor: 'text',
+        pressed,
+      }),
+    )
+    this.#cursorVisualState = {
+      target,
+      point: visualPoint,
+      cursor: 'text',
+      pressed,
+    }
+    this.#setPointerVisualMode({
+      kind: 'freePoint',
+      point: visualPoint,
+      pressed,
+    })
+  }
+
   #anchorPointerCursor(context: PointerSignalContext): void {
     const state = this.#cursorVisualState
 
@@ -3094,11 +3282,157 @@ function operationOptions(options: OperationOptions): WaitOptions {
   }
 }
 
+function shouldAnimateTextSelection(options: SelectTextOptions): boolean {
+  return options.motion !== undefined || normalizeDuration(options.duration ?? 0) > 0
+}
+
+function textSelectionRangeAtProgress(
+  range: PlatformTextSelectionRange,
+  progress: number,
+): PlatformTextSelectionRange {
+  const clampedProgress = clampProgress(progress)
+
+  if (clampedProgress >= 1) {
+    return range
+  }
+
+  if (range.anchor.target !== range.focus.target) {
+    const focus = domTextSelectionEndpointAtProgress(range, clampedProgress)
+
+    return focus
+      ? { anchor: range.anchor, focus }
+      : { anchor: range.anchor, focus: range.anchor }
+  }
+
+  const anchorOffset = range.anchor.offset
+  const focusOffset = range.focus.offset
+  const nextOffset = Math.round(anchorOffset + (focusOffset - anchorOffset) * clampedProgress)
+
+  return {
+    anchor: range.anchor,
+    focus: {
+      target: range.focus.target,
+      offset: nextOffset,
+    },
+  }
+}
+
+function domTextSelectionEndpointAtProgress(
+  range: PlatformTextSelectionRange,
+  progress: number,
+): PlatformTextSelectionEndpoint | null {
+  if (!(range.anchor.target instanceof Text) || !(range.focus.target instanceof Text)) {
+    return null
+  }
+
+  const ownerDocument = range.anchor.target.ownerDocument
+
+  if (!ownerDocument || range.focus.target.ownerDocument !== ownerDocument) {
+    return null
+  }
+
+  const domRange = ownerDocument.createRange()
+
+  try {
+    domRange.setStart(range.anchor.target, range.anchor.offset)
+    domRange.setEnd(range.focus.target, range.focus.offset)
+
+    if (domRange.collapsed && !sameTextSelectionEndpoint(range.anchor, range.focus)) {
+      return null
+    }
+
+    const textDistance = Math.round(domRange.toString().length * progress)
+
+    return domTextSelectionEndpointAtDistance(
+      domRange,
+      range.anchor,
+      range.focus,
+      textDistance,
+      ownerDocument,
+    )
+  } catch {
+    return null
+  } finally {
+    domRange.detach()
+  }
+}
+
+function domTextSelectionEndpointAtDistance(
+  domRange: Range,
+  anchor: PlatformTextSelectionEndpoint,
+  focus: PlatformTextSelectionEndpoint,
+  textDistance: number,
+  ownerDocument: Document,
+): PlatformTextSelectionEndpoint | null {
+  if (textDistance <= 0) {
+    return anchor
+  }
+
+  const walker = ownerDocument.createTreeWalker(
+    domRange.commonAncestorContainer,
+    NodeFilter.SHOW_TEXT,
+  )
+  let remaining = textDistance
+  let node = walker.nextNode()
+
+  while (node) {
+    const textNode = node as Text
+
+    if (domRange.intersectsNode(textNode)) {
+      const startOffset = textNode === anchor.target ? anchor.offset : 0
+      const endOffset = textNode === focus.target ? focus.offset : textNode.data.length
+      const segmentLength = Math.max(0, endOffset - startOffset)
+
+      if (remaining <= segmentLength) {
+        return {
+          target: textNode,
+          offset: startOffset + remaining,
+        }
+      }
+
+      remaining -= segmentLength
+    }
+
+    node = walker.nextNode()
+  }
+
+  return focus
+}
+
+function sameTextSelectionEndpoint(
+  first: PlatformTextSelectionEndpoint,
+  second: PlatformTextSelectionEndpoint,
+): boolean {
+  return first.target === second.target && first.offset === second.offset
+}
+
+function progressBetweenPoints(from: Point, to: Point, point: Point): number {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const lengthSquared = dx * dx + dy * dy
+
+  if (lengthSquared === 0) {
+    return 1
+  }
+
+  const progress = ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared
+
+  return clampProgress(progress)
+}
+
+function clampProgress(progress: number): number {
+  if (!Number.isFinite(progress)) {
+    return 0
+  }
+
+  return Math.max(0, Math.min(1, progress))
+}
+
 function cancellationOptions(options: OperationOptions): CancellationOptions {
   return options.signal === undefined ? {} : { signal: options.signal }
 }
 
-function pointerMovementOptions(options: MoveOptions | DragOptions): MoveOptions {
+function pointerMovementOptions(options: MoveOptions | DragOptions | SelectTextOptions): MoveOptions {
   return {
     ...operationOptions(options),
     ...(options.duration === undefined ? {} : { duration: options.duration }),

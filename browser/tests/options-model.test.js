@@ -92,6 +92,17 @@ describe('browser options model', () => {
     expect(resolveActionOptions('typeInto')).toEqual({
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
     })
+    expect(
+      resolveActionOptions('selectText', {
+        options: {
+          duration: 120,
+          motion: { kind: 'ease', timing: 'linear', duration: 120 },
+        },
+      }),
+    ).toEqual({
+      duration: 120,
+      motion: { kind: 'ease', timing: 'linear', duration: 120 },
+    })
   })
 
   it('materializes default inertia motion parameters at the option boundary', () => {

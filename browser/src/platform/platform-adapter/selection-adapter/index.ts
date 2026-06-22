@@ -3,6 +3,7 @@ import type {
   PlatformTextSelectionEndpoint,
   PlatformTextSelectionRange,
   PlatformTextSelectionSnapshot,
+  Point,
   SelectionPort,
   TextSelectionSurface,
 } from '../../../shared/index.js'
@@ -59,6 +60,10 @@ export class BrowserSelectionAdapter implements SelectionAdapter {
     return applyDomSelection(anchor, focus)
   }
 
+  measureEndpoint(endpoint: PlatformTextSelectionEndpoint): Point | null {
+    return measureSelectionEndpoint(endpoint)
+  }
+
   clearSelection(target?: Node | HTMLInputElement | HTMLTextAreaElement): PlatformTextSelectionSnapshot {
     if (isTextControl(target)) {
       const position = target.selectionEnd ?? target.selectionStart ?? 0
@@ -80,6 +85,154 @@ export class BrowserSelectionAdapter implements SelectionAdapter {
     selection.removeAllRanges()
 
     return readDomSelectionSnapshot(selection)
+  }
+}
+
+function measureSelectionEndpoint(endpoint: PlatformTextSelectionEndpoint): Point | null {
+  if (isTextControl(endpoint.target)) {
+    return measureTextControlEndpoint(endpoint.target, endpoint.offset)
+  }
+
+  return measureDomEndpoint(endpoint.target, endpoint.offset)
+}
+
+function measureDomEndpoint(target: Node, offset: number): Point | null {
+  const ownerDocument = ownerDocumentFor(target)
+  const range = ownerDocument.createRange()
+
+  try {
+    range.setStart(target, offset)
+    range.setEnd(target, offset)
+
+    const rect = firstUsableRect(range.getClientRects()) ?? usableRect(range.getBoundingClientRect())
+
+    return rect ? pointForCaretRect(rect) : null
+  } catch {
+    return null
+  } finally {
+    range.detach()
+  }
+}
+
+function measureTextControlEndpoint(
+  target: HTMLInputElement | HTMLTextAreaElement,
+  offset: number,
+): Point | null {
+  const documentRef = target.ownerDocument
+  const view = documentRef.defaultView ?? globalThis.window
+  const targetRect = target.getBoundingClientRect()
+
+  if (!isUsableRect(targetRect)) {
+    return null
+  }
+
+  const mirror = documentRef.createElement('div')
+  const marker = documentRef.createElement('span')
+  const style = view.getComputedStyle(target)
+  const value = target.value
+  const clampedOffset = Math.max(0, Math.min(offset, value.length))
+  const before = value.slice(0, clampedOffset)
+  const after = value.slice(clampedOffset) || '.'
+
+  copyTextControlMeasurementStyle(mirror, style, target, targetRect)
+  mirror.textContent = before
+  marker.textContent = '\u200b'
+  mirror.append(marker, documentRef.createTextNode(after))
+  documentRef.body.append(mirror)
+
+  try {
+    const markerRect = marker.getBoundingClientRect()
+    const rect = usableRect(markerRect)
+
+    if (!rect) {
+      return null
+    }
+
+    return {
+      x: rect.left - target.scrollLeft,
+      y: rect.top + rect.height / 2 - target.scrollTop,
+    }
+  } finally {
+    mirror.remove()
+  }
+}
+
+function copyTextControlMeasurementStyle(
+  mirror: HTMLElement,
+  style: CSSStyleDeclaration,
+  target: HTMLInputElement | HTMLTextAreaElement,
+  targetRect: DOMRect,
+): void {
+  const isTextarea = target instanceof HTMLTextAreaElement
+  const styleProperties = [
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'borderRightWidth',
+    'borderTopWidth',
+    'boxSizing',
+    'fontFamily',
+    'fontFeatureSettings',
+    'fontKerning',
+    'fontSize',
+    'fontStretch',
+    'fontStyle',
+    'fontVariant',
+    'fontWeight',
+    'letterSpacing',
+    'lineHeight',
+    'paddingBottom',
+    'paddingLeft',
+    'paddingRight',
+    'paddingTop',
+    'tabSize',
+    'textAlign',
+    'textIndent',
+    'textTransform',
+    'wordSpacing',
+  ] as const
+
+  Object.assign(mirror.style, {
+    position: 'fixed',
+    left: `${targetRect.left}px`,
+    top: `${targetRect.top}px`,
+    width: `${targetRect.width}px`,
+    minHeight: `${targetRect.height}px`,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    visibility: 'hidden',
+    whiteSpace: isTextarea ? 'pre-wrap' : 'pre',
+    wordBreak: isTextarea ? 'break-word' : 'normal',
+  })
+
+  for (const property of styleProperties) {
+    mirror.style[property] = style[property]
+  }
+}
+
+function firstUsableRect(rects: DOMRectList): DOMRect | null {
+  for (const rect of Array.from(rects)) {
+    const usable = usableRect(rect)
+
+    if (usable) {
+      return usable
+    }
+  }
+
+  return null
+}
+
+function usableRect(rect: DOMRect): DOMRect | null {
+  return isUsableRect(rect) ? rect : null
+}
+
+function isUsableRect(rect: DOMRect): boolean {
+  return Number.isFinite(rect.left) && Number.isFinite(rect.top) && (rect.width > 0 || rect.height > 0)
+}
+
+function pointForCaretRect(rect: DOMRect): Point {
+  return {
+    x: rect.left,
+    y: rect.top + rect.height / 2,
   }
 }
 

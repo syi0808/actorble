@@ -435,7 +435,7 @@ export type TextSelectionTarget =
       focus: TextSelectionEndpoint
     }>
 
-export type SelectTextOptions = OperationOptions
+export type SelectTextOptions = OperationOptions & PointerMovementOptions
 
 export type PointerSequenceMoveStep = Readonly<{
   type: 'move'
@@ -569,6 +569,7 @@ export interface SelectionPort {
   readSelection(target?: Node | HTMLInputElement | HTMLTextAreaElement): PlatformTextSelectionSnapshot
   applySelection(range: PlatformTextSelectionRange): PlatformTextSelectionSnapshot
   clearSelection(target?: Node | HTMLInputElement | HTMLTextAreaElement): PlatformTextSelectionSnapshot
+  measureEndpoint?(endpoint: PlatformTextSelectionEndpoint): Point | null
 }
 
 export type PointerEventDescriptor = Readonly<{
