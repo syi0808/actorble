@@ -92,7 +92,11 @@ try {
   await page.goto(new URL('research-clipping/', baseUrl).toString())
   await expectPageTitle(page, 'Research clipping')
   await openUtilityPanel(page, 'task-utility-panel')
-  await runCurrentScenario(page, 'Research clipping complete')
+  await runCurrentScenarioWithObservation(
+    page,
+    'Research clipping complete',
+    () => expectTextSelectionCursorMotion(page),
+  )
   await expectResearchClippingComplete(page)
 } catch (error) {
   throw await withPageDiagnostics(error, page)
@@ -423,6 +427,43 @@ async function expectDebugTypingFeedbackDuringRun(page) {
         overlay?.querySelector('[data-actorble-visual-typing]'),
     )
   })
+}
+
+async function expectTextSelectionCursorMotion(page) {
+  const result = await page.evaluate(async () => {
+    const transforms = new Set()
+    let pressedTextSamples = 0
+    const startedAt = performance.now()
+
+    while (performance.now() - startedAt < 2000) {
+      const cursor = document.querySelector('[data-actorble-visual-cursor]')
+
+      if (
+        cursor instanceof HTMLElement &&
+        cursor.getAttribute('data-actorble-cursor-kind') === 'text' &&
+        cursor.hasAttribute('data-actorble-cursor-pressed')
+      ) {
+        pressedTextSamples += 1
+        transforms.add(getComputedStyle(cursor).transform)
+      }
+
+      if (pressedTextSamples >= 32 && transforms.size >= 24) {
+        break
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 16))
+    }
+
+    return {
+      pressedTextSamples,
+      uniqueTransforms: transforms.size,
+    }
+  })
+
+  assert(
+    result.pressedTextSamples >= 32 && result.uniqueTransforms >= 24,
+    `Expected moving pressed text cursor samples; got ${JSON.stringify(result)}`,
+  )
 }
 
 async function expectOverlayHitTesting(page, targetSelector, label) {

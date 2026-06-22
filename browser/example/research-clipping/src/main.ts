@@ -8,7 +8,7 @@ import {
 } from '../../shared/task-example.js'
 
 const articleCopy =
-  'Selection-driven research workflows need visible verification before a captured quote is trusted in a brief.'
+  'Research note: visible verification before a captured quote is trusted before it enters a selection-driven automation brief.'
 const selectedQuote = 'visible verification before a captured quote is trusted'
 const noteText = 'Use in weekly automation brief.'
 const selectedQuoteOffset = articleCopy.indexOf(selectedQuote)
@@ -139,8 +139,8 @@ async function selectResearchQuote(context: TaskExampleContext): Promise<void> {
     anchor: { target, offset: selectedQuoteOffset },
     focus: { target, offset: selectedQuoteOffset + selectedQuote.length },
   }, {
-    duration: 320,
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
+    duration: 720,
+    motion: { kind: 'ease', timing: 'ease-in-out', duration: 720 },
   })
   updateQuotePreview()
 }

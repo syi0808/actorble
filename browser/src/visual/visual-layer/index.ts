@@ -438,6 +438,8 @@ const CURSOR_LINE_HALO_STROKE_WIDTH = '4'
 const CURSOR_LINE_STROKE_WIDTH = '2'
 const CURSOR_THIN_LINE_HALO_STROKE_WIDTH = '3.4'
 const CURSOR_THIN_LINE_STROKE_WIDTH = '1.6'
+const CURSOR_TEXT_LINE_HALO_STROKE_WIDTH = '5.2'
+const CURSOR_TEXT_LINE_STROKE_WIDTH = '2.4'
 const CURSOR_PRESSED_SCALE = 'scale(0.9)'
 
 const CURSOR_BASE_STYLE: Readonly<Record<string, string>> = {
@@ -461,7 +463,7 @@ const POINTER_CURSOR_HAND_PATH =
   'C 11.1,7.2 10.4,6.7 9.6,6.7 C 9.2,6.7 8.8,6.8 8.6,7 ' +
   'L 8.6,3.6 C 8.6,2.7 7.9,2 7,2 Z'
 
-const TEXT_CURSOR_PATH = 'M 5,2 L 5,24 M 2,2 L 8,2 M 2,24 L 8,24'
+const TEXT_CURSOR_PATH = 'M 7,3 L 7,27 M 3,3 L 11,3 M 3,27 L 11,27'
 
 const NOT_ALLOWED_CURSOR_PATH =
   'M 11,2.5 A 8.5,8.5 0 1 0 11,19.5 A 8.5,8.5 0 1 0 11,2.5 ' +
@@ -577,14 +579,14 @@ const CURSOR_VISUAL_SPECS: Readonly<Record<SupportedCursorVisualKind, CursorVisu
     style: CURSOR_BASE_STYLE,
   },
   text: {
-    width: 10,
-    height: 26,
-    hotspot: { x: 5, y: 13 },
+    width: 14,
+    height: 30,
+    hotspot: { x: 7, y: 15 },
     svg: {
-      viewBox: '0 0 10 26',
+      viewBox: '0 0 14 30',
       paths: [
-        haloStrokePath(TEXT_CURSOR_PATH, CURSOR_LINE_HALO_STROKE_WIDTH, 'square'),
-        foregroundStrokePath(TEXT_CURSOR_PATH, CURSOR_THIN_LINE_STROKE_WIDTH, 'square'),
+        haloStrokePath(TEXT_CURSOR_PATH, CURSOR_TEXT_LINE_HALO_STROKE_WIDTH, 'square'),
+        foregroundStrokePath(TEXT_CURSOR_PATH, CURSOR_TEXT_LINE_STROKE_WIDTH, 'square'),
       ],
     },
     style: CURSOR_BASE_STYLE,

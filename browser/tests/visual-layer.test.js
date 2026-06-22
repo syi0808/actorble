@@ -164,7 +164,7 @@ describe('BrowserVisualLayer', () => {
     const point = { x: 80, y: 90 }
     const variants = [
       ['pointer', 'pointer', '18px', '24px', '7', '2', 7, 2],
-      ['text', 'text', '10px', '26px', '5', '13', 5, 13],
+      ['text', 'text', '14px', '30px', '7', '15', 7, 15],
       ['not-allowed', 'not-allowed', '22px', '22px', '11', '11', 11, 11],
       ['wait', 'wait', '22px', '22px', '11', '11', 11, 11],
       ['progress', 'progress', '28px', '30px', '2', '2', 2, 2],
@@ -209,6 +209,26 @@ describe('BrowserVisualLayer', () => {
       )
       expect(paths.some((path) => path.getAttribute('stroke') === 'Canvas')).toBe(true)
     }
+  })
+
+  it('renders text cursor feedback with a visible halo over selected text', () => {
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({ point: { x: 100, y: 120 }, cursor: 'text', pressed: true })
+
+    const cursor = getCursorElement()
+    const paths = Array.from(getCursorSvg(cursor).querySelectorAll('path'))
+
+    expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('text')
+    expect(cursor.style.width).toBe('14px')
+    expect(cursor.style.height).toBe('30px')
+    expect(paths).toHaveLength(2)
+    expect(paths[0].getAttribute('stroke')).toBe('Canvas')
+    expect(paths[0].getAttribute('stroke-width')).toBe('5.2')
+    expect(paths[0].getAttribute('stroke-linecap')).toBe('square')
+    expect(paths[1].getAttribute('stroke')).toBe('CanvasText')
+    expect(paths[1].getAttribute('stroke-width')).toBe('2.4')
+    expect(paths[1].getAttribute('stroke-linecap')).toBe('square')
   })
 
   it('scales cursor dimensions and hotspots while keeping the requested point anchored', () => {
@@ -434,7 +454,7 @@ describe('BrowserVisualLayer', () => {
     expect(cursor.getAttribute('data-actorble-cursor-kind')).toBe('text')
     expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
     expect(getCursorSvg(cursor).style.transform).not.toBe(pointerGraphicTransform)
-    expectCursorSvgShift(cursor, 5, 13)
+    expectCursorSvgShift(cursor, 7, 15)
     expect(cursor.style.borderRadius).toBe('')
   })
 
