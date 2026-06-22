@@ -810,7 +810,7 @@ describe('sidepanel scenario editor', () => {
       actionFamily: 'selectText',
       controls: {
         textInput: false,
-        duration: false,
+        duration: true,
         waitText: false,
         scrollPosition: false,
         targetSlots: true,

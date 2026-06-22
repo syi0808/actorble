@@ -591,8 +591,8 @@ describe('compileToBrowserRuntime', () => {
     })
   })
 
-  it('rejects options unsupported by selectText runtime steps', () => {
-    const result = compileToBrowserRuntime(
+  it('compiles selectText movement options into browser runtime selection steps', () => {
+    const compilation = compile(
       scenario([
         {
           action: 'selectText',
@@ -600,24 +600,19 @@ describe('compileToBrowserRuntime', () => {
           options: {
             timeout: 1000,
             duration: 20,
+            motion: { kind: 'ease', easing: 'ease-in-out', duration: 20 },
           },
         },
       ]),
     )
 
-    expect(result).toMatchObject({
-      ok: false,
-      issues: [
-        {
-          code: 'compiler_error',
-          path: ['steps', 0, 'options', 'duration'],
-          details: {
-            action: 'selectText',
-            option: 'duration',
-            supportedOptions: ['timeout'],
-          },
-        },
-      ],
+    expect(compilation.scenario.steps[0]).toMatchObject({
+      action: 'selectText',
+      options: {
+        timeout: 1000,
+        duration: 20,
+        motion: { kind: 'ease', easing: 'ease-in-out', duration: 20 },
+      },
     })
   })
 })

@@ -142,7 +142,7 @@ const fillOptionKeys = ['timeout', 'clear'] as const
 const pressOptionKeys = ['timeout', 'delay'] as const
 const scrollOptionKeys = ['timeout', 'behavior'] as const
 const dragOptionKeys = ['timeout', 'duration', 'motion', 'force'] as const
-const selectTextOptionKeys = ['timeout'] as const
+const selectTextOptionKeys = ['timeout', 'duration', 'motion'] as const
 const waitOptionKeys = ['timeout'] as const
 
 type BrowserRuntimeStepOptions = Readonly<Record<string, unknown>>

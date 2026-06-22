@@ -2142,7 +2142,7 @@ function selectedStepControls(
 ): SidepanelScenarioEditorView['selectedStepFields']['controls'] {
   return {
     textInput: typeof input === 'string',
-    duration: actionFamily === 'delay',
+    duration: actionFamily === 'delay' || actionFamily === 'selectText',
     waitText: isRecord(input) && input.kind === 'text',
     scrollPosition: actionFamily === 'scrollToPosition' && isScenarioPoint(input),
     targetSlots: targetSlotsForStep(step, step.id ?? 'selected').length > 0,
