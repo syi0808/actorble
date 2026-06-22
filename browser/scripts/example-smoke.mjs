@@ -91,6 +91,7 @@ try {
 
   await page.goto(new URL('research-clipping/', baseUrl).toString())
   await expectPageTitle(page, 'Research clipping')
+  await expectManualResearchQuoteSave(page)
   await openUtilityPanel(page, 'task-utility-panel')
   await runCurrentScenarioWithObservation(
     page,
@@ -388,6 +389,46 @@ async function expectResearchClippingComplete(page) {
     'action.typeInto',
     'action.waitFor',
   ])
+}
+
+async function expectManualResearchQuoteSave(page) {
+  const quote = 'captured quote\nis trusted before it enters'
+
+  await page.evaluate((quote) => {
+    const source = document.getElementById('research-source-copy')
+
+    if (!source) {
+      throw new Error('Research source copy was not found.')
+    }
+
+    const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT)
+    let textNode = walker.nextNode()
+
+    while (textNode) {
+      const offset = textNode.textContent?.indexOf(quote) ?? -1
+
+      if (offset >= 0) {
+        const range = document.createRange()
+        const selection = window.getSelection()
+
+        range.setStart(textNode, offset)
+        range.setEnd(textNode, offset + quote.length)
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        document.dispatchEvent(new Event('selectionchange'))
+        return
+      }
+
+      textNode = walker.nextNode()
+    }
+
+    throw new Error('Manual research quote text was not found.')
+  }, quote)
+
+  await expectText(page, '#quote-preview-output', quote)
+  await page.locator('#save-quote').click()
+  await expectState(page, '#clipping-status', 'saved')
+  await expectText(page, '#saved-quote-output', quote)
 }
 
 async function expectFeedbackModeOverlay(page, mode) {

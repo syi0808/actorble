@@ -12,6 +12,8 @@ const articleCopy =
 const selectedQuote = 'visible verification before a captured quote\nis trusted'
 const noteText = 'Use in weekly automation brief.'
 const selectedQuoteOffset = articleCopy.indexOf(selectedQuote)
+let currentSourceQuote = ''
+let sourceSelectionListenerBound = false
 
 if (selectedQuoteOffset < 0) {
   throw new Error('Research quote is not present in the source copy.')
@@ -107,13 +109,22 @@ mountTaskExample({
 })
 
 function bindStage(context: TaskExampleContext): void {
+  currentSourceQuote = ''
+
   const sourceCopy = byId<HTMLElement>('research-source-copy')
   const saveButton = byId<HTMLButtonElement>('save-quote')
   const noteInput = byId<HTMLTextAreaElement>('quote-note')
   const publishButton = byId<HTMLButtonElement>('publish-clipping')
 
+  sourceCopy.addEventListener('pointerup', syncQuotePreviewFromSelection)
+  sourceCopy.addEventListener('mouseup', syncQuotePreviewFromSelection)
   saveButton.addEventListener('click', saveSelectedQuote)
   publishButton.addEventListener('click', publishClipping)
+
+  if (!sourceSelectionListenerBound) {
+    document.addEventListener('selectionchange', syncQuotePreviewFromSelection)
+    sourceSelectionListenerBound = true
+  }
 
   context.bindDomEvents('researchSource', sourceCopy)
   context.bindDomEvents('saveQuote', saveButton)
@@ -171,16 +182,30 @@ async function publishResearchClipping(context: TaskExampleContext): Promise<voi
 }
 
 function updateQuotePreview(): void {
-  const quote = selectedDocumentText()
+  setQuotePreview(selectedSourceQuote())
+}
+
+function syncQuotePreviewFromSelection(): void {
+  const quote = selectedSourceQuote()
+
+  if (!quote) {
+    return
+  }
+
+  setQuotePreview(quote)
+}
+
+function setQuotePreview(quote: string): void {
   const status = byId<HTMLElement>('clipping-status')
 
+  currentSourceQuote = quote
   byId<HTMLElement>('quote-preview-output').textContent = quote || 'Waiting'
   status.dataset.state = quote ? 'selected' : 'idle'
   status.textContent = quote ? 'Quote selected' : 'Waiting for quote'
 }
 
 function saveSelectedQuote(): void {
-  const quote = currentQuotePreview()
+  const quote = selectedSourceQuote() || currentQuotePreview()
   const status = byId<HTMLElement>('clipping-status')
 
   if (!quote) {
@@ -189,6 +214,7 @@ function saveSelectedQuote(): void {
     return
   }
 
+  setQuotePreview(quote)
   byId<HTMLElement>('saved-quote-output').textContent = quote
   status.dataset.state = 'saved'
   status.textContent = 'Quote saved'
@@ -212,7 +238,7 @@ function publishClipping(): void {
 }
 
 function currentQuotePreview(): string {
-  return readOutputText('quote-preview-output')
+  return currentSourceQuote || readOutputText('quote-preview-output')
 }
 
 function currentSavedQuote(): string {
@@ -225,6 +251,50 @@ function readOutputText(id: string): string {
   return text === 'Waiting' ? '' : text
 }
 
-function selectedDocumentText(): string {
-  return document.getSelection()?.toString() ?? ''
+function selectedSourceQuote(): string {
+  const selection = document.getSelection()
+  const sourceCopy = document.getElementById('research-source-copy')
+
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !sourceCopy) {
+    return ''
+  }
+
+  const sourceRange = document.createRange()
+  sourceRange.selectNodeContents(sourceCopy)
+
+  const selectedRanges: string[] = []
+
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index)
+
+    if (!rangeIntersectsNode(range, sourceCopy)) {
+      continue
+    }
+
+    const clippedRange = range.cloneRange()
+
+    if (clippedRange.compareBoundaryPoints(Range.START_TO_START, sourceRange) < 0) {
+      clippedRange.setStart(sourceRange.startContainer, sourceRange.startOffset)
+    }
+
+    if (clippedRange.compareBoundaryPoints(Range.END_TO_END, sourceRange) > 0) {
+      clippedRange.setEnd(sourceRange.endContainer, sourceRange.endOffset)
+    }
+
+    const text = clippedRange.toString().trim()
+
+    if (text) {
+      selectedRanges.push(text)
+    }
+  }
+
+  return selectedRanges.join('\n').trim()
+}
+
+function rangeIntersectsNode(range: Range, node: Node): boolean {
+  try {
+    return range.intersectsNode(node)
+  } catch {
+    return false
+  }
 }
