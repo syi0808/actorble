@@ -177,6 +177,22 @@ describe('BrowserPointerEngine', () => {
     ])
   })
 
+  it('syncs position without emitting pointer movement signals', () => {
+    const { engine, events } = createEngine()
+
+    expect(engine.syncPosition({ x: 64, y: 32 })).toMatchObject({
+      position: { x: 64, y: 32 },
+      previousPosition: { x: 0, y: 0 },
+      motion: {
+        status: 'idle',
+        from: { x: 0, y: 0 },
+        to: { x: 64, y: 32 },
+        path: [],
+      },
+    })
+    expect(events).toEqual([])
+  })
+
   it('moves over duration with ordered intermediate and final moved signals', async () => {
     const timeline = createTimeline(25)
     const { engine, events } = createEngine({ timeline })

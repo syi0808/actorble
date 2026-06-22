@@ -44,6 +44,7 @@ export type PointerState = Readonly<{
 
 export interface PointerEngine {
   getState(): PointerState
+  syncPosition(point: Point): PointerState
   moveTo(point: Point, options?: PointerMoveOptions): Promise<PointerState>
   down(button?: PointerButtonName): Promise<PointerState>
   up(button?: PointerButtonName): Promise<PointerState>
@@ -134,6 +135,25 @@ export class BrowserPointerEngine implements PointerEngine {
 
   getState(): PointerState {
     return cloneState(this.#state)
+  }
+
+  syncPosition(point: Point): PointerState {
+    const previousPoint = clonePoint(this.#state.position)
+    const nextPoint = clonePoint(point)
+
+    this.#state = {
+      ...this.#state,
+      position: nextPoint,
+      previousPosition: previousPoint,
+      motion: {
+        status: 'idle',
+        from: previousPoint,
+        to: nextPoint,
+        path: [],
+      },
+    }
+
+    return this.getState()
   }
 
   async moveTo(point: Point, options: PointerMoveOptions = {}): Promise<PointerState> {

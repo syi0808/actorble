@@ -5,7 +5,7 @@ import { BrowserGestureEngine } from '../../input/gesture-engine/index.js'
 import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
 import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
 import { BrowserKeyboardEngine } from '../../input/keyboard-engine/index.js'
-import { BrowserPointerEngine } from '../../input/pointer-engine/index.js'
+import { BrowserPointerEngine, type PointerEngine } from '../../input/pointer-engine/index.js'
 import { BrowserPointerSignalBus } from '../../input/pointer-signals/index.js'
 import {
   BrowserDomAdapter,
@@ -257,6 +257,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #gesture: GestureEngine
   readonly #interactability: InteractabilityEngine
   readonly #keyboard: KeyboardEngine
+  readonly #pointer: PointerEngine
   readonly #resolver: TargetResolver
   readonly #selection: SelectionPort
   readonly #state: StateApplyPort
@@ -295,6 +296,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         trace,
       })
     const signals = options.signals ?? new BrowserPointerSignalBus()
+    const pointer = new BrowserPointerEngine({
+      signals,
+      timeline,
+      initialPosition: options.pointer?.initialPosition,
+    })
     const geometrySurfaceCache = createFrameGeometrySurfaceCache({
       layoutInvalidation,
       timeline,
@@ -315,14 +321,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#events = events
     this.#focus = focus
     this.#geometry = geometry
+    this.#pointer = pointer
     this.#gesture =
       options.gesture ??
       new BrowserGestureEngine({
-        pointer: new BrowserPointerEngine({
-          signals,
-          timeline,
-          initialPosition: options.pointer?.initialPosition,
-        }),
+        pointer,
         timeline,
       })
     this.#interactability =
@@ -1544,12 +1547,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         return
       }
 
-      this.#currentPointerPoint = clonePoint(signal.point)
       const progress = progressBetweenPoints(anchorPoint, focusPoint, signal.point)
       const gestureState = selectionGestureStateAtProgress(progress, signal.point)
       const eventPoint = gestureState.point
       const dispatchTarget = gestureState.target
 
+      this.#currentPointerPoint = clonePoint(eventPoint)
       lastPoint = clonePoint(eventPoint)
 
       switch (signal.type) {
@@ -1623,6 +1626,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       subscription.dispose()
       this.#cursorPressedButtons.clear()
     }
+
+    this.#pointer.syncPosition(lastPoint)
 
     span.event('selection-gesture:completed', {
       action: 'selectText',

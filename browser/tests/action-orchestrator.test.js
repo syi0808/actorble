@@ -1168,6 +1168,99 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('selectText keeps following pointer actions continuous from the selection focus', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.id = 'copy'
+    paragraph.textContent = 'abcdefghij'
+    document.body.append(paragraph)
+    const textNode = paragraph.firstChild
+    const selectionTarget = {
+      id: 'copy-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: '#copy', description: 'p#copy' },
+    }
+    const clickTarget = targetHandle('save')
+    const selection = createSelectionDouble()
+    const timeline = createFrameTimeline(50)
+    const visualEvents = []
+    const visual = {
+      showCursor: vi.fn((request) => {
+        visualEvents.push(request)
+      }),
+      highlightTarget: vi.fn(),
+      showClick: vi.fn(),
+      showFocus: vi.fn(),
+      showTyping: vi.fn(),
+      showKeystroke: vi.fn(),
+      clearFeedback: vi.fn(),
+      hide: vi.fn(),
+      destroy: vi.fn(),
+    }
+    selection.measureEndpoint.mockImplementation((endpoint) => ({
+      x: endpoint.offset * 30,
+      y: 0,
+    }))
+    const { orchestrator } = createHarness({
+      target: selectionTarget,
+      selection,
+      timeline,
+      visual,
+      visualFeedback: 'debug',
+      useRealGesture: true,
+      geometrySnapshots: [geometryFor(clickTarget, { x: 400, y: 0 })],
+    })
+
+    await expect(
+      orchestrator.selectText(
+        {
+          anchor: { target: selectionTarget, offset: 0 },
+          focus: { target: selectionTarget, offset: 10 },
+        },
+        { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(visualEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cursor: 'text',
+          point: { x: 300, y: 0 },
+          pressed: false,
+        }),
+      ]),
+    )
+
+    visualEvents.splice(0)
+
+    await expect(
+      orchestrator.click(clickTarget, {
+        duration: 100,
+        motion: { kind: 'ease', timing: 'linear', duration: 100 },
+        pressDwell: 0,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(visualEvents[0]).toEqual(
+      expect.objectContaining({
+        point: { x: 350, y: 0 },
+      }),
+    )
+    expect(visualEvents).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          point: { x: 200, y: 0 },
+        }),
+      ]),
+    )
+    expect(selection.applySelection).toHaveBeenLastCalledWith({
+      anchor: { target: textNode, offset: 0 },
+      focus: { target: textNode, offset: 10 },
+    })
+  })
+
   it('selectText progressively expands visual gestures across text nodes', async () => {
     const paragraph = document.createElement('p')
     const start = document.createElement('span')

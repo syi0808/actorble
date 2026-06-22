@@ -709,6 +709,7 @@ label {
   font-size: 1.04rem;
   line-height: 1.68;
   user-select: text;
+  white-space: pre-line;
 }
 
 .source-metadata,

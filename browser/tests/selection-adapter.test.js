@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { BrowserSelectionAdapter } from '../src/platform/platform-adapter/index.js'
 
 describe('BrowserSelectionAdapter', () => {
@@ -152,6 +152,43 @@ describe('BrowserSelectionAdapter', () => {
     })
   })
 
+  it('measures DOM caret positions from the next character when collapsed range rects are unavailable', () => {
+    document.body.innerHTML = '<p id="copy">First wrapped line</p>'
+    const textNode = document.querySelector('#copy').firstChild
+    const adapter = new BrowserSelectionAdapter(document)
+    const zeroRect = rect(0, 0, 0, 0)
+    const nextCharacterRect = rect(24, 48, 8, 16)
+    const createRange = vi.spyOn(document, 'createRange')
+
+    createRange.mockImplementation(() => {
+      let startOffset = 0
+      let endOffset = 0
+
+      return {
+        setStart: vi.fn((_node, offset) => {
+          startOffset = offset
+        }),
+        setEnd: vi.fn((_node, offset) => {
+          endOffset = offset
+        }),
+        getClientRects: vi.fn(() => (
+          startOffset === 6 && endOffset === 7 ? [nextCharacterRect] : []
+        )),
+        getBoundingClientRect: vi.fn(() => zeroRect),
+        detach: vi.fn(),
+      }
+    })
+
+    try {
+      expect(adapter.measureEndpoint({ target: textNode, offset: 6 })).toEqual({
+        x: 24,
+        y: 56,
+      })
+    } finally {
+      createRange.mockRestore()
+    }
+  })
+
   it('rejects unsupported input types with actionable text selection errors', () => {
     document.body.innerHTML = '<input id="quantity" type="number" value="42" />'
     const input = document.querySelector('#quantity')
@@ -231,3 +268,16 @@ describe('BrowserSelectionAdapter', () => {
     expect(source).not.toMatch(/action-orchestrator|gesture-engine|recorder|interaction-state-store/)
   })
 })
+
+function rect(left, top, width, height) {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+  }
+}

@@ -106,7 +106,59 @@ function measureDomEndpoint(target: Node, offset: number): Point | null {
 
     const rect = firstUsableRect(range.getClientRects()) ?? usableRect(range.getBoundingClientRect())
 
-    return rect ? pointForCaretRect(rect) : null
+    if (rect) {
+      return pointForCaretRect(rect)
+    }
+  } catch {
+    return null
+  } finally {
+    range.detach()
+  }
+
+  return measureDomEndpointFromAdjacentText(target, offset, ownerDocument)
+}
+
+function measureDomEndpointFromAdjacentText(
+  target: Node,
+  offset: number,
+  ownerDocument: Document,
+): Point | null {
+  if (!(target instanceof Text)) {
+    return null
+  }
+
+  if (offset < target.data.length) {
+    const nextRect = measureDomTextSegment(target, offset, offset + 1, ownerDocument)
+
+    if (nextRect) {
+      return pointForCaretRect(nextRect)
+    }
+  }
+
+  if (offset > 0) {
+    const previousRect = measureDomTextSegment(target, offset - 1, offset, ownerDocument)
+
+    if (previousRect) {
+      return pointForTrailingCaretRect(previousRect)
+    }
+  }
+
+  return null
+}
+
+function measureDomTextSegment(
+  target: Text,
+  startOffset: number,
+  endOffset: number,
+  ownerDocument: Document,
+): DOMRect | null {
+  const range = ownerDocument.createRange()
+
+  try {
+    range.setStart(target, startOffset)
+    range.setEnd(target, endOffset)
+
+    return firstUsableRect(range.getClientRects()) ?? usableRect(range.getBoundingClientRect())
   } catch {
     return null
   } finally {
@@ -232,6 +284,13 @@ function isUsableRect(rect: DOMRect): boolean {
 function pointForCaretRect(rect: DOMRect): Point {
   return {
     x: rect.left,
+    y: rect.top + rect.height / 2,
+  }
+}
+
+function pointForTrailingCaretRect(rect: DOMRect): Point {
+  return {
+    x: rect.right,
     y: rect.top + rect.height / 2,
   }
 }

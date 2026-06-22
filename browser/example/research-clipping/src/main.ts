@@ -8,8 +8,8 @@ import {
 } from '../../shared/task-example.js'
 
 const articleCopy =
-  'Research note: visible verification before a captured quote is trusted before it enters a selection-driven automation brief.'
-const selectedQuote = 'visible verification before a captured quote is trusted'
+  'Research note: visible verification before a captured quote\nis trusted before it enters a selection-driven automation brief.'
+const selectedQuote = 'visible verification before a captured quote\nis trusted'
 const noteText = 'Use in weekly automation brief.'
 const selectedQuoteOffset = articleCopy.indexOf(selectedQuote)
 

@@ -366,7 +366,7 @@ async function expectSelectionPointerSequenceComplete(page) {
 }
 
 async function expectResearchClippingComplete(page) {
-  const quote = 'visible verification before a captured quote is trusted'
+  const quote = 'visible verification before a captured quote\nis trusted'
   const note = 'Use in weekly automation brief.'
 
   await expectState(page, '#clipping-status', 'published')
