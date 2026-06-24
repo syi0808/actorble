@@ -11,6 +11,10 @@ import { DropdownMenu, Tooltip } from 'radix-ui'
 import { CommandIcon, type CommandIconName } from './icons.js'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger'
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
+export type ControlSize = 'sm' | 'md' | 'lg'
+export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent'
+export type BadgeSize = 'sm' | 'md'
 
 export type OverflowMenuItem = Readonly<{
   label: string
@@ -44,6 +48,7 @@ export function Button({
   icon,
   iconOnly = false,
   pending = false,
+  size = 'sm',
   tooltip,
   variant = 'secondary',
   className,
@@ -54,6 +59,7 @@ export function Button({
     icon?: CommandIconName
     iconOnly?: boolean
     pending?: boolean
+    size?: ButtonSize
     tooltip?: string
     variant?: ButtonVariant
   }>): ReactElement {
@@ -65,16 +71,20 @@ export function Button({
     <button
       {...props}
       aria-label={iconOnly ? ariaLabel : props['aria-label']}
-      className={className}
+      aria-busy={pending ? true : props['aria-busy']}
+      className={classNames('ui-button', className)}
       data-icon-only={iconOnly ? 'true' : 'false'}
       data-pending={pending ? 'true' : 'false'}
+      data-size={size}
       data-variant={variant}
       disabled={disabled}
       title={tooltip ?? (typeof label === 'string' ? label : undefined)}
       type={props.type ?? 'button'}
     >
       {icon === undefined ? null : <CommandIcon name={icon} />}
-      {iconOnly ? <span className="sr-only">{children}</span> : <span className="button-label">{children}</span>}
+      {iconOnly
+        ? <span className="sr-only">{children}</span>
+        : <span className="button-label">{children}</span>}
     </button>
   )
 
@@ -105,6 +115,7 @@ export function IconButton(
       icon: CommandIconName
       label: string
       pending?: boolean
+      size?: ButtonSize
       tooltip?: string
       variant?: ButtonVariant
     }>,
@@ -153,8 +164,8 @@ export function Field({
     hint?: string
   }>): ReactElement {
   return (
-    <label {...props} className={classNames('field', className)}>
-      <span>{label}</span>
+    <label {...props} className={classNames('field', 'ui-field', className)}>
+      <span className="field-label">{label}</span>
       {children}
       {hint === undefined ? null : <small className="field-hint">{hint}</small>}
     </label>
@@ -162,34 +173,82 @@ export function Field({
 }
 
 export function TextInput(
-  props: InputHTMLAttributes<HTMLInputElement>,
+  {
+    className,
+    size = 'sm',
+    ...props
+  }: Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
+    Readonly<{
+      size?: ControlSize
+    }>,
 ): ReactElement {
-  return <input {...props} />
+  return (
+    <input
+      {...props}
+      className={classNames('ui-input', className)}
+      data-size={size}
+    />
+  )
 }
 
 export function Textarea(
-  props: TextareaHTMLAttributes<HTMLTextAreaElement>,
+  {
+    className,
+    size = 'sm',
+    ...props
+  }: TextareaHTMLAttributes<HTMLTextAreaElement> &
+    Readonly<{
+      size?: ControlSize
+    }>,
 ): ReactElement {
-  return <textarea {...props} />
+  return (
+    <textarea
+      {...props}
+      className={classNames('ui-textarea', className)}
+      data-size={size}
+    />
+  )
 }
 
 export function Select(
-  props: SelectHTMLAttributes<HTMLSelectElement>,
+  {
+    className,
+    size = 'sm',
+    ...props
+  }: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> &
+    Readonly<{
+      size?: ControlSize
+    }>,
 ): ReactElement {
-  return <select {...props} />
+  return (
+    <select
+      {...props}
+      className={classNames('ui-select', className)}
+      data-size={size}
+    />
+  )
 }
 
 export function StatusPill({
   children,
+  size = 'sm',
   status,
+  tone,
   className,
 }: Readonly<{
   children: ReactNode
+  size?: BadgeSize
   status: string
+  tone?: BadgeTone
   className?: string
 }>): ReactElement {
   return (
-    <span className={classNames('status-pill', className)} data-status={status}>
+    <span
+      className={classNames('status-pill', 'ui-badge', className)}
+      data-size={size}
+      data-status={status}
+      data-tone={tone ?? toneFromStatus(status)}
+    >
       {children}
     </span>
   )
@@ -225,6 +284,27 @@ export function OverflowMenu({
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
   )
+}
+
+function toneFromStatus(status: string): BadgeTone {
+  if (
+    status === 'running' ||
+    status === 'recording' ||
+    status === 'completed' ||
+    status === 'ready'
+  ) {
+    return 'success'
+  }
+
+  if (status === 'paused' || status === 'stopped' || status === 'blocked') {
+    return 'warning'
+  }
+
+  if (status === 'failed' || status === 'error' || status === 'invalid') {
+    return 'danger'
+  }
+
+  return 'neutral'
 }
 
 export function classNames(

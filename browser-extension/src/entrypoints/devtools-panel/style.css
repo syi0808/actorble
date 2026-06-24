@@ -1,16 +1,18 @@
+@import "../../ui/tokens.css";
+
 :root {
   color-scheme: light dark;
-  --bg: #f2f4f5;
+  --bg: #f6f7f8;
   --surface: #ffffff;
-  --surface-strong: #e9edf0;
-  --text: #15181b;
-  --muted: #59636e;
-  --border: #c8d0d8;
-  --accent: #0f6b5f;
-  --accent-soft: #dcefeb;
-  --warning: #8b5e00;
-  --danger: #b3261e;
-  --ok: #276738;
+  --surface-strong: #e5e9ee;
+  --text: #15181d;
+  --muted: #5d6876;
+  --border: #d5dce4;
+  --accent: #0f766e;
+  --accent-soft: #e2f5f0;
+  --warning: #956100;
+  --danger: #bd322b;
+  --ok: #0f766e;
   --radius: 6px;
   font-family:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -54,11 +56,10 @@ dl {
 }
 
 .eyebrow {
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 750;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 h1 {
@@ -111,15 +112,18 @@ h2 {
 }
 
 .status-pill {
+  display: inline-flex;
   flex: 0 0 auto;
-  min-height: 26px;
-  padding: 5px 9px;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
   background: var(--surface-strong);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .status-pill[data-status="running"],
@@ -184,7 +188,7 @@ h2 {
 .run-title {
   min-width: 0;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -201,9 +205,8 @@ h2 {
   border-radius: 999px;
   color: var(--muted);
   background: var(--surface-strong);
-  font-size: 10px;
-  font-weight: 750;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .metric-strip {
@@ -228,9 +231,8 @@ h2 {
 .metric-strip dt,
 .key-value-list dt {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 750;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .metric-strip dd {
@@ -305,7 +307,7 @@ h2 {
 
 .detail-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 

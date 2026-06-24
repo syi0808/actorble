@@ -97,7 +97,7 @@ h1 {
   font-weight: 500;
 }
 
-select {
+select:not(.ui-select) {
   box-sizing: border-box;
   width: 100%;
   min-height: 38px;
@@ -158,7 +158,7 @@ dd {
   display: none;
 }
 
-button {
+button:not(.ui-button) {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
@@ -174,65 +174,29 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+button:not(.ui-button):hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
 }
 
-button:focus-visible,
-select:focus {
+button:not(.ui-button):focus-visible,
+select:not(.ui-select):focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 2px;
 }
 
-button:disabled {
+button:not(.ui-button):disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
 
-button[data-variant="primary"],
-.primary,
-button[data-pending="true"] {
+.primary {
   border-color: var(--accent);
   color: var(--accent-contrast);
   background: var(--accent);
 }
 
-button[data-variant="primary"]:hover:not(:disabled),
 .primary:hover:not(:disabled) {
   background: var(--accent-strong);
-}
-
-button[data-variant="secondary"] {
-  background: var(--surface-soft);
-}
-
-button[data-variant="subtle"] {
-  background: transparent;
-}
-
-button[data-variant="danger"] {
-  border-color: color-mix(in srgb, var(--danger) 38%, var(--border));
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
-}
-
-button[data-icon-only="true"] {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
-}
-
-.ui-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-}
-
-.button-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sr-only {

@@ -102,10 +102,9 @@ const github = 'https://github.com/syi0808/actorble'
                 <div class="app-shell-head">
                   <ActorbleSymbol class="app-symbol" />
                   <div class="app-copy">
-                    <span class="app-eyebrow">Scenario Builder</span>
+                    <span class="app-eyebrow">Scenario builder</span>
                     <h2>Launch review</h2>
                   </div>
-                  <span class="product-status" data-tone="ready">Ready</span>
                 </div>
 
                 <div class="scenario-shell-mock">
@@ -169,7 +168,6 @@ const github = 'https://github.com/syi0808/actorble'
                   <div class="inspector-panel">
                     <div class="mock-panel-heading">
                       <h3>Selected step</h3>
-                      <span class="product-status" data-tone="ready">Ready</span>
                     </div>
                     <div class="target-slot-preview">
                       <span>Target</span>
@@ -229,10 +227,6 @@ const github = 'https://github.com/syi0808/actorble'
                     <span>Scenario</span>
                     <strong>Launch review</strong>
                     <small>Ready for this tab</small>
-                  </div>
-                  <div class="runtime-status-row">
-                    <span class="product-status" data-tone="ready">Ready</span>
-                    <span class="product-status" data-tone="saved">Saved</span>
                   </div>
                   <button
                     class="nested-run-button"
@@ -961,7 +955,7 @@ const github = 'https://github.com/syi0808/actorble'
   }
 
   button:disabled {
-    cursor: wait;
+    cursor: not-allowed;
   }
 
   h1,
@@ -1016,7 +1010,7 @@ const github = 'https://github.com/syi0808/actorble'
 
   .brand {
     gap: 10px;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .brand-wordmark {
@@ -1033,7 +1027,7 @@ const github = 'https://github.com/syi0808/actorble'
     gap: clamp(14px, 3vw, 24px);
     color: #42525f;
     font-size: 0.94rem;
-    font-weight: 740;
+    font-weight: 600;
   }
 
   .nav a:hover {
@@ -1124,7 +1118,7 @@ const github = 'https://github.com/syi0808/actorble'
     background: rgba(255, 255, 255, 0.74);
     color: var(--ink);
     font-size: 0.78rem;
-    font-weight: 730;
+    font-weight: 600;
     backdrop-filter: blur(18px);
   }
 
@@ -1308,8 +1302,7 @@ const github = 'https://github.com/syi0808/actorble'
 
   .app-shell-head,
   .scenario-shell-actions,
-  .runtime-lockup,
-  .runtime-status-row {
+  .runtime-lockup {
     display: flex;
     align-items: center;
   }
@@ -1339,10 +1332,9 @@ const github = 'https://github.com/syi0808/actorble'
   .step-field-preview span,
   .diagnostics-preview span {
     color: #9fb7ae;
-    font-size: 0.72rem;
-    font-weight: 850;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0;
   }
 
   .app-copy h2 {
@@ -1355,17 +1347,17 @@ const github = 'https://github.com/syi0808/actorble'
 
   .product-status {
     display: inline-flex;
-    min-height: 25px;
+    min-height: 24px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 999px;
-    padding: 0 9px;
+    padding: 0 8px;
     background: rgba(255, 255, 255, 0.08);
     color: #cfe4dc;
-    font-size: 0.74rem;
-    font-weight: 850;
+    font-size: 0.75rem;
+    font-weight: 500;
   }
 
   .product-status[data-tone="ready"],
@@ -1441,7 +1433,7 @@ const github = 'https://github.com/syi0808/actorble'
   .mock-panel-heading span:not(.product-status) {
     color: #9fb7ae;
     font-size: 0.76rem;
-    font-weight: 760;
+    font-weight: 500;
   }
 
   .workflow-list {
@@ -1468,7 +1460,7 @@ const github = 'https://github.com/syi0808/actorble'
   .workflow-list li[data-state="selected"] {
     border-color: rgba(51, 230, 194, 0.48);
     background: rgba(51, 230, 194, 0.16);
-    box-shadow: inset 3px 0 0 var(--mint);
+    box-shadow: 0 0 0 2px rgba(51, 230, 194, 0.14);
   }
 
   .workflow-list li[data-state="complete"] {
@@ -1484,7 +1476,7 @@ const github = 'https://github.com/syi0808/actorble'
     background: rgba(255, 255, 255, 0.12);
     color: #dff7ee;
     font-size: 0.78rem;
-    font-weight: 850;
+    font-weight: 600;
   }
 
   .workflow-list strong,
@@ -1512,7 +1504,7 @@ const github = 'https://github.com/syi0808/actorble'
   .step-state {
     color: #a9f7e3;
     font-size: 0.7rem;
-    font-weight: 850;
+    font-weight: 500;
   }
 
   .target-slot-preview,
@@ -1542,7 +1534,7 @@ const github = 'https://github.com/syi0808/actorble'
   .check-button,
   .review-button {
     border-radius: 8px;
-    font-weight: 850;
+    font-weight: 500;
     scroll-margin: 150px 0;
   }
 
@@ -1578,7 +1570,7 @@ const github = 'https://github.com/syi0808/actorble'
     background: var(--paper);
     color: var(--ink);
     font-size: 0.82rem;
-    font-weight: 760;
+    font-weight: 500;
   }
 
   .chrome-tab.muted {
@@ -1655,7 +1647,7 @@ const github = 'https://github.com/syi0808/actorble'
     background: var(--ink);
     color: #ffffff;
     font-size: 0.78rem;
-    font-weight: 850;
+    font-weight: 500;
   }
 
   .chrome-profile-icon {
@@ -1728,11 +1720,6 @@ const github = 'https://github.com/syi0808/actorble'
     font-size: 0.82rem;
   }
 
-  .runtime-status-row {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
   .nested-run-button {
     justify-self: start;
     margin-top: 4px;
@@ -1763,7 +1750,7 @@ const github = 'https://github.com/syi0808/actorble'
   .target-eyebrow {
     color: var(--mint-dark);
     font-size: 0.84rem;
-    font-weight: 850;
+    font-weight: 500;
   }
 
   .target-header h2 {
@@ -1775,11 +1762,12 @@ const github = 'https://github.com/syi0808/actorble'
   .review-badge {
     border: 1px solid #cce4dc;
     border-radius: 999px;
-    padding: 7px 12px;
+    min-height: 24px;
+    padding: 0 8px;
     background: #ffffff;
     color: #607367;
-    font-size: 0.84rem;
-    font-weight: 850;
+    font-size: 0.75rem;
+    font-weight: 500;
     white-space: nowrap;
   }
 
@@ -1856,13 +1844,13 @@ const github = 'https://github.com/syi0808/actorble'
   .field span {
     color: #32433c;
     font-size: 0.84rem;
-    font-weight: 850;
+    font-weight: 500;
   }
 
   .field input {
     width: 100%;
     min-width: 0;
-    min-height: 46px;
+    min-height: 44px;
     border: 1px solid #bad7cd;
     border-radius: 8px;
     padding: 0 13px;
@@ -1934,7 +1922,7 @@ const github = 'https://github.com/syi0808/actorble'
 
   .review-confirmation p {
     margin: 0;
-    font-weight: 850;
+    font-weight: 500;
   }
 
   .review-confirmation[data-state="ready"] {
@@ -2107,11 +2095,11 @@ const github = 'https://github.com/syi0808/actorble'
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 46px;
+    min-height: 44px;
     border: 1px solid transparent;
     border-radius: 8px;
     padding: 0 18px;
-    font-weight: 850;
+    font-weight: 600;
     box-shadow: 0 12px 28px rgba(8, 127, 112, 0.1);
     transition:
       border-color 160ms ease,
