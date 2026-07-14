@@ -54,6 +54,57 @@ function createControlledTimeline() {
   }
 }
 
+function createAbortableControlledTimeline() {
+  let now = 0
+  let activeAbortListenerCount = 0
+  const pendingFrames = new Set()
+
+  return {
+    timeline: {
+      now: vi.fn(() => now),
+      delay: vi.fn(async () => {}),
+      nextFrame: vi.fn(
+        (options = {}) =>
+          new Promise((resolve, reject) => {
+            const pending = {
+              resolve: (frameInterval = 25) => {
+                options.signal?.removeEventListener('abort', onAbort)
+                if (options.signal) activeAbortListenerCount -= 1
+                pendingFrames.delete(pending)
+                now += frameInterval
+                resolve(now)
+              },
+            }
+            const onAbort = () => {
+              options.signal?.removeEventListener('abort', onAbort)
+              activeAbortListenerCount -= 1
+              pendingFrames.delete(pending)
+              reject(new Error('frame aborted'))
+            }
+
+            if (options.signal) activeAbortListenerCount += 1
+            options.signal?.addEventListener('abort', onAbort, { once: true })
+            pendingFrames.add(pending)
+          }),
+      ),
+      settle: vi.fn(async () => {}),
+      withTimeout: vi.fn(async (operation) => operation),
+    },
+    get pendingFrameCount() {
+      return pendingFrames.size
+    },
+    get activeAbortListenerCount() {
+      return activeAbortListenerCount
+    },
+    step(frameInterval = 25) {
+      const pending = pendingFrames.values().next().value
+
+      if (!pending) throw new Error('No pending frame to resolve.')
+      pending.resolve(frameInterval)
+    },
+  }
+}
+
 async function flushResolvedFrame(controlledTimeline, frameInterval = 16) {
   controlledTimeline.step(frameInterval)
   await Promise.resolve()
@@ -566,6 +617,30 @@ describe('BrowserPointerEngine', () => {
     expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' })
   })
 
+  it('makes repeated cancellation idempotent and allows the next move without reset', async () => {
+    const { engine, events } = createEngine()
+
+    await engine.down('primary')
+    await engine.cancel()
+    const eventsAfterFirstCancellation = [...events]
+
+    await engine.cancel()
+
+    expect(events).toEqual(eventsAfterFirstCancellation)
+    expect(engine.getState()).toMatchObject({
+      position: { x: 0, y: 0 },
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+
+    await expect(engine.moveTo({ x: 25, y: 30 })).resolves.toMatchObject({
+      position: { x: 25, y: 30 },
+      motion: { status: 'idle' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(events.filter((event) => event.type === 'pointer:cancelled')).toHaveLength(1)
+  })
+
   it('cancels in-flight motion, clears buttons, and emits no later movement frames', async () => {
     const controlledTimeline = createControlledTimeline()
     const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
@@ -596,5 +671,35 @@ describe('BrowserPointerEngine', () => {
       buttons: { pressed: [], primary: null },
     })
     expect(events).toEqual(eventsAtCancellation)
+  })
+
+  it('stops a halfway move immediately when its AbortSignal fires', async () => {
+    const controlled = createAbortableControlledTimeline()
+    const controller = new AbortController()
+    const { engine, events } = createEngine({ timeline: controlled.timeline })
+    const movement = engine.moveTo(
+      { x: 100, y: 0 },
+      { duration: 100, signal: controller.signal },
+    )
+
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
+    controlled.step(25)
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
+    controller.abort('move stopped')
+
+    await expect(movement).rejects.toThrow('frame aborted')
+    expect(controlled.pendingFrameCount).toBe(0)
+    expect(controlled.activeAbortListenerCount).toBe(0)
+    expect(engine.getState()).toMatchObject({
+      position: { x: 25, y: 0 },
+      motion: { status: 'cancelled' },
+      buttons: { pressed: [], primary: null },
+    })
+    expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' })
+
+    await expect(engine.moveTo({ x: 30, y: 5 })).resolves.toMatchObject({
+      position: { x: 30, y: 5 },
+      motion: { status: 'idle' },
+    })
   })
 })

@@ -360,6 +360,23 @@ describe('BrowserVisualLayer', () => {
     expect(getCursorSvg(cursor).style.transition).toBe('transform 80ms ease-out')
   })
 
+  it('clears cancelled transaction feedback while preserving the released cursor point', () => {
+    const target = targetHandle('cancel-target')
+    const layer = new BrowserVisualLayer({ root: document })
+
+    layer.showCursor({ point: { x: 32, y: 48 }, cursor: 'pointer', pressed: true })
+    layer.highlightTarget({ target, rect: { x: 20, y: 30, width: 40, height: 20 } })
+    layer.showClick({ x: 32, y: 48 })
+    layer.showCursor({ point: { x: 32, y: 48 }, cursor: 'pointer', pressed: false })
+    layer.clearFeedback()
+
+    const cursor = getCursorElement()
+    expectCursorAtPoint(cursor, { x: 32, y: 48 })
+    expect(cursor.hasAttribute('data-actorble-cursor-pressed')).toBe(false)
+    expect(document.querySelector('[data-actorble-visual-highlight]')).toBeNull()
+    expect(document.querySelector('[data-actorble-visual-click]')).toBeNull()
+  })
+
   it('reuses the SVG subtree for repeated same-kind cursor updates', () => {
     const layer = new BrowserVisualLayer({ root: document })
 

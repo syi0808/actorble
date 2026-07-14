@@ -295,6 +295,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   #signalContext: PointerSignalContext | null = null
   #clickDispatchState: ClickDispatchState | null = null
   readonly #cursorPressedButtons = new Set<PointerButtonName>()
+  readonly #pressedPointerTargets = new Map<PointerButtonName, TargetHandle>()
   #cursorVisualState: CursorVisualState | null = null
   #currentPointerPoint: Point | null = null
   #nextPointerCommandId = 1
@@ -443,6 +444,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const span = this.#startActionSpan('moveTo', target, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
+    let performStarted = false
 
     try {
       handle = await this.#resolveTarget(target, options)
@@ -454,6 +456,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       this.#showTargetHighlight(handle, snapshot)
 
       phase = 'perform'
+      performStarted = true
       const commandId = this.#createPointerCommandId()
       const moveTarget = handle
       await this.#withPointerPerformTimeout(
@@ -484,9 +487,18 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         output: { point },
       })
     } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'moveTo')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
       throw this.#finishActionFailure(span, error, {
         action: 'moveTo',
-        phase,
+        phase: failurePhase,
         targetId: handle?.id,
       })
     } finally {
@@ -1351,6 +1363,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     let phase: ActionPhase = 'resolve'
     let primaryTarget: TargetHandle | undefined
     let range: ResolvedTextSelectionRange | undefined
+    let performStarted = false
 
     try {
       range = await this.#resolveTextSelectionRange(targetOrRange, options)
@@ -1364,7 +1377,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       }
 
       phase = 'perform'
-      const snapshot = shouldAnimateTextSelection(options)
+      const animated = shouldAnimateTextSelection(options)
+      performStarted = animated
+      const snapshot = animated
         ? await this.#performTextSelectionGesture(range, options, span)
         : this.#selection.applySelection(range.range)
 
@@ -1387,13 +1402,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         output: selectionTraceOutput(snapshot),
       })
     } catch (error) {
+      const failurePhase = phase
+
+      if (performStarted) {
+        phase = 'cleanup'
+        await this.#cleanupFailedPerform(span, 'selectText')
+      } else {
+        this.#clearVisualFeedback()
+      }
+
       throw this.#finishActionFailure(span, error, {
         action: 'selectText',
-        phase,
+        phase: failurePhase,
         targetId: primaryTarget?.id,
       })
     } finally {
       scope.dispose()
+      this.#clearPointerContext()
     }
   }
 
@@ -2204,6 +2229,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#state.applyStateEffects(diff.effects)
 
     if (signal.type === 'pointer:cancelled') {
+      this.#closePointerDispatchState()
       this.#cursorPressedButtons.clear()
       this.#restorePressedCursorVisual()
       this.#clearPointerVisualMode()
@@ -2235,6 +2261,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       }
       case 'pointer:down': {
+        this.#pressedPointerTargets.set(signal.button, eventTarget)
         this.#cursorPressedButtons.add(signal.button)
         this.#showPointerCursor(
           signal.point,
@@ -2264,6 +2291,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         break
       }
       case 'pointer:up': {
+        this.#pressedPointerTargets.delete(signal.button)
         this.#cursorPressedButtons.delete(signal.button)
         this.#showPointerCursor(
           signal.point,
@@ -2517,6 +2545,32 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     return true
   }
 
+  #closePointerDispatchState(): void {
+    const cancellationTarget = this.#pressedPointerTargets.values().next().value as
+      | TargetHandle
+      | undefined
+    const point = this.#currentPointerPoint ? clonePoint(this.#currentPointerPoint) : null
+
+    this.#pressedPointerTargets.clear()
+    if (this.#signalContext?.drag) {
+      this.#signalContext.drag.active = false
+    }
+    if (this.#clickDispatchState) {
+      resetPendingClickDispatch(this.#clickDispatchState)
+    }
+
+    if (!cancellationTarget || !point) {
+      return
+    }
+
+    this.#events.dispatchPointerEvent({
+      type: 'pointercancel',
+      target: cancellationTarget.element,
+      point,
+      buttons: [],
+    })
+  }
+
   async #cleanupFailedPerform(
     span: TraceSpanHandle,
     action: ActionName = 'click',
@@ -2529,6 +2583,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         error: describeUnknownError(error),
       })
     }
+
+    this.#closePointerDispatchState()
 
     try {
       const diff = this.#store.reset()

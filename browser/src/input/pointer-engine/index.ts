@@ -308,6 +308,15 @@ export class BrowserPointerEngine implements PointerEngine {
   }
 
   #cancelMotion(): void {
+    const hasOpenState =
+      this.#state.motion.status === 'moving' ||
+      this.#state.motion.status === 'settling' ||
+      this.#state.buttons.pressed.length > 0
+
+    if (!hasOpenState) {
+      return
+    }
+
     this.#state = {
       ...this.#state,
       motion: {

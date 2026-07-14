@@ -1301,7 +1301,7 @@ api/actorble-facade
 
 ### T59. Pointer and gesture cancellation invariants
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Audit move, click, drag, selection gesture, and pointerSequence interruption so every long-running pointer transaction closes pressed, active, dragging, capture, and visual state before the next action.
 - Dependencies: T52, completed unified action timeout envelope, pointer/gesture/store/visual modules.
 - Decision constraints:

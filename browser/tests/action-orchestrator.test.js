@@ -102,7 +102,7 @@ function createFrameTimeline(frameInterval = 125) {
 
 function createBlockingTimeline() {
   let now = 0
-  const pendingDelays = []
+  const pendingDelays = new Set()
 
   return {
     timeline: {
@@ -115,19 +115,23 @@ function createBlockingTimeline() {
               return
             }
 
+            const pending = {
+              duration,
+              resolve: () => {
+                options.signal?.removeEventListener('abort', onAbort)
+                pendingDelays.delete(pending)
+                now += duration
+                resolve()
+              },
+            }
             const onAbort = () => {
+              options.signal?.removeEventListener('abort', onAbort)
+              pendingDelays.delete(pending)
               reject(cancellationError('timeline.delay', options.signal?.reason))
             }
 
             options.signal?.addEventListener('abort', onAbort, { once: true })
-            pendingDelays.push({
-              duration,
-              resolve: () => {
-                options.signal?.removeEventListener('abort', onAbort)
-                now += duration
-                resolve()
-              },
-            })
+            pendingDelays.add(pending)
           }),
       ),
       nextFrame: vi.fn(async () => now),
@@ -135,16 +139,72 @@ function createBlockingTimeline() {
       withTimeout: vi.fn(async (operation) => operation),
     },
     get pendingDelayCount() {
-      return pendingDelays.length
+      return pendingDelays.size
     },
     resolveNextDelay() {
-      const pending = pendingDelays.shift()
+      const pending = pendingDelays.values().next().value
 
       if (!pending) {
         throw new Error('No pending delay to resolve.')
       }
 
       pending.resolve()
+    },
+  }
+}
+
+function createBlockingFrameTimeline() {
+  let now = 0
+  let activeAbortListenerCount = 0
+  const pendingFrames = new Set()
+
+  return {
+    timeline: {
+      now: vi.fn(() => now),
+      delay: vi.fn(async () => {}),
+      nextFrame: vi.fn(
+        (options = {}) =>
+          new Promise((resolve, reject) => {
+            const pending = {
+              resolve: (frameInterval = 50) => {
+                options.signal?.removeEventListener('abort', onAbort)
+                if (options.signal) activeAbortListenerCount -= 1
+                pendingFrames.delete(pending)
+                now += frameInterval
+                resolve(now)
+              },
+            }
+            const onAbort = () => {
+              options.signal?.removeEventListener('abort', onAbort)
+              activeAbortListenerCount -= 1
+              pendingFrames.delete(pending)
+              reject(cancellationError('timeline.nextFrame', options.signal?.reason))
+            }
+
+            if (options.signal?.aborted) {
+              reject(cancellationError('timeline.nextFrame', options.signal.reason))
+              return
+            }
+
+            if (options.signal) activeAbortListenerCount += 1
+            options.signal?.addEventListener('abort', onAbort, { once: true })
+            pendingFrames.add(pending)
+          }),
+      ),
+      settle: vi.fn(async () => {}),
+      withTimeout: vi.fn(async (operation) => operation),
+    },
+    get pendingFrameCount() {
+      return pendingFrames.size
+    },
+    get activeAbortListenerCount() {
+      return activeAbortListenerCount
+    },
+    step(frameInterval = 50) {
+      const pending = pendingFrames.values().next().value
+
+      if (!pending) throw new Error('No pending frame to resolve.')
+      pending.resolve(frameInterval)
     },
   }
 }
@@ -422,6 +482,9 @@ function createHarness(options = {}) {
     hover: vi.fn(async (point) => {
       calls.push('gesture.hover')
       signals.emit({ type: 'pointer:moved', point, previousPoint: null })
+      if (options.hoverFailure) {
+        throw options.hoverFailure
+      }
       return { completed: true }
     }),
     doubleClick: vi.fn(async () => {
@@ -1109,6 +1172,63 @@ describe('BrowserActionOrchestrator', () => {
       point: { x: 17, y: 0 },
       pressed: false,
     })
+  })
+
+  it('cancels an animated selection halfway and disposes frame listeners before the next action', async () => {
+    const paragraph = document.createElement('p')
+    paragraph.textContent = 'abcdefghij'
+    document.body.append(paragraph)
+    const textNode = paragraph.firstChild
+    const target = {
+      id: 'selection-target',
+      element: paragraph,
+      root: document,
+      resolvedAt: 1000,
+      validity: 'live',
+      debug: { selector: 'p', description: 'p' },
+    }
+    const controlled = createBlockingFrameTimeline()
+    const controller = new AbortController()
+    const selection = createSelectionDouble({
+      surface: 'document-text',
+      strategy: 'selection-api',
+      anchorNode: textNode,
+      focusNode: textNode,
+    })
+    const { events, orchestrator, store, visual } = createHarness({
+      target,
+      selection,
+      timeline: controlled.timeline,
+      enableVisual: true,
+      visualFeedback: 'debug',
+    })
+    selection.measureEndpoint.mockImplementation((endpoint) => ({ x: endpoint.offset, y: 0 }))
+
+    const result = orchestrator.selectText(
+      {
+        anchor: { target, offset: 0 },
+        focus: { target, offset: 10 },
+      },
+      { duration: 100, signal: controller.signal },
+    )
+
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
+    controlled.step(50)
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
+    controller.abort('selection stopped')
+
+    await expect(result).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
+    expect(controlled.pendingFrameCount).toBe(0)
+    expect(controlled.activeAbortListenerCount).toBe(0)
+    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toContain(
+      'pointercancel',
+    )
+    expect(store.snapshot().selection.active).toBe(false)
+    expect(visual.showCursor).toHaveBeenLastCalledWith(
+      expect.objectContaining({ point: { x: 5, y: 0 }, pressed: false }),
+    )
+
+    await expect(orchestrator.moveTo(target, { duration: 0 })).resolves.toBeUndefined()
   })
 
   it('selectText keeps the visual cursor on the progressively selected focus caret', async () => {
@@ -2016,6 +2136,24 @@ describe('BrowserActionOrchestrator', () => {
     ])
   })
 
+  it('cleans failed move state and visual feedback before a subsequent move', async () => {
+    const pointerVisual = createPointerVisualTrackerDouble()
+    const { gesture, orchestrator, state, visual } = createHarness({
+      enableVisual: true,
+      hoverFailure: cancellationError('gesture.hover', 'move stopped'),
+      pointerVisual,
+    })
+
+    await expect(orchestrator.moveTo(css('#target-1'))).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+    })
+
+    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(pointerVisual.clear).toHaveBeenCalled()
+    expect(visual.clearFeedback).toHaveBeenCalled()
+  })
+
   it('moveTo skips reveal when the action reveal policy is false', async () => {
     const { calls, orchestrator, surface } = createHarness()
 
@@ -2172,7 +2310,7 @@ describe('BrowserActionOrchestrator', () => {
         details: { boundary: 'gesture-engine', pressedButtons: ['primary'] },
       },
     )
-    const { gesture, orchestrator, state, trace } = createHarness({
+    const { events, gesture, orchestrator, state, trace } = createHarness({
       pointerSequenceFailure: failure,
     })
 
@@ -2187,6 +2325,9 @@ describe('BrowserActionOrchestrator', () => {
     })
 
     expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(events.dispatchPointerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'pointercancel', buttons: [] }),
+    )
     expect(state.cleanup).toHaveBeenCalledOnce()
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
@@ -2572,7 +2713,7 @@ describe('BrowserActionOrchestrator', () => {
   it('drag cancellation after pointer down cleans up pressed and dragging state', async () => {
     const source = targetHandle('drag-source')
     const destination = targetHandle('drop-target')
-    const { gesture, orchestrator, state, trace, visual } = createHarness({
+    const { events, gesture, orchestrator, state, trace, visual } = createHarness({
       target: source,
       enableVisual: true,
       resolveTargets: [source, destination],
@@ -2599,6 +2740,9 @@ describe('BrowserActionOrchestrator', () => {
     })
 
     expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(events.dispatchPointerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'pointercancel', buttons: [] }),
+    )
     expect(state.cleanup).toHaveBeenCalledOnce()
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 10, y: 20 },
@@ -3575,7 +3719,7 @@ describe('BrowserActionOrchestrator', () => {
   it('restores pressed cursor visual when click is cancelled during press dwell', async () => {
     const controlled = createBlockingTimeline()
     const controller = new AbortController()
-    const { orchestrator, visual } = createHarness({
+    const { events, orchestrator, store, visual } = createHarness({
       enableVisual: true,
       useRealGesture: true,
       timeline: controlled.timeline,
@@ -3602,11 +3746,32 @@ describe('BrowserActionOrchestrator', () => {
     await expect(click).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
     })
+    expect(controlled.pendingDelayCount).toBe(0)
+    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'pointermove',
+      'pointerdown',
+      'pointercancel',
+    ])
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(store.snapshot()).toMatchObject({
+      active: null,
+      dragging: { source: null, target: null },
+    })
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
     })
+
+    events.dispatchPointerEvent.mockClear()
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined()
+    expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      'pointermove',
+      'pointerdown',
+      'pointerup',
+    ])
   })
 
   it('times out click perform during press dwell with action timeout cleanup', async () => {

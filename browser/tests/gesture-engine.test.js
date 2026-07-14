@@ -73,6 +73,51 @@ function createFakePointer() {
 }
 
 describe('BrowserGestureEngine', () => {
+  it.each([
+    {
+      phase: 'click dwell after down',
+      run: (engine) => engine.click(createTarget(), { x: 3, y: 4 }, { pressDwell: 50 }),
+      arrange: ({ timeline }) => {
+        timeline.delay.mockRejectedValueOnce(
+          cancellationError('timeline.delay', 'phase abort'),
+        )
+      },
+    },
+    {
+      phase: 'drag movement after down',
+      run: (engine) => engine.drag({ x: 1, y: 1 }, { x: 9, y: 9 }),
+      arrange: ({ pointer }) => {
+        pointer.moveTo.mockResolvedValueOnce(pointer.getState())
+        pointer.moveTo.mockRejectedValueOnce(
+          cancellationError('pointer.moveTo', 'phase abort'),
+        )
+      },
+    },
+    {
+      phase: 'pointer sequence pause after down',
+      run: (engine) =>
+        engine.pointerSequence([
+          { type: 'down', button: 'primary' },
+          { type: 'pause', duration: 50 },
+          { type: 'up', button: 'primary' },
+        ]),
+      arrange: ({ timeline }) => {
+        timeline.delay.mockRejectedValueOnce(
+          cancellationError('timeline.delay', 'phase abort'),
+        )
+      },
+    },
+  ])('cancels exactly once when aborted during $phase', async ({ arrange, run }) => {
+    const harness = createFakePointer()
+    const engine = new BrowserGestureEngine({ pointer: harness.pointer, timeline: harness.timeline })
+
+    arrange(harness)
+
+    await expect(run(engine)).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
+    expect(harness.calls.filter(([operation]) => operation === 'cancel')).toHaveLength(1)
+    expect(harness.calls.filter(([operation]) => operation === 'up')).toHaveLength(0)
+  })
+
   it('click composes move, down, and up pointer operations in order', async () => {
     const { calls, pointer, timeline } = createFakePointer()
     const engine = new BrowserGestureEngine({ pointer, timeline })
