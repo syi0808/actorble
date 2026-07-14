@@ -11,6 +11,9 @@ import { createFrameGeometrySurfaceCache } from '../../targeting/frame-geometry-
 import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine, normalizeWaitStrategy } from '../timeline-engine/index.js'
+import { BrowserVisualStabilityObserver } from '../visual-stability-observer/index.js'
+import { BrowserLayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
+import { BrowserScrollChainResolver } from '../../targeting/scroll-chain-resolver/index.js'
 import type {
   LayoutInvalidationEvent,
   LayoutInvalidationTracker,
@@ -22,6 +25,7 @@ import type {
   Locator,
   TargetHandle,
   TargetLike,
+  StabilityPolicy,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
@@ -34,6 +38,7 @@ import type {
   TimelineEngine,
   WaitStrategy,
 } from '../timeline-engine/index.js'
+import type { VisualStabilityObserver } from '../visual-stability-observer/index.js'
 
 export type WaitResult = Readonly<{
   condition: WaitCondition
@@ -43,7 +48,11 @@ export type WaitResult = Readonly<{
 
 export interface WaitObservationEngine {
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>
-  settle(strategy?: WaitStrategy, options?: WaitOptions): Promise<WaitResult | null>
+  settle(
+    strategy?: StabilityPolicy,
+    options?: WaitOptions,
+    target?: TargetHandle,
+  ): Promise<WaitResult | null>
   invalidateGeometry(reason: string): void
 }
 
@@ -70,6 +79,7 @@ export type WaitObservationEngineOptions = Readonly<{
   layoutInvalidation?: LayoutInvalidationTracker
   timeline?: TimelineEngine
   trace?: WaitTraceRecorder
+  visualStability?: VisualStabilityObserver
   onGeometryInvalidated?: GeometryInvalidationHook
 }>
 
@@ -130,6 +140,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   readonly #geometrySurfaceCache?: FrameGeometrySurfaceCache
   readonly #layoutInvalidation?: LayoutInvalidationTracker
   readonly #layoutInvalidationSubscription?: { dispose(): void }
+  readonly #visualStability: VisualStabilityObserver
   #layoutRevision = 0
   #textRevision = 0
 
@@ -138,10 +149,15 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
     this.#resolver =
       options.resolver ?? new BrowserTargetResolver({ dom: this.#dom, clock: this.#timeline })
+    const layoutInvalidation =
+      options.layoutInvalidation ?? new BrowserLayoutInvalidationTracker({
+        dom: this.#dom,
+        timeline: this.#timeline,
+      })
     const geometrySurfaceCache =
       options.geometry === undefined
         ? createFrameGeometrySurfaceCache({
-            layoutInvalidation: options.layoutInvalidation,
+            layoutInvalidation,
             timeline: this.#timeline,
           })
         : undefined
@@ -157,9 +173,19 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       options.interactability ??
       new BrowserInteractabilityEngine({ dom: this.#dom, geometry: this.#geometry })
     this.#trace = options.trace
+    this.#visualStability =
+      options.visualStability ??
+      new BrowserVisualStabilityObserver({
+        dom: this.#dom,
+        geometry: this.#geometry,
+        layoutInvalidation,
+        resolver: this.#resolver,
+        scrollChain: new BrowserScrollChainResolver({ dom: this.#dom }),
+        timeline: this.#timeline,
+      })
     this.#onGeometryInvalidated = options.onGeometryInvalidated
-    this.#layoutInvalidation = options.layoutInvalidation
-    this.#layoutInvalidationSubscription = options.layoutInvalidation?.subscribe((event) => {
+    this.#layoutInvalidation = layoutInvalidation
+    this.#layoutInvalidationSubscription = layoutInvalidation.subscribe((event) => {
       this.#recordLayoutInvalidation(event)
     })
   }
@@ -217,11 +243,12 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async settle(
-    strategy: WaitStrategy = 'interaction-stable',
+    strategy: StabilityPolicy = 'interaction-stable',
     options: WaitOptions = {},
+    target?: TargetHandle,
   ): Promise<WaitResult | null> {
     const operation = 'wait.settle'
-    const resolvedStrategy = normalizeWaitStrategy(strategy)
+    const resolvedStrategy = strategy === 'settled' ? 'interaction-stable' : strategy
     const span = this.#trace?.startSpan(operation, {
       strategy: resolvedStrategy,
       timeout: options.timeout,
@@ -233,8 +260,18 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     })
 
     try {
+      if (resolvedStrategy === 'visual-stable') {
+        await this.#visualStability.observe(target, options)
+        span?.event('wait:success', { strategy: resolvedStrategy })
+        span?.end({ strategy: resolvedStrategy })
+        return null
+      }
+
       await this.#withTimeout(operation, options, { strategy: resolvedStrategy }, (signal) =>
-        this.#timeline.settle(resolvedStrategy, toCancellationOptions(signal)),
+        this.#timeline.settle(
+          normalizeWaitStrategy(resolvedStrategy as WaitStrategy),
+          toCancellationOptions(signal),
+        ),
       )
 
       span?.event('wait:success', { strategy: resolvedStrategy })
@@ -677,7 +714,10 @@ function normalizeWaitError(
     ) {
       return timeoutError(operation, normalizeDuration(timeout), {
         cause: error,
-        details,
+        details: {
+          ...error.details,
+          ...details,
+        },
       })
     }
 

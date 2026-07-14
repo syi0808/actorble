@@ -20,7 +20,7 @@ export type ScrollSettlementTimeline = Pick<TimelineEngine, 'nextFrame' | 'now'>
 
 export type ScrollSettlementDomPort = Pick<
   DomReadPort,
-  'getScrollMetrics' | 'observeScroll' | 'observeScrollEnd'
+  'getScrollMetrics' | 'observeScrollActivity' | 'observeScrollEnd'
 >
 
 export type ScrollSettlementOptions = Readonly<{
@@ -112,7 +112,7 @@ export class BrowserScrollSettlementObserver implements ScrollSettlementObserver
 
       for (const state of states) {
         disposables.push(
-          this.#dom.observeScroll(state.target, () => {
+          this.#dom.observeScrollActivity(state.target, () => {
             state.lastActivityAt = this.#timeline.now()
           }),
         )

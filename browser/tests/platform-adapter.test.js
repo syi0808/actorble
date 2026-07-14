@@ -220,6 +220,20 @@ describe('BrowserDomAdapter', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('observes scroll activity without reading metrics in the event callback', () => {
+    const scrollbox = document.createElement('div')
+    const adapter = new BrowserDomAdapter(document)
+    const metrics = vi.spyOn(adapter, 'getScrollMetrics')
+    const listener = vi.fn()
+    const subscription = adapter.observeScrollActivity(scrollbox, listener)
+
+    scrollbox.dispatchEvent(new Event('scroll'))
+
+    expect(listener).toHaveBeenCalledWith()
+    expect(metrics).not.toHaveBeenCalled()
+    subscription.dispose()
+  })
+
   it('treats native scrollend as an optional disposable signal', () => {
     const unsupported = new Proxy(document.createElement('div'), {
       has(target, property) {
@@ -378,6 +392,25 @@ describe('BrowserDomAdapter', () => {
     target.dispatchEvent(new Event('transitionrun', { bubbles: true }))
     expect(listener).toHaveBeenCalledWith('animation-frame')
 
+    subscription.dispose()
+  })
+
+  it('observes mutations and scroll activity inside reachable open shadow roots', async () => {
+    const host = document.createElement('section')
+    const shadow = host.attachShadow({ mode: 'open' })
+    const target = document.createElement('button')
+    shadow.append(target)
+    document.body.append(host)
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+    const subscription = adapter.observeLayoutInvalidations(listener)
+
+    target.setAttribute('data-state', 'ready')
+    await flushDomObservers()
+    target.dispatchEvent(new Event('scroll'))
+
+    expect(listener).toHaveBeenCalledWith('mutation')
+    expect(listener).toHaveBeenCalledWith('scroll')
     subscription.dispose()
   })
 })

@@ -85,7 +85,7 @@ function createDom(initialOffsets) {
         const offset = offsets.get(target) ?? { x: 0, y: 0 }
         return metrics(offset.x, offset.y)
       }),
-      observeScroll: vi.fn((target, listener) =>
+      observeScrollActivity: vi.fn((target, listener) =>
         subscribe(scrollListeners, target, listener, scrollDispose),
       ),
       observeScrollEnd: vi.fn((target, listener) =>
@@ -255,9 +255,9 @@ describe('scroll settlement observer', () => {
       [first, { x: 0, y: 0 }],
       [second, { x: 0, y: 0 }],
     ])
-    port.dom.observeScroll.mockImplementationOnce((target, listener) => {
+    port.dom.observeScrollActivity.mockImplementationOnce((target, listener) => {
       const subscription = createDom([[target, { x: 0, y: 0 }]])
-      const disposable = subscription.dom.observeScroll(target, listener)
+      const disposable = subscription.dom.observeScrollActivity(target, listener)
 
       return {
         dispose() {

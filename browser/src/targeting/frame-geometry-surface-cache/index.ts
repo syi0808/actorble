@@ -14,7 +14,8 @@ export type FrameGeometrySurfaceCacheTimeline = Readonly<{
 }>
 
 export type FrameGeometrySurfaceCacheOptions = Readonly<{
-  layoutInvalidation?: Pick<LayoutInvalidationTracker, 'subscribe'>
+  layoutInvalidation?: Pick<LayoutInvalidationTracker, 'subscribe'> &
+    Partial<Pick<LayoutInvalidationTracker, 'subscribeDirty'>>
   timeline?: FrameGeometrySurfaceCacheTimeline
 }>
 
@@ -32,9 +33,10 @@ export class FrameGeometrySurfaceCache implements Disposable {
 
   constructor(options: FrameGeometrySurfaceCacheOptions = {}) {
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
-    this.#layoutInvalidationSubscription = options.layoutInvalidation?.subscribe((event) => {
-      this.invalidate(event.reason)
-    })
+    const layoutInvalidation = options.layoutInvalidation
+    this.#layoutInvalidationSubscription = layoutInvalidation?.subscribeDirty !== undefined
+      ? layoutInvalidation.subscribeDirty((event) => this.invalidate(event.reason))
+      : layoutInvalidation?.subscribe((event) => this.invalidate(event.reason))
   }
 
   getBoundingRect(element: Element, read: () => Rect): Rect {

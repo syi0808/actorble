@@ -473,7 +473,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         },
       )
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'moveTo',
@@ -556,7 +556,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'click',
@@ -651,7 +651,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? point
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'clickCurrent',
@@ -749,7 +749,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'doubleClick',
@@ -805,7 +805,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const snapshot = await this.#focus.focus(handle, options)
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
       this.#clearVisualFeedback()
 
       span.end({
@@ -971,7 +971,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#showTypingFeedback(typeTarget, false)
       }
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'typeInto',
@@ -1037,7 +1037,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       }
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, handle)
 
       span.end({
         action: 'fill',
@@ -1302,7 +1302,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       )
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, source)
 
       span.end({
         action: 'drag',
@@ -1375,7 +1375,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       span.event('selection:applied', selectionTraceMetadata(range, snapshot))
 
       phase = 'wait'
-      await this.#waitAfterAction(options)
+      await this.#waitAfterAction(options, primaryTarget)
 
       span.end({
         action: 'selectText',
@@ -1522,6 +1522,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
   async #waitAfterAction(
     options: OperationOptions & Readonly<{ wait?: ActionWaitPolicy }>,
+    target?: TargetHandle,
   ): Promise<void> {
     const policy = options.wait ?? 'interaction-stable'
 
@@ -1533,11 +1534,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const resolvedPolicy = normalizeStabilityPolicy(policy)
 
     if (resolvedPolicy === 'visual-stable') {
-      throw actorbleError(
-        'PLATFORM_UNSUPPORTED',
-        'Visual-stable action waits are not implemented yet.',
-        { details: { policy: resolvedPolicy } },
-      )
+      await this.#wait.settle(resolvedPolicy, operationOptions(options), target)
+      return
     }
 
     await this.#wait.settle(resolvedPolicy, operationOptions(options))

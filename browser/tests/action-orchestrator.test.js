@@ -2078,8 +2078,8 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('rejects visual-stable action waits until the observed stability task lands', async () => {
-    const { orchestrator } = createHarness()
+  it('routes visual-stable action waits with the resolved primary target', async () => {
+    const { orchestrator, wait } = createHarness()
 
     await expect(
       orchestrator.moveTo(css('#target-1'), {
@@ -2087,10 +2087,21 @@ describe('BrowserActionOrchestrator', () => {
         wait: 'visual-stable',
         duration: 0,
       }),
-    ).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: { policy: 'visual-stable' },
-    })
+    ).resolves.toBeUndefined()
+
+    expect(wait.settle).toHaveBeenCalledWith(
+      'visual-stable',
+      {},
+      expect.objectContaining({ id: 'target-1' }),
+    )
+  })
+
+  it('routes targetless visual-stable action waits to root observation', async () => {
+    const { orchestrator, wait } = createHarness()
+
+    await expect(orchestrator.type('Saved', { wait: 'visual-stable' })).resolves.toBeUndefined()
+
+    expect(wait.settle).toHaveBeenCalledWith('visual-stable', {}, undefined)
   })
 
   it('pointerSequence executes a cleanup-safe transaction and records trace output', async () => {

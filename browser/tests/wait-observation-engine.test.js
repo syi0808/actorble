@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
-import { actorbleError, css } from '../src/shared/index.js'
+import { actorbleError, css, timeoutError } from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
   createWaitObservationEngine,
@@ -184,6 +184,58 @@ describe('BrowserWaitObservationEngine', () => {
         data: expect.objectContaining({ strategy: 'interaction-stable' }),
       }),
     ])
+  })
+
+  it('delegates visual-stable settlement to the observed stability engine', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const target = targetHandle(document.querySelector('#save'))
+    const visualStability = {
+      observe: vi.fn(async () => ({
+        requiredStableFrames: 2,
+        observedStableFrames: 2,
+        lastMutationAt: 0,
+        lastScrollAt: 0,
+      })),
+    }
+    const timeline = createTimeline()
+    const engine = new BrowserWaitObservationEngine({ timeline, visualStability })
+
+    await expect(engine.settle('visual-stable', { timeout: 250 }, target)).resolves.toBeNull()
+
+    expect(visualStability.observe).toHaveBeenCalledWith(target, { timeout: 250 })
+    expect(timeline.settle).not.toHaveBeenCalled()
+  })
+
+  it('preserves visual-stability samples when normalizing settle timeouts', async () => {
+    const visualStability = {
+      observe: vi.fn(async () => {
+        throw timeoutError('wait.visual-stable', 25, {
+          details: {
+            requiredStableFrames: 2,
+            observedStableFrames: 0,
+            lastMutationAt: 7,
+            lastScrollAt: 8,
+          },
+        })
+      }),
+    }
+    const engine = new BrowserWaitObservationEngine({
+      timeline: createTimeline(),
+      visualStability,
+    })
+
+    await expect(engine.settle('visual-stable', { timeout: 25 })).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'wait.settle',
+        timeout: 25,
+        strategy: 'visual-stable',
+        requiredStableFrames: 2,
+        observedStableFrames: 0,
+        lastMutationAt: 7,
+        lastScrollAt: 8,
+      },
+    })
   })
 
   it('resolves custom wait predicates immediately when already satisfied', async () => {

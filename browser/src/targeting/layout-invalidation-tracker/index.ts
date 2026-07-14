@@ -19,6 +19,13 @@ export type LayoutInvalidationEvent = Readonly<{
 
 export type LayoutInvalidationListener = (event: LayoutInvalidationEvent) => void
 
+export type LayoutInvalidationDirtyEvent = Readonly<{
+  reason: LayoutInvalidationReason
+  at: TimestampMs
+}>
+
+export type LayoutInvalidationDirtyListener = (event: LayoutInvalidationDirtyEvent) => void
+
 export type LayoutInvalidationObservationPort = Pick<
   DomPort,
   'observeLayoutInvalidations'
@@ -37,12 +44,14 @@ export interface LayoutInvalidationTracker extends Disposable {
   isRunning(): boolean
   markDirty(reason: LayoutInvalidationReason): void
   subscribe(listener: LayoutInvalidationListener): Disposable
+  subscribeDirty(listener: LayoutInvalidationDirtyListener): Disposable
 }
 
 export class BrowserLayoutInvalidationTracker implements LayoutInvalidationTracker {
   readonly #dom: LayoutInvalidationObservationPort
   readonly #timeline: LayoutInvalidationTimeline
   readonly #listeners = new Set<LayoutInvalidationListener>()
+  readonly #dirtyListeners = new Set<LayoutInvalidationDirtyListener>()
   #running = false
   #observation: Disposable | null = null
   #frameController: AbortController | null = null
@@ -86,6 +95,9 @@ export class BrowserLayoutInvalidationTracker implements LayoutInvalidationTrack
       return
     }
 
+    const dirtyEvent = { reason, at: this.#timeline.now() }
+    for (const listener of [...this.#dirtyListeners]) listener(dirtyEvent)
+
     this.#pendingCount += 1
     this.#pendingFirstReason ??= reason
 
@@ -110,9 +122,15 @@ export class BrowserLayoutInvalidationTracker implements LayoutInvalidationTrack
     }
   }
 
+  subscribeDirty(listener: LayoutInvalidationDirtyListener): Disposable {
+    this.#dirtyListeners.add(listener)
+    return { dispose: () => this.#dirtyListeners.delete(listener) }
+  }
+
   dispose(): void {
     this.stop()
     this.#listeners.clear()
+    this.#dirtyListeners.clear()
   }
 
   #scheduleFrameFlush(): void {
@@ -198,6 +216,10 @@ export class NoopLayoutInvalidationTracker implements LayoutInvalidationTracker 
   markDirty(_reason: LayoutInvalidationReason): void {}
 
   subscribe(_listener: LayoutInvalidationListener): Disposable {
+    return { dispose() {} }
+  }
+
+  subscribeDirty(_listener: LayoutInvalidationDirtyListener): Disposable {
     return { dispose() {} }
   }
 

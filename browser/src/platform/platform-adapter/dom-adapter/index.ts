@@ -255,7 +255,9 @@ export class BrowserDomAdapter implements DomAdapter {
     const root = this.getRoot()
     const ownerWindow = getOwnerWindowForRoot(root)
     const cleanupListeners: Array<() => void> = []
-    let mutationObserver: MutationObserver | null = null
+    const mutationObservers: MutationObserver[] = []
+    const observedRoots = new Set<Document | ShadowRoot>()
+    const MutationObserverCtor = (ownerWindow as MutationObserverOwner).MutationObserver
 
     const listen = (
       target: EventTarget,
@@ -277,39 +279,51 @@ export class BrowserDomAdapter implements DomAdapter {
       })
     }
 
+    const discoverOpenRoots = (scope: Document | ShadowRoot) => {
+      for (const element of scope.querySelectorAll('*')) {
+        if (element.shadowRoot !== null) observeRoot(element.shadowRoot)
+      }
+    }
+
+    const observeRoot = (observationRoot: Document | ShadowRoot) => {
+      if (observedRoots.has(observationRoot)) return
+      observedRoots.add(observationRoot)
+
+      listen(observationRoot, 'scroll', 'scroll', { capture: true, passive: true })
+      for (const eventName of [
+        'animationstart',
+        'animationiteration',
+        'animationend',
+        'transitionrun',
+        'transitionstart',
+        'transitionend',
+        'transitioncancel',
+      ]) {
+        listen(observationRoot, eventName, 'animation-frame', {
+          capture: true,
+          passive: true,
+        })
+      }
+
+      if (typeof MutationObserverCtor === 'function') {
+        const observer = new MutationObserverCtor((records) => {
+          discoverOpenRoots(observationRoot)
+          if (!records.every(isInternalMutationRecord)) listener('mutation')
+        })
+        observer.observe(observationRoot, {
+          attributes: true,
+          characterData: true,
+          childList: true,
+          subtree: true,
+        })
+        mutationObservers.push(observer)
+      }
+
+      discoverOpenRoots(observationRoot)
+    }
+
     listen(ownerWindow, 'resize', 'resize')
-    listen(root, 'scroll', 'scroll', { capture: true, passive: true })
-
-    for (const eventName of [
-      'animationstart',
-      'animationiteration',
-      'animationend',
-      'transitionrun',
-      'transitionstart',
-      'transitionend',
-      'transitioncancel',
-    ]) {
-      listen(root, eventName, 'animation-frame', { capture: true, passive: true })
-    }
-
-    const MutationObserverCtor = (ownerWindow as MutationObserverOwner).MutationObserver
-
-    if (typeof MutationObserverCtor === 'function') {
-      const observer = new MutationObserverCtor((records) => {
-        if (records.every(isInternalMutationRecord)) {
-          return
-        }
-
-        listener('mutation')
-      })
-      observer.observe(root, {
-        attributes: true,
-        characterData: true,
-        childList: true,
-        subtree: true,
-      })
-      mutationObserver = observer
-    }
+    observeRoot(root)
 
     return {
       dispose() {
@@ -317,8 +331,8 @@ export class BrowserDomAdapter implements DomAdapter {
           cleanup()
         }
 
-        mutationObserver?.disconnect()
-        mutationObserver = null
+        for (const observer of mutationObservers.splice(0)) observer.disconnect()
+        observedRoots.clear()
       },
     }
   }
@@ -328,6 +342,24 @@ export class BrowserDomAdapter implements DomAdapter {
     listener: ActorbleListener<ScrollMetrics>,
   ): Disposable {
     return this.#observeScrollSignal(target, 'scroll', listener)
+  }
+
+  observeScrollActivity(
+    target: Element | Window,
+    listener: ActorbleListener<void>,
+  ): Disposable {
+    const options: AddEventListenerOptions = { passive: true }
+    const handler = () => listener()
+    target.addEventListener('scroll', handler, options)
+    let disposed = false
+
+    return {
+      dispose() {
+        if (disposed) return
+        disposed = true
+        target.removeEventListener('scroll', handler, options)
+      },
+    }
   }
 
   observeScrollEnd(

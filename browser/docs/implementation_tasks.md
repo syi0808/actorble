@@ -1202,7 +1202,7 @@ api/actorble-facade
 
 ### T54. Observed visual-stability engine
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add geometry stable-frame sampling, mutation quiet observation, scroll stability composition, target validity checking, and timeout diagnostics for opt-in visual stability.
 - Dependencies: T50, T53, geometry engine, layout invalidation tracker, frame cache, diagnostics.
 - Decision constraints:

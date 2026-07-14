@@ -139,6 +139,29 @@ describe('runner tracking scaffold', () => {
     ])
   })
 
+  it('publishes read-free dirty signals synchronously before the coalesced frame event', () => {
+    const timeline = {
+      now: vi.fn(() => 37),
+      nextFrame: vi.fn(() => new Promise(() => {})),
+    }
+    const tracker = new BrowserLayoutInvalidationTracker({ timeline })
+    const dirty = []
+    const coalesced = []
+
+    tracker.subscribeDirty((event) => dirty.push(event))
+    tracker.subscribe((event) => coalesced.push(event))
+    tracker.start()
+    tracker.markDirty('mutation')
+    tracker.markDirty('scroll')
+
+    expect(dirty).toEqual([
+      { reason: 'mutation', at: 37 },
+      { reason: 'scroll', at: 37 },
+    ])
+    expect(coalesced).toEqual([])
+    expect(timeline.nextFrame).toHaveBeenCalledOnce()
+  })
+
   it('ignores dirty signals while stopped and clears pending invalidations on stop', async () => {
     const frame = deferred()
     const observation = { dispose: vi.fn() }

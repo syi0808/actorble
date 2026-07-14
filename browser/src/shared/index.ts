@@ -654,6 +654,10 @@ export interface DomReadPort {
     target: Element | Window,
     listener: ActorbleListener<ScrollMetrics>,
   ): Disposable
+  observeScrollActivity(
+    target: Element | Window,
+    listener: ActorbleListener<void>,
+  ): Disposable
   observeScrollEnd(
     target: Element | Window,
     listener: ActorbleListener<ScrollMetrics>,
