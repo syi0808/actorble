@@ -5,6 +5,7 @@ import {
   timeoutError,
 } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import {
@@ -13,8 +14,15 @@ import {
   type ScrollSurfaceSnapshot,
 } from '../scroll-chain-resolver/index.js'
 import { createRevealPlanner, type RevealPlanner } from '../reveal-planner/index.js'
+import {
+  createScrollSettlementObserver,
+  scrollSettlementOptionsFor,
+  type ScrollSettlementObserver,
+  type ScrollSettlementTimeline,
+} from '../scroll-settlement-observer/index.js'
 import type {
   Clock,
+  CancellationSignalLike,
   CoordinateSpace,
   DomPort,
   OperationOptions,
@@ -22,6 +30,7 @@ import type {
   Rect,
   RevealOptions,
   RevealResult,
+  ScrollSettlePolicy,
   ScrollDelta,
   ScrollOptions,
   ScrollPosition,
@@ -61,6 +70,8 @@ export type SurfaceEngineOptions = Readonly<{
   geometry?: RevealGeometryReader | (() => RevealGeometryReader)
   revealPlanner?: RevealPlanner
   scrollChainResolver?: ScrollChainResolver
+  settlementObserver?: ScrollSettlementObserver
+  timeline?: ScrollSettlementTimeline
 }>
 
 export type RevealGeometrySnapshot = Readonly<{
@@ -80,11 +91,16 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   readonly #geometry?: () => RevealGeometryReader
   readonly #revealPlanner: RevealPlanner
   readonly #scrollChainResolver: ScrollChainResolver
+  readonly #settlementObserver: ScrollSettlementObserver
+  readonly #timeline: ScrollSettlementTimeline
 
   constructor(options: SurfaceEngineOptions = {}) {
+    const timeline = options.timeline ?? new BrowserTimelineEngine()
+
     this.#dom = options.dom ?? new BrowserDomAdapter()
     this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
-    this.#clock = options.clock ?? { now: () => Date.now() }
+    this.#clock = options.clock ?? timeline
+    this.#timeline = timeline
     this.#geometry =
       options.geometry === undefined
         ? undefined
@@ -94,6 +110,9 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     this.#revealPlanner = options.revealPlanner ?? createRevealPlanner()
     this.#scrollChainResolver =
       options.scrollChainResolver ?? createScrollChainResolver({ dom: this.#dom, cache: this.#cache })
+    this.#settlementObserver =
+      options.settlementObserver ??
+      createScrollSettlementObserver({ dom: this.#dom, timeline: this.#timeline })
   }
 
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot {
@@ -138,7 +157,10 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       this.#scrollChainResolver.resolve(target),
       options,
     )
-    const steps: RevealResult['steps'][number][] = []
+    const executedSteps: Array<
+      Omit<RevealResult['steps'][number], 'to'> & { scrollTarget: Element | Window }
+    > = []
+    const changedSurfaces = new Set<Element | Window>()
     let currentGeometry = initialGeometry
 
     for (let index = 0; index < canonicalChain.length; index += 1) {
@@ -174,21 +196,39 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       }
 
       assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-      this.#dom.scrollTo(freshSurface.scrollTarget, planned.intendedTo, { behavior: 'instant' })
+      this.#dom.scrollTo(freshSurface.scrollTarget, planned.intendedTo, {
+        behavior: scrollBehaviorFor(options),
+      })
       this.#cache.invalidate('scroll')
-      const actual = this.#readScrollPosition(freshSurface.scrollTarget)
+      executedSteps.push({
+        surfaceId: planned.surfaceId,
+        from: Object.freeze({ ...planned.from }),
+        intendedTo: Object.freeze({ ...planned.intendedTo }),
+        axes: Object.freeze([...planned.axes]),
+        scrollTarget: freshSurface.scrollTarget,
+      })
 
-      steps.push(
-        Object.freeze({
-          surfaceId: planned.surfaceId,
-          from: Object.freeze({ ...planned.from }),
-          intendedTo: Object.freeze({ ...planned.intendedTo }),
-          to: Object.freeze(actual),
-          axes: Object.freeze([...planned.axes]),
-        }),
-      )
+      if (!samePoint(planned.from, planned.intendedTo)) {
+        changedSurfaces.add(freshSurface.scrollTarget)
+      }
       assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
     }
+
+    await this.#settleSurfaces(
+      [...changedSurfaces],
+      options.settle,
+      'surface.reveal',
+      deadline,
+      options.signal,
+    )
+    this.#cache.invalidate('scroll')
+    const steps: RevealResult['steps'][number][] = executedSteps.map(
+      ({ scrollTarget, ...step }) =>
+        Object.freeze({
+          ...step,
+          to: Object.freeze(this.#readScrollPosition(scrollTarget)),
+        }),
+    )
 
     const finalGeometry = await geometry.snapshot(target)
     assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
@@ -213,7 +253,16 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.scrollTo', this.#clock, deadline, options.signal)
     const before = this.#getViewportScrollOffset()
+    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
     this.#scrollViewportTo(position, options)
+    this.#cache.invalidate('scroll')
+    await this.#settleSurfaces(
+      samePoint(before, position) ? [] : [target],
+      options.settle,
+      'surface.scrollTo',
+      deadline,
+      options.signal,
+    )
     this.#cache.invalidate('scroll')
     const after = this.#getViewportScrollOffset()
     assertOperationBoundary('surface.scrollTo', this.#clock, deadline, options.signal)
@@ -225,7 +274,17 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.scrollBy', this.#clock, deadline, options.signal)
     const before = this.#getViewportScrollOffset()
-    this.#scrollViewportTo({ x: before.x + delta.x, y: before.y + delta.y }, options)
+    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
+    const intended = { x: before.x + delta.x, y: before.y + delta.y }
+    this.#scrollViewportTo(intended, options)
+    this.#cache.invalidate('scroll')
+    await this.#settleSurfaces(
+      samePoint(before, intended) ? [] : [target],
+      options.settle,
+      'surface.scrollBy',
+      deadline,
+      options.signal,
+    )
     this.#cache.invalidate('scroll')
     const after = this.#getViewportScrollOffset()
     assertOperationBoundary('surface.scrollBy', this.#clock, deadline, options.signal)
@@ -306,6 +365,34 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   ): readonly ScrollSurfaceSnapshot[] {
     return (options.container ?? 'all') === 'nearest' ? chain.slice(0, 1) : chain
   }
+
+  async #settleSurfaces(
+    surfaces: readonly (Element | Window)[],
+    policy: ScrollSettlePolicy | undefined,
+    operation: string,
+    deadline: OperationDeadline | undefined,
+    signal: CancellationSignalLike | undefined,
+  ): Promise<void> {
+    if (surfaces.length === 0 || policy === undefined || policy === 'none') {
+      return
+    }
+
+    if (policy === 'next-frame') {
+      await this.#timeline.nextFrame({ signal })
+      assertOperationBoundary(operation, this.#clock, deadline, signal)
+      return
+    }
+
+    await this.#settlementObserver.settle(surfaces, {
+      ...scrollSettlementOptionsFor(policy),
+      ...(deadline === undefined
+        ? {}
+        : { timeout: Math.max(0, deadline.at - this.#clock.now()) }),
+      ...(signal === undefined ? {} : { signal }),
+      operation,
+    })
+    assertOperationBoundary(operation, this.#clock, deadline, signal)
+  }
 }
 
 export function createSurfaceEngine(options: SurfaceEngineOptions = {}): SurfaceEngine {
@@ -337,22 +424,10 @@ function assertSupportedExplicitScrollOptions(options: ScrollOptions): void {
     )
   }
 
-  if (options.settle !== undefined && options.settle !== 'none') {
-    throw actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      'Observed scroll settlement is not implemented by the surface engine yet.',
-      {
-        details: {
-          boundary: 'surface-engine',
-          settle: typeof options.settle === 'string' ? options.settle : options.settle.kind,
-        },
-      },
-    )
-  }
 }
 
 function assertSupportedRevealOptions(options: RevealOptions): void {
-  if (options.motion !== undefined && options.motion.kind !== 'instant') {
+  if (options.motion?.kind === 'timed') {
     throw actorbleError(
       'PLATFORM_UNSUPPORTED',
       `${options.motion.kind} reveal motion is not implemented by the surface engine yet.`,
@@ -360,18 +435,14 @@ function assertSupportedRevealOptions(options: RevealOptions): void {
     )
   }
 
-  if (options.settle !== undefined && options.settle !== 'none') {
-    throw actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      'Observed reveal settlement is not implemented by the surface engine yet.',
-      {
-        details: {
-          boundary: 'surface-engine',
-          settle: typeof options.settle === 'string' ? options.settle : options.settle.kind,
-        },
-      },
-    )
-  }
+}
+
+function scrollBehaviorFor(options: RevealOptions | ScrollOptions): 'instant' | 'smooth' {
+  return options.motion?.kind === 'native-smooth' ? 'smooth' : 'instant'
+}
+
+function samePoint(left: Point, right: Point): boolean {
+  return left.x === right.x && left.y === right.y
 }
 
 function assertViewportRevealGeometry(snapshot: RevealGeometrySnapshot): void {

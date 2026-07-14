@@ -102,6 +102,7 @@ function createFrameTimeline() {
 
   return {
     timeline: {
+      now: vi.fn(() => 0),
       nextFrame: vi.fn(
         () =>
           new Promise((resolve) => {
@@ -277,6 +278,95 @@ describe('BrowserSurfaceEngine', () => {
     expect(dom.getViewportScrollTarget).toHaveBeenCalledWith(document)
   })
 
+  it('routes next-frame and observed settlement after explicit scroll writes', async () => {
+    let offset = { x: 0, y: 0 }
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: 1000,
+        scrollHeight: 1000,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+      }),
+    })
+    const controlled = createFrameTimeline()
+    const settlementObserver = { settle: vi.fn(async () => {}) }
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      timeline: controlled.timeline,
+      settlementObserver,
+    })
+
+    const nextFrame = engine.scrollTo({ x: 10, y: 20 }, { settle: 'next-frame' })
+    expect(controlled.timeline.nextFrame).toHaveBeenCalledOnce()
+    await controlled.resolveFrame()
+    await expect(nextFrame).resolves.toEqual({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: { x: 10, y: 20 },
+    })
+
+    await expect(
+      engine.scrollTo(
+        { x: 30, y: 40 },
+        {
+          motion: { kind: 'native-smooth' },
+          settle: { kind: 'scroll-stable', quietMs: 12, stableFrames: 3, threshold: 0.25 },
+          timeout: 100,
+        },
+      ),
+    ).resolves.toEqual({
+      changed: true,
+      before: { x: 10, y: 20 },
+      after: { x: 30, y: 40 },
+    })
+    expect(dom.scrollTo).toHaveBeenLastCalledWith(
+      window,
+      { x: 30, y: 40 },
+      { behavior: 'smooth' },
+    )
+    expect(settlementObserver.settle).toHaveBeenCalledWith(
+      [window],
+      expect.objectContaining({
+        quietMs: 12,
+        stableFrames: 3,
+        threshold: 0.25,
+        timeout: 100,
+        operation: 'surface.scrollTo',
+      }),
+    )
+  })
+
+  it('preserves the applied offset when observed settlement is cancelled', async () => {
+    let offset = { x: 0, y: 0 }
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: 1000,
+        scrollHeight: 1000,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+      }),
+    })
+    const cancellation = Object.assign(new Error('cancelled'), { code: 'ACTION_CANCELLED' })
+    const settlementObserver = { settle: vi.fn(async () => Promise.reject(cancellation)) }
+    const engine = new BrowserSurfaceEngine({ dom, settlementObserver })
+
+    await expect(
+      engine.scrollBy({ x: 5, y: 6 }, { settle: 'scroll-stable' }),
+    ).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
+    expect(offset).toEqual({ x: 5, y: 6 })
+    expect(dom.scrollTo).toHaveBeenCalledOnce()
+  })
+
   it('returns a no-op reveal result when visibility is already satisfied', async () => {
     const target = document.createElement('button')
     const handle = targetHandle('target-1', target)
@@ -302,7 +392,7 @@ describe('BrowserSurfaceEngine', () => {
     expect(geometry.snapshot).toHaveBeenCalledTimes(2)
   })
 
-  it('executes instant nested reveal inner-to-outer with fresh geometry and actual offsets', async () => {
+  it('executes native-smooth nested reveal inner-to-outer and settles all changed surfaces', async () => {
     const target = document.createElement('button')
     const inner = document.createElement('section')
     const handle = targetHandle('target-1', target)
@@ -380,20 +470,31 @@ describe('BrowserSurfaceEngine', () => {
         offsets.set(scrollTarget, { x: position.x, y: position.y })
       }),
     })
+    const settlementObserver = { settle: vi.fn(async () => {}) }
     const engine = new BrowserSurfaceEngine({
       dom,
       geometry,
       scrollChainResolver: resolver,
+      settlementObserver,
     })
 
     const result = await engine.reveal(handle, {
       visibility: 'full',
       block: 'end',
       inline: 'nearest',
-      settle: 'none',
+      motion: { kind: 'native-smooth' },
+      settle: 'scroll-stable',
     })
 
     expect(dom.scrollTo.mock.calls.map(([scrollTarget]) => scrollTarget)).toEqual([inner, window])
+    expect(dom.scrollTo.mock.calls.map(([, , options]) => options)).toEqual([
+      { behavior: 'smooth' },
+      { behavior: 'smooth' },
+    ])
+    expect(settlementObserver.settle).toHaveBeenCalledWith(
+      [inner, window],
+      expect.objectContaining({ operation: 'surface.reveal' }),
+    )
     expect(result).toMatchObject({
       changed: true,
       before: { visibilityRatio: 0, fullyVisible: false },
@@ -564,15 +665,20 @@ describe('BrowserSurfaceEngine', () => {
     expect(dom.scrollTo).toHaveBeenCalledOnce()
   })
 
-  it('rejects timed motion and observed settlement until their engine tasks land', async () => {
-    const engine = createSurfaceEngine({ dom: createDomPort() })
+  it('keeps timed motion deferred after observed settlement lands', async () => {
+    const settlementObserver = { settle: vi.fn(async () => {}) }
+    const engine = createSurfaceEngine({ dom: createDomPort(), settlementObserver })
 
     await expect(
       engine.scrollTo({ x: 10, y: 20 }, { motion: { kind: 'timed', duration: 100 } }),
     ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
     await expect(
       engine.scrollBy({ x: 1, y: 2 }, { settle: 'scroll-stable' }),
-    ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
+    ).resolves.toMatchObject({ changed: false })
+    expect(settlementObserver.settle).toHaveBeenCalledWith(
+      [window],
+      expect.objectContaining({ operation: 'surface.scrollBy' }),
+    )
   })
 
   it('maps viewport and document points with the viewport scroll offset only', () => {

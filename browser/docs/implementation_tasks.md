@@ -1122,7 +1122,7 @@ api/actorble-facade
 
 ### T50. Scroll settlement observer and native-smooth execution
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Observe all changed surfaces until offsets remain within threshold for stable frames and the quiet window elapses; use native `scrollend` only as an acceleration hint and add native-smooth motion.
 - Dependencies: T46, T49, Timeline Engine.
 - Decision constraints:

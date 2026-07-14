@@ -243,6 +243,31 @@ describe('BrowserDomAdapter', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('observes viewport scrollend on Document while reporting Window metrics', () => {
+    Object.defineProperty(document, 'onscrollend', { configurable: true, value: null })
+    const addEventListener = vi.spyOn(document, 'addEventListener')
+    const removeEventListener = vi.spyOn(document, 'removeEventListener')
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+    const subscription = adapter.observeScrollEnd(window, listener)
+
+    expect(subscription).not.toBeNull()
+    expect(addEventListener).toHaveBeenCalledWith(
+      'scrollend',
+      expect.any(Function),
+      { passive: true },
+    )
+
+    document.dispatchEvent(new Event('scrollend'))
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ scrollLeft: window.scrollX, scrollTop: window.scrollY }),
+    )
+
+    subscription.dispose()
+    subscription.dispose()
+    expect(removeEventListener).toHaveBeenCalledTimes(1)
+  })
+
   it('describes native label accessible names after ARIA names', () => {
     document.body.innerHTML = `
       <form>

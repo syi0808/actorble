@@ -334,23 +334,26 @@ export class BrowserDomAdapter implements DomAdapter {
     target: Element | Window,
     listener: ActorbleListener<ScrollMetrics>,
   ): Disposable | null {
-    if (!('onscrollend' in target)) {
+    const eventTarget = isWindow(target) ? target.document : target
+
+    if (!('onscrollend' in eventTarget)) {
       return null
     }
 
-    return this.#observeScrollSignal(target, 'scrollend', listener)
+    return this.#observeScrollSignal(target, 'scrollend', listener, eventTarget)
   }
 
   #observeScrollSignal(
     target: Element | Window,
     eventName: 'scroll' | 'scrollend',
     listener: ActorbleListener<ScrollMetrics>,
+    eventTarget: EventTarget = target,
   ): Disposable {
     const options: AddEventListenerOptions = { passive: true }
     const handler = () => listener(this.getScrollMetrics(target))
     let disposed = false
 
-    target.addEventListener(eventName, handler, options)
+    eventTarget.addEventListener(eventName, handler, options)
 
     return {
       dispose() {
@@ -359,7 +362,7 @@ export class BrowserDomAdapter implements DomAdapter {
         }
 
         disposed = true
-        target.removeEventListener(eventName, handler, options)
+        eventTarget.removeEventListener(eventName, handler, options)
       },
     }
   }

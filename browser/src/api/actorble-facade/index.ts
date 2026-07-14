@@ -102,6 +102,7 @@ export class Actorble {
     const surface = new BrowserSurfaceEngine({
       dom,
       cache: geometrySurfaceCache,
+      timeline,
       geometry: () => {
         if (geometry === undefined) {
           throw new Error('Actorble geometry composition is not initialized.')
