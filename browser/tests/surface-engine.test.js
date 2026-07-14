@@ -277,13 +277,291 @@ describe('BrowserSurfaceEngine', () => {
     expect(dom.getViewportScrollTarget).toHaveBeenCalledWith(document)
   })
 
-  it('reports the public reveal engine as intentionally deferred to T49', async () => {
-    const engine = createSurfaceEngine({ dom: createDomPort() })
+  it('returns a no-op reveal result when visibility is already satisfied', async () => {
+    const target = document.createElement('button')
+    const handle = targetHandle('target-1', target)
+    const geometry = {
+      snapshot: vi.fn(async () => ({
+        target: handle,
+        rect: { x: 10, y: 10, width: 20, height: 20 },
+        visibleRect: { x: 10, y: 10, width: 20, height: 20 },
+        coordinateSpace: 'viewport',
+      })),
+    }
+    const engine = createSurfaceEngine({ dom: createDomPort(), geometry })
 
-    await expect(engine.reveal(targetHandle('target-1'))).rejects.toMatchObject({
-      code: 'NOT_IMPLEMENTED',
-      details: { boundary: 'SurfaceEngine.reveal' },
+    await expect(engine.reveal(handle, { settle: 'none' })).resolves.toEqual({
+      target: handle,
+      changed: false,
+      before: { visibilityRatio: 1, fullyVisible: true },
+      after: { visibilityRatio: 1, fullyVisible: true },
+      fullyVisible: true,
+      visibilityRatio: 1,
+      steps: [],
     })
+    expect(geometry.snapshot).toHaveBeenCalledTimes(2)
+  })
+
+  it('executes instant nested reveal inner-to-outer with fresh geometry and actual offsets', async () => {
+    const target = document.createElement('button')
+    const inner = document.createElement('section')
+    const handle = targetHandle('target-1', target)
+    const offsets = new Map([
+      [inner, { x: 0, y: 0 }],
+      [window, { x: 0, y: 0 }],
+    ])
+    const snapshots = [
+      { rect: { x: 0, y: 240, width: 20, height: 20 }, visibleRect: null },
+      { rect: { x: 0, y: 140, width: 20, height: 20 }, visibleRect: null },
+      {
+        rect: { x: 0, y: 40, width: 20, height: 20 },
+        visibleRect: { x: 0, y: 40, width: 20, height: 20 },
+      },
+    ]
+    const geometry = {
+      snapshot: vi.fn(async () => ({
+        target: handle,
+        coordinateSpace: 'viewport',
+        ...(snapshots.shift() ?? {
+          rect: { x: 0, y: 40, width: 20, height: 20 },
+          visibleRect: { x: 0, y: 40, width: 20, height: 20 },
+        }),
+      })),
+    }
+    const surfaceSnapshot = (id, kind, scrollTarget, parentId) => {
+      const offset = offsets.get(scrollTarget)
+      return {
+        id,
+        kind,
+        scrollTarget,
+        viewportRect: { x: 0, y: 0, width: 100, height: 100 },
+        metrics: {
+          scrollLeft: offset.x,
+          scrollTop: offset.y,
+          scrollWidth: 100,
+          scrollHeight: 400,
+          clientWidth: 100,
+          clientHeight: 100,
+          clientLeft: 0,
+          clientTop: 0,
+        },
+        overflowAxes: ['y'],
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        parentId,
+      }
+    }
+    const resolver = {
+      resolve: vi.fn(() => [
+        surfaceSnapshot('inner', 'element', inner, 'viewport'),
+        surfaceSnapshot('viewport', 'viewport', window, null),
+      ]),
+    }
+    const dom = createDomPort({
+      getComputedScrollStyle: vi.fn(() => ({
+        overflowX: 'visible',
+        overflowY: 'visible',
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        scrollMargin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      })),
+      getScrollMetrics: vi.fn((scrollTarget) => {
+        const offset = offsets.get(scrollTarget)
+        return {
+          scrollLeft: offset.x,
+          scrollTop: offset.y,
+          scrollWidth: 100,
+          scrollHeight: 400,
+          clientWidth: 100,
+          clientHeight: 100,
+          clientLeft: 0,
+          clientTop: 0,
+        }
+      }),
+      scrollTo: vi.fn((scrollTarget, position) => {
+        offsets.set(scrollTarget, { x: position.x, y: position.y })
+      }),
+    })
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      geometry,
+      scrollChainResolver: resolver,
+    })
+
+    const result = await engine.reveal(handle, {
+      visibility: 'full',
+      block: 'end',
+      inline: 'nearest',
+      settle: 'none',
+    })
+
+    expect(dom.scrollTo.mock.calls.map(([scrollTarget]) => scrollTarget)).toEqual([inner, window])
+    expect(result).toMatchObject({
+      changed: true,
+      before: { visibilityRatio: 0, fullyVisible: false },
+      after: { visibilityRatio: 1, fullyVisible: true },
+      fullyVisible: true,
+      visibilityRatio: 1,
+    })
+    expect(result.steps).toEqual([
+      {
+        surfaceId: 'inner',
+        from: { x: 0, y: 0 },
+        intendedTo: { x: 0, y: 160 },
+        to: { x: 0, y: 160 },
+        axes: ['y'],
+      },
+      {
+        surfaceId: 'viewport',
+        from: { x: 0, y: 0 },
+        intendedTo: { x: 0, y: 60 },
+        to: { x: 0, y: 60 },
+        axes: ['y'],
+      },
+    ])
+    expect(geometry.snapshot).toHaveBeenCalledTimes(3)
+  })
+
+  it('returns best-effort partial visibility from final geometry', async () => {
+    const target = document.createElement('button')
+    const handle = targetHandle('target-1', target)
+    const geometry = {
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce({
+          target: handle,
+          rect: { x: 0, y: 200, width: 100, height: 200 },
+          visibleRect: null,
+          coordinateSpace: 'viewport',
+        })
+        .mockResolvedValueOnce({
+          target: handle,
+          rect: { x: 0, y: -50, width: 100, height: 200 },
+          visibleRect: { x: 0, y: 0, width: 100, height: 100 },
+          coordinateSpace: 'viewport',
+        }),
+    }
+    const viewport = {
+      id: 'viewport',
+      kind: 'viewport',
+      scrollTarget: window,
+      viewportRect: { x: 0, y: 0, width: 100, height: 100 },
+      metrics: {
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 100,
+        scrollHeight: 300,
+        clientWidth: 100,
+        clientHeight: 100,
+        clientLeft: 0,
+        clientTop: 0,
+      },
+      overflowAxes: ['y'],
+      scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      parentId: null,
+    }
+    let actualTop = 0
+    const dom = createDomPort({
+      getComputedScrollStyle: vi.fn(() => ({
+        overflowX: 'visible',
+        overflowY: 'visible',
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        scrollMargin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        actualTop = Math.min(200, position.y)
+      }),
+      getScrollMetrics: vi.fn(() => ({ ...viewport.metrics, scrollTop: actualTop })),
+    })
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      geometry,
+      scrollChainResolver: { resolve: vi.fn(() => [{ ...viewport, metrics: { ...viewport.metrics, scrollTop: actualTop } }]) },
+    })
+
+    await expect(
+      engine.reveal(handle, { visibility: 'full', block: 'nearest', settle: 'none' }),
+    ).resolves.toMatchObject({
+      changed: true,
+      after: { visibilityRatio: 0.5, fullyVisible: false },
+      visibilityRatio: 0.5,
+      fullyVisible: false,
+    })
+  })
+
+  it('stops nested reveal at timeout and abort step boundaries', async () => {
+    const target = document.createElement('button')
+    const inner = document.createElement('section')
+    const handle = targetHandle('target-1', target)
+    const controller = new AbortController()
+    let controllerToAbort = controller
+    let now = 0
+    const geometry = {
+      snapshot: vi.fn(async () => ({
+        target: handle,
+        rect: { x: 0, y: 200, width: 20, height: 20 },
+        visibleRect: null,
+        coordinateSpace: 'viewport',
+      })),
+    }
+    const surfaces = [inner, window].map((scrollTarget, index) => ({
+      id: index === 0 ? 'inner' : 'viewport',
+      kind: index === 0 ? 'element' : 'viewport',
+      scrollTarget,
+      viewportRect: { x: 0, y: 0, width: 100, height: 100 },
+      metrics: {
+        scrollLeft: 0,
+        scrollTop: 0,
+        scrollWidth: 100,
+        scrollHeight: 400,
+        clientWidth: 100,
+        clientHeight: 100,
+        clientLeft: 0,
+        clientTop: 0,
+      },
+      overflowAxes: ['y'],
+      scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      parentId: index === 0 ? 'viewport' : null,
+    }))
+    const dom = createDomPort({
+      getComputedScrollStyle: vi.fn(() => ({
+        overflowX: 'visible',
+        overflowY: 'visible',
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        scrollMargin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      })),
+      scrollTo: vi.fn(() => {
+        now = 10
+        controllerToAbort.abort('stop after inner')
+      }),
+    })
+    const engine = new BrowserSurfaceEngine({
+      clock: { now: () => now },
+      dom,
+      geometry,
+      scrollChainResolver: { resolve: vi.fn(() => surfaces) },
+    })
+
+    await expect(
+      engine.reveal(handle, { visibility: 'full', settle: 'none', timeout: 5 }),
+    ).rejects.toMatchObject({ code: 'ACTION_TIMEOUT', details: { operation: 'surface.reveal' } })
+    expect(dom.scrollTo).toHaveBeenCalledOnce()
+
+    now = 0
+    dom.scrollTo.mockClear()
+    await expect(
+      engine.reveal(handle, { visibility: 'full', settle: 'none', signal: controller.signal }),
+    ).rejects.toMatchObject({ code: 'ACTION_CANCELLED', details: { operation: 'surface.reveal' } })
+    expect(dom.scrollTo).not.toHaveBeenCalled()
+
+    const betweenStepsController = new AbortController()
+    controllerToAbort = betweenStepsController
+    await expect(
+      engine.reveal(handle, {
+        visibility: 'full',
+        settle: 'none',
+        signal: betweenStepsController.signal,
+      }),
+    ).rejects.toMatchObject({ code: 'ACTION_CANCELLED', details: { operation: 'surface.reveal' } })
+    expect(dom.scrollTo).toHaveBeenCalledOnce()
   })
 
   it('rejects timed motion and observed settlement until their engine tasks land', async () => {

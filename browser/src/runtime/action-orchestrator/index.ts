@@ -318,9 +318,21 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       layoutInvalidation,
       timeline,
     })
-    const surface = options.surface ?? new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
-    const geometry =
-      options.geometry ??
+    let geometry = options.geometry
+    const surface =
+      options.surface ??
+      new BrowserSurfaceEngine({
+        dom,
+        cache: geometrySurfaceCache,
+        geometry: () => {
+          if (geometry === undefined) {
+            throw new Error('Actorble geometry composition is not initialized.')
+          }
+
+          return geometry
+        },
+      })
+    geometry ??=
       new BrowserGeometryEngine({
         dom,
         surface,

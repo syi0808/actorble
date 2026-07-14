@@ -2137,6 +2137,48 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
+  it('reveal delegates the validated handle and propagates structured visibility results', async () => {
+    const { calls, orchestrator, surface, target, trace, wait } = createHarness()
+    const result = {
+      target,
+      changed: true,
+      before: { visibilityRatio: 0, fullyVisible: false },
+      after: { visibilityRatio: 1, fullyVisible: true },
+      fullyVisible: true,
+      visibilityRatio: 1,
+      steps: [
+        {
+          surfaceId: 'viewport',
+          from: { x: 0, y: 0 },
+          intendedTo: { x: 0, y: 100 },
+          to: { x: 0, y: 100 },
+          axes: ['y'],
+        },
+      ],
+    }
+    surface.reveal.mockResolvedValueOnce(result)
+
+    await expect(
+      orchestrator.reveal(css('#target-1'), { block: 'center', settle: 'none' }),
+    ).resolves.toBe(result)
+
+    expect(calls).toEqual(['resolver.resolve', 'resolver.validate'])
+    expect(surface.reveal).toHaveBeenCalledWith(target, { block: 'center', settle: 'none' })
+    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'reveal:complete',
+          data: expect.objectContaining({
+            changed: true,
+            visibilityRatio: 1,
+            steps: [expect.objectContaining({ surfaceId: 'viewport' })],
+          }),
+        }),
+      ]),
+    )
+  })
+
   it('scrollTo and scrollBy delegate explicit vectors and return structured results', async () => {
     const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
     const position = { x: 10, y: 20 }

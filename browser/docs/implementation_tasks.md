@@ -1099,7 +1099,7 @@ api/actorble-facade
 
 ### T49. Instant reveal and explicit viewport scroll vertical core
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Compose chain resolution and planning inside Surface Engine, execute instant steps inner-to-outer, refresh geometry between steps, verify final visibility, and implement explicit viewport `scrollTo`/`scrollBy`.
 - Dependencies: T45-T48, layout invalidation tracker, frame geometry/surface cache.
 - Decision constraints:

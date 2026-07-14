@@ -98,11 +98,21 @@ export class Actorble {
       layoutInvalidation,
       timeline,
     })
-    const surface = new BrowserSurfaceEngine({ dom, cache: geometrySurfaceCache })
+    let geometry = options.geometry
+    const surface = new BrowserSurfaceEngine({
+      dom,
+      cache: geometrySurfaceCache,
+      geometry: () => {
+        if (geometry === undefined) {
+          throw new Error('Actorble geometry composition is not initialized.')
+        }
+
+        return geometry
+      },
+    })
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
-    const geometry =
-      options.geometry ??
+    geometry ??=
       new BrowserGeometryEngine({
         dom,
         surface,
