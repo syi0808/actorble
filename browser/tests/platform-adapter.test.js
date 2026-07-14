@@ -168,6 +168,21 @@ describe('BrowserDomAdapter', () => {
     })
   })
 
+  it('counts running and pending animations for a watched subtree', () => {
+    const target = document.createElement('section')
+    const getAnimations = vi.fn(() => [
+      { playState: 'running', pending: false },
+      { playState: 'paused', pending: true },
+      { playState: 'finished', pending: false },
+    ])
+    Object.defineProperty(target, 'getAnimations', { configurable: true, value: getAnimations })
+
+    const adapter = new BrowserDomAdapter(document)
+
+    expect(adapter.getActiveAnimationCount(target)).toBe(2)
+    expect(getAnimations).toHaveBeenCalledWith({ subtree: true })
+  })
+
   it('falls back to scroll offsets when an element has no scrollTo method', () => {
     const scrollbox = document.createElement('div')
     Object.defineProperty(scrollbox, 'scrollTo', { configurable: true, value: undefined })

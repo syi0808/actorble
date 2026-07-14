@@ -49,7 +49,10 @@ export interface VisualStabilityObserver {
 }
 
 export type VisualStabilityObserverOptions = Readonly<{
-  dom?: Pick<DomReadPort, 'getRoot' | 'getViewportScrollTarget' | 'getScrollMetrics'>
+  dom?: Pick<
+    DomReadPort,
+    'getRoot' | 'getViewportScrollTarget' | 'getScrollMetrics' | 'getActiveAnimationCount'
+  >
   geometry: Pick<GeometryEngine, 'getBoundingRect'>
   layoutInvalidation: LayoutInvalidationTracker
   resolver: Pick<TargetResolver, 'validate'>
@@ -70,7 +73,10 @@ type ScrollState = {
 }
 
 export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
-  readonly #dom: Pick<DomReadPort, 'getRoot' | 'getViewportScrollTarget' | 'getScrollMetrics'>
+  readonly #dom: Pick<
+    DomReadPort,
+    'getRoot' | 'getViewportScrollTarget' | 'getScrollMetrics' | 'getActiveAnimationCount'
+  >
   readonly #geometry: Pick<GeometryEngine, 'getBoundingRect'>
   readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #resolver: Pick<TargetResolver, 'validate'>
@@ -162,13 +168,26 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
         if (target !== undefined) {
           await this.#resolver.validate(target)
           const sampledRect = cloneRect(this.#geometry.getBoundingRect(target))
+          const activeAnimationCount = this.#dom.getActiveAnimationCount?.(target.element) ?? 0
           previousRect = lastRect
           lastRect = sampledRect
 
-          if (previousRect === undefined || rectChanged(previousRect, sampledRect, policy.threshold)) {
+          if (
+            activeAnimationCount > 0 ||
+            previousRect === undefined ||
+            rectChanged(previousRect, sampledRect, policy.threshold)
+          ) {
             geometryStableFrames = 0
           } else {
             geometryStableFrames += 1
+          }
+
+          if (activeAnimationCount > 0) {
+            this.#trace?.appendEvent?.('stability:reset', {
+              observedStableFrames: 0,
+              reason: 'active-animation',
+              activeAnimationCount,
+            })
           }
         }
 

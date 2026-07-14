@@ -647,6 +647,7 @@ export interface DomReadPort {
   getParentElement(element: Element): Element | null
   getScrollMetrics(target: Element | Window): ScrollMetrics
   getComputedScrollStyle(element: Element): ComputedScrollStyleSnapshot
+  getActiveAnimationCount?(element?: Element): number
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
   getAttribute(element: Element, name: string): string | null
   getTextContent(element: Element): string

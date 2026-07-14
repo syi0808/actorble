@@ -102,7 +102,13 @@ function metrics(scrollLeft = 0, scrollTop = 0) {
   }
 }
 
-function createHarness({ rects = [rect()], offsets = [[0, 0]], validate, trace } = {}) {
+function createHarness({
+  rects = [rect()],
+  offsets = [[0, 0]],
+  activeAnimations = [0],
+  validate,
+  trace,
+} = {}) {
   const controlled = createControlledTimeline()
   const layout = createLayoutInvalidationTracker()
   const element = document.createElement('button')
@@ -111,6 +117,7 @@ function createHarness({ rects = [rect()], offsets = [[0, 0]], validate, trace }
   const surface = document.createElement('div')
   const rectQueue = [...rects]
   const offsetQueue = [...offsets]
+  const animationQueue = [...activeAnimations]
   const geometry = {
     getBoundingRect: vi.fn(() => rectQueue.shift() ?? rectQueue.at(-1) ?? rect()),
   }
@@ -121,6 +128,9 @@ function createHarness({ rects = [rect()], offsets = [[0, 0]], validate, trace }
       const [x, y] = offsetQueue.shift() ?? offsetQueue.at(-1) ?? [0, 0]
       return metrics(x, y)
     }),
+    getActiveAnimationCount: vi.fn(
+      () => animationQueue.shift() ?? animationQueue.at(-1) ?? 0,
+    ),
   }
   const resolver = {
     validate: vi.fn(validate ?? (async (handle) => handle)),
@@ -186,6 +196,25 @@ describe('BrowserVisualStabilityObserver', () => {
     await harness.controlled.frame(144)
 
     await expect(observation).resolves.toMatchObject({ observedStableFrames: 2 })
+  })
+
+  it('does not settle while the watched target has an active CSS animation', async () => {
+    const harness = createHarness({
+      rects: [rect(), rect(), rect(), rect()],
+      activeAnimations: [1, 1, 0, 0],
+    })
+    const settled = vi.fn()
+    const observation = harness.observer.observe(harness.target)
+    observation.then(settled)
+
+    await harness.controlled.frame(80)
+    await harness.controlled.frame(96)
+    await harness.controlled.frame(112)
+    expect(settled).not.toHaveBeenCalled()
+    await harness.controlled.frame(128)
+
+    await expect(observation).resolves.toMatchObject({ observedStableFrames: 2 })
+    expect(harness.dom.getActiveAnimationCount).toHaveBeenCalledTimes(4)
   })
 
   it('delays mutation and scroll quiet independently without reading geometry in callbacks', async () => {

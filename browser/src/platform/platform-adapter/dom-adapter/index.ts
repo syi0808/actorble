@@ -127,6 +127,25 @@ export class BrowserDomAdapter implements DomAdapter {
     }
   }
 
+  getActiveAnimationCount(element?: Element): number {
+    const root = element ?? this.getRoot()
+    const getAnimations = 'getAnimations' in root && typeof root.getAnimations === 'function'
+      ? root.getAnimations.bind(root)
+      : undefined
+
+    if (getAnimations === undefined) {
+      return 0
+    }
+
+    const animations = element === undefined
+      ? getAnimations()
+      : getAnimations({ subtree: true })
+
+    return animations.filter(
+      (animation) => animation.playState === 'running' || animation.pending,
+    ).length
+  }
+
   elementFromPoint(point: Point, options: HitTestOptions = {}): Element | null {
     const root = this.getRoot()
 

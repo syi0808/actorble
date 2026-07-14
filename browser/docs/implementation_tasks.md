@@ -1342,7 +1342,7 @@ api/actorble-facade
 
 ### T61. Nested reveal and visual-stability browser vertical slice
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Prove the complete runtime flow in a real browser fixture: nested reveal, pointer endpoint refresh, interaction, asynchronous UI mutation, observed stability, and cancellation recovery.
 - Dependencies: T45-T60.
 - Decision constraints:

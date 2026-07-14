@@ -27,6 +27,9 @@ export default defineConfig({
         researchClipping: fileURLToPath(
           new URL('research-clipping/index.html', import.meta.url),
         ),
+        nestedRevealStability: fileURLToPath(
+          new URL('nested-reveal-stability/index.html', import.meta.url),
+        ),
       },
     },
   },

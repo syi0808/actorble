@@ -99,6 +99,12 @@ try {
     () => expectTextSelectionCursorMotion(page),
   )
   await expectResearchClippingComplete(page)
+
+  await page.goto(new URL('nested-reveal-stability/', baseUrl).toString())
+  await expectPageTitle(page, 'Nested reveal lab')
+  await openUtilityPanel(page, 'task-utility-panel')
+  await runCurrentScenario(page, 'Nested reveal scenario complete')
+  await expectNestedRevealStabilityComplete(page)
 } catch (error) {
   throw await withPageDiagnostics(error, page)
 } finally {
@@ -113,6 +119,7 @@ async function expectIndexLinks(page) {
   await expectLink(page, '#open-appointment-scheduler', '/appointment-scheduler/')
   await expectLink(page, '#open-selection-pointer-sequence', '/selection-pointer-sequence/')
   await expectLink(page, '#open-research-clipping', '/research-clipping/')
+  await expectLink(page, '#open-nested-reveal-stability', '/nested-reveal-stability/')
 }
 
 async function expectLink(page, selector, hrefSuffix) {
@@ -389,6 +396,68 @@ async function expectResearchClippingComplete(page) {
     'action.typeInto',
     'action.waitFor',
   ])
+}
+
+async function expectNestedRevealStabilityComplete(page) {
+  await expectInputValue(page, '#nested-target', 'Scenema')
+  await expectState(page, '#async-result', 'moving')
+  await expectEventLogIncludes(page, [
+    'nestedInput.click',
+    'nestedInput.focus',
+    'nestedInput.change',
+  ])
+  await expectTraceIncludes(page, [
+    'action.reveal',
+    'action.moveTo',
+    'action.click',
+    'action.typeInto',
+    'action.waitFor',
+  ])
+
+  const state = await page.evaluate(() => window.__actorbleNestedReveal)
+
+  assert(state, 'Expected nested reveal smoke state.')
+  const panelIndex = state.scrollOrder.findIndex((sample) => sample.surface === 'panel')
+  const viewportIndex = state.scrollOrder.findIndex((sample) => sample.surface === 'viewport')
+  assert(panelIndex >= 0, `Expected an inner panel scroll; got ${JSON.stringify(state.scrollOrder)}`)
+  assert(viewportIndex >= 0, `Expected an outer viewport scroll; got ${JSON.stringify(state.scrollOrder)}`)
+  assert(
+    panelIndex < viewportIndex,
+    `Expected inner-before-outer scroll order; got ${JSON.stringify(state.scrollOrder)}`,
+  )
+  assert(state.panelScrollTop > 0, `Expected positive panel scrollTop, got ${state.panelScrollTop}.`)
+  assert(state.viewportScrollY > 0, `Expected positive viewport scrollY, got ${state.viewportScrollY}.`)
+  assert(state.pointerInsideTarget, 'Expected refreshed pointer coordinates inside the target input.')
+  assert(state.motionStartedAt !== null, 'Expected asynchronous result motion to start.')
+  assert(state.motionEndedAt !== null, 'Expected asynchronous result motion to end.')
+  assert(state.stableCompletedAt !== null, 'Expected visual-stable wait to complete.')
+  assert(
+    state.stableCompletedAt + 24 >= state.motionEndedAt,
+    `Expected stable completion after result motion; got ${JSON.stringify({
+      motionEndedAt: state.motionEndedAt,
+      stableCompletedAt: state.stableCompletedAt,
+    })}`,
+  )
+  assertEqual(state.alreadyVisibleChanged, false, 'already-visible reveal changed')
+  assertEqual(state.oversizedFullyVisible, false, 'oversized reveal fullyVisible')
+  assertEqual(state.timedAbortCode, 'ACTION_CANCELLED', 'timed reveal abort code')
+  assert(
+    Math.abs(state.timedStoppedPosition - state.timedAbortPosition) <= 0.5,
+    `Expected timed reveal to stop in place; got ${JSON.stringify({
+      aborted: state.timedAbortPosition,
+      stopped: state.timedStoppedPosition,
+    })}`,
+  )
+  assert(state.recoverySucceeded, 'Expected the action after timed reveal cancellation to succeed.')
+  for (const eventName of ['reveal:start', 'reveal:complete', 'stability:start', 'stability:complete']) {
+    assert(
+      state.revealTraceEvents.includes(eventName),
+      `Expected trace event ${eventName}; got ${state.revealTraceEvents.join(', ')}.`,
+    )
+  }
+  assertEqual(state.capabilities.scrolling, 'nested-dom', 'scrolling capability')
+  assertEqual(state.capabilities.reveal, 'planned', 'reveal capability')
+  assertEqual(state.capabilities.stability, 'observed', 'stability capability')
 }
 
 async function expectManualResearchQuoteSave(page) {
