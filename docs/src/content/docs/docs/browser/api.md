@@ -585,11 +585,27 @@ type PointerSequenceOptions = OperationOptions
 type WaitCondition =
   | { kind: 'visible'; target: TargetLike }
   | { kind: 'hidden'; target: TargetLike }
+  | { kind: 'attached'; target: TargetLike }
+  | { kind: 'detached'; target: TargetLike }
+  | { kind: 'enabled'; target: TargetLike }
+  | { kind: 'disabled'; target: TargetLike }
+  | { kind: 'focused'; target: TargetLike }
   | { kind: 'text'; value: string | RegExp }
   | { kind: 'custom'; predicate: () => boolean | Promise<boolean> }
 ```
 
 `waitFor()` resolves when the condition is satisfied or rejects on timeout/cancellation.
+Target-state helpers are exported for direct and scenario use:
+
+```ts
+await actorble.waitFor(attached(css('#save')))
+await actorble.waitFor(enabled(css('#save')))
+await actorble.waitFor(focused(css('#project-name')))
+```
+
+`detached` succeeds when the watched target leaves the configured root or its locator no longer
+resolves. `enabled` and `disabled` follow the Interactability Engine's HTML, ARIA, and inert-state
+semantics. `focused` reads the actual active element through supported open shadow roots.
 
 ## Scenario
 

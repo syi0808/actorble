@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
-import { actorbleError, css, timeoutError } from '../src/shared/index.js'
+import {
+  actorbleError,
+  attached,
+  css,
+  detached,
+  disabled,
+  enabled,
+  focused,
+  timeoutError,
+} from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
   createWaitObservationEngine,
@@ -967,6 +976,124 @@ describe('BrowserWaitObservationEngine', () => {
         }),
       }),
     )
+  })
+
+  it.each([
+    ['attached', attached, true],
+    ['enabled', enabled, true],
+    ['disabled', disabled, false],
+  ])('resolves %s after its target observation transitions', async (_kind, createCondition, reportEnabled) => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const target = targetHandle(document.querySelector('#save'))
+    let attempt = 0
+    const ports = createObservationPorts(target, {
+      resolver: {
+        resolve: vi.fn(async () => {
+          attempt += 1
+          if (attempt === 1) throw actorbleError('TARGET_NOT_FOUND', 'not yet')
+          return target
+        }),
+      },
+      reports: [interactabilityReportFor(target, { enabled: reportEnabled })],
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    await expect(engine.waitFor(createCondition(css('#save')), { timeout: 100 })).resolves.toMatchObject({
+      satisfied: true,
+      strategy: 'interaction-stable',
+    })
+  })
+
+  it('resolves detached when a locator no longer resolves without geometry reads', async () => {
+    const target = targetHandle(document.body)
+    const ports = createObservationPorts(target, {
+      resolver: { resolve: vi.fn(async () => { throw actorbleError('TARGET_NOT_FOUND', 'gone') }) },
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    await expect(engine.waitFor(detached(css('#toast')))).resolves.toMatchObject({ satisfied: true })
+    expect(ports.geometry.snapshot).not.toHaveBeenCalled()
+    expect(ports.interactability.inspect).not.toHaveBeenCalled()
+  })
+
+  it('resolves focused from the platform active element and rechecks it every attempt', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const save = document.querySelector('#save')
+    const target = targetHandle(save)
+    let active = null
+    const dom = { getActiveElement: vi.fn(() => active) }
+    const ports = createObservationPorts(target)
+    const timeline = createTimeline({ settle: vi.fn(async () => { active = save }) })
+    const engine = new BrowserWaitObservationEngine({ dom, timeline, ...ports })
+
+    await expect(engine.waitFor(focused(css('#save')))).resolves.toMatchObject({ satisfied: true })
+    expect(dom.getActiveElement).toHaveBeenCalledTimes(2)
+  })
+
+  it('surfaces a locator-less stale handle instead of treating it as detached', async () => {
+    const stale = targetHandle(document.body, { validity: 'stale' })
+    const failure = actorbleError('TARGET_STALE', 'cannot recover')
+    const ports = createObservationPorts(stale, {
+      resolver: { validate: vi.fn(async () => { throw failure }) },
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline(), ...ports })
+
+    await expect(engine.waitFor(detached(stale))).rejects.toBe(failure)
+  })
+
+  it('treats failed locator-backed stale recovery as detached but preserves structural errors', async () => {
+    const locator = css('#save')
+    const stale = targetHandle(document.body, { validity: 'stale', locator })
+    const notFound = actorbleError('TARGET_NOT_FOUND', 'gone')
+    const staleFailure = actorbleError('TARGET_STALE', 'cannot recover', { cause: notFound })
+    const detachedPorts = createObservationPorts(stale, {
+      resolver: { validate: vi.fn(async () => { throw staleFailure }) },
+    })
+
+    await expect(
+      new BrowserWaitObservationEngine({ timeline: createTimeline(), ...detachedPorts })
+        .waitFor(detached(stale)),
+    ).resolves.toMatchObject({ satisfied: true })
+
+    const ambiguous = actorbleError('TARGET_AMBIGUOUS', 'too many')
+    const structuralFailure = actorbleError('TARGET_STALE', 'cannot recover', { cause: ambiguous })
+    const structuralPorts = createObservationPorts(stale, {
+      resolver: { validate: vi.fn(async () => { throw structuralFailure }) },
+    })
+
+    await expect(
+      new BrowserWaitObservationEngine({ timeline: createTimeline(), ...structuralPorts })
+        .waitFor(detached(stale)),
+    ).rejects.toBe(structuralFailure)
+  })
+
+  it('records condition-specific timeout context and cancels target waits cleanly', async () => {
+    vi.useFakeTimers()
+    const target = targetHandle(document.body)
+    const ports = createObservationPorts(target, {
+      reports: [interactabilityReportFor(target, { enabled: false })],
+    })
+    const timeline = createTimeline({ settle: vi.fn(() => new Promise(() => {})) })
+    const engine = new BrowserWaitObservationEngine({ timeline, ...ports })
+    const promise = engine.waitFor(enabled(css('#save')), { timeout: 25 })
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        conditionKind: 'enabled',
+        attempts: 1,
+        lastObservation: expect.objectContaining({ enabled: false }),
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    const controller = new AbortController()
+    controller.abort('stopped')
+    await expect(engine.waitFor(attached(css('#save')), { signal: controller.signal })).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'stopped' },
+    })
   })
 })
 

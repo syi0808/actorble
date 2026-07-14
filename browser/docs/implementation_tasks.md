@@ -1223,7 +1223,7 @@ api/actorble-facade
 
 ### T55. Attachment, focus, and interactability wait conditions
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Expand Wait Engine with attached, detached, enabled, disabled, and focused conditions using existing resolver, interactability, and DOM-focus sources of truth.
 - Dependencies: T53, target resolver, interactability engine, focus adapter.
 - Decision constraints:

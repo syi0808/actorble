@@ -84,7 +84,17 @@ export type WaitObservationEngineOptions = Readonly<{
 }>
 
 type TargetWaitObservation = Readonly<{
-  state: 'visible' | 'hidden' | 'not-found' | 'detached' | 'stale'
+  state:
+    | 'visible'
+    | 'hidden'
+    | 'attached'
+    | 'enabled'
+    | 'disabled'
+    | 'focused'
+    | 'unfocused'
+    | 'not-found'
+    | 'detached'
+    | 'stale'
   target?: unknown
   targetId?: string
   errorCode?: ActorbleError['code']
@@ -92,6 +102,8 @@ type TargetWaitObservation = Readonly<{
   visible?: boolean
   visibilityRatio?: number
   blockingReasons?: readonly string[]
+  enabled?: boolean
+  focused?: boolean
 }>
 
 type TextWaitObservation = Readonly<{
@@ -335,7 +347,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     assertNotCancelled('wait.for', signal)
     const conditionKind = (condition as Readonly<{ kind: string }>).kind
 
-    if (condition.kind === 'visible' || condition.kind === 'hidden') {
+    if (isTargetWaitCondition(condition)) {
       return await this.#waitForTargetCondition(condition, signal, diagnostics)
     }
 
@@ -423,7 +435,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async #waitForTargetCondition(
-    condition: Extract<WaitCondition, { kind: 'visible' | 'hidden' }>,
+    condition: Extract<WaitCondition, { target: TargetLike }>,
     signal: WaitOptions['signal'],
     diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
@@ -435,7 +447,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       assertNotCancelled('wait.for', signal)
       diagnostics.attempts += 1
 
-      const observation = await this.#observeTargetForWait(condition.target, cache)
+      const observation = await this.#observeTargetForWait(condition, cache)
       diagnostics.lastObservation = observation
 
       assertNotCancelled('wait.for', signal)
@@ -458,10 +470,10 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async #observeTargetForWait(
-    target: TargetLike,
+    condition: Extract<WaitCondition, { target: TargetLike }>,
     cache: TargetWaitObservationCache,
   ): Promise<TargetWaitObservation> {
-    const reuseEnabled = this.#canReuseWaitObservations()
+    const reuseEnabled = this.#canReuseWaitObservations() && condition.kind !== 'focused'
 
     if (
       reuseEnabled &&
@@ -473,7 +485,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
 
     const result = await this.#readTargetObservation(
-      target,
+      condition,
       reuseEnabled ? cache.handle : undefined,
     )
 
@@ -494,20 +506,45 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async #readTargetObservation(
-    target: TargetLike,
+    condition: Extract<WaitCondition, { target: TargetLike }>,
     cachedHandle: TargetHandle | undefined,
   ): Promise<TargetWaitObservationResult> {
     try {
-      const handle = await this.#resolveTarget(target, cachedHandle)
+      const handle = await this.#resolveTarget(condition.target, cachedHandle)
+
+      if (condition.kind === 'attached' || condition.kind === 'detached') {
+        return {
+          observation: {
+            state: 'attached',
+            target: summarizeTarget(handle),
+            targetId: handle.id,
+          },
+          handle,
+        }
+      }
+
+      if (condition.kind === 'focused') {
+        const focused = this.#dom.getActiveElement() === handle.element
+        return {
+          observation: {
+            state: focused ? 'focused' : 'unfocused',
+            target: summarizeTarget(handle),
+            targetId: handle.id,
+            focused,
+          },
+          handle,
+        }
+      }
+
       const snapshot = await this.#geometry.snapshot(handle)
       const report = await this.#interactability.inspect(handle, snapshot)
 
       return {
-        observation: observationFromReport(report),
+        observation: observationFromReport(report, condition.kind),
         handle,
       }
     } catch (error) {
-      const observation = observationFromTargetError(error, target)
+      const observation = observationFromTargetError(error, condition.target, condition.kind)
 
       if (observation !== null) {
         return { observation }
@@ -749,14 +786,31 @@ function unsupportedTargetScopedTextWait(
 }
 
 function isTargetConditionSatisfied(
-  kind: 'visible' | 'hidden',
+  kind: Extract<WaitCondition, { target: TargetLike }>['kind'],
   observation: TargetWaitObservation,
 ): boolean {
-  if (kind === 'visible') {
-    return observation.state === 'visible'
+  switch (kind) {
+    case 'visible':
+      return observation.state === 'visible'
+    case 'hidden':
+      return observation.state !== 'visible'
+    case 'attached':
+      return observation.state === 'attached' ||
+        observation.state === 'visible' ||
+        observation.state === 'hidden' ||
+        observation.state === 'enabled' ||
+        observation.state === 'disabled' ||
+        observation.state === 'focused' ||
+        observation.state === 'unfocused'
+    case 'detached':
+      return observation.state === 'detached' || observation.state === 'not-found'
+    case 'enabled':
+      return observation.enabled === true
+    case 'disabled':
+      return observation.enabled === false
+    case 'focused':
+      return observation.focused === true
   }
-
-  return observation.state !== 'visible'
 }
 
 function canReuseTargetObservation(observation: TargetWaitObservation): boolean {
@@ -786,20 +840,29 @@ function formatTextMatcher(value: string | RegExp): string {
   return value instanceof RegExp ? value.toString() : value
 }
 
-function observationFromReport(report: InteractabilityReport): TargetWaitObservation {
+function observationFromReport(
+  report: InteractabilityReport,
+  kind: 'visible' | 'hidden' | 'enabled' | 'disabled',
+): TargetWaitObservation {
+  const state = kind === 'enabled' || kind === 'disabled'
+    ? (report.enabled ? 'enabled' : 'disabled')
+    : (report.visible ? 'visible' : 'hidden')
+
   return {
-    state: report.visible ? 'visible' : 'hidden',
+    state,
     target: summarizeTarget(report.target),
     targetId: report.target.id,
     visible: report.visible,
     visibilityRatio: report.visibilityRatio,
     blockingReasons: report.blockingReasons,
+    enabled: report.enabled,
   }
 }
 
 function observationFromTargetError(
   error: unknown,
   target: TargetLike,
+  conditionKind: Extract<WaitCondition, { target: TargetLike }>['kind'],
 ): TargetWaitObservation | null {
   if (!(error instanceof ActorbleError)) {
     return null
@@ -810,11 +873,31 @@ function observationFromTargetError(
       return observationFromError('not-found', error, target)
     case 'TARGET_DETACHED':
       return observationFromError('detached', error, target)
-    case 'TARGET_STALE':
+    case 'TARGET_STALE': {
+      if (isTargetHandle(target) && target.locator === undefined) {
+        return null
+      }
+
+      if (!staleTargetNoLongerResolves(error)) {
+        return null
+      }
+
+      if (conditionKind === 'detached') {
+        return observationFromError('detached', error, target)
+      }
+
       return observationFromError('stale', error, target)
+    }
     default:
       return null
   }
+}
+
+function staleTargetNoLongerResolves(error: ActorbleError): boolean {
+  const cause = error.cause
+
+  return cause instanceof ActorbleError &&
+    (cause.code === 'TARGET_NOT_FOUND' || cause.code === 'TARGET_DETACHED')
 }
 
 function observationFromError(
@@ -866,6 +949,11 @@ function summarizeCondition(condition: WaitCondition): Readonly<Record<string, u
       return { kind: condition.kind }
     case 'visible':
     case 'hidden':
+    case 'attached':
+    case 'detached':
+    case 'enabled':
+    case 'disabled':
+    case 'focused':
       return {
         kind: condition.kind,
         target: summarizeTarget(condition.target),
@@ -881,6 +969,18 @@ function summarizeCondition(condition: WaitCondition): Readonly<Record<string, u
       }
     }
   }
+}
+
+function isTargetWaitCondition(
+  condition: WaitCondition,
+): condition is Extract<WaitCondition, { target: TargetLike }> {
+  return condition.kind === 'visible' ||
+    condition.kind === 'hidden' ||
+    condition.kind === 'attached' ||
+    condition.kind === 'detached' ||
+    condition.kind === 'enabled' ||
+    condition.kind === 'disabled' ||
+    condition.kind === 'focused'
 }
 
 function textConditionTarget(

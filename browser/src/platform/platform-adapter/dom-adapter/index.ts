@@ -198,7 +198,13 @@ export class BrowserDomAdapter implements DomAdapter {
   }
 
   getActiveElement(root: Document | ShadowRoot = this.getRoot()): Element | null {
-    return root.activeElement
+    let activeElement = root.activeElement
+
+    while (activeElement?.shadowRoot?.mode === 'open' && activeElement.shadowRoot.activeElement) {
+      activeElement = activeElement.shadowRoot.activeElement
+    }
+
+    return activeElement
   }
 
   focus(element: HTMLElement | SVGElement, options: FocusOptions = {}): void {

@@ -806,4 +806,18 @@ describe('BrowserStyleAdapter', () => {
     expect(afterRuntimeStyle.version).toBe(initial.version)
     expect(afterLinkMutation.version).not.toBe(initial.version)
   })
+
+  it('reads the deepest active element across nested open shadow roots', () => {
+    const outerHost = document.createElement('section')
+    const outerRoot = outerHost.attachShadow({ mode: 'open' })
+    const innerHost = document.createElement('article')
+    const innerRoot = innerHost.attachShadow({ mode: 'open' })
+    const input = document.createElement('input')
+    innerRoot.append(input)
+    outerRoot.append(innerHost)
+    document.body.append(outerHost)
+    input.focus()
+
+    expect(new BrowserDomAdapter(document).getActiveElement()).toBe(input)
+  })
 })

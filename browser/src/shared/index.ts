@@ -786,11 +786,54 @@ export interface PlatformAdapterPort {
   readonly style: StylePort
 }
 
+export type TargetWaitConditionKind =
+  | 'visible'
+  | 'hidden'
+  | 'attached'
+  | 'detached'
+  | 'enabled'
+  | 'disabled'
+  | 'focused'
+
+export type TargetWaitCondition = {
+  [TKind in TargetWaitConditionKind]: Readonly<{
+    kind: TKind
+    target: TargetLike
+  }>
+}[TargetWaitConditionKind]
+
 export type WaitCondition =
-  | Readonly<{ kind: 'visible'; target: TargetLike }>
-  | Readonly<{ kind: 'hidden'; target: TargetLike }>
+  | TargetWaitCondition
   | Readonly<{ kind: 'text'; value: string | RegExp }>
   | Readonly<{ kind: 'custom'; predicate: () => boolean | Promise<boolean> }>
+
+export function visible(target: TargetLike): Extract<TargetWaitCondition, { kind: 'visible' }> {
+  return { kind: 'visible', target }
+}
+
+export function hidden(target: TargetLike): Extract<TargetWaitCondition, { kind: 'hidden' }> {
+  return { kind: 'hidden', target }
+}
+
+export function attached(target: TargetLike): Extract<TargetWaitCondition, { kind: 'attached' }> {
+  return { kind: 'attached', target }
+}
+
+export function detached(target: TargetLike): Extract<TargetWaitCondition, { kind: 'detached' }> {
+  return { kind: 'detached', target }
+}
+
+export function enabled(target: TargetLike): Extract<TargetWaitCondition, { kind: 'enabled' }> {
+  return { kind: 'enabled', target }
+}
+
+export function disabled(target: TargetLike): Extract<TargetWaitCondition, { kind: 'disabled' }> {
+  return { kind: 'disabled', target }
+}
+
+export function focused(target: TargetLike): Extract<TargetWaitCondition, { kind: 'focused' }> {
+  return { kind: 'focused', target }
+}
 
 type ScenarioStepOptions<TOptions extends OperationOptions> = Omit<TOptions, 'signal'>
 

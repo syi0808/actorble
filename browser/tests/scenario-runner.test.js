@@ -3,7 +3,7 @@ import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/in
 import { BROWSER_OPTION_DEFAULTS } from '../src/options/index.js'
 import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserScenarioRunner } from '../src/runtime/scenario-runner/index.js'
-import { actorbleError, css } from '../src/shared/index.js'
+import { actorbleError, css, focused } from '../src/shared/index.js'
 
 const targetLifecycleDefaults = {
   reveal: BROWSER_OPTION_DEFAULTS.reveal,
@@ -145,6 +145,19 @@ describe('BrowserScenarioRunner', () => {
         }),
       }),
     ])
+  })
+
+  it('passes target-state wait helpers through scenario input with the runner signal', async () => {
+    const condition = focused(css('#name'))
+    const orchestrator = createOrchestrator()
+    const runner = new BrowserScenarioRunner({ orchestrator })
+
+    await runner.run({ steps: [{ action: 'waitFor', input: condition, options: { timeout: 25 } }] })
+
+    expect(orchestrator.waitFor).toHaveBeenCalledWith(
+      condition,
+      expect.objectContaining({ timeout: 25, signal: expect.any(AbortSignal) }),
+    )
   })
 
   it('runs type, fill, and press scenario steps in order through the action orchestrator', async () => {
