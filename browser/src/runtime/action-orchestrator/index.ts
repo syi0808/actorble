@@ -48,6 +48,7 @@ import type {
   ActorblePointerOptions,
   ActionRevealPolicy,
   ActionWaitPolicy,
+  ActorbleErrorDetails,
   DragOptions,
   FillOptions,
   FocusOptions,
@@ -331,6 +332,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       new BrowserSurfaceEngine({
         dom,
         cache: geometrySurfaceCache,
+        trace,
         geometry: () => {
           if (geometry === undefined) {
             throw new Error('Actorble geometry composition is not initialized.')
@@ -2617,11 +2619,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     span.event('action:failure', {
       ...context,
       code: normalized.code,
-      details: normalized.details,
+      details: normalized.code === 'ACTION_CANCELLED'
+        ? sanitizedCancellationDetails(normalized.details)
+        : normalized.details,
     })
 
     if (normalized.code === 'ACTION_CANCELLED') {
-      span.cancel(normalized.details?.reason)
+      span.cancel(cancellationReasonKind(normalized.details?.reason))
       return normalized
     }
 
@@ -2987,6 +2991,23 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       after: result.after,
     })
   }
+}
+
+function sanitizedCancellationDetails(
+  details: ActorbleErrorDetails | undefined,
+): ActorbleErrorDetails | undefined {
+  if (details === undefined) return undefined
+  return {
+    ...(typeof details.operation === 'string' ? { operation: details.operation } : {}),
+    reasonKind: cancellationReasonKind(details.reason),
+  }
+}
+
+function cancellationReasonKind(reason: unknown): string {
+  if (reason === undefined) return 'unspecified'
+  if (reason instanceof ActorbleError) return `actorble-error:${reason.code}`
+  if (reason instanceof Error) return 'error'
+  return typeof reason
 }
 
 export function createActionOrchestrator(

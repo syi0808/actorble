@@ -346,6 +346,11 @@ Supported event names currently emitted by the browser runtime are:
 - `pseudo:mirror:warning`
 - `scenario:pause`
 - `scenario:resume`
+- `reveal:start` / `reveal:visibility-before` / `reveal:scroll-chain` / `reveal:plan`
+- `reveal:step-start` / `reveal:step-update` / `reveal:step-end` / `reveal:replan`
+- `reveal:settle-start` / `reveal:settle-end` / `reveal:visibility-after` / `reveal:complete`
+- `stability:start` / `stability:mutation` / `stability:layout-sample`
+- `stability:scroll-dirty` / `stability:stable-frame` / `stability:reset` / `stability:complete`
 - `surface:scrolled`
 - `wait:retry`
 - `wait:start`
@@ -676,8 +681,14 @@ type CapabilityReport = {
   dragAndDrop: DragAndDropCapability
   textSelection: TextSelectionCapability
   pointerSequence: PointerSequenceCapability
+  scrolling: 'none' | 'viewport' | 'nested-dom'
+  reveal: 'none' | 'scroll-into-view' | 'planned'
+  stability: 'none' | 'frame' | 'observed'
 }
 ```
+
+The in-page browser runtime reports `scrolling: 'nested-dom'`, `reveal: 'planned'`, and
+`stability: 'observed'`. It cannot produce native trusted wheel input.
 
 ### FidelityReport
 

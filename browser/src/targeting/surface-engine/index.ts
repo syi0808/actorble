@@ -74,7 +74,28 @@ export type SurfaceEngineOptions = Readonly<{
   scrollChainResolver?: ScrollChainResolver
   settlementObserver?: ScrollSettlementObserver
   timeline?: ScrollSettlementTimeline
+  trace?: SurfaceTraceRecorder
 }>
+
+export type SurfaceTraceRecorder = Readonly<{
+  appendEvent(name: string, data?: unknown): void
+  attachSnapshot(name: string, data: unknown): void
+}>
+
+type RevealDiagnosticStep = Readonly<{
+  surfaceId: string
+  from: Point
+  intendedTo: Point
+  to: Point
+  axes: readonly string[]
+}>
+
+type RevealDiagnosticState = {
+  phase: string
+  before?: VisibilitySnapshot
+  after?: VisibilitySnapshot
+  completedSteps: RevealDiagnosticStep[]
+}
 
 export type RevealGeometrySnapshot = Readonly<{
   rect: Rect
@@ -95,6 +116,7 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   readonly #scrollChainResolver: ScrollChainResolver
   readonly #settlementObserver: ScrollSettlementObserver
   readonly #timeline: ScrollSettlementTimeline
+  readonly #trace?: SurfaceTraceRecorder
 
   constructor(options: SurfaceEngineOptions = {}) {
     const timeline = options.timeline ?? new BrowserTimelineEngine()
@@ -103,6 +125,7 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
     this.#clock = options.clock ?? timeline
     this.#timeline = timeline
+    this.#trace = options.trace
     this.#geometry =
       options.geometry === undefined
         ? undefined
@@ -142,6 +165,41 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   async reveal(target: TargetHandle, options: RevealOptions = {}): Promise<RevealResult> {
+    const diagnostics: RevealDiagnosticState = { phase: 'start', completedSteps: [] }
+    this.#trace?.appendEvent('reveal:start', { policy: summarizeRevealPolicy(options) })
+
+    try {
+      const result = await this.#performReveal(target, options, diagnostics)
+      this.#trace?.appendEvent('reveal:complete', {
+        outcome: 'success',
+        changed: result.changed,
+        fullyVisible: result.fullyVisible,
+        visibilityRatio: result.visibilityRatio,
+        frameCount: diagnostics.completedSteps.length,
+      })
+      return result
+    } catch (error) {
+      const code = diagnosticErrorCode(error)
+      if (code === 'ACTION_TIMEOUT') {
+        this.#trace?.attachSnapshot('reveal:timeout', revealTimeoutSnapshot(diagnostics))
+      }
+      this.#trace?.appendEvent('reveal:complete', {
+        outcome: code === 'ACTION_TIMEOUT'
+          ? 'timed-out'
+          : code === 'ACTION_CANCELLED'
+            ? 'cancelled'
+            : 'failed',
+        ...(code === undefined ? {} : { code }),
+      })
+      throw error
+    }
+  }
+
+  async #performReveal(
+    target: TargetHandle,
+    options: RevealOptions,
+    diagnostics: RevealDiagnosticState,
+  ): Promise<RevealResult> {
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
 
@@ -154,10 +212,24 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
     assertViewportRevealGeometry(initialGeometry)
     const before = visibilitySnapshot(initialGeometry.rect, initialGeometry.visibleRect)
+    diagnostics.phase = 'visibility-before'
+    diagnostics.before = before
+    this.#trace?.appendEvent('reveal:visibility-before', {
+      visibility: before,
+      rect: cloneRect(initialGeometry.rect),
+      visibleRect: cloneOptionalRect(initialGeometry.visibleRect),
+    })
     const canonicalChain = this.#selectedRevealChain(
       this.#scrollChainResolver.resolve(target),
       options,
     )
+    this.#trace?.appendEvent('reveal:scroll-chain', {
+      surfaces: canonicalChain.map((surface) => ({
+        surfaceId: surface.id,
+        kind: surface.kind,
+        offset: { x: surface.metrics.scrollLeft, y: surface.metrics.scrollTop },
+      })),
+    })
     const executedSteps: Array<
       Omit<RevealResult['steps'][number], 'to'> & { scrollTarget: Element | Window }
     > = []
@@ -170,6 +242,11 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       if (index > 0) {
         currentGeometry = await geometry.snapshot(target)
         assertViewportRevealGeometry(currentGeometry)
+        this.#trace?.appendEvent('reveal:replan', {
+          reason: 'post-scroll-geometry-refresh',
+          replanCount: index,
+          rect: cloneRect(currentGeometry.rect),
+        })
       }
 
       const canonicalSurface = canonicalChain[index]
@@ -192,10 +269,29 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
         options,
       })
 
+      this.#trace?.appendEvent('reveal:plan', {
+        surfaceId: freshSurface.id,
+        planned: planned !== undefined,
+        ...(planned === undefined
+          ? {}
+          : {
+              from: { ...planned.from },
+              intendedTo: { ...planned.intendedTo },
+              axes: [...planned.axes],
+            }),
+      })
+
       if (planned === undefined) {
         continue
       }
 
+      diagnostics.phase = 'step'
+      this.#trace?.appendEvent('reveal:step-start', {
+        surfaceId: planned.surfaceId,
+        from: { ...planned.from },
+        intendedTo: { ...planned.intendedTo },
+        axes: [...planned.axes],
+      })
       assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
       const execution = this.#executeScroll(
         freshSurface.scrollTarget,
@@ -208,6 +304,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       if (execution !== undefined) {
         await execution
       }
+      const currentPosition = this.#readScrollPosition(freshSurface.scrollTarget)
+      this.#trace?.appendEvent('reveal:step-update', {
+        surfaceId: planned.surfaceId,
+        frame: 1,
+        current: currentPosition,
+      })
       executedSteps.push({
         surfaceId: planned.surfaceId,
         from: Object.freeze({ ...planned.from }),
@@ -215,6 +317,15 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
         axes: Object.freeze([...planned.axes]),
         scrollTarget: freshSurface.scrollTarget,
       })
+      const diagnosticStep: RevealDiagnosticStep = {
+        surfaceId: planned.surfaceId,
+        from: { ...planned.from },
+        intendedTo: { ...planned.intendedTo },
+        to: { ...currentPosition },
+        axes: [...planned.axes],
+      }
+      diagnostics.completedSteps.push(diagnosticStep)
+      this.#trace?.appendEvent('reveal:step-end', diagnosticStep)
 
       if (!samePoint(planned.from, planned.intendedTo)) {
         changedSurfaces.add(freshSurface.scrollTarget)
@@ -222,6 +333,13 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
     }
 
+    diagnostics.phase = 'settle'
+    if (changedSurfaces.size > 0 && options.settle !== undefined && options.settle !== 'none') {
+      this.#trace?.appendEvent('reveal:settle-start', {
+        policy: summarizeSettlePolicy(options.settle),
+        surfaceCount: changedSurfaces.size,
+      })
+    }
     await this.#settleSurfaces(
       [...changedSurfaces],
       options.settle,
@@ -229,6 +347,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       deadline,
       options.signal,
     )
+    if (changedSurfaces.size > 0 && options.settle !== undefined && options.settle !== 'none') {
+      this.#trace?.appendEvent('reveal:settle-end', {
+        policy: summarizeSettlePolicy(options.settle),
+        surfaceCount: changedSurfaces.size,
+      })
+    }
     this.#cache.invalidate('scroll')
     const steps: RevealResult['steps'][number][] = executedSteps.map(
       ({ scrollTarget, ...step }) =>
@@ -242,6 +366,13 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
     assertViewportRevealGeometry(finalGeometry)
     const after = visibilitySnapshot(finalGeometry.rect, finalGeometry.visibleRect)
+    diagnostics.phase = 'visibility-after'
+    diagnostics.after = after
+    this.#trace?.appendEvent('reveal:visibility-after', {
+      visibility: after,
+      rect: cloneRect(finalGeometry.rect),
+      visibleRect: cloneOptionalRect(finalGeometry.visibleRect),
+    })
 
     return Object.freeze({
       target,
@@ -482,6 +613,52 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     })
     assertOperationBoundary(operation, this.#clock, deadline, signal)
   }
+}
+
+function summarizeRevealPolicy(options: RevealOptions): Record<string, unknown> {
+  return {
+    visibility: options.visibility ?? 'any',
+    block: options.block ?? 'nearest',
+    inline: options.inline ?? 'nearest',
+    container: options.container ?? 'all',
+    motion: options.motion?.kind ?? 'instant',
+    settle: summarizeSettlePolicy(options.settle),
+    ...(options.safeArea === undefined ? {} : { safeArea: { ...options.safeArea } }),
+    ...(options.offset === undefined ? {} : { offset: { ...options.offset } }),
+  }
+}
+
+function summarizeSettlePolicy(policy: ScrollSettlePolicy | undefined): unknown {
+  if (typeof policy !== 'object' || policy === null) return policy ?? 'none'
+  return { ...policy }
+}
+
+function revealTimeoutSnapshot(state: RevealDiagnosticState): Record<string, unknown> {
+  return {
+    phase: state.phase,
+    ...(state.before === undefined ? {} : { before: { ...state.before } }),
+    ...(state.after === undefined ? {} : { after: { ...state.after } }),
+    completedSteps: state.completedSteps.map((step) => ({
+      ...step,
+      from: { ...step.from },
+      intendedTo: { ...step.intendedTo },
+      to: { ...step.to },
+      axes: [...step.axes],
+    })),
+  }
+}
+
+function cloneRect(rect: Rect): Rect {
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+}
+
+function cloneOptionalRect(rect: Rect | null): Rect | null {
+  return rect === null ? null : cloneRect(rect)
+}
+
+function diagnosticErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
 }
 
 export function createSurfaceEngine(options: SurfaceEngineOptions = {}): SurfaceEngine {

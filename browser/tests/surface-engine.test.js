@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserSurfaceEngine, createSurfaceEngine } from '../src/targeting/surface-engine/index.js'
 import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
 import { css, element } from '../src/shared/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 
 function targetHandle(id, target, options = {}) {
   return {
@@ -448,10 +449,31 @@ describe('BrowserSurfaceEngine', () => {
     expect(geometry.snapshot).toHaveBeenCalledTimes(2)
   })
 
+  it('records a sanitized failed reveal terminal event', async () => {
+    const target = document.createElement('button')
+    const trace = new BrowserDiagnosticsTrace()
+    const engine = createSurfaceEngine({ dom: createDomPort(), trace })
+
+    await expect(engine.reveal(targetHandle('secret-target-id', target))).rejects.toMatchObject({
+      code: 'NOT_IMPLEMENTED',
+    })
+    expect(trace.getTrace().events).toEqual([
+      expect.objectContaining({ name: 'reveal:start' }),
+      expect.objectContaining({
+        name: 'reveal:complete',
+        data: { outcome: 'failed', code: 'NOT_IMPLEMENTED' },
+      }),
+    ])
+    expect(JSON.stringify(trace.getTrace())).not.toContain('secret-target-id')
+  })
+
   it('executes native-smooth nested reveal inner-to-outer and settles all changed surfaces', async () => {
     const target = document.createElement('button')
+    target.textContent = 'secret target content'
     const inner = document.createElement('section')
-    const handle = targetHandle('target-1', target)
+    const handle = targetHandle('target-1', target, {
+      debug: { selector: '#secret-selector', description: 'secret accessible name' },
+    })
     const offsets = new Map([
       [inner, { x: 0, y: 0 }],
       [window, { x: 0, y: 0 }],
@@ -527,11 +549,13 @@ describe('BrowserSurfaceEngine', () => {
       }),
     })
     const settlementObserver = { settle: vi.fn(async () => {}) }
+    const trace = new BrowserDiagnosticsTrace()
     const engine = new BrowserSurfaceEngine({
       dom,
       geometry,
       scrollChainResolver: resolver,
       settlementObserver,
+      trace,
     })
 
     const result = await engine.reveal(handle, {
@@ -575,6 +599,26 @@ describe('BrowserSurfaceEngine', () => {
       },
     ])
     expect(geometry.snapshot).toHaveBeenCalledTimes(3)
+    expect(trace.getTrace().events.map((event) => event.name)).toEqual([
+      'reveal:start',
+      'reveal:visibility-before',
+      'reveal:scroll-chain',
+      'reveal:plan',
+      'reveal:step-start',
+      'reveal:step-update',
+      'reveal:step-end',
+      'reveal:replan',
+      'reveal:plan',
+      'reveal:step-start',
+      'reveal:step-update',
+      'reveal:step-end',
+      'reveal:settle-start',
+      'reveal:settle-end',
+      'reveal:visibility-after',
+      'reveal:complete',
+    ])
+    expect(JSON.stringify(trace.getTrace())).not.toContain('target-1')
+    expect(JSON.stringify(trace.getTrace())).not.toContain('secret')
   })
 
   it('returns best-effort partial visibility from final geometry', async () => {
@@ -690,17 +734,32 @@ describe('BrowserSurfaceEngine', () => {
         controllerToAbort.abort('stop after inner')
       }),
     })
+    const trace = new BrowserDiagnosticsTrace()
     const engine = new BrowserSurfaceEngine({
       clock: { now: () => now },
       dom,
       geometry,
       scrollChainResolver: { resolve: vi.fn(() => surfaces) },
+      trace,
     })
 
     await expect(
       engine.reveal(handle, { visibility: 'full', settle: 'none', timeout: 5 }),
     ).rejects.toMatchObject({ code: 'ACTION_TIMEOUT', details: { operation: 'surface.reveal' } })
     expect(dom.scrollTo).toHaveBeenCalledOnce()
+    expect(trace.getTrace().snapshots).toEqual([
+      expect.objectContaining({
+        name: 'reveal:timeout',
+        data: expect.objectContaining({
+          phase: 'step',
+          completedSteps: [expect.objectContaining({ surfaceId: 'inner' })],
+        }),
+      }),
+    ])
+    expect(trace.getTrace().events.at(-1)).toMatchObject({
+      name: 'reveal:complete',
+      data: { outcome: 'timed-out', code: 'ACTION_TIMEOUT' },
+    })
 
     now = 0
     dom.scrollTo.mockClear()
@@ -708,6 +767,10 @@ describe('BrowserSurfaceEngine', () => {
       engine.reveal(handle, { visibility: 'full', settle: 'none', signal: controller.signal }),
     ).rejects.toMatchObject({ code: 'ACTION_CANCELLED', details: { operation: 'surface.reveal' } })
     expect(dom.scrollTo).not.toHaveBeenCalled()
+    expect(trace.getTrace().events.at(-1)).toMatchObject({
+      name: 'reveal:complete',
+      data: { outcome: 'cancelled', code: 'ACTION_CANCELLED' },
+    })
 
     const betweenStepsController = new AbortController()
     controllerToAbort = betweenStepsController

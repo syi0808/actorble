@@ -17,6 +17,9 @@ describe('BrowserCapabilityFidelityReporter', () => {
       dragAndDrop: 'pointer-gesture',
       textSelection: 'selection-api',
       pointerSequence: 'transactional',
+      scrolling: 'nested-dom',
+      reveal: 'planned',
+      stability: 'observed',
     })
 
     expect(reporter.getFidelity()).toEqual({
@@ -38,6 +41,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
         'Synthetic pointer drag is supported through pointer move/down/move/up DOM events.',
         'HTML5 DataTransfer drag/drop, native trusted drag/drop, editor selection drag, and custom drag adapters are not implemented yet.',
         'Debug event subscriptions are exact-name trace event subscriptions; span lifecycle snapshots are available through getTrace().',
+        'Native trusted wheel input is not available from the in-page browser runtime.',
       ],
     })
   })
@@ -52,6 +56,9 @@ describe('BrowserCapabilityFidelityReporter', () => {
       dragAndDrop: 'pointer-gesture',
       textSelection: 'selection-api',
       pointerSequence: 'transactional',
+      scrolling: 'nested-dom',
+      reveal: 'planned',
+      stability: 'observed',
     })
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { actorbleError } from '../src/shared/index.js'
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
 import {
   BrowserVisualStabilityObserver,
   DEFAULT_VISUAL_STABILITY_POLICY,
@@ -101,7 +102,7 @@ function metrics(scrollLeft = 0, scrollTop = 0) {
   }
 }
 
-function createHarness({ rects = [rect()], offsets = [[0, 0]], validate } = {}) {
+function createHarness({ rects = [rect()], offsets = [[0, 0]], validate, trace } = {}) {
   const controlled = createControlledTimeline()
   const layout = createLayoutInvalidationTracker()
   const element = document.createElement('button')
@@ -134,6 +135,7 @@ function createHarness({ rects = [rect()], offsets = [[0, 0]], validate } = {}) 
     resolver,
     scrollChain,
     timeline: controlled.timeline,
+    trace,
   })
 
   return { controlled, dom, geometry, layout, observer, resolver, surface, target }
@@ -228,12 +230,14 @@ describe('BrowserVisualStabilityObserver', () => {
 
   it('fails promptly when the watched target detaches and cleans up the frame loop', async () => {
     let attempts = 0
+    const trace = new BrowserDiagnosticsTrace()
     const harness = createHarness({
       validate: async (handle) => {
         attempts += 1
         if (attempts === 2) throw actorbleError('TARGET_DETACHED', 'Target detached.')
         return handle
       },
+      trace,
     })
     const promise = harness.observer.observe(harness.target)
 
@@ -243,6 +247,10 @@ describe('BrowserVisualStabilityObserver', () => {
     await expect(promise).rejects.toMatchObject({ code: 'TARGET_DETACHED' })
     expect(harness.layout.tracker.stop).toHaveBeenCalledOnce()
     expect(harness.controlled.pendingFrames).toBe(0)
+    expect(trace.getTrace().events.at(-1)).toMatchObject({
+      name: 'stability:complete',
+      data: { outcome: 'failed', code: 'TARGET_DETACHED' },
+    })
   })
 
   it('reports the last stability sample on timeout and disposes after abort', async () => {
@@ -265,7 +273,8 @@ describe('BrowserVisualStabilityObserver', () => {
 
     await timeoutExpectation
 
-    const abortHarness = createHarness()
+    const abortTrace = new BrowserDiagnosticsTrace()
+    const abortHarness = createHarness({ trace: abortTrace })
     const controller = new AbortController()
     const cancelled = abortHarness.observer.observe(abortHarness.target, {
       signal: controller.signal,
@@ -275,5 +284,43 @@ describe('BrowserVisualStabilityObserver', () => {
     await expect(cancelled).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
     expect(abortHarness.layout.tracker.stop).toHaveBeenCalledOnce()
     expect(abortHarness.controlled.pendingFrames).toBe(0)
+    expect(abortTrace.getTrace().events.at(-1)).toMatchObject({
+      name: 'stability:complete',
+      data: { outcome: 'cancelled', code: 'ACTION_CANCELLED' },
+    })
+  })
+
+  it('records scalar-only stability lifecycle and an authoritative timeout snapshot', async () => {
+    const trace = new BrowserDiagnosticsTrace({ retention: { maxEvents: 1, maxSnapshots: 1 } })
+    const harness = createHarness({ rects: [rect(), rect(20)], trace })
+    const timedOut = harness.observer.observe(harness.target, { timeout: 90 })
+    const expectation = expect(timedOut).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: expect.objectContaining({
+        requiredStableFrames: 2,
+        observedStableFrames: 0,
+        lastRect: rect(20),
+      }),
+    })
+
+    await harness.controlled.frame(80)
+    await harness.controlled.frame(96)
+    await expectation
+
+    const snapshot = trace.getTrace()
+    expect(snapshot.events).toEqual([
+      expect.objectContaining({
+        name: 'stability:complete',
+        data: { outcome: 'timed-out', code: 'ACTION_TIMEOUT' },
+      }),
+    ])
+    expect(snapshot.snapshots).toEqual([
+      expect.objectContaining({
+        name: 'stability:timeout',
+        data: expect.objectContaining({ lastRect: rect(20), observedStableFrames: 0 }),
+      }),
+    ])
+    expect(JSON.stringify(snapshot)).not.toContain('target-1')
+    expect(JSON.stringify(snapshot)).not.toContain('button#target')
   })
 })

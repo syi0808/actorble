@@ -1282,7 +1282,7 @@ api/actorble-facade
 
 ### T58. Reveal and stability diagnostics and capability reporting
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add structured reveal/stability trace events, timeout snapshots, and capability/fidelity fields after behavior is stable.
 - Dependencies: T49-T57, diagnostics and capability reporter.
 - Decision constraints:

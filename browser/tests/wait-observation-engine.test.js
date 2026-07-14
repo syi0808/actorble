@@ -278,11 +278,55 @@ describe('BrowserWaitObservationEngine', () => {
       engine.waitFor(stable(css('#save'), { quietMs: 40, stableFrames: 3, threshold: 0.25 })),
     ).resolves.toMatchObject({ satisfied: true })
 
-    expect(visualStability.observe).toHaveBeenNthCalledWith(1, undefined, {})
+    expect(visualStability.observe).toHaveBeenNthCalledWith(1, undefined, {
+      onObservation: expect.any(Function),
+    })
     expect(visualStability.observe).toHaveBeenNthCalledWith(2, target, {
       quietMs: 40,
       stableFrames: 3,
       threshold: 0.25,
+      onObservation: expect.any(Function),
+    })
+  })
+
+  it('keeps the last observed stability sample authoritative on an outer timeout', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const observation = {
+      requiredStableFrames: 2,
+      observedStableFrames: 1,
+      previousRect: { x: 1, y: 2, width: 3, height: 4 },
+      lastRect: { x: 2, y: 2, width: 3, height: 4 },
+      lastMutationAt: 10,
+      lastScrollAt: 20,
+    }
+    const visualStability = {
+      observe: vi.fn((_target, options) => {
+        options.onObservation(observation)
+        return new Promise(() => {})
+      }),
+    }
+    const trace = new BrowserDiagnosticsTrace({
+      retention: { maxEvents: 0, maxSnapshots: 0 },
+    })
+    const engine = new BrowserWaitObservationEngine({
+      timeline: createTimeline(),
+      trace,
+      visualStability,
+    })
+    const promise = engine.waitFor(stable(), { timeout: 25 })
+    const expectation = expect(promise).rejects.toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: expect.objectContaining(observation),
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+    await expectation
+
+    expect(trace.getTrace().events).toEqual([])
+    expect(trace.getTrace().spans.at(-1)?.error).toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: expect.objectContaining(observation),
     })
   })
 

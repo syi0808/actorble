@@ -90,4 +90,24 @@ describe('docs and examples option model alignment', () => {
     }
     expect(api).toContain('they do not retain matcher sources')
   })
+
+  it('documents reveal and stability diagnostics and capability fidelity', () => {
+    const api = readFileSync(join(repoRoot, 'docs/src/content/docs/docs/browser/api.md'), 'utf8')
+    const advanced = readFileSync(
+      join(repoRoot, 'docs/src/content/docs/docs/browser/advanced-api.md'),
+      'utf8',
+    )
+
+    for (const value of [
+      "scrolling: 'nested-dom'",
+      "reveal: 'planned'",
+      "stability: 'observed'",
+    ]) {
+      expect(api).toContain(value)
+    }
+    for (const family of ['reveal:start', 'reveal:complete', 'stability:start', 'stability:complete']) {
+      expect(advanced).toContain(family)
+    }
+    expect(advanced).toContain('never retain raw DOM nodes')
+  })
 })

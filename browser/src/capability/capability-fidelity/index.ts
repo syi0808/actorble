@@ -20,6 +20,9 @@ export type TextSelectionCapability =
   | 'editor-adapter'
   | 'native'
 export type PointerSequenceCapability = 'none' | 'transactional'
+export type ScrollingCapability = 'none' | 'viewport' | 'nested-dom'
+export type RevealCapability = 'none' | 'scroll-into-view' | 'planned'
+export type StabilityCapability = 'none' | 'frame' | 'observed'
 
 export type InputFidelity =
   | 'visual-only'
@@ -61,6 +64,9 @@ export type CapabilityReport = Readonly<{
   dragAndDrop: DragAndDropCapability
   textSelection: TextSelectionCapability
   pointerSequence: PointerSequenceCapability
+  scrolling: ScrollingCapability
+  reveal: RevealCapability
+  stability: StabilityCapability
 }>
 
 export type FidelityReport = Readonly<{
@@ -119,6 +125,9 @@ const browserCapabilityReport: CapabilityReport = {
   dragAndDrop: 'pointer-gesture',
   textSelection: 'selection-api',
   pointerSequence: 'transactional',
+  scrolling: 'nested-dom',
+  reveal: 'planned',
+  stability: 'observed',
 }
 
 const browserVisualOverlayDisabled: VisualOverlayFidelity = {
@@ -142,5 +151,6 @@ const browserFidelityReport: FidelityReport = {
     'Synthetic pointer drag is supported through pointer move/down/move/up DOM events.',
     'HTML5 DataTransfer drag/drop, native trusted drag/drop, editor selection drag, and custom drag adapters are not implemented yet.',
     'Debug event subscriptions are exact-name trace event subscriptions; span lifecycle snapshots are available through getTrace().',
+    'Native trusted wheel input is not available from the in-page browser runtime.',
   ],
 }

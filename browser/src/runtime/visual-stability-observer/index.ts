@@ -32,6 +32,7 @@ export type VisualStabilityOptions = Readonly<{
   threshold?: number
   timeout?: DurationMs
   signal?: CancellationSignalLike
+  onObservation?: (observation: VisualStabilityResult) => void
 }>
 
 export type VisualStabilityResult = Readonly<{
@@ -54,6 +55,12 @@ export type VisualStabilityObserverOptions = Readonly<{
   resolver: Pick<TargetResolver, 'validate'>
   scrollChain?: ScrollChainResolver
   timeline?: Pick<TimelineEngine, 'nextFrame' | 'now'>
+  trace?: VisualStabilityTraceRecorder
+}>
+
+export type VisualStabilityTraceRecorder = Readonly<{
+  appendEvent?(name: string, data?: unknown): void
+  attachSnapshot?(name: string, data: unknown): void
 }>
 
 type ScrollState = {
@@ -69,6 +76,7 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
   readonly #resolver: Pick<TargetResolver, 'validate'>
   readonly #scrollChain: ScrollChainResolver
   readonly #timeline: Pick<TimelineEngine, 'nextFrame' | 'now'>
+  readonly #trace?: VisualStabilityTraceRecorder
 
   constructor(options: VisualStabilityObserverOptions) {
     this.#dom = options.dom ?? new BrowserDomAdapter()
@@ -77,6 +85,7 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
     this.#resolver = options.resolver
     this.#scrollChain = options.scrollChain ?? new BrowserScrollChainResolver()
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
+    this.#trace = options.trace
   }
 
   async observe(
@@ -100,16 +109,30 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
     let lastRect: Rect | undefined
     let geometryStableFrames = 0
     let cleanedUp = false
+    let lastDetails: VisualStabilityResult = {
+      requiredStableFrames: policy.stableFrames,
+      observedStableFrames: 0,
+      lastMutationAt,
+      lastScrollAt,
+    }
+
+    this.#trace?.appendEvent?.('stability:start', {
+      scope: target === undefined ? 'root' : 'target',
+      policy,
+      surfaceCount: scrollStates.length,
+    })
 
     const onDirty = (event: LayoutInvalidationDirtyEvent) => {
       if (event.reason === 'mutation') {
         mutationGeneration += 1
         lastMutationAt = event.at
+        this.#trace?.appendEvent?.('stability:mutation', { at: event.at })
       }
       if (event.reason === 'scroll') {
         scrollGeneration += 1
         lastScrollAt = event.at
         for (const state of scrollStates) state.stableFrames = 0
+        this.#trace?.appendEvent?.('stability:scroll-dirty', { at: event.at })
       }
     }
     let dirtySubscription: Disposable | undefined
@@ -178,6 +201,21 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
           lastMutationAt,
           lastScrollAt,
         })
+        lastDetails = details()
+        options.onObservation?.(lastDetails)
+        this.#trace?.appendEvent?.('stability:layout-sample', lastDetails)
+
+        if (sampleRaced || observedStableFrames === 0) {
+          this.#trace?.appendEvent?.('stability:reset', {
+            observedStableFrames,
+            reason: sampleRaced ? 'dirty-during-sample' : 'geometry-or-scroll-changed',
+          })
+        } else {
+          this.#trace?.appendEvent?.('stability:stable-frame', {
+            observedStableFrames,
+            requiredStableFrames: policy.stableFrames,
+          })
+        }
 
         if (deadline !== undefined && sampledAt >= deadline) {
           throw timeoutError(operation, normalizeNonNegative(options.timeout ?? 0, 0), {
@@ -194,11 +232,26 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
         const scrollQuiet = sampledAt - lastScrollAt >= policy.quietMs
 
         if (!sampleRaced && geometryStable && scrollStable && mutationQuiet && scrollQuiet) {
-          return details()
+          this.#trace?.appendEvent?.('stability:complete', { outcome: 'success' })
+          return lastDetails
         }
       }
     } catch (error) {
-      if (options.signal?.aborted) throw cancellationError(operation, options.signal.reason)
+      if (options.signal?.aborted) {
+        this.#trace?.appendEvent?.('stability:complete', {
+          outcome: 'cancelled',
+          code: 'ACTION_CANCELLED',
+        })
+        throw cancellationError(operation, options.signal.reason)
+      }
+      const code = diagnosticErrorCode(error)
+      if (code === 'ACTION_TIMEOUT') {
+        this.#trace?.attachSnapshot?.('stability:timeout', lastDetails)
+      }
+      this.#trace?.appendEvent?.('stability:complete', {
+        outcome: code === 'ACTION_TIMEOUT' ? 'timed-out' : 'failed',
+        ...(code === undefined ? {} : { code }),
+      })
       throw error
     } finally {
       cleanup()
@@ -215,6 +268,11 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
       stableFrames: 0,
     }))
   }
+}
+
+function diagnosticErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
 }
 
 function normalizePolicy(options: VisualStabilityOptions) {

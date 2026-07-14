@@ -104,6 +104,7 @@ export class Actorble {
       dom,
       cache: geometrySurfaceCache,
       timeline,
+      trace,
       geometry: () => {
         if (geometry === undefined) {
           throw new Error('Actorble geometry composition is not initialized.')

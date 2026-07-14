@@ -404,6 +404,13 @@ function createDiagnosticsTrace(options?: DiagnosticsTraceOptions): TraceCollect
 
 Trace event subscriptions are exact-name subscriptions for future events only. They do not replay `getTrace().events`; callers should use `off()` or facade `destroy()` cleanup to release listeners.
 
+Reveal diagnostics use the `reveal:start` through `reveal:complete` event family. Observed stability
+uses `stability:start` through `stability:complete`. Their payloads contain policies, surface IDs,
+counts, outcomes, and numeric geometry or offset summaries; they never retain raw DOM nodes, target
+content, mutation records, error messages, or cancellation reasons. Timeout snapshots duplicate the
+latest scalar summary, while the thrown timeout error remains authoritative when trace retention
+evicts events or snapshots.
+
 ## CapabilityFidelityReporter
 
 ```ts

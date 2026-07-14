@@ -166,6 +166,7 @@ type WaitObservation =
 type WaitAttemptDiagnostics = {
   attempts: number
   lastObservation?: WaitObservation
+  lastStabilityObservation?: import('../visual-stability-observer/index.js').VisualStabilityResult
   pendingChildren: Map<string, CompositeChildDiagnostic>
 }
 
@@ -245,6 +246,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         resolver: this.#resolver,
         scrollChain: new BrowserScrollChainResolver({ dom: this.#dom }),
         timeline: this.#timeline,
+        trace: this.#trace,
       })
     this.#onGeometryInvalidated = options.onGeometryInvalidated
     this.#layoutInvalidation = layoutInvalidation
@@ -410,6 +412,9 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       await this.#visualStability.observe(target, {
         ...condition.options,
         ...(signal === undefined ? {} : { signal }),
+        onObservation: (observation) => {
+          diagnostics.lastStabilityObservation = observation
+        },
       })
       return satisfiedResult(condition)
     }
@@ -1004,6 +1009,9 @@ function conditionErrorDetails(
     ...(diagnostics.lastObservation === undefined
       ? {}
       : { lastObservation: diagnostics.lastObservation }),
+    ...(diagnostics.lastStabilityObservation === undefined
+      ? {}
+      : { ...diagnostics.lastStabilityObservation }),
     ...(diagnostics.pendingChildren.size === 0
       ? {}
       : { unfinishedChildren: [...diagnostics.pendingChildren.values()] }),
@@ -1012,11 +1020,18 @@ function conditionErrorDetails(
 
 function finishSpanWithError(span: WaitTraceSpan | undefined, error: ActorbleError): void {
   if (error.code === 'ACTION_CANCELLED') {
-    span?.cancel(error.details?.reason)
+    span?.cancel(cancellationReasonKind(error.details?.reason))
     return
   }
 
   span?.error(error)
+}
+
+function cancellationReasonKind(reason: unknown): string {
+  if (reason === undefined) return 'unspecified'
+  if (reason instanceof ActorbleError) return `actorble-error:${reason.code}`
+  if (reason instanceof Error) return 'error'
+  return typeof reason
 }
 
 function normalizeWaitError(
