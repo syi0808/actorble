@@ -1,5 +1,7 @@
 import {
   Actorble,
+  all,
+  any,
   attribute,
   attached,
   css,
@@ -8,6 +10,7 @@ import {
   enabled,
   focused,
   hidden,
+  stable,
   text,
   url,
   value,
@@ -31,6 +34,11 @@ const conditions: readonly WaitCondition[] = [
   attribute(target, 'data-state', 'ready'),
   attribute(target, 'data-state', null),
   url('/projects/1'),
+  stable(),
+  stable(target, { quietMs: 40, stableFrames: 3, threshold: 0.25 }),
+  all(visible(target), enabled(target)),
+  any(text('Saved'), url('/projects/1')),
+  all(attached(target), any(enabled(target), disabled(target))),
 ]
 const steps: readonly ScenarioStep[] = conditions.map((condition) => ({
   action: 'waitFor',

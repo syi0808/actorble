@@ -1262,7 +1262,7 @@ api/actorble-facade
 
 ### T57. Stable wait and all/any composition
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Expose observed visual stability as `stable(target?, options)` and add recursive `all`/`any` composition to the declarative condition vocabulary.
 - Dependencies: T54-T56.
 - Decision constraints:

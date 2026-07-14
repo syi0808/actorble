@@ -166,7 +166,13 @@ type WaitObservation =
 type WaitAttemptDiagnostics = {
   attempts: number
   lastObservation?: WaitObservation
+  pendingChildren: Map<string, CompositeChildDiagnostic>
 }
+
+type CompositeChildDiagnostic = Readonly<{
+  path: readonly number[]
+  condition: Readonly<Record<string, unknown>>
+}>
 
 type WaitErrorDetailsProvider = ActorbleErrorDetails | (() => ActorbleErrorDetails)
 
@@ -259,7 +265,12 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       timeout: options.timeout,
     })
 
-    const diagnostics: WaitAttemptDiagnostics = { attempts: 0 }
+    const diagnostics: WaitAttemptDiagnostics = {
+      attempts: 0,
+      pendingChildren: condition.kind === 'all' || condition.kind === 'any'
+        ? collectPendingChildren(condition)
+        : new Map(),
+    }
     const details = () => conditionErrorDetails(condition, diagnostics)
 
     try {
@@ -267,7 +278,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         operation,
         options,
         details,
-        (signal) => this.#waitForCondition(condition, signal, diagnostics),
+        (signal) => this.#waitForTrackedCondition(condition, signal, diagnostics, []),
       )
 
       span?.event('wait:success', {
@@ -392,6 +403,17 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     assertNotCancelled('wait.for', signal)
     const conditionKind = (condition as Readonly<{ kind: string }>).kind
 
+    if (condition.kind === 'stable') {
+      const target = condition.target === undefined
+        ? undefined
+        : await this.#resolveTarget(condition.target, undefined)
+      await this.#visualStability.observe(target, {
+        ...condition.options,
+        ...(signal === undefined ? {} : { signal }),
+      })
+      return satisfiedResult(condition)
+    }
+
     if (isTargetWaitCondition(condition)) {
       return await this.#waitForTargetCondition(condition, signal, diagnostics)
     }
@@ -406,6 +428,14 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
 
     if (condition.kind === 'url') {
       return await this.#waitForUrlCondition(condition, signal, diagnostics)
+    }
+
+    if (condition.kind === 'all' || condition.kind === 'any') {
+      throw actorbleError(
+        'PLATFORM_UNSUPPORTED',
+        'Composite conditions must be evaluated through the composite wait path.',
+        { details: { conditionKind: condition.kind } },
+      )
     }
 
     if (conditionKind !== 'custom') {
@@ -445,6 +475,62 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         condition: summarizeCondition(condition),
       })
       await this.#timeline.settle('interaction-stable', toCancellationOptions(signal))
+    }
+  }
+
+  async #waitForTrackedCondition(
+    condition: WaitCondition,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+    path: readonly number[],
+  ): Promise<WaitResult> {
+    assertNotCancelled('wait.for', signal)
+
+    if (condition.kind === 'all' || condition.kind === 'any') {
+      return await this.#waitForCompositeCondition(condition, signal, diagnostics, path)
+    }
+
+    const result = await this.#waitForCondition(condition, signal, diagnostics)
+    diagnostics.pendingChildren.delete(compositePathKey(path))
+    return result
+  }
+
+  async #waitForCompositeCondition(
+    condition: Extract<WaitCondition, { kind: 'all' | 'any' }>,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+    path: readonly number[],
+  ): Promise<WaitResult> {
+    if (condition.conditions.length === 0) {
+      if (condition.kind === 'all') {
+        diagnostics.pendingChildren.delete(compositePathKey(path))
+        return satisfiedResult(condition)
+      }
+
+      await waitForCancellation(signal)
+      throw cancellationError('wait.for', signal?.reason)
+    }
+
+    const branches = condition.conditions.map(() => createLinkedAbortController(signal))
+    const tasks = condition.conditions.map((child, index) =>
+      this.#waitForTrackedCondition(child, branches[index].controller.signal, diagnostics, [...path, index]),
+    )
+
+    try {
+      if (condition.kind === 'all') {
+        await Promise.all(tasks)
+      } else {
+        await Promise.race(tasks)
+      }
+
+      for (const branch of branches) branch.controller.abort('composite condition complete')
+      return satisfiedResult(condition)
+    } catch (error) {
+      for (const branch of branches) branch.controller.abort(error)
+      if (signal?.aborted) throw cancellationError('wait.for', signal.reason)
+      throw error
+    } finally {
+      for (const branch of branches) branch.dispose()
     }
   }
 
@@ -918,6 +1004,9 @@ function conditionErrorDetails(
     ...(diagnostics.lastObservation === undefined
       ? {}
       : { lastObservation: diagnostics.lastObservation }),
+    ...(diagnostics.pendingChildren.size === 0
+      ? {}
+      : { unfinishedChildren: [...diagnostics.pendingChildren.values()] }),
   }
 }
 
@@ -1260,9 +1349,78 @@ function summarizeCondition(condition: WaitCondition): Readonly<Record<string, u
       }
     case 'url':
       return { kind: condition.kind, matcher: summarizeMatcher(condition.value) }
+    case 'stable':
+      return {
+        kind: condition.kind,
+        scope: condition.target === undefined ? 'root' : 'target',
+        ...(condition.target === undefined ? {} : { target: summarizeTarget(condition.target) }),
+        ...(condition.options === undefined ? {} : { options: condition.options }),
+      }
+    case 'all':
+    case 'any':
+      return { kind: condition.kind, conditionCount: condition.conditions.length }
   }
 
   return { kind: (condition as Readonly<{ kind: string }>).kind }
+}
+
+function collectPendingChildren(
+  condition: WaitCondition,
+  path: readonly number[] = [],
+  pending = new Map<string, CompositeChildDiagnostic>(),
+): Map<string, CompositeChildDiagnostic> {
+  if (condition.kind === 'all' || condition.kind === 'any') {
+    if (condition.conditions.length === 0) {
+      pending.set(compositePathKey(path), { path: [...path], condition: summarizeCondition(condition) })
+    } else {
+      condition.conditions.forEach((child, index) => {
+        collectPendingChildren(child, [...path, index], pending)
+      })
+    }
+    return pending
+  }
+
+  pending.set(compositePathKey(path), { path: [...path], condition: summarizeCondition(condition) })
+  return pending
+}
+
+function compositePathKey(path: readonly number[]): string {
+  return path.length === 0 ? 'root' : path.join('.')
+}
+
+function createLinkedAbortController(signal: WaitOptions['signal']): Readonly<{
+  controller: AbortController
+  dispose(): void
+}> {
+  const controller = new AbortController()
+  const onAbort = () => controller.abort(signal?.reason)
+
+  if (signal?.aborted) {
+    controller.abort(signal.reason)
+  } else {
+    signal?.addEventListener('abort', onAbort, { once: true })
+  }
+
+  return {
+    controller,
+    dispose() {
+      signal?.removeEventListener('abort', onAbort)
+    },
+  }
+}
+
+function waitForCancellation(signal: WaitOptions['signal']): Promise<never> {
+  if (signal?.aborted) {
+    return Promise.reject(cancellationError('wait.for', signal.reason))
+  }
+
+  return new Promise((_, reject) => {
+    signal?.addEventListener(
+      'abort',
+      () => reject(cancellationError('wait.for', signal.reason)),
+      { once: true },
+    )
+  })
 }
 
 function isTargetWaitCondition(

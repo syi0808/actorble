@@ -4,6 +4,8 @@ import { BrowserDomAdapter } from '../src/platform/platform-adapter/dom-adapter/
 import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
 import {
   actorbleError,
+  all,
+  any,
   attribute,
   attached,
   css,
@@ -11,6 +13,7 @@ import {
   disabled,
   enabled,
   focused,
+  stable,
   text,
   timeoutError,
   url,
@@ -250,6 +253,159 @@ describe('BrowserWaitObservationEngine', () => {
         lastScrollAt: 8,
       },
     })
+  })
+
+  it('delegates root and target stable conditions to the visual-stability observer', async () => {
+    document.body.innerHTML = '<button id="save">Save</button>'
+    const target = targetHandle(document.querySelector('#save'))
+    const ports = createObservationPorts(target)
+    const visualStability = {
+      observe: vi.fn(async () => ({
+        requiredStableFrames: 3,
+        observedStableFrames: 3,
+        lastMutationAt: 0,
+        lastScrollAt: 0,
+      })),
+    }
+    const engine = new BrowserWaitObservationEngine({
+      timeline: createTimeline(),
+      visualStability,
+      ...ports,
+    })
+
+    await expect(engine.waitFor(stable())).resolves.toMatchObject({ satisfied: true })
+    await expect(
+      engine.waitFor(stable(css('#save'), { quietMs: 40, stableFrames: 3, threshold: 0.25 })),
+    ).resolves.toMatchObject({ satisfied: true })
+
+    expect(visualStability.observe).toHaveBeenNthCalledWith(1, undefined, {})
+    expect(visualStability.observe).toHaveBeenNthCalledWith(2, target, {
+      quietMs: 40,
+      stableFrames: 3,
+      threshold: 0.25,
+    })
+  })
+
+  it('supports nested all and any conditions with latched child success', async () => {
+    let secondReady = false
+    const first = { kind: 'custom', predicate: vi.fn(() => true) }
+    const second = { kind: 'custom', predicate: vi.fn(() => secondReady) }
+    const third = { kind: 'custom', predicate: vi.fn(() => false) }
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        secondReady = true
+      }),
+    })
+    const condition = all(first, any(second, third))
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(condition)).resolves.toEqual({
+      condition,
+      satisfied: true,
+      strategy: 'interaction-stable',
+    })
+    expect(first.predicate).toHaveBeenCalledOnce()
+    expect(second.predicate).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels and disposes losing any branches after the first success', async () => {
+    let losingSignal
+    const timeline = createTimeline({
+      settle: vi.fn((_strategy, options) => new Promise((_, reject) => {
+        losingSignal = options.signal
+        options.signal.addEventListener('abort', () => reject(actorbleError('ACTION_CANCELLED', 'cancelled')), { once: true })
+      })),
+    })
+    const condition = any(
+      { kind: 'custom', predicate: () => false },
+      { kind: 'custom', predicate: () => true },
+    )
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(condition)).resolves.toMatchObject({ satisfied: true })
+    expect(losingSignal).toBeDefined()
+    expect(losingSignal.aborted).toBe(true)
+  })
+
+  it('uses one outer timeout and reports redacted unfinished composite children', async () => {
+    vi.useFakeTimers()
+    const timeline = createTimeline({ settle: vi.fn(() => new Promise(() => {})) })
+    const condition = all(
+      { kind: 'custom', predicate: () => true },
+      any(value(css('#locator-secret'), 'matcher-secret'), url('/url-secret')),
+    )
+    const engine = new BrowserWaitObservationEngine({ timeline })
+    const promise = engine.waitFor(condition, { timeout: 25 })
+    const failurePromise = promise.catch((error) => error)
+
+    await vi.advanceTimersByTimeAsync(25)
+    const failure = await failurePromise
+
+    expect(failure).toMatchObject({
+      code: 'ACTION_TIMEOUT',
+      details: {
+        operation: 'wait.for',
+        timeout: 25,
+        unfinishedChildren: [
+          { path: [1, 0], condition: expect.objectContaining({ kind: 'value' }) },
+          { path: [1, 1], condition: expect.objectContaining({ kind: 'url' }) },
+        ],
+      },
+    })
+    expect(JSON.stringify(failure.details)).not.toMatch(/locator-secret|matcher-secret|url-secret/)
+  })
+
+  it('cascades external abort through composite children', async () => {
+    let childSignal
+    const timeline = createTimeline({
+      settle: vi.fn((_strategy, options) => new Promise((_, reject) => {
+        childSignal = options.signal
+        options.signal.addEventListener('abort', () => reject(actorbleError('ACTION_CANCELLED', 'cancelled')), { once: true })
+      })),
+    })
+    const controller = new AbortController()
+    const engine = new BrowserWaitObservationEngine({ timeline })
+    const promise = engine.waitFor(all({ kind: 'custom', predicate: () => false }), {
+      signal: controller.signal,
+    })
+
+    await vi.waitFor(() => expect(childSignal).toBeDefined())
+    controller.abort('scenario stopped')
+
+    await expect(promise).rejects.toMatchObject({
+      code: 'ACTION_CANCELLED',
+      details: { reason: 'scenario stopped' },
+    })
+    expect(childSignal.aborted).toBe(true)
+  })
+
+  it('fails on the first structural child error and cancels sibling work', async () => {
+    let siblingSignal
+    const structural = actorbleError('PLATFORM_UNSUPPORTED', 'unsupported child')
+    const timeline = createTimeline({
+      settle: vi.fn((_strategy, options) => new Promise((_, reject) => {
+        siblingSignal = options.signal
+        options.signal.addEventListener('abort', () => reject(actorbleError('ACTION_CANCELLED', 'cancelled')), { once: true })
+      })),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(all(
+      { kind: 'custom', predicate: () => false },
+      { kind: 'custom', predicate: () => { throw structural } },
+    ))).rejects.toBe(structural)
+    expect(siblingSignal.aborted).toBe(true)
+  })
+
+  it('defines empty composite semantics', async () => {
+    vi.useFakeTimers()
+    const engine = new BrowserWaitObservationEngine({ timeline: createTimeline() })
+
+    await expect(engine.waitFor(all())).resolves.toMatchObject({ satisfied: true })
+    const promise = engine.waitFor(any(), { timeout: 10 })
+    const expectation = expect(promise).rejects.toMatchObject({ code: 'ACTION_TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(10)
+    await expectation
   })
 
   it('resolves custom wait predicates immediately when already satisfied', async () => {

@@ -813,6 +813,25 @@ export type TargetWaitCondition = {
   }>
 }[TargetWaitConditionKind]
 
+export type StableWaitOptions = Readonly<{
+  quietMs?: DurationMs
+  stableFrames?: number
+  threshold?: number
+}>
+
+export type StableCondition = Readonly<{
+  kind: 'stable'
+  target?: TargetLike
+  options?: StableWaitOptions
+}>
+
+export type CompositeWaitCondition = {
+  [TKind in 'all' | 'any']: Readonly<{
+    kind: TKind
+    conditions: readonly WaitCondition[]
+  }>
+}['all' | 'any']
+
 export type WaitCondition =
   | TargetWaitCondition
   | Readonly<{ kind: 'text'; value: string | RegExp; target?: TargetLike }>
@@ -824,6 +843,8 @@ export type WaitCondition =
       value: string | RegExp | null
     }>
   | Readonly<{ kind: 'url'; value: string | RegExp }>
+  | StableCondition
+  | CompositeWaitCondition
   | Readonly<{ kind: 'custom'; predicate: () => boolean | Promise<boolean> }>
 
 export function visible(target: TargetLike): Extract<TargetWaitCondition, { kind: 'visible' }> {
@@ -871,6 +892,25 @@ export function attribute(
 
 export function url(expected: string | RegExp): Extract<WaitCondition, { kind: 'url' }> {
   return { kind: 'url', value: expected }
+}
+
+export function stable(
+  target?: TargetLike,
+  options?: StableWaitOptions,
+): StableCondition {
+  return {
+    kind: 'stable',
+    ...(target === undefined ? {} : { target }),
+    ...(options === undefined ? {} : { options }),
+  }
+}
+
+export function all(...conditions: readonly WaitCondition[]): Extract<WaitCondition, { kind: 'all' }> {
+  return { kind: 'all', conditions }
+}
+
+export function any(...conditions: readonly WaitCondition[]): Extract<WaitCondition, { kind: 'any' }> {
+  return { kind: 'any', conditions }
 }
 
 type ScenarioStepOptions<TOptions extends OperationOptions> = Omit<TOptions, 'signal'>

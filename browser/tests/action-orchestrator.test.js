@@ -6,7 +6,7 @@ import { BrowserInteractionStateStore } from '../src/state/interaction-state-sto
 import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
 import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
-import { actorbleError, attached, cancellationError, css } from '../src/shared/index.js'
+import { actorbleError, any, attached, cancellationError, css, stable } from '../src/shared/index.js'
 
 function targetHandle(id = 'target-1') {
   const target = document.createElement('button')
@@ -4817,6 +4817,23 @@ describe('BrowserActionOrchestrator', () => {
       expect.objectContaining({
         attributes: expect.objectContaining({
           output: expect.objectContaining({ conditionKind: 'attached', satisfied: true }),
+        }),
+      }),
+    )
+  })
+
+  it('delegates and traces composite wait helpers through the public waitFor path', async () => {
+    const { orchestrator, trace, wait } = createHarness()
+    const condition = any(attached(css('#save')), stable(css('#panel')))
+    wait.waitFor.mockResolvedValue({ condition, satisfied: true, strategy: 'interaction-stable' })
+
+    await orchestrator.waitFor(condition, { timeout: 20 })
+
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 })
+    expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          output: expect.objectContaining({ conditionKind: 'any', satisfied: true }),
         }),
       }),
     )

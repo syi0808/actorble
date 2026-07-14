@@ -594,6 +594,9 @@ type WaitCondition =
   | { kind: 'value'; target: TargetLike; value: string | RegExp }
   | { kind: 'attribute'; target: TargetLike; name: string; value: string | RegExp | null }
   | { kind: 'url'; value: string | RegExp }
+  | { kind: 'stable'; target?: TargetLike; options?: StableWaitOptions }
+  | { kind: 'all'; conditions: readonly WaitCondition[] }
+  | { kind: 'any'; conditions: readonly WaitCondition[] }
   | { kind: 'custom'; predicate: () => boolean | Promise<boolean> }
 ```
 
@@ -610,6 +613,9 @@ await actorble.waitFor(value(css('#project-name'), 'Actorble'))
 await actorble.waitFor(attribute(css('#panel'), 'data-state', 'ready'))
 await actorble.waitFor(attribute(css('#panel'), 'aria-busy', null))
 await actorble.waitFor(url('/projects/actorble'))
+await actorble.waitFor(stable(css('#panel'), { quietMs: 80, stableFrames: 2, threshold: 0.5 }))
+await actorble.waitFor(all(attached(css('#save')), enabled(css('#save'))))
+await actorble.waitFor(any(text('Saved'), url('/projects/actorble')))
 ```
 
 `detached` succeeds when the watched target leaves the configured root or its locator no longer
@@ -625,6 +631,14 @@ URL strings must be root-relative paths or absolute URLs. Root-relative strings 
 `pathname + search + hash`, absolute strings match normalized `location.href`, and regular
 expressions test the full URL. Wait diagnostics expose structural match and length information only;
 they do not retain matcher sources, observed content, locator text, or raw URL components.
+
+`stable()` observes root mutation and scroll stability; when passed a target it also requires stable
+target geometry and validity. It reuses the visual-stability observer and remains opt-in.
+`all()` latches successful children and completes after every child succeeds. `any()` completes on
+the first successful child and cancels all remaining branches. Nested composites share the outer
+`waitFor()` timeout and cancellation signal. Timeout diagnostics report redacted summaries and index
+paths for unfinished children. `all()` with no children succeeds immediately; `any()` with no children
+waits until timeout or cancellation.
 
 ## Scenario
 
