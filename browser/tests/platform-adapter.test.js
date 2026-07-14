@@ -136,6 +136,8 @@ describe('BrowserDomAdapter', () => {
 
     const adapter = new BrowserDomAdapter(document)
 
+    expect(adapter.getViewportScrollElement()).toBe(document.documentElement)
+
     expect(adapter.getScrollMetrics(scrollbox)).toEqual({
       scrollLeft: 11,
       scrollTop: 12,

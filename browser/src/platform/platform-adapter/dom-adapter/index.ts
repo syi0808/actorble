@@ -63,6 +63,10 @@ export class BrowserDomAdapter implements DomAdapter {
     return getOwnerWindowForRoot(root)
   }
 
+  getViewportScrollElement(root: Document | ShadowRoot = this.getRoot()): Element {
+    return getOwnerDocument(root).documentElement
+  }
+
   getParentElement(element: Element): Element | null {
     if (element.parentElement) {
       return element.parentElement
@@ -102,8 +106,8 @@ export class BrowserDomAdapter implements DomAdapter {
     const style = getOwnerWindow(element).getComputedStyle(element)
 
     return {
-      overflowX: style.overflowX,
-      overflowY: style.overflowY,
+      overflowX: normalizeAxisOverflow(style.overflowX, style.overflow),
+      overflowY: normalizeAxisOverflow(style.overflowY, style.overflow),
       scrollPadding: {
         top: style.scrollPaddingTop,
         right: style.scrollPaddingRight,
@@ -513,6 +517,18 @@ function hasStyle(element: Element): element is StyleableElement {
 
 function isWindow(target: Element | Window): target is Window {
   return (target as Window).window === target
+}
+
+function normalizeAxisOverflow(axisOverflow: string, shorthandOverflow: string): string {
+  if (axisOverflow === 'visible' && allowsScrolling(shorthandOverflow)) {
+    return shorthandOverflow
+  }
+
+  return axisOverflow || shorthandOverflow
+}
+
+function allowsScrolling(overflow: string): boolean {
+  return overflow === 'auto' || overflow === 'scroll' || overflow === 'overlay'
 }
 
 function selectorFor(element: Element): string | undefined {

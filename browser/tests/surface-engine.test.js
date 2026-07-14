@@ -29,6 +29,7 @@ function createDomPort(overrides = {}) {
     getActiveElement: vi.fn(() => document.activeElement),
     describeElement: vi.fn(() => ({})),
     getViewportRect: vi.fn(() => ({ x: 0, y: 0, width: 1024, height: 768 })),
+    getViewportScrollElement: vi.fn(() => document.documentElement),
     getParentElement: vi.fn((element) => element.parentElement),
     getScrollMetrics: vi.fn((target) => {
       if ('scrollWidth' in target) {
@@ -52,6 +53,33 @@ function createDomPort(overrides = {}) {
       }
     }),
     getViewportScrollTarget: vi.fn(() => window),
+    getComputedScrollStyle: vi.fn((element) => {
+      const style = getComputedStyle(element)
+      const overflowX =
+        style.overflowX === 'visible' && ['auto', 'scroll', 'overlay'].includes(style.overflow)
+          ? style.overflow
+          : style.overflowX || style.overflow
+      const overflowY =
+        style.overflowY === 'visible' && ['auto', 'scroll', 'overlay'].includes(style.overflow)
+          ? style.overflow
+          : style.overflowY || style.overflow
+      return {
+        overflowX,
+        overflowY,
+        scrollPadding: {
+          top: style.scrollPaddingTop,
+          right: style.scrollPaddingRight,
+          bottom: style.scrollPaddingBottom,
+          left: style.scrollPaddingLeft,
+        },
+        scrollMargin: {
+          top: style.scrollMarginTop,
+          right: style.scrollMarginRight,
+          bottom: style.scrollMarginBottom,
+          left: style.scrollMarginLeft,
+        },
+      }
+    }),
     focus: vi.fn(),
     blur: vi.fn(),
     scrollIntoView: vi.fn(),
@@ -303,10 +331,11 @@ describe('BrowserSurfaceEngine', () => {
     let scrollable = true
     const dom = createDomPort({
       getParentElement: vi.fn((element) => (element === save ? clip : null)),
-      getComputedStyle: vi.fn(() => ({
-        overflow: 'visible',
+      getComputedScrollStyle: vi.fn(() => ({
         overflowX: 'visible',
         overflowY: scrollable ? 'scroll' : 'visible',
+        scrollPadding: { top: '', right: '', bottom: '', left: '' },
+        scrollMargin: { top: '', right: '', bottom: '', left: '' },
       })),
       getScrollMetrics: vi.fn(() => ({
         scrollLeft: 0,
@@ -329,7 +358,7 @@ describe('BrowserSurfaceEngine', () => {
     expect(engine.getSurfaceFor(handle).clippingChain).toEqual([clip])
     expect(engine.getSurfaceFor(handle).clippingChain).toEqual([clip])
     expect(engine.getScrollableAncestors(handle)).toEqual([clip])
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(1)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(1)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(1)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(1)
     expect(timeline.nextFrame).toHaveBeenCalledTimes(1)
@@ -338,7 +367,7 @@ describe('BrowserSurfaceEngine', () => {
     invalidation.emit('resize')
 
     expect(engine.getSurfaceFor(handle).clippingChain).toEqual([])
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(2)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(2)
   })
@@ -349,10 +378,11 @@ describe('BrowserSurfaceEngine', () => {
     let scrollable = true
     const dom = createDomPort({
       getParentElement: vi.fn((element) => (element === save ? clip : null)),
-      getComputedStyle: vi.fn(() => ({
-        overflow: 'visible',
+      getComputedScrollStyle: vi.fn(() => ({
         overflowX: 'visible',
         overflowY: scrollable ? 'scroll' : 'visible',
+        scrollPadding: { top: '', right: '', bottom: '', left: '' },
+        scrollMargin: { top: '', right: '', bottom: '', left: '' },
       })),
       getScrollMetrics: vi.fn(() => ({
         scrollLeft: 0,
@@ -373,7 +403,7 @@ describe('BrowserSurfaceEngine', () => {
     expect(engine.getScrollableAncestors(handle)).toEqual([])
 
     expect(dom.scrollIntoView).toHaveBeenCalledWith(save, undefined)
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(2)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
   })
 })

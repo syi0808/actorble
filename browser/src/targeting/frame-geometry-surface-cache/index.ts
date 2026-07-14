@@ -1,6 +1,7 @@
 import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
 import type {
+  ComputedScrollStyleSnapshot,
   Disposable,
   LayoutInvalidationReason,
   Rect,
@@ -24,6 +25,7 @@ export class FrameGeometrySurfaceCache implements Disposable {
   readonly #viewportRects = new Map<Document | ShadowRoot | Element, Rect>()
   readonly #scrollMetrics = new Map<object, ScrollMetrics>()
   readonly #computedStyles = new Map<Element, CSSStyleDeclaration>()
+  readonly #computedScrollStyles = new Map<Element, ComputedScrollStyleSnapshot>()
   readonly #scrollableAncestors = new Map<Element, readonly Element[]>()
   #framePending = false
   #frameToken = 0
@@ -87,6 +89,22 @@ export class FrameGeometrySurfaceCache implements Disposable {
     return style
   }
 
+  getComputedScrollStyle(
+    element: Element,
+    read: () => ComputedScrollStyleSnapshot,
+  ): ComputedScrollStyleSnapshot {
+    const cached = this.#computedScrollStyles.get(element)
+
+    if (cached !== undefined) {
+      return cloneComputedScrollStyle(cached)
+    }
+
+    const style = cloneComputedScrollStyle(read())
+    this.#computedScrollStyles.set(element, style)
+    this.#scheduleFrameClear()
+    return cloneComputedScrollStyle(style)
+  }
+
   getScrollableAncestors(
     target: Element,
     read: () => readonly Element[],
@@ -148,6 +166,7 @@ export class FrameGeometrySurfaceCache implements Disposable {
     this.#viewportRects.clear()
     this.#scrollMetrics.clear()
     this.#computedStyles.clear()
+    this.#computedScrollStyles.clear()
     this.#scrollableAncestors.clear()
   }
 }
@@ -175,5 +194,16 @@ function cloneScrollMetrics(metrics: ScrollMetrics): ScrollMetrics {
     scrollHeight: metrics.scrollHeight,
     clientWidth: metrics.clientWidth,
     clientHeight: metrics.clientHeight,
+  }
+}
+
+function cloneComputedScrollStyle(
+  style: ComputedScrollStyleSnapshot,
+): ComputedScrollStyleSnapshot {
+  return {
+    overflowX: style.overflowX,
+    overflowY: style.overflowY,
+    scrollPadding: { ...style.scrollPadding },
+    scrollMargin: { ...style.scrollMargin },
   }
 }

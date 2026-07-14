@@ -1058,7 +1058,7 @@ api/actorble-facade
 
 ### T47. Nested scroll-chain resolver
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add `targeting/scroll-chain-resolver` to calculate the scroll surfaces that can affect a target, ordered inner-to-outer and ending with the document viewport when applicable.
 - Dependencies: T46, completed target resolver and surface cache.
 - Decision constraints:

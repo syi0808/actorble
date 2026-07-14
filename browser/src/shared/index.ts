@@ -612,6 +612,7 @@ export interface DomReadPort {
   getComputedStyle(element: Element): CSSStyleDeclaration
   getViewportRect(root?: Document | ShadowRoot): Rect
   getViewportScrollTarget(root?: Document | ShadowRoot): Window
+  getViewportScrollElement(root?: Document | ShadowRoot): Element
   getParentElement(element: Element): Element | null
   getScrollMetrics(target: Element | Window): ScrollMetrics
   getComputedScrollStyle(element: Element): ComputedScrollStyleSnapshot
