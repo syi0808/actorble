@@ -407,6 +407,20 @@ export type ScrollMetrics = Readonly<{
   clientHeight: number
 }>
 
+export type ComputedCssInsets = Readonly<{
+  top: string
+  right: string
+  bottom: string
+  left: string
+}>
+
+export interface ComputedScrollStyleSnapshot {
+  readonly overflowX: string
+  readonly overflowY: string
+  readonly scrollPadding: ComputedCssInsets
+  readonly scrollMargin: ComputedCssInsets
+}
+
 export type PointerMotionTiming = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
 
 export type PointerMotionProfile =
@@ -600,6 +614,7 @@ export interface DomReadPort {
   getViewportScrollTarget(root?: Document | ShadowRoot): Window
   getParentElement(element: Element): Element | null
   getScrollMetrics(target: Element | Window): ScrollMetrics
+  getComputedScrollStyle(element: Element): ComputedScrollStyleSnapshot
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
   getAttribute(element: Element, name: string): string | null
   getTextContent(element: Element): string
@@ -611,6 +626,14 @@ export interface DomReadPort {
   observeLayoutInvalidations(
     listener: ActorbleListener<LayoutInvalidationReason>,
   ): Disposable
+  observeScroll(
+    target: Element | Window,
+    listener: ActorbleListener<ScrollMetrics>,
+  ): Disposable
+  observeScrollEnd(
+    target: Element | Window,
+    listener: ActorbleListener<ScrollMetrics>,
+  ): Disposable | null
 }
 
 export interface DomWritePort {

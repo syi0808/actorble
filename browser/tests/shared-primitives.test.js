@@ -69,6 +69,7 @@ describe('shared boundary', () => {
     for (const exportedName of [
       'Clock',
       'Cancellation',
+      'ComputedScrollStyleSnapshot',
       'DomPort',
       'EventDispatchPort',
       'StateApplyPort',

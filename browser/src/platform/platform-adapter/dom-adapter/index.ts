@@ -1,6 +1,7 @@
 import { actorbleError } from '../../../shared/index.js'
 import type {
   ActorbleListener,
+  ComputedScrollStyleSnapshot,
   Disposable,
   DomPort,
   FocusOptions,
@@ -63,7 +64,13 @@ export class BrowserDomAdapter implements DomAdapter {
   }
 
   getParentElement(element: Element): Element | null {
-    return element.parentElement
+    if (element.parentElement) {
+      return element.parentElement
+    }
+
+    const root = element.getRootNode()
+
+    return isOpenShadowRootNode(root) ? root.host : null
   }
 
   getScrollMetrics(target: Element | Window): ScrollMetrics {
@@ -88,6 +95,27 @@ export class BrowserDomAdapter implements DomAdapter {
       scrollHeight: target.scrollHeight,
       clientWidth: target.clientWidth,
       clientHeight: target.clientHeight,
+    }
+  }
+
+  getComputedScrollStyle(element: Element): ComputedScrollStyleSnapshot {
+    const style = getOwnerWindow(element).getComputedStyle(element)
+
+    return {
+      overflowX: style.overflowX,
+      overflowY: style.overflowY,
+      scrollPadding: {
+        top: style.scrollPaddingTop,
+        right: style.scrollPaddingRight,
+        bottom: style.scrollPaddingBottom,
+        left: style.scrollPaddingLeft,
+      },
+      scrollMargin: {
+        top: style.scrollMarginTop,
+        right: style.scrollMarginRight,
+        bottom: style.scrollMarginBottom,
+        left: style.scrollMarginLeft,
+      },
     }
   }
 
@@ -286,6 +314,47 @@ export class BrowserDomAdapter implements DomAdapter {
       },
     }
   }
+
+  observeScroll(
+    target: Element | Window,
+    listener: ActorbleListener<ScrollMetrics>,
+  ): Disposable {
+    return this.#observeScrollSignal(target, 'scroll', listener)
+  }
+
+  observeScrollEnd(
+    target: Element | Window,
+    listener: ActorbleListener<ScrollMetrics>,
+  ): Disposable | null {
+    if (!('onscrollend' in target)) {
+      return null
+    }
+
+    return this.#observeScrollSignal(target, 'scrollend', listener)
+  }
+
+  #observeScrollSignal(
+    target: Element | Window,
+    eventName: 'scroll' | 'scrollend',
+    listener: ActorbleListener<ScrollMetrics>,
+  ): Disposable {
+    const options: AddEventListenerOptions = { passive: true }
+    const handler = () => listener(this.getScrollMetrics(target))
+    let disposed = false
+
+    target.addEventListener(eventName, handler, options)
+
+    return {
+      dispose() {
+        if (disposed) {
+          return
+        }
+
+        disposed = true
+        target.removeEventListener(eventName, handler, options)
+      },
+    }
+  }
 }
 
 export function createDomAdapter(root?: Document | ShadowRoot): DomAdapter {
@@ -422,6 +491,10 @@ function isElementNode(node: unknown): node is Element {
 
 function isShadowRootNode(node: Node): node is ShadowRoot {
   return node.nodeType === 11 && 'host' in node
+}
+
+function isOpenShadowRootNode(node: Node): node is ShadowRoot {
+  return isShadowRootNode(node) && node.mode === 'open'
 }
 
 function findInternalElement(element: Element | null): StyleableElement | null {

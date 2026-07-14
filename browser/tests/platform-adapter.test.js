@@ -96,6 +96,145 @@ describe('BrowserDomAdapter', () => {
     })
   })
 
+  it('reads element and window scroll metrics and computed scroll styles', () => {
+    const scrollbox = document.createElement('div')
+    scrollbox.style.cssText = `
+      overflow-x: auto;
+      overflow-y: scroll;
+      scroll-padding-top: 1px;
+      scroll-padding-right: 2px;
+      scroll-padding-bottom: 3px;
+      scroll-padding-left: 4px;
+      scroll-margin-top: 5px;
+      scroll-margin-right: 6px;
+      scroll-margin-bottom: 7px;
+      scroll-margin-left: 8px;
+    `
+    document.body.append(scrollbox)
+
+    for (const [key, value] of Object.entries({
+      scrollLeft: 11,
+      scrollTop: 12,
+      scrollWidth: 301,
+      scrollHeight: 402,
+      clientWidth: 101,
+      clientHeight: 202,
+    })) {
+      Object.defineProperty(scrollbox, key, { configurable: true, value })
+    }
+
+    Object.defineProperties(window, {
+      scrollX: { configurable: true, value: 21 },
+      scrollY: { configurable: true, value: 22 },
+      innerWidth: { configurable: true, value: 801 },
+      innerHeight: { configurable: true, value: 602 },
+    })
+    Object.defineProperties(document.documentElement, {
+      scrollWidth: { configurable: true, value: 1201 },
+      scrollHeight: { configurable: true, value: 1402 },
+    })
+
+    const adapter = new BrowserDomAdapter(document)
+
+    expect(adapter.getScrollMetrics(scrollbox)).toEqual({
+      scrollLeft: 11,
+      scrollTop: 12,
+      scrollWidth: 301,
+      scrollHeight: 402,
+      clientWidth: 101,
+      clientHeight: 202,
+    })
+    expect(adapter.getScrollMetrics(window)).toMatchObject({
+      scrollLeft: 21,
+      scrollTop: 22,
+      scrollWidth: 1201,
+      scrollHeight: 1402,
+      clientWidth: 801,
+      clientHeight: 602,
+    })
+    expect(adapter.getComputedScrollStyle(scrollbox)).toEqual({
+      overflowX: 'auto',
+      overflowY: 'scroll',
+      scrollPadding: { top: '1px', right: '2px', bottom: '3px', left: '4px' },
+      scrollMargin: { top: '5px', right: '6px', bottom: '7px', left: '8px' },
+    })
+  })
+
+  it('falls back to scroll offsets when an element has no scrollTo method', () => {
+    const scrollbox = document.createElement('div')
+    Object.defineProperty(scrollbox, 'scrollTo', { configurable: true, value: undefined })
+    const adapter = new BrowserDomAdapter(document)
+    const windowScrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+
+    adapter.scrollTo(scrollbox, { x: 31, y: 32 })
+    adapter.scrollTo(window, { x: 41, y: 42 }, { behavior: 'smooth' })
+
+    expect(scrollbox.scrollLeft).toBe(31)
+    expect(scrollbox.scrollTop).toBe(32)
+    expect(windowScrollTo).toHaveBeenCalledWith({ left: 41, top: 42, behavior: 'smooth' })
+  })
+
+  it('traverses direct parents and open shadow hosts but not closed shadow hosts', () => {
+    const parent = document.createElement('div')
+    const child = document.createElement('span')
+    parent.append(child)
+
+    const openHost = document.createElement('section')
+    const openChild = document.createElement('button')
+    openHost.attachShadow({ mode: 'open' }).append(openChild)
+
+    const closedHost = document.createElement('article')
+    const closedChild = document.createElement('button')
+    closedHost.attachShadow({ mode: 'closed' }).append(closedChild)
+
+    const adapter = new BrowserDomAdapter(document)
+
+    expect(adapter.getParentElement(child)).toBe(parent)
+    expect(adapter.getParentElement(openChild)).toBe(openHost)
+    expect(adapter.getParentElement(closedChild)).toBeNull()
+  })
+
+  it('observes scroll snapshots and disposes listeners idempotently', () => {
+    const scrollbox = document.createElement('div')
+    document.body.append(scrollbox)
+    scrollbox.scrollLeft = 9
+    scrollbox.scrollTop = 10
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+    const subscription = adapter.observeScroll(scrollbox, listener)
+
+    scrollbox.dispatchEvent(new Event('scroll'))
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ scrollLeft: 9, scrollTop: 10 }))
+
+    subscription.dispose()
+    subscription.dispose()
+    scrollbox.dispatchEvent(new Event('scroll'))
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats native scrollend as an optional disposable signal', () => {
+    const unsupported = new Proxy(document.createElement('div'), {
+      has(target, property) {
+        return property === 'onscrollend' ? false : Reflect.has(target, property)
+      },
+    })
+    const supported = document.createElement('div')
+    Object.defineProperty(supported, 'onscrollend', { configurable: true, value: null })
+    const adapter = new BrowserDomAdapter(document)
+    const listener = vi.fn()
+
+    expect(adapter.observeScrollEnd(unsupported, listener)).toBeNull()
+
+    const subscription = adapter.observeScrollEnd(supported, listener)
+    supported.dispatchEvent(new Event('scrollend'))
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ scrollLeft: 0, scrollTop: 0 }))
+
+    subscription.dispose()
+    subscription.dispose()
+    supported.dispatchEvent(new Event('scrollend'))
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
   it('describes native label accessible names after ARIA names', () => {
     document.body.innerHTML = `
       <form>

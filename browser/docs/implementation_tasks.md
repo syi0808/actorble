@@ -1038,7 +1038,7 @@ api/actorble-facade
 
 ### T46. Browser scroll adapter observation primitives
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Extend the DOM adapter with narrow, testable primitives for scroll metrics, writes, event subscription, viewport/document surface access, computed scroll padding/margin, and open-shadow parent traversal.
 - Dependencies: T45, completed platform adapter and frame cache.
 - Decision constraints:
