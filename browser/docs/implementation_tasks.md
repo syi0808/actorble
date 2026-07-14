@@ -1322,7 +1322,7 @@ api/actorble-facade
 
 ### T60. Typing and wait cancellation invariants
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Audit typing cadence, keyboard modifier state, wait polling, and observer cleanup so interruption stops future work and leaves the runtime ready for the next action.
 - Dependencies: T54-T57, text/keyboard/store modules, completed timeout envelope.
 - Decision constraints:

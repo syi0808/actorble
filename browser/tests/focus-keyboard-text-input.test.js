@@ -288,6 +288,14 @@ describe('BrowserKeyboardEngine', () => {
       { type: 'keyup', key: 'K', shiftKey: true },
       { type: 'keyup', key: 'Shift', shiftKey: false },
     ])
+
+    await engine.press('A')
+    expect(engine.getState()).toEqual({ pressedKeys: [], modifiers: [] })
+    expect(input.value).toBe('')
+    expect(events.slice(-2)).toEqual([
+      { type: 'keydown', key: 'A', shiftKey: false },
+      { type: 'keyup', key: 'A', shiftKey: false },
+    ])
   })
 
   it('cleans keys pressed by press when hold delay times out', async () => {
@@ -701,6 +709,15 @@ describe('BrowserTextInputEngine', () => {
     await expect(result).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
     })
+    expect(store.snapshot().typing).toBeNull()
+    expect(input.value).toBe('a')
+
+    controlledTimeline.resolveNextDelay()
+    await Promise.resolve()
+    expect(input.value).toBe('a')
+
+    await engine.typeInto(target, 'c', { delay: 10 })
+    expect(input.value).toBe('ac')
     expect(store.snapshot().typing).toBeNull()
   })
 

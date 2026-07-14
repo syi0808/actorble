@@ -813,6 +813,32 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(promise).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
     expect(dispose).toHaveBeenCalledOnce()
+
+    history.replaceState({}, '', '/ready')
+    await expect(engine.waitFor(url('/ready'))).resolves.toMatchObject({ satisfied: true })
+    expect(dispose).toHaveBeenCalledTimes(2)
+  })
+
+  it('disposes URL observation when an any sibling wins and supports the next wait', async () => {
+    history.replaceState({}, '', '/loading')
+    const dom = new BrowserDomAdapter(document)
+    const dispose = vi.fn()
+    const observe = dom.observeUrlChanges.bind(dom)
+    vi.spyOn(dom, 'observeUrlChanges').mockImplementation((listener) => {
+      const subscription = observe(listener)
+      return { dispose: () => { dispose(); subscription.dispose() } }
+    })
+    const engine = new BrowserWaitObservationEngine({ dom, timeline: createTimeline() })
+
+    await expect(engine.waitFor(any(
+      url('/never'),
+      { kind: 'custom', predicate: () => true },
+    ))).resolves.toMatchObject({ satisfied: true })
+    expect(dispose).toHaveBeenCalledOnce()
+
+    history.replaceState({}, '', '/ready')
+    await expect(engine.waitFor(url('/ready'))).resolves.toMatchObject({ satisfied: true })
+    expect(dispose).toHaveBeenCalledTimes(2)
   })
 
   it('redacts matcher, observed content, locator text, and URL components from diagnostics', async () => {
