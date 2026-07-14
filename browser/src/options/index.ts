@@ -486,7 +486,10 @@ function normalizeResolvedActionOptions(
   action: BrowserActionName,
   options: Record<string, unknown>,
 ): Record<string, unknown> {
-  const normalized = normalizeActionRevealPolicy(action, options)
+  const normalized = normalizeActionWaitPolicy(
+    action,
+    normalizeActionRevealPolicy(action, options),
+  )
 
   if (!isPointerAction(action)) {
     return normalized
@@ -519,6 +522,20 @@ function normalizeResolvedActionOptions(
   }
 
   return normalized
+}
+
+function normalizeActionWaitPolicy(
+  action: BrowserActionName,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!actionUsesActionWait(action) || typeof options.wait !== 'string') {
+    return options
+  }
+
+  return {
+    ...options,
+    wait: normalizeStabilityPolicy(options.wait as StabilityPolicy),
+  }
 }
 
 function normalizeActionRevealPolicy(

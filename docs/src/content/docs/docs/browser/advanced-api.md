@@ -301,6 +301,10 @@ function createScenarioRunner(options?: ScenarioRunnerOptions): ScenarioRunner
 
 ## WaitObservationEngine
 
+`WaitStrategy` accepts `none`, `next-frame`, and `interaction-stable`. The deprecated `settled`
+alias remains accepted during the compatibility window and resolves to `interaction-stable` before
+execution and diagnostics.
+
 ```ts
 interface WaitObservationEngine {
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>

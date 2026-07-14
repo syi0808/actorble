@@ -159,7 +159,24 @@ describe('timeline engine', () => {
     expect(settled).toHaveBeenCalledOnce()
   })
 
-  it('settles after a microtask and frame for the settled strategy', async () => {
+  it('settles after a microtask and frame for the interaction-stable strategy', async () => {
+    vi.stubGlobal('requestAnimationFrame', undefined)
+    vi.stubGlobal('cancelAnimationFrame', undefined)
+
+    const timeline = new BrowserTimelineEngine()
+    const settled = vi.fn()
+    const promise = timeline.settle('interaction-stable').then(settled)
+
+    await Promise.resolve()
+    expect(settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(16)
+
+    await expect(promise).resolves.toBeUndefined()
+    expect(settled).toHaveBeenCalledOnce()
+  })
+
+  it('maps the deprecated settled strategy to interaction-stable behavior', async () => {
     vi.stubGlobal('requestAnimationFrame', undefined)
     vi.stubGlobal('cancelAnimationFrame', undefined)
 

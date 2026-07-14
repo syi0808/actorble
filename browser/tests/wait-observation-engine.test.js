@@ -163,7 +163,27 @@ describe('BrowserWaitObservationEngine', () => {
 
     expect(timeline.settle).toHaveBeenNthCalledWith(1, 'none', {})
     expect(timeline.settle).toHaveBeenNthCalledWith(2, 'next-frame', {})
-    expect(timeline.settle).toHaveBeenNthCalledWith(3, 'settled', {})
+    expect(timeline.settle).toHaveBeenNthCalledWith(3, 'interaction-stable', {})
+  })
+
+  it('normalizes the deprecated settled alias before delegation and tracing', async () => {
+    const timeline = createTimeline()
+    const trace = new BrowserDiagnosticsTrace({ clock: traceClock(), idPrefix: 'trace' })
+    const engine = new BrowserWaitObservationEngine({ timeline, trace })
+
+    await expect(engine.settle('settled')).resolves.toBeNull()
+
+    expect(timeline.settle).toHaveBeenCalledWith('interaction-stable', {})
+    expect(trace.getTrace().events).toEqual([
+      expect.objectContaining({
+        name: 'wait:start',
+        data: expect.objectContaining({ strategy: 'interaction-stable' }),
+      }),
+      expect.objectContaining({
+        name: 'wait:success',
+        data: expect.objectContaining({ strategy: 'interaction-stable' }),
+      }),
+    ])
   })
 
   it('resolves custom wait predicates immediately when already satisfied', async () => {
@@ -174,7 +194,7 @@ describe('BrowserWaitObservationEngine', () => {
     await expect(engine.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
     expect(condition.predicate).toHaveBeenCalledOnce()
     expect(timeline.settle).not.toHaveBeenCalled()
@@ -192,11 +212,11 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor(condition)).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(condition.predicate).toHaveBeenCalledTimes(2)
-    expect(timeline.settle).toHaveBeenCalledWith('settled', {})
+    expect(timeline.settle).toHaveBeenCalledWith('interaction-stable', {})
   })
 
   it('records diagnostics context when a custom wait predicate times out', async () => {
@@ -265,7 +285,7 @@ describe('BrowserWaitObservationEngine', () => {
     await expect(engine.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
     expect(timeline.settle).not.toHaveBeenCalled()
   })
@@ -282,7 +302,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor(condition)).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(timeline.settle).toHaveBeenCalledOnce()
@@ -298,7 +318,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor(condition)).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(timeline.settle).not.toHaveBeenCalled()
@@ -441,7 +461,7 @@ describe('BrowserWaitObservationEngine', () => {
     await expect(engine.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(ports.resolver.resolve).toHaveBeenCalledWith(css('#save'), {})
@@ -481,7 +501,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(ports.resolver.resolve).toHaveBeenCalledTimes(3)
@@ -523,7 +543,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(timeline.settle).toHaveBeenCalledTimes(2)
@@ -557,7 +577,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor({ kind: 'visible', target: css('#save') })).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(timeline.settle).toHaveBeenCalledOnce()
@@ -728,7 +748,7 @@ describe('BrowserWaitObservationEngine', () => {
     await expect(engine.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(ports.geometry.snapshot).not.toHaveBeenCalled()
@@ -750,7 +770,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor({ kind: 'hidden', target })).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(ports.resolver.resolve).not.toHaveBeenCalled()
@@ -777,7 +797,7 @@ describe('BrowserWaitObservationEngine', () => {
 
     await expect(engine.waitFor({ kind: 'hidden', target: css('#toast') })).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(ports.geometry.snapshot).toHaveBeenCalledTimes(2)
@@ -812,7 +832,7 @@ describe('BrowserWaitObservationEngine', () => {
       engine.waitFor({ kind: 'text', value: 'Project created' }),
     ).resolves.toMatchObject({
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(timeline.settle).toHaveBeenCalledTimes(2)

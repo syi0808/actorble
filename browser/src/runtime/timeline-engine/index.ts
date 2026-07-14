@@ -2,7 +2,15 @@ import { cancellationError, timeoutError } from '../../shared/index.js'
 import type { CancellationOptions, Clock, DurationMs, TimestampMs } from '../../shared/index.js'
 export type { Clock } from '../../shared/index.js'
 
-export type WaitStrategy = 'none' | 'next-frame' | 'settled'
+export type ResolvedWaitStrategy = 'none' | 'next-frame' | 'interaction-stable'
+export type WaitStrategy =
+  | ResolvedWaitStrategy
+  /** @deprecated Use 'interaction-stable'. */
+  | 'settled'
+
+export function normalizeWaitStrategy(strategy: WaitStrategy): ResolvedWaitStrategy {
+  return strategy === 'settled' ? 'interaction-stable' : strategy
+}
 
 const FRAME_FALLBACK_MS = 16
 
@@ -140,19 +148,23 @@ export class BrowserTimelineEngine implements TimelineEngine {
     })
   }
 
-  async settle(strategy: WaitStrategy = 'settled', options: CancellationOptions = {}): Promise<void> {
+  async settle(
+    strategy: WaitStrategy = 'interaction-stable',
+    options: CancellationOptions = {},
+  ): Promise<void> {
     const operation = 'timeline.settle'
     const cancellation = getCancellation(options, operation)
+    const resolvedStrategy = normalizeWaitStrategy(strategy)
 
     if (cancellation) {
       throw cancellation
     }
 
-    if (strategy === 'none') {
+    if (resolvedStrategy === 'none') {
       return
     }
 
-    if (strategy === 'next-frame') {
+    if (resolvedStrategy === 'next-frame') {
       await this.nextFrame(options)
       return
     }

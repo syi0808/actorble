@@ -123,6 +123,16 @@ describe('browser options model', () => {
   it('maps the deprecated settled name to interaction-stable explicitly', () => {
     expect(normalizeStabilityPolicy('settled')).toBe('interaction-stable')
     expect(normalizeStabilityPolicy('visual-stable')).toBe('visual-stable')
+    expect(
+      resolveActionOptions('click', {
+        actorble: { actionDefaults: { click: { wait: 'settled' } } },
+      }).wait,
+    ).toBe('interaction-stable')
+    expect(
+      resolveActionOptions('click', {
+        options: { wait: 'settled' },
+      }).wait,
+    ).toBe('interaction-stable')
   })
 
   it('materializes default inertia motion parameters at the option boundary', () => {

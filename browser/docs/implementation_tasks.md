@@ -1183,7 +1183,7 @@ api/actorble-facade
 
 ### T53. Interaction-stable compatibility contract
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Replace the ambiguous internal `'settled'` default with an explicit interaction-stable contract while preserving a documented compatibility mapping for existing callers.
 - Dependencies: T45, T52, Timeline Engine and Wait Engine.
 - Decision constraints:

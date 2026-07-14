@@ -24,7 +24,11 @@ import { BrowserTextInputEngine } from '../../input/text-input-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import { NoopVisualLayer } from '../../visual/visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
-import { BROWSER_OPTION_DEFAULTS, resolveBrowserFeedbackOptions } from '../../options/index.js'
+import {
+  BROWSER_OPTION_DEFAULTS,
+  normalizeStabilityPolicy,
+  resolveBrowserFeedbackOptions,
+} from '../../options/index.js'
 import {
   ActorbleError,
   actorbleError,
@@ -1526,18 +1530,17 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return
     }
 
-    if (policy === 'visual-stable') {
+    const resolvedPolicy = normalizeStabilityPolicy(policy)
+
+    if (resolvedPolicy === 'visual-stable') {
       throw actorbleError(
         'PLATFORM_UNSUPPORTED',
         'Visual-stable action waits are not implemented yet.',
-        { details: { policy } },
+        { details: { policy: resolvedPolicy } },
       )
     }
 
-    await this.#wait.settle(
-      policy === 'interaction-stable' || policy === 'settled' ? 'settled' : policy,
-      operationOptions(options),
-    )
+    await this.#wait.settle(resolvedPolicy, operationOptions(options))
   }
 
   #startActionSpan(
@@ -4098,7 +4101,12 @@ function summarizeOptions(
       continue
     }
 
-    summary[key] = key === 'signal' ? '[AbortSignal]' : value
+    if (key === 'signal') {
+      summary[key] = '[AbortSignal]'
+      continue
+    }
+
+    summary[key] = key === 'wait' && value === 'settled' ? 'interaction-stable' : value
   }
 
   return summary

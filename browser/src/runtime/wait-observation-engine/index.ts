@@ -10,7 +10,7 @@ import { BrowserGeometryEngine } from '../../targeting/geometry-engine/index.js'
 import { createFrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import { BrowserInteractabilityEngine } from '../../targeting/interactability-engine/index.js'
 import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
-import { BrowserTimelineEngine } from '../timeline-engine/index.js'
+import { BrowserTimelineEngine, normalizeWaitStrategy } from '../timeline-engine/index.js'
 import type {
   LayoutInvalidationEvent,
   LayoutInvalidationTracker,
@@ -29,12 +29,16 @@ import type { GeometryEngine } from '../../targeting/geometry-engine/index.js'
 import type { FrameGeometrySurfaceCache } from '../../targeting/frame-geometry-surface-cache/index.js'
 import type { InteractabilityEngine, InteractabilityReport } from '../../targeting/interactability-engine/index.js'
 import type { TargetResolver } from '../../targeting/target-resolver/index.js'
-import type { TimelineEngine, WaitStrategy } from '../timeline-engine/index.js'
+import type {
+  ResolvedWaitStrategy,
+  TimelineEngine,
+  WaitStrategy,
+} from '../timeline-engine/index.js'
 
 export type WaitResult = Readonly<{
   condition: WaitCondition
   satisfied: boolean
-  strategy: WaitStrategy
+  strategy: ResolvedWaitStrategy
 }>
 
 export interface WaitObservationEngine {
@@ -213,30 +217,33 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async settle(
-    strategy: WaitStrategy = 'settled',
+    strategy: WaitStrategy = 'interaction-stable',
     options: WaitOptions = {},
   ): Promise<WaitResult | null> {
     const operation = 'wait.settle'
+    const resolvedStrategy = normalizeWaitStrategy(strategy)
     const span = this.#trace?.startSpan(operation, {
-      strategy,
+      strategy: resolvedStrategy,
       timeout: options.timeout,
     })
 
     span?.event('wait:start', {
-      strategy,
+      strategy: resolvedStrategy,
       timeout: options.timeout,
     })
 
     try {
-      await this.#withTimeout(operation, options, { strategy }, (signal) =>
-        this.#timeline.settle(strategy, toCancellationOptions(signal)),
+      await this.#withTimeout(operation, options, { strategy: resolvedStrategy }, (signal) =>
+        this.#timeline.settle(resolvedStrategy, toCancellationOptions(signal)),
       )
 
-      span?.event('wait:success', { strategy })
-      span?.end({ strategy })
+      span?.event('wait:success', { strategy: resolvedStrategy })
+      span?.end({ strategy: resolvedStrategy })
       return null
     } catch (error) {
-      const normalized = normalizeWaitError(error, operation, options.timeout, { strategy })
+      const normalized = normalizeWaitError(error, operation, options.timeout, {
+        strategy: resolvedStrategy,
+      })
 
       if (normalized.code === 'ACTION_TIMEOUT') {
         span?.event('wait:timeout', normalized.details)
@@ -327,7 +334,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         return {
           condition,
           satisfied: true,
-          strategy: 'settled',
+          strategy: 'interaction-stable',
         }
       }
 
@@ -335,7 +342,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         attempts,
         condition: summarizeCondition(condition),
       })
-      await this.#timeline.settle('settled', toCancellationOptions(signal))
+      await this.#timeline.settle('interaction-stable', toCancellationOptions(signal))
     }
   }
 
@@ -365,7 +372,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         return {
           condition,
           satisfied: true,
-          strategy: 'settled',
+          strategy: 'interaction-stable',
         }
       }
 
@@ -374,7 +381,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         condition: summarizeCondition(condition),
         observation,
       })
-      await this.#timeline.settle('settled', toCancellationOptions(signal))
+      await this.#timeline.settle('interaction-stable', toCancellationOptions(signal))
     }
   }
 
@@ -400,7 +407,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         return {
           condition,
           satisfied: true,
-          strategy: 'settled',
+          strategy: 'interaction-stable',
         }
       }
 
@@ -409,7 +416,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         condition: summarizeCondition(condition),
         observation,
       })
-      await this.#timeline.settle('settled', toCancellationOptions(signal))
+      await this.#timeline.settle('interaction-stable', toCancellationOptions(signal))
     }
   }
 

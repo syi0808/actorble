@@ -915,7 +915,7 @@ describe('BrowserActionOrchestrator', () => {
       strategy: 'input-range-api',
       collapsed: false,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().spans).toEqual([
       expect.objectContaining({
         name: 'action.selectText',
@@ -1510,7 +1510,7 @@ describe('BrowserActionOrchestrator', () => {
       buttons: [],
       detail: 1,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().spans).toEqual([
       expect.objectContaining({
         name: 'action.click',
@@ -1571,7 +1571,7 @@ describe('BrowserActionOrchestrator', () => {
       buttons: [],
       detail: 2,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.doubleClick',
@@ -1658,7 +1658,7 @@ describe('BrowserActionOrchestrator', () => {
     await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
 
     expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         status: 'ok',
@@ -2059,6 +2059,25 @@ describe('BrowserActionOrchestrator', () => {
     expect(wait.settle).not.toHaveBeenCalled()
   })
 
+  it('normalizes legacy settled action waits before delegation and tracing', async () => {
+    const { orchestrator, trace, wait } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), { reveal: false, wait: 'settled', duration: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    expect(trace.getTrace().spans.find((span) => span.name === 'action.moveTo')).toEqual(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          input: expect.objectContaining({
+            options: expect.objectContaining({ wait: 'interaction-stable' }),
+          }),
+        }),
+      }),
+    )
+  })
+
   it('rejects visual-stable action waits until the observed stability task lands', async () => {
     const { orchestrator } = createHarness()
 
@@ -2103,7 +2122,7 @@ describe('BrowserActionOrchestrator', () => {
       expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
     )
     expect(wait.settle).toHaveBeenCalledWith(
-      'settled',
+      'interaction-stable',
       expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
     )
     expect(trace.getTrace().events).toEqual(
@@ -2361,7 +2380,7 @@ describe('BrowserActionOrchestrator', () => {
       buttons: [],
     })
     expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2633,7 +2652,7 @@ describe('BrowserActionOrchestrator', () => {
       buttons: [],
       detail: 1,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.clickCurrent',
@@ -2846,7 +2865,7 @@ describe('BrowserActionOrchestrator', () => {
       focusVisible: true,
       signal: expect.any(AbortSignal),
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
     })
@@ -2911,7 +2930,7 @@ describe('BrowserActionOrchestrator', () => {
       orchestrator.focus(css('#target-1'), { focusVisible: true }),
     ).resolves.toBeUndefined()
 
-    expect(wait.settle).toHaveBeenCalledWith('settled', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
     expect(store.snapshot().focused).toMatchObject({ id: target.id })
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
@@ -4143,7 +4162,7 @@ describe('BrowserActionOrchestrator', () => {
       signal: expect.any(AbortSignal),
       clear: false,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
     })
@@ -4278,7 +4297,7 @@ describe('BrowserActionOrchestrator', () => {
       signal: expect.any(AbortSignal),
       delay: 0,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
     })
@@ -4465,7 +4484,7 @@ describe('BrowserActionOrchestrator', () => {
       signal: expect.any(AbortSignal),
       delay: 7,
     })
-    expect(wait.settle).toHaveBeenCalledWith('settled', {
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
     })
@@ -4752,7 +4771,7 @@ describe('BrowserActionOrchestrator', () => {
   it('waitFor delegates to the wait observation engine and records an action span', async () => {
     const { orchestrator, trace, wait } = createHarness()
     const condition = { kind: 'custom', predicate: () => true }
-    const result = { condition, satisfied: true, strategy: 'settled' }
+    const result = { condition, satisfied: true, strategy: 'interaction-stable' }
     wait.waitFor.mockResolvedValue(result)
 
     await expect(orchestrator.waitFor(condition, { timeout: 10 })).resolves.toBe(result)
@@ -4768,7 +4787,7 @@ describe('BrowserActionOrchestrator', () => {
           output: {
             conditionKind: 'custom',
             satisfied: true,
-            strategy: 'settled',
+            strategy: 'interaction-stable',
           },
         }),
       }),
@@ -4797,7 +4816,7 @@ describe('BrowserActionOrchestrator', () => {
     await expect(orchestrator.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
-      strategy: 'settled',
+      strategy: 'interaction-stable',
     })
 
     expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
@@ -4810,7 +4829,7 @@ describe('BrowserActionOrchestrator', () => {
           output: {
             conditionKind: 'visible',
             satisfied: true,
-            strategy: 'settled',
+            strategy: 'interaction-stable',
           },
         }),
       }),

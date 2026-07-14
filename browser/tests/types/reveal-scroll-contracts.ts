@@ -32,12 +32,14 @@ const moveOptions: MoveOptions = {
   wait: { kind: 'custom', predicate: () => true },
 }
 const typeIntoOptions: TypeIntoOptions = { reveal: false, wait: 'interaction-stable' }
+const legacyTypeIntoOptions: TypeIntoOptions = { reveal: false, wait: 'settled' }
 
 const revealResult: Promise<RevealResult> = actorble.reveal(target, revealOptions)
 const scrollResult: Promise<ScrollResult> = actorble.scrollTo(position, scrollOptions)
 const scrollByResult: Promise<ScrollResult> = actorble.scrollBy(delta, scrollByOptions)
 const moveResult: Promise<void> = actorble.moveTo(target, moveOptions)
 const typeIntoResult: Promise<void> = actorble.typeInto(target, 'hello', typeIntoOptions)
+const legacyTypeIntoResult: Promise<void> = actorble.typeInto(target, 'legacy', legacyTypeIntoOptions)
 
 const steps: readonly ScenarioStep[] = [
   { action: 'reveal', target, options: revealOptions },
