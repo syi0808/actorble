@@ -590,7 +590,10 @@ type WaitCondition =
   | { kind: 'enabled'; target: TargetLike }
   | { kind: 'disabled'; target: TargetLike }
   | { kind: 'focused'; target: TargetLike }
-  | { kind: 'text'; value: string | RegExp }
+  | { kind: 'text'; value: string | RegExp; target?: TargetLike }
+  | { kind: 'value'; target: TargetLike; value: string | RegExp }
+  | { kind: 'attribute'; target: TargetLike; name: string; value: string | RegExp | null }
+  | { kind: 'url'; value: string | RegExp }
   | { kind: 'custom'; predicate: () => boolean | Promise<boolean> }
 ```
 
@@ -601,11 +604,27 @@ Target-state helpers are exported for direct and scenario use:
 await actorble.waitFor(attached(css('#save')))
 await actorble.waitFor(enabled(css('#save')))
 await actorble.waitFor(focused(css('#project-name')))
+await actorble.waitFor(text('Saved'))
+await actorble.waitFor(text('Saved', { target: css('#status') }))
+await actorble.waitFor(value(css('#project-name'), 'Actorble'))
+await actorble.waitFor(attribute(css('#panel'), 'data-state', 'ready'))
+await actorble.waitFor(attribute(css('#panel'), 'aria-busy', null))
+await actorble.waitFor(url('/projects/actorble'))
 ```
 
 `detached` succeeds when the watched target leaves the configured root or its locator no longer
 resolves. `enabled` and `disabled` follow the Interactability Engine's HTML, ARIA, and inert-state
 semantics. `focused` reads the actual active element through supported open shadow roots.
+
+Root-scoped `text()` preserves normalized substring matching. Target-scoped text strings match the
+target's normalized text exactly. `value()` supports input, textarea, and select controls.
+`attribute()` uses `null` for absence, so a missing attribute remains distinct from an empty value.
+Value and attribute strings match exactly; all three conditions also accept `RegExp`.
+
+URL strings must be root-relative paths or absolute URLs. Root-relative strings match
+`pathname + search + hash`, absolute strings match normalized `location.href`, and regular
+expressions test the full URL. Wait diagnostics expose structural match and length information only;
+they do not retain matcher sources, observed content, locator text, or raw URL components.
 
 ## Scenario
 

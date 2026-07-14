@@ -261,8 +261,16 @@ export function role(
 
 export function text(
   value: string | RegExp,
-  options: Omit<TextLocator, 'kind' | 'value'> = {},
-): TextLocator {
+  options: Readonly<{ target: TargetLike }>,
+): Readonly<{ kind: 'text'; value: string | RegExp; target: TargetLike }>
+export function text(
+  value: string | RegExp,
+  options?: Omit<TextLocator, 'kind' | 'value'>,
+): TextLocator
+export function text(
+  value: string | RegExp,
+  options: Omit<TextLocator, 'kind' | 'value'> | Readonly<{ target: TargetLike }> = {},
+): TextLocator | Readonly<{ kind: 'text'; value: string | RegExp; target: TargetLike }> {
   return { kind: 'text', value, ...options }
 }
 
@@ -642,7 +650,9 @@ export interface DomReadPort {
   elementFromPoint(point: Point, options?: HitTestOptions): Element | null
   getAttribute(element: Element, name: string): string | null
   getTextContent(element: Element): string
+  getElementValue(element: Element): string | null
   getRootTextContent(root?: Document | ShadowRoot): string
+  getCurrentUrl(root?: Document | ShadowRoot): string
   contains(root: Node, node: Node): boolean
   isConnected(element: Element): boolean
   getActiveElement(root?: Document | ShadowRoot): Element | null
@@ -662,6 +672,7 @@ export interface DomReadPort {
     target: Element | Window,
     listener: ActorbleListener<ScrollMetrics>,
   ): Disposable | null
+  observeUrlChanges(listener: ActorbleListener<void>, root?: Document | ShadowRoot): Disposable
 }
 
 export interface DomWritePort {
@@ -804,7 +815,15 @@ export type TargetWaitCondition = {
 
 export type WaitCondition =
   | TargetWaitCondition
-  | Readonly<{ kind: 'text'; value: string | RegExp }>
+  | Readonly<{ kind: 'text'; value: string | RegExp; target?: TargetLike }>
+  | Readonly<{ kind: 'value'; target: TargetLike; value: string | RegExp }>
+  | Readonly<{
+      kind: 'attribute'
+      target: TargetLike
+      name: string
+      value: string | RegExp | null
+    }>
+  | Readonly<{ kind: 'url'; value: string | RegExp }>
   | Readonly<{ kind: 'custom'; predicate: () => boolean | Promise<boolean> }>
 
 export function visible(target: TargetLike): Extract<TargetWaitCondition, { kind: 'visible' }> {
@@ -833,6 +852,25 @@ export function disabled(target: TargetLike): Extract<TargetWaitCondition, { kin
 
 export function focused(target: TargetLike): Extract<TargetWaitCondition, { kind: 'focused' }> {
   return { kind: 'focused', target }
+}
+
+export function value(
+  target: TargetLike,
+  expected: string | RegExp,
+): Extract<WaitCondition, { kind: 'value' }> {
+  return { kind: 'value', target, value: expected }
+}
+
+export function attribute(
+  target: TargetLike,
+  name: string,
+  expected: string | RegExp | null,
+): Extract<WaitCondition, { kind: 'attribute' }> {
+  return { kind: 'attribute', target, name, value: expected }
+}
+
+export function url(expected: string | RegExp): Extract<WaitCondition, { kind: 'url' }> {
+  return { kind: 'url', value: expected }
 }
 
 type ScenarioStepOptions<TOptions extends OperationOptions> = Omit<TOptions, 'signal'>

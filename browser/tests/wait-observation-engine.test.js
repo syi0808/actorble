@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/dom-adapter/index.js'
 import { BrowserLayoutInvalidationTracker } from '../src/targeting/layout-invalidation-tracker/index.js'
 import {
   actorbleError,
+  attribute,
   attached,
   css,
   detached,
   disabled,
   enabled,
   focused,
+  text,
   timeoutError,
+  url,
+  value,
 } from '../src/shared/index.js'
 import {
   BrowserWaitObservationEngine,
@@ -408,7 +413,8 @@ describe('BrowserWaitObservationEngine', () => {
         attempts: 1,
         condition: {
           kind: 'text',
-          value: 'Project created',
+          matcher: { kind: 'string', length: 'Project created'.length },
+          scope: 'root',
         },
         lastObservation: expect.objectContaining({
           scope: 'root',
@@ -491,23 +497,163 @@ describe('BrowserWaitObservationEngine', () => {
   })
 
   it('reports target-scoped text waits as an explicit extension point', async () => {
-    const condition = { kind: 'text', value: 'Saved', target: css('#status') }
+    document.body.innerHTML = '<p id="status">Saving</p>'
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        document.querySelector('#status').textContent = ' Saved  successfully '
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(text('Saved successfully', { target: css('#status') })))
+      .resolves.toMatchObject({ satisfied: true })
+    await expect(engine.waitFor(text(/^Saved successfully$/g, { target: css('#status') })))
+      .resolves.toMatchObject({ satisfied: true })
+    expect(timeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('matches target text exactly while preserving root text containment', async () => {
+    document.body.innerHTML = '<p id="status">Project created successfully</p>'
+    const rootEngine = new BrowserWaitObservationEngine({ timeline: createTimeline() })
+
+    await expect(rootEngine.waitFor(text('Project created'))).resolves.toMatchObject({ satisfied: true })
+
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        document.querySelector('#status').textContent = 'Project created'
+      }),
+    })
+    const targetEngine = new BrowserWaitObservationEngine({ timeline })
+    await expect(targetEngine.waitFor(text('Project created', { target: css('#status') })))
+      .resolves.toMatchObject({ satisfied: true })
+    expect(timeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('waits for input and select values and rejects unsupported value targets', async () => {
+    document.body.innerHTML = `
+      <input id="name" value="loading">
+      <textarea id="notes">draft</textarea>
+      <select id="state"><option value="loading">Loading</option><option value="ready">Ready</option></select>
+      <div id="editor" contenteditable="true">draft</div>
+    `
+    let attempts = 0
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        attempts += 1
+        if (attempts === 1) document.querySelector('#name').value = 'ready'
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(value(css('#name'), /^ready$/g))).resolves.toMatchObject({ satisfied: true })
+    document.querySelector('#state').value = 'ready'
+    await expect(engine.waitFor(value(css('#state'), 'ready'))).resolves.toMatchObject({ satisfied: true })
+    await expect(engine.waitFor(value(css('#notes'), 'draft'))).resolves.toMatchObject({ satisfied: true })
+    await expect(engine.waitFor(value(css('#editor'), 'draft'))).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: expect.objectContaining({ conditionKind: 'value', supportedElements: ['input', 'textarea', 'select'] }),
+    })
+  })
+
+  it('distinguishes absent attributes from empty values and supports regular expressions', async () => {
+    document.body.innerHTML = '<div id="panel"></div>'
+    const panel = document.querySelector('#panel')
     const engine = new BrowserWaitObservationEngine({ timeline: createTimeline() })
 
-    await expect(engine.waitFor(condition)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        conditionKind: 'text',
-        capability: 'target-scoped-text-wait',
-        supportedScope: 'root',
-        extensionPoint: 'wait-observation-engine.target-text',
-        condition: expect.objectContaining({
-          kind: 'text',
-          scope: 'target',
-          target: expect.objectContaining({ kind: 'css', selector: '#status' }),
-        }),
-      },
+    await expect(engine.waitFor(attribute(css('#panel'), 'data-state', null))).resolves.toMatchObject({ satisfied: true })
+    panel.setAttribute('data-state', '')
+    await expect(engine.waitFor(attribute(css('#panel'), 'data-state', ''))).resolves.toMatchObject({ satisfied: true })
+    panel.setAttribute('data-state', 'ready')
+    await expect(engine.waitFor(attribute(css('#panel'), 'data-state', /^ready$/g))).resolves.toMatchObject({ satisfied: true })
+
+    panel.setAttribute('data-state', 'loading')
+    const transitionTimeline = createTimeline({
+      settle: vi.fn(async () => panel.setAttribute('data-state', 'ready')),
     })
+    const transitionEngine = new BrowserWaitObservationEngine({ timeline: transitionTimeline })
+    await expect(transitionEngine.waitFor(attribute(css('#panel'), 'data-state', 'ready')))
+      .resolves.toMatchObject({ satisfied: true })
+    expect(transitionTimeline.settle).toHaveBeenCalledOnce()
+  })
+
+  it('matches root-relative, absolute, and RegExp URLs across SPA transitions', async () => {
+    history.replaceState({}, '', '/loading')
+    const timeline = createTimeline({
+      settle: vi.fn(async () => {
+        history.pushState({}, '', '/projects/1?tab=summary#details')
+      }),
+    })
+    const engine = new BrowserWaitObservationEngine({ timeline })
+
+    await expect(engine.waitFor(url('/projects/1?tab=summary#details'))).resolves.toMatchObject({ satisfied: true })
+    await expect(engine.waitFor(url(new URL('/projects/1?tab=summary#details', location.href).href))).resolves.toMatchObject({ satisfied: true })
+    await expect(engine.waitFor(url(/\/projects\/1\?tab=summary#details$/g))).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('disposes URL observation when an in-progress wait is aborted', async () => {
+    history.replaceState({}, '', '/loading')
+    const dom = new BrowserDomAdapter(document)
+    const dispose = vi.fn()
+    const observe = dom.observeUrlChanges.bind(dom)
+    vi.spyOn(dom, 'observeUrlChanges').mockImplementation((listener) => {
+      const subscription = observe(listener)
+      return { dispose: () => { dispose(); subscription.dispose() } }
+    })
+    const timeline = createTimeline({
+      settle: vi.fn((_strategy, options) => new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => reject(actorbleError('ACTION_CANCELLED', 'cancelled')), { once: true })
+      })),
+    })
+    const controller = new AbortController()
+    const engine = new BrowserWaitObservationEngine({ dom, timeline })
+    const promise = engine.waitFor(url('/ready'), { signal: controller.signal })
+
+    await vi.waitFor(() => expect(timeline.settle).toHaveBeenCalledOnce())
+    controller.abort('stopped')
+
+    await expect(promise).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('redacts matcher, observed content, locator text, and URL components from diagnostics', async () => {
+    vi.useFakeTimers()
+    history.replaceState({}, '', '/path-secret?query-secret=yes#fragment-secret')
+    document.body.innerHTML = '<input id="locator-secret" value="observed-secret">'
+    const trace = new BrowserDiagnosticsTrace({ clock: traceClock(), idPrefix: 'trace' })
+    const timeline = createTimeline({ settle: vi.fn(() => new Promise(() => {})) })
+    const engine = new BrowserWaitObservationEngine({ timeline, trace })
+    const promise = engine.waitFor(value(css('#locator-secret'), 'matcher-secret'), { timeout: 25 })
+    const failurePromise = promise.catch((error) => error)
+    await vi.advanceTimersByTimeAsync(25)
+    const failure = await failurePromise
+    expect(failure).toMatchObject({ code: 'ACTION_TIMEOUT' })
+
+    const urlTrace = new BrowserDiagnosticsTrace({ clock: traceClock(), idPrefix: 'url-trace' })
+    const urlEngine = new BrowserWaitObservationEngine({ timeline, trace: urlTrace })
+    const urlPromise = urlEngine.waitFor(url(/url-matcher-secret/), { timeout: 25 })
+    const urlFailurePromise = urlPromise.catch((error) => error)
+    await vi.advanceTimersByTimeAsync(25)
+    const urlFailure = await urlFailurePromise
+    expect(urlFailure).toMatchObject({ code: 'ACTION_TIMEOUT' })
+
+    const serialized = JSON.stringify({
+      trace: trace.getTrace(),
+      failure: failure.details,
+      urlTrace: urlTrace.getTrace(),
+      urlFailure: urlFailure.details,
+    })
+    for (const secret of [
+      'locator-secret',
+      'observed-secret',
+      'matcher-secret',
+      'url-matcher-secret',
+      'path-secret',
+      'query-secret',
+      'fragment-secret',
+    ]) {
+      expect(serialized).not.toContain(secret)
+    }
+    expect(serialized).toContain('valueLength')
   })
 
   it('resolves and validates visible targets before inspecting visual visibility', async () => {

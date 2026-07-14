@@ -317,6 +317,52 @@ describe('BrowserDomAdapter', () => {
     expect(shadowAdapter.getRootTextContent()).toBe('Shadow Complete')
   })
 
+  it('reads supported form-control values without treating contenteditable as a value control', () => {
+    document.body.innerHTML = `
+      <input id="input" value="one">
+      <textarea id="textarea">two</textarea>
+      <select id="select"><option value="three" selected>Three</option></select>
+      <div id="editor" contenteditable="true">four</div>
+    `
+    const adapter = new BrowserDomAdapter(document)
+
+    expect(adapter.getElementValue(document.querySelector('#input'))).toBe('one')
+    expect(adapter.getElementValue(document.querySelector('#textarea'))).toBe('two')
+    expect(adapter.getElementValue(document.querySelector('#select'))).toBe('three')
+    expect(adapter.getElementValue(document.querySelector('#editor'))).toBeNull()
+  })
+
+  it('observes SPA URL changes and restores shared history patches after the final disposer', () => {
+    const adapter = new BrowserDomAdapter(document)
+    const first = vi.fn()
+    const second = vi.fn()
+    const originalPushState = history.pushState
+    const originalReplaceState = history.replaceState
+    const firstSubscription = adapter.observeUrlChanges(first)
+    const secondSubscription = adapter.observeUrlChanges(second)
+
+    history.pushState({}, '', '/first')
+    history.replaceState({}, '', '/second#details')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+
+    expect(adapter.getCurrentUrl()).toBe(new URL('/second#details', location.href).href)
+    expect(first).toHaveBeenCalledTimes(3)
+    expect(second).toHaveBeenCalledTimes(3)
+
+    firstSubscription.dispose()
+    firstSubscription.dispose()
+    expect(history.pushState).not.toBe(originalPushState)
+
+    history.pushState({}, '', '/third')
+    expect(first).toHaveBeenCalledTimes(3)
+    expect(second).toHaveBeenCalledTimes(4)
+
+    secondSubscription.dispose()
+    secondSubscription.dispose()
+    expect(history.pushState).toBe(originalPushState)
+    expect(history.replaceState).toBe(originalReplaceState)
+  })
+
   it('hit-tests points and skips actorble internal elements when requested', () => {
     const overlay = document.createElement('div')
     overlay.setAttribute('data-actorble-internal', '')

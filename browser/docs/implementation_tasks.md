@@ -1242,7 +1242,7 @@ api/actorble-facade
 
 ### T56. Text, value, attribute, and URL wait conditions
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add target-scoped text, value, attribute, and URL state primitives while retaining existing root-scoped text behavior.
 - Dependencies: T55, DOM adapter observation primitives.
 - Decision constraints:

@@ -76,4 +76,18 @@ describe('docs and examples option model alignment', () => {
       expect(smoke).toContain(`feedback-mode-${feedback}`)
     }
   })
+
+  it('documents the public state wait condition vocabulary', () => {
+    const api = readFileSync(join(repoRoot, 'docs/src/content/docs/docs/browser/api.md'), 'utf8')
+
+    for (const helper of [
+      "text('Saved', { target: css('#status') })",
+      "value(css('#project-name'), 'Actorble')",
+      "attribute(css('#panel'), 'aria-busy', null)",
+      "url('/projects/actorble')",
+    ]) {
+      expect(api).toContain(helper)
+    }
+    expect(api).toContain('they do not retain matcher sources')
+  })
 })

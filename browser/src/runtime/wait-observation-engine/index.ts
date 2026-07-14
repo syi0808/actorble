@@ -25,6 +25,7 @@ import type {
   Locator,
   TargetHandle,
   TargetLike,
+  TargetWaitCondition,
   StabilityPolicy,
   WaitCondition,
   WaitOptions,
@@ -108,15 +109,59 @@ type TargetWaitObservation = Readonly<{
 
 type TextWaitObservation = Readonly<{
   state: 'matched' | 'unmatched'
-  scope: 'root'
+  scope: 'root' | 'target'
   root: 'document' | 'shadow-root'
   matched: boolean
-  matcher: string
+  matcher: MatcherSummary
   textLength: number
-  textSample: string
+  target?: unknown
+  targetId?: string
 }>
 
-type WaitObservation = TargetWaitObservation | TextWaitObservation
+type MatcherSummary = Readonly<{
+  kind: 'string' | 'regexp' | 'absent'
+  length: number
+  flags?: string
+}>
+
+type ValueWaitObservation = Readonly<{
+  state: 'matched' | 'unmatched' | 'not-found' | 'detached' | 'stale'
+  matched: boolean
+  matcher: MatcherSummary
+  control?: 'input' | 'textarea' | 'select'
+  valueLength?: number
+  target?: unknown
+  targetId?: string
+  errorCode?: ActorbleError['code']
+}>
+
+type AttributeWaitObservation = Readonly<{
+  state: 'matched' | 'unmatched' | 'not-found' | 'detached' | 'stale'
+  matched: boolean
+  matcher: MatcherSummary
+  name: string
+  present?: boolean
+  valueLength?: number
+  target?: unknown
+  targetId?: string
+  errorCode?: ActorbleError['code']
+}>
+
+type UrlWaitObservation = Readonly<{
+  state: 'matched' | 'unmatched'
+  matched: boolean
+  matcher: MatcherSummary
+  pathLength: number
+  hasQuery: boolean
+  hasFragment: boolean
+}>
+
+type WaitObservation =
+  | TargetWaitObservation
+  | TextWaitObservation
+  | ValueWaitObservation
+  | AttributeWaitObservation
+  | UrlWaitObservation
 
 type WaitAttemptDiagnostics = {
   attempts: number
@@ -355,6 +400,14 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       return await this.#waitForTextCondition(condition, signal, diagnostics)
     }
 
+    if (condition.kind === 'value' || condition.kind === 'attribute') {
+      return await this.#waitForContentCondition(condition, signal, diagnostics)
+    }
+
+    if (condition.kind === 'url') {
+      return await this.#waitForUrlCondition(condition, signal, diagnostics)
+    }
+
     if (conditionKind !== 'custom') {
       throw actorbleError(
         'PLATFORM_UNSUPPORTED',
@@ -400,8 +453,10 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     signal: WaitOptions['signal'],
     diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
-    if (textConditionTarget(condition) !== undefined) {
-      throw unsupportedTargetScopedTextWait(condition)
+    const target = textConditionTarget(condition)
+
+    if (target !== undefined) {
+      return await this.#waitForTargetTextCondition(condition, target, signal, diagnostics)
     }
 
     const cache: TextWaitObservationCache = {
@@ -434,8 +489,158 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
     }
   }
 
+  async #waitForTargetTextCondition(
+    condition: Extract<WaitCondition, { kind: 'text' }>,
+    target: TargetLike,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+  ): Promise<WaitResult> {
+    let handle: TargetHandle | undefined
+
+    for (;;) {
+      assertNotCancelled('wait.for', signal)
+      diagnostics.attempts += 1
+
+      try {
+        handle = await this.#resolveTarget(target, handle)
+        const text = normalizeWhitespace(this.#dom.getTextContent(handle.element))
+        const matched = targetTextMatches(text, condition.value)
+        diagnostics.lastObservation = {
+          state: matched ? 'matched' : 'unmatched',
+          scope: 'target',
+          root: rootKind(handle.root),
+          matched,
+          matcher: summarizeMatcher(condition.value),
+          textLength: text.length,
+          target: summarizeTarget(handle),
+          targetId: handle.id,
+        }
+
+        if (matched) return satisfiedResult(condition)
+      } catch (error) {
+        const observation = observationFromContentTargetError(error, target, summarizeMatcher(condition.value))
+        if (observation === null) throw error
+        diagnostics.lastObservation = {
+          state: observation.state === 'not-found' ? 'unmatched' : observation.state,
+          scope: 'target',
+          root: rootKind(this.#dom.getRoot()),
+          matched: false,
+          matcher: summarizeMatcher(condition.value),
+          textLength: 0,
+          target: observation.target,
+          targetId: observation.targetId,
+        }
+        handle = undefined
+      }
+
+      await this.#retryCondition(condition, diagnostics, signal)
+    }
+  }
+
+  async #waitForContentCondition(
+    condition: Extract<WaitCondition, { kind: 'value' | 'attribute' }>,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+  ): Promise<WaitResult> {
+    let handle: TargetHandle | undefined
+
+    for (;;) {
+      assertNotCancelled('wait.for', signal)
+      diagnostics.attempts += 1
+
+      try {
+        handle = await this.#resolveTarget(condition.target, handle)
+
+        if (condition.kind === 'value') {
+          const actual = this.#dom.getElementValue(handle.element)
+          if (actual === null) throw unsupportedValueTarget(handle)
+          const matched = exactMatches(actual, condition.value)
+          diagnostics.lastObservation = {
+            state: matched ? 'matched' : 'unmatched',
+            matched,
+            matcher: summarizeMatcher(condition.value),
+            control: valueControlKind(handle.element),
+            valueLength: actual.length,
+            target: summarizeTarget(handle),
+            targetId: handle.id,
+          }
+          if (matched) return satisfiedResult(condition)
+        } else {
+          const actual = this.#dom.getAttribute(handle.element, condition.name)
+          const matched = condition.value === null
+            ? actual === null
+            : actual !== null && exactMatches(actual, condition.value)
+          diagnostics.lastObservation = {
+            state: matched ? 'matched' : 'unmatched',
+            matched,
+            matcher: summarizeMatcher(condition.value),
+            name: condition.name,
+            present: actual !== null,
+            valueLength: actual?.length ?? 0,
+            target: summarizeTarget(handle),
+            targetId: handle.id,
+          }
+          if (matched) return satisfiedResult(condition)
+        }
+      } catch (error) {
+        if (error instanceof ActorbleError && error.code === 'PLATFORM_UNSUPPORTED') throw error
+        const observation = observationFromContentTargetError(error, condition.target, summarizeMatcher(condition.value))
+        if (observation === null) throw error
+        diagnostics.lastObservation = condition.kind === 'attribute'
+          ? { ...observation, matched: false, name: condition.name }
+          : { ...observation, matched: false }
+        handle = undefined
+      }
+
+      await this.#retryCondition(condition, diagnostics, signal)
+    }
+  }
+
+  async #waitForUrlCondition(
+    condition: Extract<WaitCondition, { kind: 'url' }>,
+    signal: WaitOptions['signal'],
+    diagnostics: WaitAttemptDiagnostics,
+  ): Promise<WaitResult> {
+    const subscription = this.#dom.observeUrlChanges(() => {})
+
+    try {
+      for (;;) {
+        assertNotCancelled('wait.for', signal)
+        diagnostics.attempts += 1
+        const actual = this.#dom.getCurrentUrl()
+        const parsed = new URL(actual)
+        const matched = urlMatches(actual, condition.value)
+        diagnostics.lastObservation = {
+          state: matched ? 'matched' : 'unmatched',
+          matched,
+          matcher: summarizeMatcher(condition.value),
+          pathLength: parsed.pathname.length,
+          hasQuery: parsed.search.length > 0,
+          hasFragment: parsed.hash.length > 0,
+        }
+        if (matched) return satisfiedResult(condition)
+        await this.#retryCondition(condition, diagnostics, signal)
+      }
+    } finally {
+      subscription.dispose()
+    }
+  }
+
+  async #retryCondition(
+    condition: WaitCondition,
+    diagnostics: WaitAttemptDiagnostics,
+    signal: WaitOptions['signal'],
+  ): Promise<void> {
+    this.#trace?.appendEvent?.('wait:retry', {
+      attempts: diagnostics.attempts,
+      condition: summarizeCondition(condition),
+      observation: diagnostics.lastObservation,
+    })
+    await this.#timeline.settle('interaction-stable', toCancellationOptions(signal))
+  }
+
   async #waitForTargetCondition(
-    condition: Extract<WaitCondition, { target: TargetLike }>,
+    condition: TargetWaitCondition,
     signal: WaitOptions['signal'],
     diagnostics: WaitAttemptDiagnostics,
   ): Promise<WaitResult> {
@@ -470,7 +675,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async #observeTargetForWait(
-    condition: Extract<WaitCondition, { target: TargetLike }>,
+    condition: TargetWaitCondition,
     cache: TargetWaitObservationCache,
   ): Promise<TargetWaitObservation> {
     const reuseEnabled = this.#canReuseWaitObservations() && condition.kind !== 'focused'
@@ -506,7 +711,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
   }
 
   async #readTargetObservation(
-    condition: Extract<WaitCondition, { target: TargetLike }>,
+    condition: TargetWaitCondition,
     cachedHandle: TargetHandle | undefined,
   ): Promise<TargetWaitObservationResult> {
     try {
@@ -583,9 +788,8 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
       scope: 'root',
       root: rootKind(this.#dom.getRoot()),
       matched,
-      matcher: formatTextMatcher(value),
+      matcher: summarizeMatcher(value),
       textLength: text.length,
-      textSample: sampleText(text),
     }
   }
 
@@ -767,26 +971,8 @@ function normalizeWaitError(
   })
 }
 
-function unsupportedTargetScopedTextWait(
-  condition: Extract<WaitCondition, { kind: 'text' }>,
-): ActorbleError {
-  return actorbleError(
-    'PLATFORM_UNSUPPORTED',
-    'Target-scoped text waits are not supported by the browser wait observation engine yet.',
-    {
-      details: {
-        conditionKind: 'text',
-        condition: summarizeCondition(condition),
-        capability: 'target-scoped-text-wait',
-        supportedScope: 'root',
-        extensionPoint: 'wait-observation-engine.target-text',
-      },
-    },
-  )
-}
-
 function isTargetConditionSatisfied(
-  kind: Extract<WaitCondition, { target: TargetLike }>['kind'],
+  kind: TargetWaitCondition['kind'],
   observation: TargetWaitObservation,
 ): boolean {
   switch (kind) {
@@ -826,18 +1012,109 @@ function textMatches(actualValue: string, expectedValue: string | RegExp): boole
   return actualValue.includes(normalizeWhitespace(expectedValue))
 }
 
+function exactMatches(actualValue: string, expectedValue: string | RegExp): boolean {
+  if (expectedValue instanceof RegExp) {
+    expectedValue.lastIndex = 0
+    return expectedValue.test(actualValue)
+  }
+
+  return actualValue === expectedValue
+}
+
+function targetTextMatches(actualValue: string, expectedValue: string | RegExp): boolean {
+  return expectedValue instanceof RegExp
+    ? exactMatches(actualValue, expectedValue)
+    : actualValue === normalizeWhitespace(expectedValue)
+}
+
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
-function sampleText(value: string): string {
-  const sample = value.slice(0, 120)
+function summarizeMatcher(value: string | RegExp | null): MatcherSummary {
+  if (value === null) return { kind: 'absent', length: 0 }
+  if (value instanceof RegExp) {
+    return { kind: 'regexp', length: value.source.length, flags: value.flags }
+  }
 
-  return value.length > sample.length ? `${sample}...` : sample
+  return { kind: 'string', length: value.length }
 }
 
-function formatTextMatcher(value: string | RegExp): string {
-  return value instanceof RegExp ? value.toString() : value
+function satisfiedResult(condition: WaitCondition): WaitResult {
+  return { condition, satisfied: true, strategy: 'interaction-stable' }
+}
+
+function unsupportedValueTarget(handle: TargetHandle): ActorbleError {
+  return actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    'Value waits support input, textarea, and select elements only.',
+    {
+      details: {
+        conditionKind: 'value',
+        target: summarizeTarget(handle),
+        supportedElements: ['input', 'textarea', 'select'],
+      },
+    },
+  )
+}
+
+function valueControlKind(element: Element): 'input' | 'textarea' | 'select' {
+  const tagName = element.tagName.toLowerCase()
+  return tagName === 'textarea' ? 'textarea' : tagName === 'select' ? 'select' : 'input'
+}
+
+function observationFromContentTargetError(
+  error: unknown,
+  target: TargetLike,
+  matcher: MatcherSummary,
+): ValueWaitObservation | null {
+  if (!(error instanceof ActorbleError)) return null
+
+  const state = error.code === 'TARGET_NOT_FOUND'
+    ? 'not-found'
+    : error.code === 'TARGET_DETACHED'
+      ? 'detached'
+      : error.code === 'TARGET_STALE'
+        ? 'stale'
+        : null
+  if (state === null) return null
+
+  return {
+    state,
+    matched: false,
+    matcher,
+    target: summarizeTarget(target),
+    ...targetIdFromError(error, target),
+    errorCode: error.code,
+  }
+}
+
+function urlMatches(actualHref: string, expected: string | RegExp): boolean {
+  if (expected instanceof RegExp) {
+    expected.lastIndex = 0
+    return expected.test(actualHref)
+  }
+
+  const actual = new URL(actualHref)
+  if (expected.startsWith('/')) {
+    return `${actual.pathname}${actual.search}${actual.hash}` === expected
+  }
+
+  if (!/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(expected)) {
+    throw actorbleError(
+      'PLATFORM_UNSUPPORTED',
+      'URL string waits require a root-relative path or an absolute URL.',
+      { details: { conditionKind: 'url', matcher: summarizeMatcher(expected) } },
+    )
+  }
+
+  try {
+    return actualHref === new URL(expected).href
+  } catch {
+    throw actorbleError('PLATFORM_UNSUPPORTED', 'URL wait matcher is not a valid absolute URL.', {
+      details: { conditionKind: 'url', matcher: summarizeMatcher(expected) },
+    })
+  }
 }
 
 function observationFromReport(
@@ -862,7 +1139,7 @@ function observationFromReport(
 function observationFromTargetError(
   error: unknown,
   target: TargetLike,
-  conditionKind: Extract<WaitCondition, { target: TargetLike }>['kind'],
+  conditionKind: TargetWaitCondition['kind'],
 ): TargetWaitObservation | null {
   if (!(error instanceof ActorbleError)) {
     return null
@@ -963,17 +1240,34 @@ function summarizeCondition(condition: WaitCondition): Readonly<Record<string, u
 
       return {
         kind: condition.kind,
-        value: formatTextMatcher(condition.value),
+        matcher: summarizeMatcher(condition.value),
         scope: target === undefined ? 'root' : 'target',
         ...(target === undefined ? {} : { target: summarizeTarget(target) }),
       }
     }
+    case 'value':
+      return {
+        kind: condition.kind,
+        matcher: summarizeMatcher(condition.value),
+        target: summarizeTarget(condition.target),
+      }
+    case 'attribute':
+      return {
+        kind: condition.kind,
+        name: condition.name,
+        matcher: summarizeMatcher(condition.value),
+        target: summarizeTarget(condition.target),
+      }
+    case 'url':
+      return { kind: condition.kind, matcher: summarizeMatcher(condition.value) }
   }
+
+  return { kind: (condition as Readonly<{ kind: string }>).kind }
 }
 
 function isTargetWaitCondition(
   condition: WaitCondition,
-): condition is Extract<WaitCondition, { target: TargetLike }> {
+): condition is TargetWaitCondition {
   return condition.kind === 'visible' ||
     condition.kind === 'hidden' ||
     condition.kind === 'attached' ||
@@ -998,12 +1292,7 @@ function summarizeTarget(target: TargetLike): unknown {
 
   if (typeof target === 'object' && target !== null && 'kind' in target) {
     const locator = target as unknown as Readonly<Record<string, unknown>>
-    return {
-      kind: locator.kind,
-      selector: locator.selector,
-      role: locator.role,
-      value: locator.value,
-    }
+    return { kind: locator.kind }
   }
 
   if (typeof target === 'object' && target !== null && 'id' in target) {

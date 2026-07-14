@@ -167,12 +167,24 @@ export class BrowserDomAdapter implements DomAdapter {
     return element.textContent ?? ''
   }
 
+  getElementValue(element: Element): string | null {
+    if (element.matches('input,textarea,select')) {
+      return (element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value
+    }
+
+    return null
+  }
+
   getRootTextContent(root: Document | ShadowRoot = this.getRoot()): string {
     if (isDocument(root)) {
       return root.body?.textContent ?? root.documentElement?.textContent ?? ''
     }
 
     return root.textContent ?? ''
+  }
+
+  getCurrentUrl(root: Document | ShadowRoot = this.getRoot()): string {
+    return getOwnerWindowForRoot(root).location.href
   }
 
   contains(root: Node, node: Node): boolean {
@@ -381,6 +393,13 @@ export class BrowserDomAdapter implements DomAdapter {
     return this.#observeScrollSignal(target, 'scrollend', listener, eventTarget)
   }
 
+  observeUrlChanges(
+    listener: ActorbleListener<void>,
+    root: Document | ShadowRoot = this.getRoot(),
+  ): Disposable {
+    return subscribeToUrlChanges(getOwnerWindowForRoot(root), listener)
+  }
+
   #observeScrollSignal(
     target: Element | Window,
     eventName: 'scroll' | 'scrollend',
@@ -420,6 +439,71 @@ type MutationObserverOwner = Window & {
 
 type StyleableElement = Element & {
   style: CSSStyleDeclaration
+}
+
+type UrlObservationHub = {
+  listeners: Set<ActorbleListener<void>>
+  originalPushState: History['pushState']
+  originalReplaceState: History['replaceState']
+  onNavigation: () => void
+}
+
+const urlObservationHubs = new WeakMap<Window, UrlObservationHub>()
+
+function subscribeToUrlChanges(
+  ownerWindow: Window,
+  listener: ActorbleListener<void>,
+): Disposable {
+  const hub = urlObservationHubs.get(ownerWindow) ?? createUrlObservationHub(ownerWindow)
+  hub.listeners.add(listener)
+  let disposed = false
+
+  return {
+    dispose() {
+      if (disposed) return
+      disposed = true
+      hub.listeners.delete(listener)
+
+      if (hub.listeners.size === 0) {
+        ownerWindow.removeEventListener('popstate', hub.onNavigation)
+        ownerWindow.removeEventListener('hashchange', hub.onNavigation)
+        ownerWindow.history.pushState = hub.originalPushState
+        ownerWindow.history.replaceState = hub.originalReplaceState
+        urlObservationHubs.delete(ownerWindow)
+      }
+    },
+  }
+}
+
+function createUrlObservationHub(ownerWindow: Window): UrlObservationHub {
+  const history = ownerWindow.history
+  const listeners = new Set<ActorbleListener<void>>()
+  const originalPushState = history.pushState
+  const originalReplaceState = history.replaceState
+  const onNavigation = () => {
+    for (const listener of [...listeners]) {
+      try {
+        listener()
+      } catch {
+        // Observation must not change History API behavior.
+      }
+    }
+  }
+  const hub = { listeners, originalPushState, originalReplaceState, onNavigation }
+
+  history.pushState = function pushState(...args) {
+    originalPushState.apply(this, args)
+    onNavigation()
+  }
+  history.replaceState = function replaceState(...args) {
+    originalReplaceState.apply(this, args)
+    onNavigation()
+  }
+  ownerWindow.addEventListener('popstate', onNavigation)
+  ownerWindow.addEventListener('hashchange', onNavigation)
+  urlObservationHubs.set(ownerWindow, hub)
+
+  return hub
 }
 
 const internalSelectors = [
