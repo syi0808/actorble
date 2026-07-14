@@ -40,7 +40,25 @@ function createDependencies() {
     typeInto: vi.fn(async () => {}),
     fill: vi.fn(async () => {}),
     press: vi.fn(async () => {}),
-    scrollTo: vi.fn(async () => {}),
+    reveal: vi.fn(async (resolvedTarget) => ({
+      target: resolvedTarget,
+      changed: false,
+      before: { visibilityRatio: 1, fullyVisible: true },
+      after: { visibilityRatio: 1, fullyVisible: true },
+      fullyVisible: true,
+      visibilityRatio: 1,
+      steps: [],
+    })),
+    scrollTo: vi.fn(async (position) => ({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: position,
+    })),
+    scrollBy: vi.fn(async (delta) => ({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: delta,
+    })),
     drag: vi.fn(async () => {}),
     selectText: vi.fn(async () => {}),
     pointerSequence: vi.fn(async () => {}),
@@ -131,6 +149,7 @@ describe('Actorble facade', () => {
     const locator = css('#target-1')
     const otherLocator = css('#target-2')
     const scrollPosition = { x: 10, y: 20 }
+    const scrollDelta = { x: -5, y: 15 }
     const scenario = { steps: [{ action: 'click', target: locator }] }
     const moveOptions = { timeout: 5, duration: 6 }
     const clickOptions = { timeout: 10, force: true }
@@ -141,7 +160,8 @@ describe('Actorble facade', () => {
     const typeIntoOptions = { timeout: 15, delay: 2 }
     const fillOptions = { timeout: 16, clear: true }
     const pressOptions = { timeout: 17, delay: 3 }
-    const scrollOptions = { timeout: 18, behavior: 'instant' }
+    const revealOptions = { timeout: 18, block: 'center' }
+    const scrollOptions = { timeout: 18, motion: { kind: 'instant' } }
     const dragOptions = { timeout: 19, force: true }
     const selectTextOptions = { timeout: 21 }
     const pointerSequence = [
@@ -162,7 +182,9 @@ describe('Actorble facade', () => {
     await expect(actorble.typeInto(locator, 'hello', typeIntoOptions)).resolves.toBeUndefined()
     await expect(actorble.fill(locator, 'filled', fillOptions)).resolves.toBeUndefined()
     await expect(actorble.press('Shift+K', pressOptions)).resolves.toBeUndefined()
-    await expect(actorble.scrollTo(scrollPosition, scrollOptions)).resolves.toBeUndefined()
+    await expect(actorble.reveal(locator, revealOptions)).resolves.toMatchObject({ fullyVisible: true })
+    await expect(actorble.scrollTo(scrollPosition, scrollOptions)).resolves.toMatchObject({ changed: true })
+    await expect(actorble.scrollBy(scrollDelta, scrollOptions)).resolves.toMatchObject({ changed: true })
     await expect(actorble.drag(locator, otherLocator, dragOptions)).resolves.toBeUndefined()
     await expect(actorble.selectText(locator, selectTextOptions)).resolves.toBeUndefined()
     await expect(
@@ -196,7 +218,12 @@ describe('Actorble facade', () => {
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', typeIntoOptions)
     expect(orchestrator.fill).toHaveBeenCalledWith(locator, 'filled', fillOptions)
     expect(orchestrator.press).toHaveBeenCalledWith('Shift+K', pressOptions)
+    expect(orchestrator.reveal).toHaveBeenCalledWith(locator, {
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      ...revealOptions,
+    })
     expect(orchestrator.scrollTo).toHaveBeenCalledWith(scrollPosition, scrollOptions)
+    expect(orchestrator.scrollBy).toHaveBeenCalledWith(scrollDelta, scrollOptions)
     expect(orchestrator.drag).toHaveBeenCalledWith(locator, otherLocator, {
       ...dragOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
@@ -556,16 +583,15 @@ describe('Actorble facade', () => {
     )
   })
 
-  it('creates a default module graph that can scroll to a resolved target', async () => {
-    const panel = document.createElement('div')
-    panel.id = 'panel'
-    panel.scrollTo = vi.fn()
-    document.body.append(panel)
+  it('creates a default module graph that can scroll to an explicit position', async () => {
+    window.scrollTo = vi.fn()
     const actorble = createActorble()
 
-    await expect(actorble.scrollTo(css('#panel'), { behavior: 'instant' })).resolves.toBeUndefined()
+    await expect(
+      actorble.scrollTo({ x: 0, y: 20 }, { motion: { kind: 'instant' } }),
+    ).resolves.toMatchObject({ changed: expect.any(Boolean) })
 
-    expect(panel.scrollTo).toHaveBeenCalledWith({ left: 0, top: 0, behavior: 'instant' })
+    expect(window.scrollTo).toHaveBeenCalledWith({ left: 0, top: 20, behavior: 'instant' })
     expect(actorble.getTrace().spans).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'action.scrollTo', status: 'ok' }),
@@ -577,7 +603,7 @@ describe('Actorble facade', () => {
           name: 'surface:scrolled',
           data: expect.objectContaining({
             action: 'scrollTo',
-            inputKind: 'target',
+            input: { x: 0, y: 20 },
           }),
         }),
       ]),

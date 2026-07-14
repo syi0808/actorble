@@ -535,9 +535,9 @@ scrollBy(delta)
 = viewport 또는 explicit surface를 상대 좌표만큼 이동
 ```
 
-기존 `scrollTo(target)` overload는 migration 기간의 deprecated alias이며 내부적으로
-`reveal(target)`에 위임합니다. 새 scenario schema와 facade overload는 position 기반
-`scrollTo`만 생성합니다.
+기존 `scrollTo(target)` overload는 제거합니다. Target visibility는 `reveal(target)`로만
+표현하며 새 scenario schema와 facade는 position 기반 `scrollTo`와 delta 기반 `scrollBy`만
+생성합니다.
 
 Surface Engine의 public architecture boundary는 유지하되 내부 책임은 다음처럼 나눕니다.
 

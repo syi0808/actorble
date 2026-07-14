@@ -147,12 +147,13 @@ function serializeStep(
       entries.push(['input', stringLiteral(step.input)])
       appendOptions(entries, step.options, [...path, 'options'], level)
       break
+    case 'reveal':
+      entries.push(['target', serializeLocator(step.target as BrowserRuntimeLocator, state, [...path, 'target'])])
+      appendOptions(entries, step.options, [...path, 'options'], level)
+      break
     case 'scrollTo':
-      if ('target' in step) {
-        entries.push(['target', serializeLocator(step.target as BrowserRuntimeLocator, state, [...path, 'target'])])
-      } else {
-        entries.push(['input', serializePlainObject(step.input, [...path, 'input'], level + 1)])
-      }
+    case 'scrollBy':
+      entries.push(['input', serializePlainObject(step.input, [...path, 'input'], level + 1)])
       appendOptions(entries, step.options, [...path, 'options'], level)
       break
     case 'drag':

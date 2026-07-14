@@ -62,7 +62,6 @@ import {
   formatActionLabel,
 } from '../../ui/product-format.js'
 import type { BuilderStepActionFamily } from '../../builder/index.js'
-import type { ScenarioCoordinateSpace } from '../../scenario/types.js'
 import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
 import {
   createSidepanelScenarioEditor,
@@ -1346,21 +1345,6 @@ function StepInspector({
                   type="number"
                   value={fields.scrollY}
                 />
-              </Field>
-              <Field label="Space">
-                <Select
-                  aria-label="Scroll coordinate space"
-                  onChange={(event) => onFieldChange({
-                    scrollCoordinateSpace: event.currentTarget.value as ScenarioCoordinateSpace,
-                  })}
-                  value={fields.scrollCoordinateSpace}
-                >
-                  <option value="viewport">Viewport</option>
-                  <option value="document">Document</option>
-                  <option value="screen">Screen</option>
-                  <option value="surface">Surface</option>
-                  <option value="element">Element</option>
-                </Select>
               </Field>
             </div>
           </fieldset>

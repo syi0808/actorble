@@ -131,6 +131,51 @@
         }
       }
     },
+    "scrollVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "scrollMotion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "enum": ["instant", "native-smooth"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "duration"],
+          "properties": {
+            "kind": { "const": "timed" },
+            "duration": { "$ref": "#/$defs/durationMs" },
+            "timing": { "enum": ["linear", "ease-in", "ease-out", "ease-in-out"] }
+          }
+        }
+      ]
+    },
+    "scrollSettle": {
+      "oneOf": [
+        { "enum": ["none", "next-frame", "scroll-stable"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "const": "scroll-stable" },
+            "quietMs": { "$ref": "#/$defs/durationMs" },
+            "stableFrames": { "type": "integer", "minimum": 1 },
+            "threshold": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
     "locator": {
       "oneOf": [
         {
@@ -385,7 +430,10 @@
           "$ref": "#/$defs/durationMs"
         },
         "motion": {
-          "$ref": "#/$defs/motion"
+          "oneOf": [
+            { "$ref": "#/$defs/motion" },
+            { "$ref": "#/$defs/scrollMotion" }
+          ]
         },
         "button": {
           "type": "string",
@@ -436,10 +484,33 @@
         "clear": {
           "type": "boolean"
         },
-        "behavior": {
-          "type": "string",
-          "enum": ["instant", "smooth"]
-        }
+        "visibility": {
+          "oneOf": [
+            { "enum": ["any", "full"] },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ratio"],
+              "properties": { "ratio": { "type": "number", "minimum": 0, "maximum": 1 } }
+            }
+          ]
+        },
+        "block": { "enum": ["nearest", "start", "center", "end"] },
+        "inline": { "enum": ["nearest", "start", "center", "end"] },
+        "container": { "enum": ["all", "nearest"] },
+        "safeArea": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["top", "right", "bottom", "left"],
+          "properties": {
+            "top": { "type": "number" },
+            "right": { "type": "number" },
+            "bottom": { "type": "number" },
+            "left": { "type": "number" }
+          }
+        },
+        "offset": { "$ref": "#/$defs/scrollVector" },
+        "settle": { "$ref": "#/$defs/scrollSettle" }
       }
     },
     "waitCondition": {
@@ -490,10 +561,13 @@
           "$ref": "#/$defs/pressStep"
         },
         {
-          "$ref": "#/$defs/scrollToTargetStep"
+          "$ref": "#/$defs/revealStep"
         },
         {
           "$ref": "#/$defs/scrollToPositionStep"
+        },
+        {
+          "$ref": "#/$defs/scrollByStep"
         },
         {
           "$ref": "#/$defs/dragStep"
@@ -655,7 +729,7 @@
         }
       }
     },
-    "scrollToTargetStep": {
+    "revealStep": {
       "type": "object",
       "additionalProperties": false,
       "required": ["action", "target"],
@@ -667,7 +741,7 @@
           "type": "string"
         },
         "action": {
-          "const": "scrollTo"
+          "const": "reveal"
         },
         "target": {
           "$ref": "#/$defs/target"
@@ -695,7 +769,7 @@
           "const": "scrollTo"
         },
         "input": {
-          "$ref": "#/$defs/point"
+          "$ref": "#/$defs/scrollVector"
         },
         "options": {
           "$ref": "#/$defs/actionOptions"
@@ -703,6 +777,19 @@
         "platform": {
           "$ref": "#/$defs/platformExtensions"
         }
+      }
+    },
+    "scrollByStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "input"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "note": { "type": "string" },
+        "action": { "const": "scrollBy" },
+        "input": { "$ref": "#/$defs/scrollVector" },
+        "options": { "$ref": "#/$defs/actionOptions" },
+        "platform": { "$ref": "#/$defs/platformExtensions" }
       }
     },
     "dragStep": {

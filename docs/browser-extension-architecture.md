@@ -187,7 +187,7 @@ TargetSlot
 - text selection anchor
 - text selection focus
 - waitFor target
-- scrollTo target
+- reveal target
 ```
 
 inspector와 locator preview는 target slot이 선택된 상태에서만 primary authoring
@@ -262,7 +262,7 @@ Step validation과 run feedback은 영향을 받은 step에 먼저 붙습니다.
 
 Target assignment는 selected step editor 내부의 target field control입니다. target이
 필요한 action만 target slot row를 활성화합니다. drag는 from/to, waitFor는 wait target,
-scrollTo target은 scroll target처럼 action-specific slot을 명시합니다. Target slot row를
+reveal target은 reveal target처럼 action-specific slot을 명시합니다. Target slot row를
 누르면 해당 slot 선택과 target picking이 함께 시작됩니다. 별도 `Set target`, `Pick target`,
 `Stop` button을 같은 맥락에 중복 노출하지 않습니다. inspector에서 요소를 선택하면 content
 inspector는 overlay와 listener를 정리하고, extension은 locator candidate를 preview하고,

@@ -1,4 +1,4 @@
-import { actorbleError } from '../../shared/index.js'
+import { actorbleError, notImplemented } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
 import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
 import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
@@ -8,11 +8,20 @@ import type {
   OperationOptions,
   Point,
   Rect,
+  RevealOptions,
+  RevealResult,
+  ScrollDelta,
   ScrollOptions,
   ScrollPosition,
+  ScrollResult,
   TargetHandle,
-  TargetLike,
 } from '../../shared/index.js'
+
+export type EnsureVisibleOptions = OperationOptions &
+  Readonly<{
+    block?: ScrollLogicalPosition
+    inline?: ScrollLogicalPosition
+  }>
 
 export type SurfaceSnapshot = Readonly<{
   id: string
@@ -22,17 +31,13 @@ export type SurfaceSnapshot = Readonly<{
   clippingChain: readonly Element[]
 }>
 
-export type RevealOptions = OperationOptions &
-  Readonly<{
-    block?: ScrollLogicalPosition
-    inline?: ScrollLogicalPosition
-  }>
-
 export interface SurfaceEngine {
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot
   getScrollableAncestors(target: TargetHandle): readonly Element[]
-  ensureVisible(target: TargetHandle, options?: RevealOptions): Promise<void>
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  ensureVisible(target: TargetHandle, options?: EnsureVisibleOptions): Promise<void>
+  reveal(target: TargetHandle, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point
 }
 
@@ -40,8 +45,6 @@ export type SurfaceEngineOptions = Readonly<{
   cache?: FrameGeometrySurfaceCache
   dom?: DomPort
 }>
-
-const supportedScrollPositionCoordinateSpaces = ['viewport', 'document'] as const
 
 export class BrowserSurfaceEngine implements SurfaceEngine {
   readonly #cache: FrameGeometrySurfaceCache
@@ -85,23 +88,31 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     return scrollableAncestors
   }
 
-  async ensureVisible(target: TargetHandle, options: RevealOptions = {}): Promise<void> {
+  async ensureVisible(target: TargetHandle, options: EnsureVisibleOptions = {}): Promise<void> {
     this.#dom.scrollIntoView(target.element, revealToScrollIntoViewOptions(options))
     this.#cache.invalidate('scroll')
   }
 
-  async scrollTo(
-    targetOrPosition: TargetLike | ScrollPosition,
-    options: ScrollOptions = {},
-  ): Promise<void> {
-    if (isScrollPosition(targetOrPosition)) {
-      this.#scrollViewportTo(targetOrPosition, options)
-      this.#cache.invalidate('scroll')
-      return
-    }
+  async reveal(_target: TargetHandle, _options: RevealOptions = {}): Promise<RevealResult> {
+    return notImplemented('SurfaceEngine.reveal')
+  }
 
-    this.#dom.scrollTo(targetElementForScroll(targetOrPosition), { x: 0, y: 0 }, options)
+  async scrollTo(position: ScrollPosition, options: ScrollOptions = {}): Promise<ScrollResult> {
+    assertSupportedExplicitScrollOptions(options)
+    const before = this.#getViewportScrollOffset()
+    this.#scrollViewportTo(position, options)
     this.#cache.invalidate('scroll')
+    const after = this.#getViewportScrollOffset()
+    return { changed: before.x !== after.x || before.y !== after.y, before, after }
+  }
+
+  async scrollBy(delta: ScrollDelta, options: ScrollOptions = {}): Promise<ScrollResult> {
+    assertSupportedExplicitScrollOptions(options)
+    const before = this.#getViewportScrollOffset()
+    this.#scrollViewportTo({ x: before.x + delta.x, y: before.y + delta.y }, options)
+    this.#cache.invalidate('scroll')
+    const after = this.#getViewportScrollOffset()
+    return { changed: before.x !== after.x || before.y !== after.y, before, after }
   }
 
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point {
@@ -143,28 +154,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   #scrollViewportTo(position: ScrollPosition, options: ScrollOptions): void {
-    const coordinateSpace = position.coordinateSpace ?? 'viewport'
-
-    if (!isSupportedScrollPositionCoordinateSpace(coordinateSpace)) {
-      throw actorbleError(
-        'PLATFORM_UNSUPPORTED',
-        `Scroll position coordinate space ${coordinateSpace} is not supported by the surface engine yet.`,
-        {
-          details: {
-            boundary: 'surface-engine',
-            action: 'scrollTo',
-            coordinateSpace,
-            supportedCoordinateSpaces: supportedScrollPositionCoordinateSpaces,
-            position,
-          },
-        },
-      )
-    }
-
     this.#dom.scrollTo(
       this.#dom.getViewportScrollTarget(this.#dom.getRoot()),
       { x: position.x, y: position.y },
-      options,
+      options.motion?.kind === 'native-smooth'
+        ? { behavior: 'smooth' }
+        : { behavior: 'instant' },
     )
   }
 
@@ -201,7 +196,9 @@ export function createSurfaceEngine(options: SurfaceEngineOptions = {}): Surface
   return new BrowserSurfaceEngine(options)
 }
 
-function revealToScrollIntoViewOptions(options: RevealOptions): ScrollIntoViewOptions | undefined {
+function revealToScrollIntoViewOptions(
+  options: EnsureVisibleOptions,
+): ScrollIntoViewOptions | undefined {
   const scrollOptions: ScrollIntoViewOptions = {}
 
   if (options.block !== undefined) {
@@ -227,54 +224,25 @@ function normalizeAxisOverflow(axisOverflow: string, shorthandOverflow: string):
   return axisOverflow || shorthandOverflow
 }
 
-function isSupportedScrollPositionCoordinateSpace(space: CoordinateSpace): boolean {
-  return supportedScrollPositionCoordinateSpaces.includes(
-    space as (typeof supportedScrollPositionCoordinateSpaces)[number],
-  )
-}
-
-function isScrollPosition(targetOrPosition: TargetLike | ScrollPosition): targetOrPosition is ScrollPosition {
-  return (
-    typeof targetOrPosition === 'object' &&
-    targetOrPosition !== null &&
-    'x' in targetOrPosition &&
-    'y' in targetOrPosition
-  )
-}
-
-function targetElementForScroll(target: TargetLike): Element {
-  if (isTargetHandle(target)) {
-    return target.element
-  }
-
-  if (isLocator(target)) {
-    if (target.kind === 'element') {
-      return target.element
-    }
-
+function assertSupportedExplicitScrollOptions(options: ScrollOptions): void {
+  if (options.motion?.kind === 'timed') {
     throw actorbleError(
       'PLATFORM_UNSUPPORTED',
-      `Locator kind "${target.kind}" must be resolved before surface scrolling.`,
-      {
-        details: { locatorKind: target.kind },
-      },
+      'Timed scroll motion is not implemented by the surface engine yet.',
+      { details: { boundary: 'surface-engine', motion: options.motion.kind } },
     )
   }
 
-  return target
-}
-
-function isTargetHandle(target: TargetLike): target is TargetHandle {
-  return (
-    typeof target === 'object' &&
-    target !== null &&
-    'id' in target &&
-    'element' in target &&
-    'resolvedAt' in target &&
-    'debug' in target
-  )
-}
-
-function isLocator(target: TargetLike): target is Exclude<TargetLike, TargetHandle | Element> {
-  return typeof target === 'object' && target !== null && 'kind' in target
+  if (options.settle !== undefined && options.settle !== 'none') {
+    throw actorbleError(
+      'PLATFORM_UNSUPPORTED',
+      'Observed scroll settlement is not implemented by the surface engine yet.',
+      {
+        details: {
+          boundary: 'surface-engine',
+          settle: typeof options.settle === 'string' ? options.settle : options.settle.kind,
+        },
+      },
+    )
+  }
 }

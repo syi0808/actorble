@@ -1015,12 +1015,12 @@ api/actorble-facade
 
 ### T45. Reveal, explicit scroll, and stability public contracts
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: `reveal(target)`, position-only `scrollTo(position)`, `scrollBy(delta)`, result/policy types, and new scenario actions are fixed in shared contracts before engine work begins.
 - Dependencies: Completed T1, T15, option model, scenario schema, accepted reveal/stability ADR.
 - Decision constraints:
   - `reveal` returns `RevealResult`; `scrollTo` and `scrollBy` return `ScrollResult`.
-  - Existing `scrollTo(target)` remains only as a deprecated compatibility overload and delegates to `reveal`; new scenario serialization does not emit the legacy shape.
+  - Target-based `scrollTo` is removed as a breaking change; target visibility uses `reveal`, and legacy scenario documents are rejected without migration.
   - Reveal defaults are `visibility: 'any'`, `block/inline: 'nearest'`, `container: 'all'`, instant motion, and scroll-stable settlement.
   - `ScrollPosition` and `ScrollDelta` use `{ x, y }`; explicit surface selection may be added to `ScrollOptions` without accepting a target as the position input.
   - Stability names are `interaction-stable`, `visual-stable`, and `scroll-stable`; the existing `'settled'` name receives an explicit compatibility mapping rather than ambiguous new behavior.
@@ -1030,9 +1030,9 @@ api/actorble-facade
 - Completion criteria:
   - Shared/public exports include the new action, option, motion, settle, result, and scenario-step contracts.
   - Facade, orchestrator, runner, and option resolver expose typed delegation shells without implementing nested reveal yet.
-  - Legacy target-based `scrollTo` is marked deprecated and routes through the reveal path.
+  - Portable schema and browser-extension authoring/compiler/export paths emit `reveal`, position-only `scrollTo`, and `scrollBy` without a legacy target-scroll shape.
 - Test expectations:
-  - Add type-contract fixtures for new calls, invalid target-based position calls, and the deprecated overload.
+  - Add type-contract fixtures for new calls and rejected target-based `scrollTo` calls.
   - Add facade/runner delegation tests before implementation.
   - Run `pnpm test -- tests/actorble-facade.test.js tests/scenario-runner.test.js tests/options-model.test.js` and `pnpm typecheck`.
 

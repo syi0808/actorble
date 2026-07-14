@@ -42,7 +42,7 @@ draft를 `actorble.scenario.v1`로 승격하지 않습니다.
 - document envelope: `schemaVersion`, `id`, `name`, `description`, `steps`,
   `metadata`
 - action intent: `click`, `moveTo`, `doubleClick`, `focus`, `type`, `typeInto`,
-  `fill`, `press`, `scrollTo`, `drag`, `selectText`, `waitFor`, `delay`
+  `fill`, `press`, `reveal`, `scrollTo`, `scrollBy`, `drag`, `selectText`, `waitFor`, `delay`
 - execution control: `timeout`, explicit `delay`, run-level `pacing`
 - `platform`을 통한 platform namespacing
 
@@ -62,6 +62,11 @@ macOS, Windows, Linux runtime이 구체화되면서 바뀔 가능성이 큰 영�
 
 compiler는 지원하지 않는 locator, option, platform extension을 silent no-op으로
 처리하지 말고 capability error로 다루어야 합니다.
+
+`reveal`은 target visibility intent입니다. `scrollTo`와 `scrollBy`는 각각 `{ x, y }`
+absolute position과 relative delta만 받으며 coordinate space 또는 target을 저장하지 않습니다.
+이 breaking draft는 legacy `{ action: "scrollTo", target }` 문서를 거부하고 자동 migration을
+제공하지 않습니다.
 
 ## Text Selection
 

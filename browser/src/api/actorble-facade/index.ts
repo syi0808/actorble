@@ -46,8 +46,12 @@ import type {
   ResolveOptions,
   RunOptions,
   Scenario,
+  RevealOptions,
+  RevealResult,
+  ScrollDelta,
   ScrollOptions,
   ScrollPosition,
+  ScrollResult,
   SelectTextOptions,
   TargetHandle,
   TargetInspection,
@@ -231,13 +235,24 @@ export class Actorble {
     )
   }
 
-  scrollTo(
-    targetOrPosition: TargetLike | ScrollPosition,
-    options?: ScrollOptions,
-  ): Promise<void> {
+  reveal(target: TargetLike, options?: RevealOptions): Promise<RevealResult> {
+    return this.#orchestrator.reveal(
+      target,
+      resolveActionOptions('reveal', { actorble: this.#options, options }),
+    )
+  }
+
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult> {
     return this.#orchestrator.scrollTo(
-      targetOrPosition,
+      position,
       resolveActionOptions('scrollTo', { actorble: this.#options, options }),
+    )
+  }
+
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult> {
+    return this.#orchestrator.scrollBy(
+      delta,
+      resolveActionOptions('scrollBy', { actorble: this.#options, options }),
     )
   }
 

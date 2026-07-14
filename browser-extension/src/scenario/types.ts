@@ -33,6 +33,11 @@ export type ScenarioPoint = Readonly<{
   coordinateSpace?: ScenarioCoordinateSpace
 }>
 
+export type ScenarioScrollVector = Readonly<{
+  x: number
+  y: number
+}>
+
 export type ScenarioRoleLocator = Readonly<{
   strategy: 'role'
   role: string
@@ -98,6 +103,42 @@ export type ScenarioMotion =
     }>
   | Readonly<{ kind: 'inertia' | 'spring'; duration?: ScenarioDurationMs }>
 
+export type ScenarioScrollMotion =
+  | Readonly<{ kind: 'instant' }>
+  | Readonly<{ kind: 'native-smooth' }>
+  | Readonly<{
+      kind: 'timed'
+      duration: ScenarioDurationMs
+      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
+    }>
+
+export type ScenarioScrollSettle =
+  | 'none'
+  | 'next-frame'
+  | 'scroll-stable'
+  | Readonly<{
+      kind: 'scroll-stable'
+      quietMs?: ScenarioDurationMs
+      stableFrames?: number
+      threshold?: number
+    }>
+
+export type ScenarioScrollOptions = Readonly<{
+  timeout?: ScenarioDurationMs
+  motion?: ScenarioScrollMotion
+  settle?: ScenarioScrollSettle
+}>
+
+export type ScenarioRevealOptions = ScenarioScrollOptions &
+  Readonly<{
+    visibility?: 'any' | 'full' | Readonly<{ ratio: number }>
+    block?: 'nearest' | 'start' | 'center' | 'end'
+    inline?: 'nearest' | 'start' | 'center' | 'end'
+    container?: 'all' | 'nearest'
+    safeArea?: Readonly<{ top: number; right: number; bottom: number; left: number }>
+    offset?: ScenarioScrollVector
+  }>
+
 export type ScenarioPointerButtonName =
   | 'primary'
   | 'secondary'
@@ -124,7 +165,6 @@ export type ScenarioActionOptions = Readonly<{
   }>
   afterFocusDelay?: ScenarioDurationMs
   clear?: boolean
-  behavior?: 'instant' | 'smooth'
 }>
 
 export type ScenarioWaitCondition =
@@ -184,18 +224,25 @@ export type ScenarioPressStep = ScenarioStepCommon &
     options?: ScenarioActionOptions
   }>
 
-export type ScenarioScrollToTargetStep = ScenarioStepCommon &
+export type ScenarioRevealStep = ScenarioStepCommon &
   Readonly<{
-    action: 'scrollTo'
+    action: 'reveal'
     target: ScenarioTarget
-    options?: ScenarioActionOptions
+    options?: ScenarioRevealOptions
   }>
 
 export type ScenarioScrollToPositionStep = ScenarioStepCommon &
   Readonly<{
     action: 'scrollTo'
-    input: ScenarioPoint
-    options?: ScenarioActionOptions
+    input: ScenarioScrollVector
+    options?: ScenarioScrollOptions
+  }>
+
+export type ScenarioScrollByStep = ScenarioStepCommon &
+  Readonly<{
+    action: 'scrollBy'
+    input: ScenarioScrollVector
+    options?: ScenarioScrollOptions
   }>
 
 export type ScenarioDragStep = ScenarioStepCommon &
@@ -233,8 +280,9 @@ export type ScenarioStep =
   | ScenarioTypeStep
   | ScenarioTargetTextStep
   | ScenarioPressStep
-  | ScenarioScrollToTargetStep
+  | ScenarioRevealStep
   | ScenarioScrollToPositionStep
+  | ScenarioScrollByStep
   | ScenarioDragStep
   | ScenarioSelectTextStep
   | ScenarioWaitForStep

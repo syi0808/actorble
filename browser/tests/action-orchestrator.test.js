@@ -306,8 +306,25 @@ function createHarness(options = {}) {
     ensureVisible: vi.fn(async () => {
       calls.push('surface.ensureVisible')
     }),
-    scrollTo: vi.fn(async () => {
+    reveal: vi.fn(async (resolvedTarget) => {
+      calls.push('surface.reveal')
+      return {
+        target: resolvedTarget,
+        changed: false,
+        before: { visibilityRatio: 1, fullyVisible: true },
+        after: { visibilityRatio: 1, fullyVisible: true },
+        fullyVisible: true,
+        visibilityRatio: 1,
+        steps: [],
+      }
+    }),
+    scrollTo: vi.fn(async (position) => {
       calls.push('surface.scrollTo')
+      return { changed: true, before: { x: 0, y: 0 }, after: position }
+    }),
+    scrollBy: vi.fn(async (delta) => {
+      calls.push('surface.scrollBy')
+      return { changed: true, before: { x: 0, y: 0 }, after: delta }
     }),
     mapPoint: vi.fn((point) => point),
   }
@@ -723,7 +740,9 @@ function createRealTextHarness(options = {}) {
     ensureVisible: vi.fn(async () => {
       calls.push('surface.ensureVisible')
     }),
+    reveal: vi.fn(),
     scrollTo: vi.fn(),
+    scrollBy: vi.fn(),
     mapPoint: vi.fn((point) => point),
   }
   const geometryEngine = {
@@ -2082,125 +2101,7 @@ describe('BrowserActionOrchestrator', () => {
     )
   })
 
-  it('scrollTo resolves, validates, scrolls the target, invalidates geometry, and waits', async () => {
-    const { calls, orchestrator, surface, target, trace, wait } = createHarness()
-    const controller = new AbortController()
-    const options = {
-      timeout: 100,
-      behavior: 'instant',
-      signal: controller.signal,
-    }
-
-    await expect(orchestrator.scrollTo(css('#target-1'), options)).resolves.toBeUndefined()
-
-    expect(calls).toEqual([
-      'resolver.resolve',
-      'resolver.validate',
-      'surface.scrollTo',
-      'wait.settle',
-    ])
-    expect(surface.scrollTo).toHaveBeenCalledWith(target, options)
-    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
-    expect(wait.settle).toHaveBeenCalledWith('settled', {
-      timeout: 100,
-      signal: controller.signal,
-    })
-    expect(trace.getTrace().events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'surface:scrolled',
-          data: expect.objectContaining({
-            action: 'scrollTo',
-            targetId: 'target-1',
-            inputKind: 'target',
-          }),
-        }),
-      ]),
-    )
-    expect(trace.getTrace().spans.at(-1)).toEqual(
-      expect.objectContaining({
-        name: 'action.scrollTo',
-        status: 'ok',
-        attributes: expect.objectContaining({
-          action: 'scrollTo',
-          completed: true,
-          targetId: 'target-1',
-          output: expect.objectContaining({
-            inputKind: 'target',
-          }),
-        }),
-      }),
-    )
-  })
-
-  it('scrollTo passes positions to the surface engine and leaves coordinate policy there', async () => {
-    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
-    const position = { x: 10, y: 20, coordinateSpace: 'viewport' }
-
-    await expect(orchestrator.scrollTo(position, { behavior: 'smooth' })).resolves.toBeUndefined()
-
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(calls).toEqual(['surface.scrollTo', 'wait.settle'])
-    expect(surface.scrollTo).toHaveBeenCalledWith(position, { behavior: 'smooth' })
-    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
-    expect(trace.getTrace().events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'surface:scrolled',
-          data: expect.objectContaining({
-            action: 'scrollTo',
-            inputKind: 'position',
-          }),
-        }),
-      ]),
-    )
-  })
-
-  it('scrollTo reports unsupported position coordinate spaces from the perform phase', async () => {
-    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
-    const position = { x: 10, y: 20, coordinateSpace: 'screen' }
-    const failure = actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      'Scroll position coordinate space screen is not supported by the surface engine yet.',
-      {
-        details: {
-          action: 'scrollTo',
-          coordinateSpace: 'screen',
-          supportedCoordinateSpaces: ['viewport', 'document'],
-        },
-      },
-    )
-    surface.scrollTo.mockImplementationOnce(async () => {
-      calls.push('surface.scrollTo')
-      throw failure
-    })
-
-    await expect(orchestrator.scrollTo(position)).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: expect.objectContaining({
-        action: 'scrollTo',
-        coordinateSpace: 'screen',
-        supportedCoordinateSpaces: ['viewport', 'document'],
-      }),
-    })
-
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(calls).toEqual(['surface.scrollTo'])
-    expect(wait.invalidateGeometry).not.toHaveBeenCalled()
-    expect(trace.getTrace().spans.at(-1)).toEqual(
-      expect.objectContaining({
-        name: 'action.scrollTo',
-        status: 'error',
-        attributes: expect.objectContaining({
-          phase: 'perform',
-        }),
-      }),
-    )
-  })
-
-  it('scrollTo fails stale target validation with target context before scrolling', async () => {
+  it('reveal resolves and validates its target before delegating without raw target trace data', async () => {
     const staleTarget = {
       ...targetHandle('stale-scroll'),
       locator: css('#stale-scroll'),
@@ -2216,23 +2117,59 @@ describe('BrowserActionOrchestrator', () => {
       }),
     })
 
-    await expect(orchestrator.scrollTo(css('#stale-scroll'))).rejects.toMatchObject({
+    await expect(orchestrator.reveal(css('#stale-scroll'))).rejects.toMatchObject({
       code: 'TARGET_STALE',
       details: expect.objectContaining({
         targetId: 'stale-scroll',
       }),
     })
 
-    expect(surface.scrollTo).not.toHaveBeenCalled()
+    expect(surface.reveal).not.toHaveBeenCalled()
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
-        name: 'action.scrollTo',
+        name: 'action.reveal',
         status: 'error',
         attributes: expect.objectContaining({
           phase: 'validate',
           targetId: 'stale-scroll',
         }),
       }),
+    )
+  })
+
+  it('scrollTo and scrollBy delegate explicit vectors and return structured results', async () => {
+    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
+    const position = { x: 10, y: 20 }
+    const delta = { x: -5, y: 15 }
+
+    await expect(
+      orchestrator.scrollTo(position, { motion: { kind: 'native-smooth' } }),
+    ).resolves.toEqual({ changed: true, before: { x: 0, y: 0 }, after: position })
+    await expect(orchestrator.scrollBy(delta)).resolves.toEqual({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: delta,
+    })
+
+    expect(resolver.resolve).not.toHaveBeenCalled()
+    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(calls).toEqual(['surface.scrollTo', 'surface.scrollBy'])
+    expect(surface.scrollTo).toHaveBeenCalledWith(position, {
+      motion: { kind: 'native-smooth' },
+    })
+    expect(surface.scrollBy).toHaveBeenCalledWith(delta, {})
+    expect(wait.invalidateGeometry).toHaveBeenCalledTimes(2)
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'surface:scrolled',
+          data: expect.objectContaining({ action: 'scrollTo', input: position }),
+        }),
+        expect.objectContaining({
+          name: 'surface:scrolled',
+          data: expect.objectContaining({ action: 'scrollBy', input: delta }),
+        }),
+      ]),
     )
   })
 

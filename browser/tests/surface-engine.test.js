@@ -228,7 +228,7 @@ describe('BrowserSurfaceEngine', () => {
     expect(engine.getScrollableAncestors(targetHandle('target-1', save))).toEqual([inner, outer])
   })
 
-  it('reveals targets and scrolls supported positions through the DOM adapter only', async () => {
+  it('keeps legacy ensureVisible internal and scrolls explicit vectors through the DOM adapter', async () => {
     document.body.innerHTML = '<button id="save">Save</button>'
     const save = document.querySelector('#save')
     const dom = createDomPort()
@@ -236,33 +236,37 @@ describe('BrowserSurfaceEngine', () => {
     const handle = targetHandle('target-1', save)
 
     await engine.ensureVisible(handle, { block: 'center', inline: 'nearest' })
-    await engine.scrollTo(handle, { behavior: 'instant' })
-    await engine.scrollTo(element(save), { behavior: 'smooth' })
-    await engine.scrollTo({ x: 10, y: 20 })
-    await engine.scrollTo({ x: 30, y: 40, coordinateSpace: 'document' })
+    await expect(engine.scrollTo({ x: 10, y: 20 })).resolves.toMatchObject({ changed: false })
+    await expect(
+      engine.scrollTo({ x: 30, y: 40 }, { motion: { kind: 'native-smooth' } }),
+    ).resolves.toMatchObject({ changed: false })
+    await expect(engine.scrollBy({ x: 5, y: -2 })).resolves.toMatchObject({ changed: false })
 
     expect(dom.scrollIntoView).toHaveBeenCalledWith(save, { block: 'center', inline: 'nearest' })
-    expect(dom.scrollTo).toHaveBeenNthCalledWith(1, save, { x: 0, y: 0 }, { behavior: 'instant' })
-    expect(dom.scrollTo).toHaveBeenNthCalledWith(2, save, { x: 0, y: 0 }, { behavior: 'smooth' })
-    expect(dom.scrollTo).toHaveBeenNthCalledWith(3, window, { x: 10, y: 20 }, {})
-    expect(dom.scrollTo).toHaveBeenNthCalledWith(4, window, { x: 30, y: 40 }, {})
+    expect(dom.scrollTo).toHaveBeenNthCalledWith(1, window, { x: 10, y: 20 }, { behavior: 'instant' })
+    expect(dom.scrollTo).toHaveBeenNthCalledWith(2, window, { x: 30, y: 40 }, { behavior: 'smooth' })
+    expect(dom.scrollTo).toHaveBeenNthCalledWith(3, window, { x: 5, y: -2 }, { behavior: 'instant' })
     expect(dom.getViewportScrollTarget).toHaveBeenCalledWith(document)
   })
 
-  it('rejects unresolved locators and unsupported scroll position coordinate spaces', async () => {
+  it('reports the public reveal engine as intentionally deferred to T49', async () => {
     const engine = createSurfaceEngine({ dom: createDomPort() })
 
-    await expect(engine.scrollTo(css('#save'))).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
+    await expect(engine.reveal(targetHandle('target-1'))).rejects.toMatchObject({
+      code: 'NOT_IMPLEMENTED',
+      details: { boundary: 'SurfaceEngine.reveal' },
     })
-    await expect(engine.scrollTo({ x: 1, y: 2, coordinateSpace: 'surface' })).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: expect.objectContaining({
-        action: 'scrollTo',
-        coordinateSpace: 'surface',
-        supportedCoordinateSpaces: ['viewport', 'document'],
-      }),
-    })
+  })
+
+  it('rejects timed motion and observed settlement until their engine tasks land', async () => {
+    const engine = createSurfaceEngine({ dom: createDomPort() })
+
+    await expect(
+      engine.scrollTo({ x: 10, y: 20 }, { motion: { kind: 'timed', duration: 100 } }),
+    ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
+    await expect(
+      engine.scrollBy({ x: 1, y: 2 }, { settle: 'scroll-stable' }),
+    ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
   })
 
   it('maps viewport and document points with the viewport scroll offset only', () => {

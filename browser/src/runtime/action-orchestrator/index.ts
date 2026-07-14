@@ -56,8 +56,12 @@ import type {
   PlatformTextSelectionEndpoint,
   PlatformTextSelectionRange,
   PlatformTextSelectionSnapshot,
+  RevealOptions,
+  RevealResult,
+  ScrollDelta,
   ScrollOptions,
   ScrollPosition,
+  ScrollResult,
   SelectTextOptions,
   SelectionPort,
   StateApplyPort,
@@ -109,7 +113,9 @@ export type ActionName =
   | 'typeInto'
   | 'fill'
   | 'press'
+  | 'reveal'
   | 'scrollTo'
+  | 'scrollBy'
   | 'drag'
   | 'selectText'
   | 'pointerSequence'
@@ -131,7 +137,9 @@ export interface ActionOrchestrator {
   typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void>
   fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
   press(keys: string, options?: PressOptions): Promise<void>
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  reveal(target: TargetLike, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
   selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void>
   pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void>
@@ -1042,54 +1050,74 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
-  async scrollTo(
-    targetOrPosition: TargetLike | ScrollPosition,
-    options: ScrollOptions = {},
-  ): Promise<void> {
-    const positionInput = isScrollPosition(targetOrPosition)
-    const span = this.#startActionSpan(
-      'scrollTo',
-      positionInput ? undefined : targetOrPosition,
-      positionInput ? { ...options, position: targetOrPosition } : options,
-    )
-    let phase: ActionPhase = positionInput ? 'perform' : 'resolve'
+  async reveal(target: TargetLike, options: RevealOptions = {}): Promise<RevealResult> {
+    const span = this.#startActionSpan('reveal', target, summarizeRevealOptions(options))
+    let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
 
     try {
-      if (positionInput) {
-        await this.#surface.scrollTo(targetOrPosition, options)
-        this.#recordScrollDiagnostics(span, 'position', undefined, targetOrPosition, options)
-      } else {
-        const resolved = isTargetHandle(targetOrPosition)
-          ? targetOrPosition
-          : await this.#resolver.resolve(toLocator(targetOrPosition), operationOptions(options))
+      const resolved = isTargetHandle(target)
+        ? target
+        : await this.#resolver.resolve(toLocator(target), operationOptions(options))
+      handle = resolved
+      phase = 'validate'
+      handle = await this.#resolver.validate(resolved)
+      phase = 'perform'
+      const result = await this.#surface.reveal(handle, options)
 
-        handle = resolved
-        phase = 'validate'
-        handle = await this.#resolver.validate(resolved)
-
-        phase = 'perform'
-        await this.#surface.scrollTo(handle, options)
-        this.#recordScrollDiagnostics(span, 'target', handle, undefined, options)
-      }
-
-      phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
-
-      span.end({
-        action: 'scrollTo',
-        completed: true,
-        ...(handle === undefined ? {} : { targetId: handle.id }),
-        output: {
-          inputKind: positionInput ? 'position' : 'target',
-          ...(positionInput ? { position: targetOrPosition } : {}),
-        },
-      })
+      this.#wait.invalidateGeometry('scroll')
+      span.event('reveal:complete', summarizeRevealResult(result))
+      span.end({ action: 'reveal', completed: true, targetId: handle.id })
+      return result
     } catch (error) {
       throw this.#finishActionFailure(span, error, {
-        action: 'scrollTo',
+        action: 'reveal',
         phase,
         targetId: handle?.id,
+      })
+    }
+  }
+
+  async scrollTo(
+    position: ScrollPosition,
+    options: ScrollOptions = {},
+  ): Promise<ScrollResult> {
+    return this.#performExplicitScroll('scrollTo', position, options)
+  }
+
+  async scrollBy(delta: ScrollDelta, options: ScrollOptions = {}): Promise<ScrollResult> {
+    return this.#performExplicitScroll('scrollBy', delta, options)
+  }
+
+  async #performExplicitScroll(
+    action: 'scrollTo' | 'scrollBy',
+    vector: ScrollPosition | ScrollDelta,
+    options: ScrollOptions,
+  ): Promise<ScrollResult> {
+    const span = this.#startActionSpan(action, undefined, {
+      ...summarizeScrollOptions(options),
+      input: vector,
+    })
+    const phase: ActionPhase = 'perform'
+
+    try {
+      const result =
+        action === 'scrollTo'
+          ? await this.#surface.scrollTo(vector, options)
+          : await this.#surface.scrollBy(vector, options)
+
+      this.#recordScrollDiagnostics(span, action, vector, options, result)
+
+      span.end({
+        action,
+        completed: true,
+        output: { changed: result.changed, before: result.before, after: result.after },
+      })
+      return result
+    } catch (error) {
+      throw this.#finishActionFailure(span, error, {
+        action,
+        phase,
       })
     }
   }
@@ -2838,18 +2866,20 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
   #recordScrollDiagnostics(
     span: TraceSpanHandle,
-    inputKind: 'target' | 'position',
-    target: TargetHandle | undefined,
-    position: ScrollPosition | undefined,
+    action: 'scrollTo' | 'scrollBy',
+    input: ScrollPosition | ScrollDelta,
     options: ScrollOptions,
+    result: ScrollResult,
   ): void {
     this.#wait.invalidateGeometry('scroll')
     span.event('surface:scrolled', {
-      action: 'scrollTo',
-      inputKind,
-      ...(target === undefined ? {} : { targetId: target.id }),
-      ...(position === undefined ? {} : { position }),
-      ...(options.behavior === undefined ? {} : { behavior: options.behavior }),
+      action,
+      input,
+      motion: options.motion?.kind,
+      settle: summarizeScrollSettle(options.settle),
+      changed: result.changed,
+      before: result.before,
+      after: result.after,
     })
   }
 }
@@ -3182,6 +3212,51 @@ function uniqueTargetIds(targets: readonly (TargetHandle | undefined)[]): string
 
 function handleIdForElement(element: Element): string | undefined {
   return element.id || undefined
+}
+
+function summarizeRevealOptions(options: RevealOptions): Record<string, unknown> {
+  return {
+    ...(options.visibility === undefined ? {} : { visibility: options.visibility }),
+    ...(options.block === undefined ? {} : { block: options.block }),
+    ...(options.inline === undefined ? {} : { inline: options.inline }),
+    ...(options.container === undefined ? {} : { container: options.container }),
+    ...(options.safeArea === undefined ? {} : { safeArea: options.safeArea }),
+    ...(options.offset === undefined ? {} : { offset: options.offset }),
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
+    ...(options.settle === undefined ? {} : { settle: summarizeScrollSettle(options.settle) }),
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+  }
+}
+
+function summarizeScrollOptions(options: ScrollOptions): Record<string, unknown> {
+  return {
+    ...(options.motion === undefined ? {} : { motion: options.motion }),
+    ...(options.settle === undefined ? {} : { settle: summarizeScrollSettle(options.settle) }),
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+  }
+}
+
+function summarizeScrollSettle(
+  settle: ScrollOptions['settle'] | RevealOptions['settle'],
+): unknown {
+  return settle
+}
+
+function summarizeRevealResult(result: RevealResult): Record<string, unknown> {
+  return {
+    changed: result.changed,
+    before: result.before,
+    after: result.after,
+    fullyVisible: result.fullyVisible,
+    visibilityRatio: result.visibilityRatio,
+    steps: result.steps.map((step) => ({
+      surfaceId: step.surfaceId,
+      from: step.from,
+      intendedTo: step.intendedTo,
+      to: step.to,
+      axes: step.axes,
+    })),
+  }
 }
 
 function assertCanClick(
@@ -3809,16 +3884,6 @@ function isLocator(target: TargetLike): target is Locator {
   return typeof target === 'object' && target !== null && 'kind' in target
 }
 
-function isScrollPosition(
-  targetOrPosition: TargetLike | ScrollPosition,
-): targetOrPosition is ScrollPosition {
-  return (
-    typeof targetOrPosition === 'object' &&
-    targetOrPosition !== null &&
-    'x' in targetOrPosition &&
-    'y' in targetOrPosition
-  )
-}
 
 function isFocusOrTypingStateEffect(effect: StateEffect): boolean {
   return (

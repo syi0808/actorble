@@ -293,13 +293,17 @@ describe('builder authoring session', () => {
         issuePath: ['steps', 0, 'input'],
       },
       {
-        family: 'scrollToTarget',
-        expected: { action: 'scrollTo', target: emptyTarget() },
+        family: 'reveal',
+        expected: { action: 'reveal', target: emptyTarget() },
         issuePath: ['steps', 0, 'target', 'locators'],
       },
       {
         family: 'scrollToPosition',
-        expected: { action: 'scrollTo', input: { x: 0, y: 0, coordinateSpace: 'document' } },
+        expected: { action: 'scrollTo', input: { x: 0, y: 0 } },
+      },
+      {
+        family: 'scrollBy',
+        expected: { action: 'scrollBy', input: { x: 0, y: 0 } },
       },
       {
         family: 'drag',
@@ -407,7 +411,7 @@ describe('builder authoring session', () => {
       { family: 'selectText', expectedSlots: ['step-target'] },
       { family: 'drag', expectedSlots: ['drag-from', 'drag-to'] },
       { family: 'waitForVisible', expectedSlots: ['waitFor-target'] },
-      { family: 'scrollToTarget', expectedSlots: ['scrollTo-target'] },
+      { family: 'reveal', expectedSlots: ['reveal-target'] },
       { family: 'clickCurrent', expectedSlots: [] },
       { family: 'waitForText', expectedSlots: [] },
       { family: 'scrollToPosition', expectedSlots: [] },
@@ -447,9 +451,9 @@ describe('builder authoring session', () => {
       kind: 'waitFor-target',
       stepId: 'slot-step',
     }, testIdLocator('wait-target')))
-    const scrollStep = unwrap(updateStepActionFamily(withWaitTarget, 'slot-step', 'scrollToTarget'))
+    const scrollStep = unwrap(updateStepActionFamily(withWaitTarget, 'slot-step', 'reveal'))
     const withScrollTarget = unwrap(assignLocatorToTargetSlot(scrollStep, {
-      kind: 'scrollTo-target',
+      kind: 'reveal-target',
       stepId: 'slot-step',
     }, testIdLocator('scroll-target')))
     const selectStep = unwrap(updateStepActionFamily(withScrollTarget, 'slot-step', 'selectText'))

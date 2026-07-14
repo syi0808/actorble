@@ -17,8 +17,9 @@ export function actionIcon(action: string): CommandIconName {
       return 'text-cursor'
     case 'press':
       return 'keyboard'
-    case 'scrollToTarget':
+    case 'reveal':
     case 'scrollToPosition':
+    case 'scrollBy':
       return 'scroll'
     case 'drag':
       return 'grab'
@@ -57,10 +58,12 @@ export function actionHint(action: string): string {
       return 'Set field value'
     case 'press':
       return 'Press keys'
-    case 'scrollToTarget':
+    case 'reveal':
       return 'Reveal a target'
     case 'scrollToPosition':
       return 'Scroll coordinates'
+    case 'scrollBy':
+      return 'Scroll by a delta'
     case 'drag':
       return 'Drag between targets'
     case 'selectText':

@@ -72,7 +72,7 @@ export type InspectorTargetSlotKind =
   | 'selection-anchor'
   | 'selection-focus'
   | 'waitFor-target'
-  | 'scrollTo-target'
+  | 'reveal-target'
 
 export type InspectorTargetSlotCorrelation = Readonly<{
   kind: InspectorTargetSlotKind
@@ -507,7 +507,7 @@ function isInspectorTargetSlotKind(value: unknown): value is InspectorTargetSlot
       value === 'selection-anchor' ||
       value === 'selection-focus' ||
       value === 'waitFor-target' ||
-      value === 'scrollTo-target'
+      value === 'reveal-target'
     )
   )
 }

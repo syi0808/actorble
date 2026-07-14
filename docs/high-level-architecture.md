@@ -395,8 +395,8 @@ surface chain을 안쪽에서 바깥쪽으로 계획하고, 각 이동 뒤 geome
 계획의 재평가를 허용해야 합니다. Oversized target처럼 requested visibility를 달성할 수
 없는 경우에는 가능한 최대 visibility를 확보하고 결과에 미달 상태를 보고합니다.
 
-`scrollTo(target)` compatibility overload를 유지하는 구현은 deprecated alias로만 제공하며
-내부적으로 `reveal(target)`에 위임합니다.
+`scrollTo(target)` compatibility overload는 제공하지 않습니다. Target visibility는
+`reveal(target)`로만 표현하며 explicit scroll vector는 target을 허용하지 않습니다.
 
 ---
 

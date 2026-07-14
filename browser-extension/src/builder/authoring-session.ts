@@ -7,7 +7,6 @@ import {
   type ScenarioLocator,
   type ScenarioMetadata,
   type ScenarioPlatformExtensions,
-  type ScenarioPoint,
   type ScenarioStep,
   type ScenarioTarget,
   type ScenarioTargetGroup,
@@ -25,8 +24,9 @@ export type BuilderStepActionFamily =
   | 'typeInto'
   | 'fill'
   | 'press'
-  | 'scrollToTarget'
+  | 'reveal'
   | 'scrollToPosition'
+  | 'scrollBy'
   | 'drag'
   | 'selectText'
   | 'waitForVisible'
@@ -41,7 +41,7 @@ export type BuilderTargetSlot =
   | Readonly<{ kind: 'selection-anchor'; stepId: string }>
   | Readonly<{ kind: 'selection-focus'; stepId: string }>
   | Readonly<{ kind: 'waitFor-target'; stepId: string }>
-  | Readonly<{ kind: 'scrollTo-target'; stepId: string }>
+  | Readonly<{ kind: 'reveal-target'; stepId: string }>
 
 export type BuilderDraftStep = Readonly<{
   id?: ScenarioId
@@ -620,10 +620,8 @@ export function listTargetSlotsForStep(
       return isTargetWaitCondition(step.input)
         ? [{ kind: 'waitFor-target', stepId }]
         : []
-    case 'scrollTo':
-      return hasOwn(step, 'target')
-        ? [{ kind: 'scrollTo-target', stepId }]
-        : []
+    case 'reveal':
+      return [{ kind: 'reveal-target', stepId }]
     default:
       return []
   }
@@ -766,10 +764,10 @@ export function createDefaultStepForActionFamily(
         action: 'press',
         input: '',
       }
-    case 'scrollToTarget':
+    case 'reveal':
       return {
         ...common,
-        action: 'scrollTo',
+        action: 'reveal',
         target: emptyTargetGroup(),
       }
     case 'scrollToPosition':
@@ -779,8 +777,13 @@ export function createDefaultStepForActionFamily(
         input: {
           x: 0,
           y: 0,
-          coordinateSpace: 'document',
-        } satisfies ScenarioPoint,
+        },
+      }
+    case 'scrollBy':
+      return {
+        ...common,
+        action: 'scrollBy',
+        input: { x: 0, y: 0 },
       }
     case 'drag':
       return {
@@ -1041,8 +1044,8 @@ function slotCanWrite(step: BuilderDraftStep, slot: BuilderTargetSlot | undefine
       return step.action === 'selectText' && isTextSelectionEndpointTarget(step.target)
     case 'waitFor-target':
       return step.action === 'waitFor' && isTargetWaitCondition(step.input)
-    case 'scrollTo-target':
-      return step.action === 'scrollTo' && hasOwn(step, 'target')
+    case 'reveal-target':
+      return step.action === 'reveal'
   }
 }
 
@@ -1053,7 +1056,7 @@ function writeTargetToSlot(
 ): BuilderDraftStep {
   switch (slot.kind) {
     case 'step-target':
-    case 'scrollTo-target':
+    case 'reveal-target':
       return {
         ...step,
         target,
@@ -1126,8 +1129,12 @@ function isTextSelectionEndpointTarget(
 
 function actionFamilyForStep(step: BuilderDraftStep): BuilderStepActionFamily {
   switch (step.action) {
+    case 'reveal':
+      return 'reveal'
     case 'scrollTo':
-      return hasOwn(step, 'target') ? 'scrollToTarget' : 'scrollToPosition'
+      return 'scrollToPosition'
+    case 'scrollBy':
+      return 'scrollBy'
     case 'waitFor':
       if (isRecord(step.input) && step.input.kind === 'hidden') {
         return 'waitForHidden'

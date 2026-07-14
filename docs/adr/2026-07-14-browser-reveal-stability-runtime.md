@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-07-14
 
+Compatibility amendment: `docs/adr/2026-07-14-remove-target-scrollto-compatibility.md` removes the
+temporary target-based `scrollTo` alias. The remaining decisions in this ADR stay accepted.
+
 ## Context
 
 The browser runtime can resolve stale targets, dispatch synthetic interaction, track target-anchored
@@ -21,7 +24,7 @@ Actorble separates target reveal from explicit scrolling:
 - `reveal(target)` satisfies a requested visibility condition and returns a structured `RevealResult`.
 - `scrollTo(position)` performs absolute scrolling on the selected surface.
 - `scrollBy(delta)` performs relative scrolling on the selected surface.
-- The legacy `scrollTo(target)` overload may remain temporarily as a deprecated alias to `reveal(target)`.
+- Target-based `scrollTo` is not supported; callers use `reveal(target)`.
 
 The Surface Engine remains the public architecture boundary. It owns internal scroll-chain resolution,
 reveal planning, scroll execution, and scroll settlement observation. Reveal traverses open shadow hosts,

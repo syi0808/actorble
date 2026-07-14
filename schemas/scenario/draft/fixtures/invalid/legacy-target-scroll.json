@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "actorble.scenario.draft",
+  "steps": [
+    {
+      "action": "scrollTo",
+      "target": {
+        "strategy": "css",
+        "selector": "#legacy"
+      }
+    }
+  ]
+}

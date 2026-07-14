@@ -256,7 +256,7 @@ function selectedMessage(
     sessionId: string
     frameId: number
     targetSlot: Readonly<{
-      kind: 'step-target' | 'drag-from' | 'drag-to' | 'waitFor-target' | 'scrollTo-target'
+      kind: 'step-target' | 'drag-from' | 'drag-to' | 'waitFor-target' | 'reveal-target'
       stepId: string
     }>
   }> = {},

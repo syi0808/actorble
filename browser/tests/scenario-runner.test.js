@@ -27,7 +27,9 @@ function createOrchestrator(overrides = {}) {
     typeInto: vi.fn(async () => {}),
     fill: vi.fn(),
     press: vi.fn(),
-    scrollTo: vi.fn(),
+    reveal: vi.fn(),
+    scrollTo: vi.fn(async (position) => ({ changed: true, before: { x: 0, y: 0 }, after: position })),
+    scrollBy: vi.fn(async (delta) => ({ changed: true, before: { x: 0, y: 0 }, after: delta })),
     drag: vi.fn(),
     selectText: vi.fn(async () => {}),
     pointerSequence: vi.fn(async () => {}),
@@ -197,13 +199,23 @@ describe('BrowserScenarioRunner', () => {
     ])
   })
 
-  it('runs target and position scrollTo scenario steps through the action orchestrator', async () => {
+  it('runs reveal and explicit scroll scenario steps through the action orchestrator', async () => {
     const calls = []
     const target = css('#panel')
-    const position = { x: 10, y: 20, coordinateSpace: 'document' }
+    const position = { x: 10, y: 20 }
+    const delta = { x: -5, y: 15 }
     const orchestrator = createOrchestrator({
-      scrollTo: vi.fn(async (targetOrPosition, options) => {
-        calls.push(['scrollTo', targetOrPosition, options])
+      reveal: vi.fn(async (resolvedTarget, options) => {
+        calls.push(['reveal', resolvedTarget, options])
+        return { target: resolvedTarget, changed: false, steps: [] }
+      }),
+      scrollTo: vi.fn(async (input, options) => {
+        calls.push(['scrollTo', input, options])
+        return { changed: true, before: { x: 0, y: 0 }, after: input }
+      }),
+      scrollBy: vi.fn(async (input, options) => {
+        calls.push(['scrollBy', input, options])
+        return { changed: true, before: { x: 0, y: 0 }, after: input }
       }),
     })
     const runner = new BrowserScenarioRunner({ orchestrator })
@@ -211,19 +223,22 @@ describe('BrowserScenarioRunner', () => {
     await expect(
       runner.run({
         steps: [
-          { action: 'scrollTo', target, options: { timeout: 10, behavior: 'instant' } },
-          { action: 'scrollTo', input: position, options: { timeout: 20, behavior: 'smooth' } },
+          { action: 'reveal', target, options: { timeout: 10, block: 'center' } },
+          { action: 'scrollTo', input: position, options: { timeout: 20, motion: { kind: 'native-smooth' } } },
+          { action: 'scrollBy', input: delta, options: { timeout: 30 } },
         ],
       }),
     ).resolves.toBeUndefined()
 
     expect(calls).toEqual([
       [
-        'scrollTo',
+        'reveal',
         target,
         expect.objectContaining({
           timeout: 10,
-          behavior: 'instant',
+          visibility: 'any',
+          block: 'center',
+          settle: 'scroll-stable',
           signal: expect.any(AbortSignal),
         }),
       ],
@@ -232,10 +247,11 @@ describe('BrowserScenarioRunner', () => {
         position,
         expect.objectContaining({
           timeout: 20,
-          behavior: 'smooth',
+          motion: { kind: 'native-smooth' },
           signal: expect.any(AbortSignal),
         }),
       ],
+      ['scrollBy', delta, expect.objectContaining({ timeout: 30, signal: expect.any(AbortSignal) })],
     ])
   })
 
@@ -675,39 +691,6 @@ describe('BrowserScenarioRunner', () => {
     ).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
       details: { action: 'pointerSequence', stepIndex: 0, field: 'sequence' },
-    })
-  })
-
-  it('adds scenario step context to unsupported scrollTo coordinate failures', async () => {
-    const position = { x: 10, y: 20, coordinateSpace: 'screen' }
-    const orchestrator = createOrchestrator({
-      scrollTo: vi.fn(async () => {
-        throw actorbleError(
-          'PLATFORM_UNSUPPORTED',
-          'Scroll position coordinate space screen is not supported.',
-          {
-            details: {
-              action: 'scrollTo',
-              coordinateSpace: 'screen',
-              supportedCoordinateSpaces: ['viewport', 'document'],
-            },
-          },
-        )
-      }),
-    })
-    const runner = new BrowserScenarioRunner({ orchestrator })
-
-    await expect(
-      runner.run({
-        steps: [{ action: 'scrollTo', input: position }],
-      }),
-    ).rejects.toMatchObject({
-      code: 'PLATFORM_UNSUPPORTED',
-      details: {
-        action: 'scrollTo',
-        stepIndex: 0,
-        coordinateSpace: 'screen',
-      },
     })
   })
 
@@ -1361,18 +1344,18 @@ describe('BrowserScenarioRunner', () => {
     )
   })
 
-  it('stops an in-flight scrollTo step through the scenario abort signal', async () => {
+  it('stops an in-flight reveal step through the scenario abort signal', async () => {
     let scrollSignal
     const target = css('#panel')
     const orchestrator = createOrchestrator({
-      scrollTo: vi.fn((_targetOrPosition, options) => {
+      reveal: vi.fn((_target, options) => {
         scrollSignal = options.signal
         return new Promise((_resolve, reject) => {
           options.signal.addEventListener(
             'abort',
             () => {
               reject(actorbleError('ACTION_CANCELLED', 'scroll cancelled', {
-                details: { operation: 'scrollTo', reason: options.signal.reason },
+                details: { operation: 'reveal', reason: options.signal.reason },
               }))
             },
             { once: true },
@@ -1381,7 +1364,7 @@ describe('BrowserScenarioRunner', () => {
       }),
     })
     const runner = new BrowserScenarioRunner({ orchestrator })
-    const run = runner.run({ steps: [{ action: 'scrollTo', target }] })
+    const run = runner.run({ steps: [{ action: 'reveal', target }] })
     run.catch(() => {})
 
     await vi.waitFor(() => expect(scrollSignal).toBeDefined())
@@ -1392,7 +1375,7 @@ describe('BrowserScenarioRunner', () => {
       details: { operation: 'scenario.run', reason: 'scenario stopped' },
     })
     expect(scrollSignal.aborted).toBe(true)
-    expect(orchestrator.scrollTo).toHaveBeenCalledWith(
+    expect(orchestrator.reveal).toHaveBeenCalledWith(
       target,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
@@ -1898,11 +1881,11 @@ describe('BrowserScenarioRunner', () => {
     const cases = [
       {
         step: { action: 'scrollTo' },
-        details: { action: 'scrollTo', stepIndex: 0, field: 'targetOrPosition' },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'input' },
       },
       {
         step: { action: 'scrollTo', target: css('#panel'), input: { x: 1, y: 2 } },
-        details: { action: 'scrollTo', stepIndex: 0, field: 'targetOrPosition' },
+        details: { action: 'scrollTo', stepIndex: 0, field: 'target' },
       },
       {
         step: { action: 'scrollTo', input: { x: '1', y: 2 } },

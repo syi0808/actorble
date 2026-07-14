@@ -18,11 +18,10 @@ import {
 } from '../shared/result.js'
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
-  type ScenarioActionOptions,
   type ScenarioDocument,
   type ScenarioLocator,
   type ScenarioPlatformExtensions,
-  type ScenarioPoint,
+  type ScenarioScrollVector,
   type ScenarioStep,
   type ScenarioTarget,
   type ScenarioTargetGroup,
@@ -140,7 +139,18 @@ const typeOptionKeys = [
 ] as const
 const fillOptionKeys = ['timeout', 'clear'] as const
 const pressOptionKeys = ['timeout', 'delay'] as const
-const scrollOptionKeys = ['timeout', 'behavior'] as const
+const revealOptionKeys = [
+  'timeout',
+  'visibility',
+  'block',
+  'inline',
+  'container',
+  'safeArea',
+  'offset',
+  'motion',
+  'settle',
+] as const
+const scrollOptionKeys = ['timeout', 'motion', 'settle'] as const
 const dragOptionKeys = ['timeout', 'duration', 'motion', 'force'] as const
 const selectTextOptionKeys = ['timeout', 'duration', 'motion'] as const
 const waitOptionKeys = ['timeout'] as const
@@ -347,7 +357,27 @@ function compileStep(
         ...optionsProperty(options),
       })
     }
-    case 'scrollTo': {
+    case 'reveal': {
+      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const options = compileOptions(
+        step.options,
+        revealOptionKeys,
+        [...path, 'options'],
+        step.action,
+        issues,
+      )
+
+      return target === null
+        ? null
+        : asRuntimeStep({
+            ...stepIdentity(step),
+            action: step.action,
+            target,
+            ...optionsProperty(options),
+          })
+    }
+    case 'scrollTo':
+    case 'scrollBy': {
       const options = compileOptions(
         step.options,
         scrollOptionKeys,
@@ -356,23 +386,10 @@ function compileStep(
         issues,
       )
 
-      if ('target' in step) {
-        const target = compileTarget(step.target, [...path, 'target'], issues)
-
-        return target === null
-          ? null
-          : asRuntimeStep({
-              ...stepIdentity(step),
-              action: step.action,
-              target,
-              ...optionsProperty(options),
-            })
-      }
-
       return asRuntimeStep({
         ...stepIdentity(step),
         action: step.action,
-        input: compileScrollPosition(step.input),
+        input: compileScrollVector(step.input),
         ...optionsProperty(options),
       })
     }
@@ -613,16 +630,15 @@ function compileWaitCondition(
   }
 }
 
-function compileScrollPosition(point: ScenarioPoint): BrowserRuntimeScrollPosition {
+function compileScrollVector(point: ScenarioScrollVector): BrowserRuntimeScrollPosition {
   return {
     x: point.x,
     y: point.y,
-    ...(point.coordinateSpace === undefined ? {} : { coordinateSpace: point.coordinateSpace }),
   }
 }
 
 function compileOptions(
-  options: ScenarioActionOptions | undefined,
+  options: Readonly<Record<string, unknown>> | undefined,
   allowedKeys: readonly string[],
   path: ExtensionIssuePath,
   action: string,

@@ -233,15 +233,20 @@ describe('compileToBrowserRuntime', () => {
         },
         {
           id: 'scroll-target',
-          action: 'scrollTo',
+          action: 'reveal',
           target,
-          options: { timeout: 1000, behavior: 'smooth' },
+          options: { timeout: 1000, motion: { kind: 'native-smooth' } },
         },
         {
           id: 'scroll-position',
           action: 'scrollTo',
-          input: { x: 0, y: 200, coordinateSpace: 'document' },
-          options: { timeout: 1000, behavior: 'instant' },
+          input: { x: 0, y: 200 },
+          options: { timeout: 1000, motion: { kind: 'instant' } },
+        },
+        {
+          id: 'scroll-by',
+          action: 'scrollBy',
+          input: { x: 0, y: -50 },
         },
         {
           id: 'drag',
@@ -289,6 +294,7 @@ describe('compileToBrowserRuntime', () => {
       'press',
       'scroll-target',
       'scroll-position',
+      'scroll-by',
       'drag',
       'wait-visible',
       'wait-hidden',
@@ -343,14 +349,18 @@ describe('compileToBrowserRuntime', () => {
         options: { delay: 2 },
       },
       {
-        action: 'scrollTo',
+        action: 'reveal',
         target: { kind: 'css', selector: '#target' },
-        options: { behavior: 'smooth' },
+        options: { motion: { kind: 'native-smooth' } },
       },
       {
         action: 'scrollTo',
-        input: { x: 0, y: 200, coordinateSpace: 'document' },
-        options: { behavior: 'instant' },
+        input: { x: 0, y: 200 },
+        options: { motion: { kind: 'instant' } },
+      },
+      {
+        action: 'scrollBy',
+        input: { x: 0, y: -50 },
       },
       {
         action: 'drag',

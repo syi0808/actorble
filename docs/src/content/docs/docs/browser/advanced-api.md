@@ -126,7 +126,9 @@ interface SurfaceEngine {
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot
   getScrollableAncestors(target: TargetHandle): readonly Element[]
   ensureVisible(target: TargetHandle, options?: RevealOptions): Promise<void>
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  reveal(target: TargetHandle, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point
 }
 ```
@@ -169,7 +171,9 @@ interface ActionOrchestrator {
   typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void>
   fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
   press(keys: string, options?: PressOptions): Promise<void>
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  reveal(target: TargetLike, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>
   geometry(target: TargetLike): Promise<GeometrySnapshot>

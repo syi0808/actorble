@@ -11,12 +11,14 @@ import type {
   PointerMotionProfile,
   PointerSequenceOptions,
   PressOptions,
+  RevealOptions,
   RunOptions,
   ScrollOptions,
   SelectTextOptions,
   TypeOptions,
   VisualTextVisibility,
   WaitOptions,
+  StabilityPolicy,
 } from '../shared/index.js'
 
 export type { BrowserActionDefaults } from '../shared/index.js'
@@ -54,6 +56,14 @@ export const BROWSER_OPTION_DEFAULTS = {
   springMotion: DEFAULT_SPRING_MOTION,
   typingDelay: 60,
   clickPressDwell: 80,
+  reveal: {
+    visibility: 'any',
+    block: 'nearest',
+    inline: 'nearest',
+    container: 'all',
+    motion: { kind: 'instant' },
+    settle: 'scroll-stable',
+  },
   feedback: DEFAULT_FEEDBACK,
 } as const
 
@@ -93,7 +103,9 @@ export type BrowserActionName =
   | 'typeInto'
   | 'fill'
   | 'press'
+  | 'reveal'
   | 'scrollTo'
+  | 'scrollBy'
   | 'drag'
   | 'selectText'
   | 'pointerSequence'
@@ -109,7 +121,9 @@ export type BrowserActionOptionMap = Readonly<{
   typeInto: TypeOptions
   fill: FillOptions
   press: PressOptions
+  reveal: RevealOptions
   scrollTo: ScrollOptions
+  scrollBy: ScrollOptions
   drag: DragOptions
   selectText: SelectTextOptions
   pointerSequence: PointerSequenceOptions
@@ -245,6 +259,12 @@ export function resolveBrowserFeedbackOptions(
   return resolveInternalFeedbackObject(feedback)
 }
 
+export function normalizeStabilityPolicy(
+  policy: StabilityPolicy,
+): Exclude<StabilityPolicy, 'settled'> {
+  return policy === 'settled' ? 'interaction-stable' : policy
+}
+
 function isResolvedActorbleOptions(
   options: BrowserActorbleOptions | ResolvedActorbleOptions,
 ): options is ResolvedActorbleOptions {
@@ -376,6 +396,8 @@ function centralizedActionDefaults(action: BrowserActionName): Record<string, un
     case 'type':
     case 'typeInto':
       return { delay: BROWSER_OPTION_DEFAULTS.typingDelay }
+    case 'reveal':
+      return BROWSER_OPTION_DEFAULTS.reveal
     default:
       return {}
   }
@@ -404,8 +426,12 @@ function actionDefaultsFor(
       return defaults.fill
     case 'press':
       return defaults.press
+    case 'reveal':
+      return defaults.reveal
     case 'scrollTo':
       return defaults.scrollTo
+    case 'scrollBy':
+      return defaults.scrollBy
     case 'drag':
       return defaults.drag
     case 'selectText':

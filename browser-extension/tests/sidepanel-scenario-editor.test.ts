@@ -601,9 +601,9 @@ describe('sidepanel scenario editor', () => {
       kind: 'waitFor-target',
       stepId: 'slot-step',
     }, testIdLocator('wait-target'))
-    editor.updateSelectedStepActionFamily('scrollToTarget')
+    editor.updateSelectedStepActionFamily('reveal')
     const scrollTarget = editor.applyLocatorToTargetSlot({
-      kind: 'scrollTo-target',
+      kind: 'reveal-target',
       stepId: 'slot-step',
     }, testIdLocator('scroll-target'))
 
@@ -626,13 +626,13 @@ describe('sidepanel scenario editor', () => {
     expect(editor.getSnapshot()).toMatchObject({
       issues: [],
       selectedTargetSlot: {
-        kind: 'scrollTo-target',
+        kind: 'reveal-target',
         stepId: 'slot-step',
       },
       draftDocument: {
         steps: [
           {
-            action: 'scrollTo',
+            action: 'reveal',
             target: targetWithTestId('scroll-target'),
           },
         ],
@@ -662,9 +662,9 @@ describe('sidepanel scenario editor', () => {
       expect.objectContaining({ id: 'waitFor-target:slot-step', selected: true }),
     ])
 
-    editor.updateSelectedStepActionFamily('scrollToTarget')
+    editor.updateSelectedStepActionFamily('reveal')
     expect(createSidepanelScenarioEditorView(editor.getSnapshot()).targetSlotRows).toEqual([
-      expect.objectContaining({ id: 'scrollTo-target:slot-step', selected: true }),
+      expect.objectContaining({ id: 'reveal-target:slot-step', selected: true }),
     ])
 
     editor.updateSelectedStepActionFamily('selectText')
@@ -761,7 +761,6 @@ describe('sidepanel scenario editor', () => {
       actionFamily: 'scrollToPosition',
       scrollX: '0',
       scrollY: '0',
-      scrollCoordinateSpace: 'document',
       controls: {
         waitText: false,
         scrollPosition: true,
@@ -774,7 +773,6 @@ describe('sidepanel scenario editor', () => {
     const scrollUpdate = editor.updateSelectedStepFields({
       scrollX: '25',
       scrollY: '40',
-      scrollCoordinateSpace: 'viewport',
     })
     expect(scrollUpdate).toMatchObject({ ok: true })
     expect(editor.getSnapshot().draftDocument?.steps[0]).toMatchObject({
@@ -782,7 +780,6 @@ describe('sidepanel scenario editor', () => {
       input: {
         x: 25,
         y: 40,
-        coordinateSpace: 'viewport',
       },
     })
 

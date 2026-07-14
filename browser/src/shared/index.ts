@@ -330,7 +330,72 @@ export type TargetInspection = Readonly<{
 export type ScrollPosition = Readonly<{
   x: number
   y: number
-  coordinateSpace?: CoordinateSpace
+}>
+
+export type ScrollDelta = Readonly<{
+  x: number
+  y: number
+}>
+
+export type RevealVisibility = 'any' | 'full' | Readonly<{ ratio: number }>
+export type RevealAlignment = 'nearest' | 'start' | 'center' | 'end'
+export type RevealContainer = 'all' | 'nearest'
+
+export type ScrollMotion =
+  | Readonly<{ kind: 'instant' }>
+  | Readonly<{ kind: 'native-smooth' }>
+  | Readonly<{
+      kind: 'timed'
+      duration: DurationMs
+      timing?: PointerMotionTiming
+    }>
+
+export type ScrollSettlePolicy =
+  | 'none'
+  | 'next-frame'
+  | 'scroll-stable'
+  | Readonly<{
+      kind: 'scroll-stable'
+      quietMs?: DurationMs
+      stableFrames?: number
+      threshold?: number
+    }>
+
+export type StabilityPolicy =
+  | 'none'
+  | 'next-frame'
+  | 'interaction-stable'
+  | 'visual-stable'
+  /** @deprecated Use 'interaction-stable'. */
+  | 'settled'
+
+export type VisibilitySnapshot = Readonly<{
+  visibilityRatio: number
+  fullyVisible: boolean
+}>
+
+export type RevealExecutionStep = Readonly<{
+  surfaceId: string
+  from: ScrollPosition
+  intendedTo: ScrollPosition
+  to: ScrollPosition
+  axes: readonly ('x' | 'y')[]
+}>
+
+export type RevealResult = Readonly<{
+  target: TargetHandle
+  changed: boolean
+  before: VisibilitySnapshot
+  after: VisibilitySnapshot
+  fullyVisible: boolean
+  visibilityRatio: number
+  steps: readonly RevealExecutionStep[]
+}>
+
+export type ScrollResult = Readonly<{
+  changed: boolean
+  before: ScrollPosition
+  after: ScrollPosition
 }>
 
 export type ScrollMetrics = Readonly<{
@@ -411,10 +476,25 @@ export type PressOptions = OperationOptions &
     delay?: DurationMs
   }>
 
+export type RevealOptions = OperationOptions &
+  Readonly<{
+    visibility?: RevealVisibility
+    block?: RevealAlignment
+    inline?: RevealAlignment
+    container?: RevealContainer
+    safeArea?: Insets
+    offset?: Point
+    motion?: ScrollMotion
+    settle?: ScrollSettlePolicy
+  }>
+
 export type ScrollOptions = OperationOptions &
   Readonly<{
-    behavior?: 'instant' | 'smooth'
+    motion?: ScrollMotion
+    settle?: ScrollSettlePolicy
   }>
+
+export type ActionRevealPolicy = false | true | RevealOptions
 
 export type DragOptions = OperationOptions &
   PointerMovementOptions &
@@ -480,7 +560,9 @@ export type BrowserActionDefaults = Readonly<{
   typeInto?: Readonly<Partial<TypeOptions>>
   fill?: Readonly<Partial<FillOptions>>
   press?: Readonly<Partial<PressOptions>>
+  reveal?: Readonly<Partial<RevealOptions>>
   scrollTo?: Readonly<Partial<ScrollOptions>>
+  scrollBy?: Readonly<Partial<ScrollOptions>>
   drag?: Readonly<Partial<DragOptions>>
   selectText?: Readonly<Partial<SelectTextOptions>>
   pointerSequence?: Readonly<Partial<PointerSequenceOptions>>
@@ -535,8 +617,12 @@ export interface DomWritePort {
   focus(element: HTMLElement | SVGElement, options?: FocusOptions): void
   blur(element: HTMLElement | SVGElement): void
   scrollIntoView(element: Element, options?: ScrollIntoViewOptions): void
-  scrollTo(target: Element | Window, position: Point, options?: ScrollOptions): void
+  scrollTo(target: Element | Window, position: Point, options?: DomScrollOptions): void
 }
+
+export type DomScrollOptions = Readonly<{
+  behavior?: 'instant' | 'smooth'
+}>
 
 export interface DomPort extends DomReadPort, DomWritePort {}
 
@@ -721,12 +807,11 @@ export type ScenarioPressStep = Readonly<{
   options?: ScenarioStepOptions<PressOptions>
 }>
 
-export type ScenarioScrollToTargetStep = Readonly<{
+export type ScenarioRevealStep = Readonly<{
   id?: string
-  action: 'scrollTo'
+  action: 'reveal'
   target: TargetLike
-  input?: never
-  options?: ScenarioStepOptions<ScrollOptions>
+  options?: ScenarioStepOptions<RevealOptions>
 }>
 
 export type ScenarioScrollToPositionStep = Readonly<{
@@ -737,7 +822,14 @@ export type ScenarioScrollToPositionStep = Readonly<{
   options?: ScenarioStepOptions<ScrollOptions>
 }>
 
-export type ScenarioScrollToStep = ScenarioScrollToTargetStep | ScenarioScrollToPositionStep
+export type ScenarioScrollToStep = ScenarioScrollToPositionStep
+
+export type ScenarioScrollByStep = Readonly<{
+  id?: string
+  action: 'scrollBy'
+  input: ScrollDelta
+  options?: ScenarioStepOptions<ScrollOptions>
+}>
 
 export type ScenarioDragStep = Readonly<{
   id?: string
@@ -785,7 +877,9 @@ export type ScenarioStep =
   | ScenarioTypeIntoStep
   | ScenarioFillStep
   | ScenarioPressStep
+  | ScenarioRevealStep
   | ScenarioScrollToStep
+  | ScenarioScrollByStep
   | ScenarioDragStep
   | ScenarioSelectTextStep
   | ScenarioPointerSequenceStep

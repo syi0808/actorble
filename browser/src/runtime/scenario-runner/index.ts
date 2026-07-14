@@ -27,9 +27,9 @@ import type {
   RunOptions,
   Scenario,
   ScenarioDelayStep,
-  ScenarioScrollToStep,
   ScenarioStep,
   PointerSequence,
+  ScrollDelta,
   ScrollPosition,
   TargetLike,
   WaitCondition,
@@ -319,8 +319,32 @@ export class BrowserScenarioRunner implements ScenarioRunner {
           step.input,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
         )
+      case 'reveal':
+        assertTarget(step.target, step.action, stepIndex)
+        return this.#orchestrator
+          .reveal(
+            step.target,
+            this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+          )
+          .then(() => undefined)
       case 'scrollTo':
-        return this.#executeScrollToStep(step, stepIndex, signal, runOptions)
+        assertNoTarget(step, step.action, stepIndex)
+        assertScrollVector(step.input, step.action, stepIndex)
+        return this.#orchestrator
+          .scrollTo(
+            step.input,
+            this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+          )
+          .then(() => undefined)
+      case 'scrollBy':
+        assertNoTarget(step, step.action, stepIndex)
+        assertScrollVector(step.input, step.action, stepIndex)
+        return this.#orchestrator
+          .scrollBy(
+            step.input,
+            this.#resolveStepOptions(step.action, step.options, signal, runOptions),
+          )
+          .then(() => undefined)
       case 'drag':
         assertTarget(step.from, step.action, stepIndex, 'from')
         assertTarget(step.to, step.action, stepIndex, 'to')
@@ -353,24 +377,6 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         return this.#executeDelayStep(step, stepIndex, signal)
       default:
         throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex)
-    }
-  }
-
-  async #executeScrollToStep(
-    step: ScenarioScrollToStep,
-    stepIndex: number,
-    signal: AbortSignal,
-    runOptions: ResolvedRunOptions,
-  ): Promise<void> {
-    const targetOrPosition = scrollToTargetOrPosition(step, stepIndex)
-
-    try {
-      await this.#orchestrator.scrollTo(
-        targetOrPosition,
-        this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-      )
-    } catch (error) {
-      throw enrichStepError(error, step.action, stepIndex)
     }
   }
 
@@ -679,31 +685,11 @@ function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: 
   return typeof step === 'object' && step !== null && 'action' in step
 }
 
-function scrollToTargetOrPosition(
-  step: ScenarioScrollToStep,
-  stepIndex: number,
-): TargetLike | ScrollPosition {
-  const runtimeStep = step as Readonly<{ target?: unknown; input?: unknown }>
-  const hasTarget = runtimeStep.target !== undefined
-  const hasInput = runtimeStep.input !== undefined
-
-  if (hasTarget === hasInput) {
-    throw scrollToStepInputError(step.action, stepIndex, 'targetOrPosition')
-  }
-
-  if (hasTarget) {
-    return runtimeStep.target as TargetLike
-  }
-
-  assertScrollPosition(runtimeStep.input, step.action, stepIndex)
-  return runtimeStep.input
-}
-
-function assertScrollPosition(
+function assertScrollVector(
   input: unknown,
   action: string,
   stepIndex: number,
-): asserts input is ScrollPosition {
+): asserts input is ScrollPosition | ScrollDelta {
   if (typeof input !== 'object' || input === null) {
     throw scrollToStepInputError(action, stepIndex, 'input')
   }
@@ -717,6 +703,18 @@ function assertScrollPosition(
   }
 }
 
+function assertNoTarget(step: object, action: string, stepIndex: number): void {
+  if (!('target' in step)) {
+    return
+  }
+
+  throw actorbleError(
+    'PLATFORM_UNSUPPORTED',
+    `Scenario step "${action}" does not accept a target; use reveal(target).`,
+    { details: { action, stepIndex, field: 'target' } },
+  )
+}
+
 function scrollToStepInputError(
   action: string,
   stepIndex: number,
@@ -724,25 +722,11 @@ function scrollToStepInputError(
 ): ActorbleError {
   return actorbleError(
     'PLATFORM_UNSUPPORTED',
-    `Scenario step "${action}" requires exactly one target or finite scroll position input.`,
+    `Scenario step "${action}" requires a finite scroll vector input.`,
     {
       details: { action, stepIndex, field },
     },
   )
-}
-
-function enrichStepError(error: unknown, action: string, stepIndex: number): ActorbleError {
-  if (error instanceof ActorbleError) {
-    return actorbleError(error.code, error.message, {
-      cause: error,
-      details: { action, ...error.details, stepIndex },
-    })
-  }
-
-  return actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" failed.`, {
-    cause: error,
-    details: { action, stepIndex },
-  })
 }
 
 function isPositiveFiniteDuration(duration: unknown): duration is number {

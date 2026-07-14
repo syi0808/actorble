@@ -8,7 +8,7 @@ import type {
   LayoutInvalidationReason,
   Point,
   Rect,
-  ScrollOptions,
+  DomScrollOptions,
   ScrollMetrics,
   TargetDebugInfo,
 } from '../../../shared/index.js'
@@ -182,7 +182,7 @@ export class BrowserDomAdapter implements DomAdapter {
     element.scrollIntoView(options)
   }
 
-  scrollTo(target: Element | Window, position: Point, options: ScrollOptions = {}): void {
+  scrollTo(target: Element | Window, position: Point, options: DomScrollOptions = {}): void {
     if (isWindow(target)) {
       target.scrollTo({ left: position.x, top: position.y, behavior: options.behavior })
       return

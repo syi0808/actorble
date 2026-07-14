@@ -60,6 +60,7 @@ import type {
   ScenarioDocument,
   ScenarioLocator,
   ScenarioPoint,
+  ScenarioScrollVector,
   ScenarioStep,
   ScenarioTarget,
 } from '../../scenario/types.js'
@@ -217,7 +218,6 @@ export type SidepanelStepFieldUpdate = Readonly<{
   waitText?: string
   scrollX?: string | number
   scrollY?: string | number
-  scrollCoordinateSpace?: ScenarioCoordinateSpace
   optionsJson?: string
   targetJson?: string
   fromJson?: string
@@ -315,7 +315,6 @@ export type SidepanelScenarioEditorView = Readonly<{
     waitText: string
     scrollX: string
     scrollY: string
-    scrollCoordinateSpace: ScenarioCoordinateSpace | ''
     optionsJson: string
     targetJson: string
     fromJson: string
@@ -1981,8 +1980,7 @@ function stepFieldUpdateFromInput(
 
   if (
     update.scrollX !== undefined ||
-    update.scrollY !== undefined ||
-    update.scrollCoordinateSpace !== undefined
+    update.scrollY !== undefined
   ) {
     const input = readStepProperty(step, 'input')
     if (!isScenarioPoint(input)) {
@@ -1995,7 +1993,6 @@ function stepFieldUpdateFromInput(
 
     let nextX = input.x
     let nextY = input.y
-    let nextCoordinateSpace = input.coordinateSpace
 
     if (update.scrollX !== undefined) {
       const x = parseNumberField(update.scrollX, 'Scroll X')
@@ -2019,15 +2016,10 @@ function stepFieldUpdateFromInput(
       nextY = y.value
     }
 
-    if (update.scrollCoordinateSpace !== undefined) {
-      nextCoordinateSpace = update.scrollCoordinateSpace
-    }
-
     next.input = {
       x: nextX,
       y: nextY,
-      ...(nextCoordinateSpace === undefined ? {} : { coordinateSpace: nextCoordinateSpace }),
-    } satisfies ScenarioPoint
+    }
   }
 
   const jsonFields = [
@@ -2085,7 +2077,6 @@ function selectedStepFields(
       waitText: '',
       scrollX: '',
       scrollY: '',
-      scrollCoordinateSpace: '',
       optionsJson: '',
       targetJson: '',
       fromJson: '',
@@ -2113,7 +2104,6 @@ function selectedStepFields(
     waitText: waitTextValue(input),
     scrollX: point === undefined ? '' : String(point.x),
     scrollY: point === undefined ? '' : String(point.y),
-    scrollCoordinateSpace: point?.coordinateSpace ?? '',
     optionsJson: jsonTextFor(readStepProperty(step, 'options')),
     targetJson: jsonTextFor(readStepProperty(step, 'target')),
     fromJson: jsonTextFor(readStepProperty(step, 'from')),
@@ -2144,7 +2134,9 @@ function selectedStepControls(
     textInput: typeof input === 'string',
     duration: actionFamily === 'delay' || actionFamily === 'selectText',
     waitText: isRecord(input) && input.kind === 'text',
-    scrollPosition: actionFamily === 'scrollToPosition' && isScenarioPoint(input),
+    scrollPosition:
+      (actionFamily === 'scrollToPosition' || actionFamily === 'scrollBy') &&
+      isScenarioScrollVector(input),
     targetSlots: targetSlotsForStep(step, step.id ?? 'selected').length > 0,
   }
 }
@@ -2283,8 +2275,9 @@ const actionFamilies = [
   'typeInto',
   'fill',
   'press',
-  'scrollToTarget',
+  'reveal',
   'scrollToPosition',
+  'scrollBy',
   'drag',
   'selectText',
   'waitForVisible',
@@ -2307,10 +2300,12 @@ function actionFamilyLabel(family: BuilderStepActionFamily): string {
       return 'Click current'
     case 'typeInto':
       return 'Type into'
-    case 'scrollToTarget':
-      return 'Scroll to target'
+    case 'reveal':
+      return 'Reveal target'
     case 'scrollToPosition':
       return 'Scroll position'
+    case 'scrollBy':
+      return 'Scroll by'
     case 'selectText':
       return 'Select text'
     case 'waitForVisible':
@@ -2326,10 +2321,12 @@ function actionFamilyLabel(family: BuilderStepActionFamily): string {
 
 function actionFamilyForStep(step: BuilderDraftStep): BuilderStepActionFamily {
   switch (step.action) {
+    case 'reveal':
+      return 'reveal'
     case 'scrollTo':
-      return readStepProperty(step, 'target') === undefined
-        ? 'scrollToPosition'
-        : 'scrollToTarget'
+      return 'scrollToPosition'
+    case 'scrollBy':
+      return 'scrollBy'
     case 'waitFor': {
       const input = readStepProperty(step, 'input')
       if (isRecord(input) && input.kind === 'hidden') {
@@ -2366,15 +2363,15 @@ function targetSlotLabel(slot: BuilderTargetSlot): string {
       return 'Selection focus'
     case 'waitFor-target':
       return 'Wait target'
-    case 'scrollTo-target':
-      return 'Scroll target'
+    case 'reveal-target':
+      return 'Reveal target'
   }
 }
 
 function targetSlotSummary(step: BuilderDraftStep, slot: BuilderTargetSlot): string {
   switch (slot.kind) {
     case 'step-target':
-    case 'scrollTo-target':
+    case 'reveal-target':
       return targetSummary(readStepProperty(step, 'target'))
     case 'drag-from':
       return targetSummary(readStepProperty(step, 'from'))
@@ -2439,7 +2436,7 @@ function hasIssueAtTargetSlot(
 function targetSlotPath(slot: BuilderTargetSlot): readonly string[] {
   switch (slot.kind) {
     case 'step-target':
-    case 'scrollTo-target':
+    case 'reveal-target':
       return ['target']
     case 'drag-from':
       return ['from']
@@ -2606,6 +2603,15 @@ function isScenarioPoint(value: unknown): value is ScenarioPoint {
       value.coordinateSpace === undefined ||
       isScenarioCoordinateSpace(value.coordinateSpace)
     )
+  )
+}
+
+function isScenarioScrollVector(value: unknown): value is ScenarioScrollVector {
+  return (
+    isRecord(value) &&
+    typeof value.x === 'number' &&
+    typeof value.y === 'number' &&
+    value.coordinateSpace === undefined
   )
 }
 

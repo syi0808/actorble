@@ -3,6 +3,7 @@ import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-logi
 import missingStepsFixture from '../../schemas/scenario/draft/fixtures/invalid/missing-steps.json'
 import pointerDownStepFixture from '../../schemas/scenario/draft/fixtures/invalid/pointer-down-step.json'
 import selectTextPointEndpointFixture from '../../schemas/scenario/draft/fixtures/invalid/select-text-point-endpoint.json'
+import legacyTargetScrollFixture from '../../schemas/scenario/draft/fixtures/invalid/legacy-target-scroll.json'
 import { exportScenarioToCode } from '../src/scenario/export-code.js'
 import { migrateScenarioDocument } from '../src/scenario/migrate.js'
 import {
@@ -174,6 +175,23 @@ describe('scenario skeleton contracts', () => {
         }),
       ]),
     })
+  })
+
+  it('rejects legacy target-based scrollTo documents without migration', () => {
+    const validation = validateScenarioDocument(legacyTargetScrollFixture)
+    const migration = migrateScenarioDocument(legacyTargetScrollFixture)
+
+    for (const result of [validation, migration]) {
+      expect(result.ok).toBe(false)
+      expect(result).toMatchObject({
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'invalid_document',
+            path: ['steps', 0, 'target'],
+          }),
+        ]),
+      })
+    }
   })
 
   it('returns draft documents unchanged during migration', () => {

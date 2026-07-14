@@ -7,6 +7,7 @@ import {
   resolveActorbleOptions,
   resolveBrowserFeedbackOptions,
   resolveRunOptions,
+  normalizeStabilityPolicy,
 } from '../src/options/index.js'
 
 describe('browser options model', () => {
@@ -95,6 +96,7 @@ describe('browser options model', () => {
     expect(resolveActionOptions('typeInto')).toEqual({
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
     })
+    expect(resolveActionOptions('reveal')).toEqual(BROWSER_OPTION_DEFAULTS.reveal)
     expect(
       resolveActionOptions('selectText', {
         options: {
@@ -106,6 +108,11 @@ describe('browser options model', () => {
       duration: 120,
       motion: { kind: 'ease', timing: 'linear', duration: 120 },
     })
+  })
+
+  it('maps the deprecated settled name to interaction-stable explicitly', () => {
+    expect(normalizeStabilityPolicy('settled')).toBe('interaction-stable')
+    expect(normalizeStabilityPolicy('visual-stable')).toBe('visual-stable')
   })
 
   it('materializes default inertia motion parameters at the option boundary', () => {

@@ -58,7 +58,13 @@ const optionKeys = new Set([
   'focusClick',
   'afterFocusDelay',
   'clear',
-  'behavior',
+  'visibility',
+  'block',
+  'inline',
+  'container',
+  'safeArea',
+  'offset',
+  'settle',
 ])
 
 export function validateScenarioDocument(input: unknown): ScenarioValidationResult {
@@ -178,8 +184,19 @@ function validateStep(
       validateNonEmptyString(step.input, [...path, 'input'], issues)
       validateOptions(step.options, [...path, 'options'], issues)
       return
+    case 'reveal':
+      rejectUnexpectedProperties(
+        step,
+        new Set(['id', 'note', 'action', 'target', 'options', 'platform']),
+        path,
+        issues,
+      )
+      validateTarget(step.target, [...path, 'target'], issues)
+      validateOptions(step.options, [...path, 'options'], issues)
+      return
     case 'scrollTo':
-      validateScrollToStep(step, path, issues)
+    case 'scrollBy':
+      validateExplicitScrollStep(step, path, issues)
       return
     case 'drag':
       rejectUnexpectedProperties(
@@ -227,33 +244,40 @@ function validateStep(
   }
 }
 
-function validateScrollToStep(
+function validateExplicitScrollStep(
   step: UnknownRecord,
   path: ExtensionIssuePath,
   issues: ExtensionIssue[],
 ): void {
-  const hasTarget = hasOwn(step, 'target')
-  const hasInput = hasOwn(step, 'input')
-
   rejectUnexpectedProperties(
     step,
-    new Set(['id', 'note', 'action', 'target', 'input', 'options', 'platform']),
+    new Set(['id', 'note', 'action', 'input', 'options', 'platform']),
     path,
     issues,
   )
 
-  if (hasTarget === hasInput) {
-    issues.push(issue('scrollTo step must include either "target" or "input".', path))
+  if (hasOwn(step, 'target')) {
+    issues.push(issue('Explicit scroll steps do not accept "target"; use reveal.', [...path, 'target']))
+  }
+
+  validateScrollVector(step.input, [...path, 'input'], issues)
+
+  validateOptions(step.options, [...path, 'options'], issues)
+}
+
+function validateScrollVector(
+  value: unknown,
+  path: ExtensionIssuePath,
+  issues: ExtensionIssue[],
+): void {
+  if (!isRecord(value)) {
+    issues.push(issue('Scroll input must be an object.', path))
     return
   }
 
-  if (hasTarget) {
-    validateTarget(step.target, [...path, 'target'], issues)
-  } else {
-    validatePoint(step.input, [...path, 'input'], issues)
-  }
-
-  validateOptions(step.options, [...path, 'options'], issues)
+  rejectUnexpectedProperties(value, new Set(['x', 'y']), path, issues)
+  validateNumber(value.x, [...path, 'x'], issues)
+  validateNumber(value.y, [...path, 'y'], issues)
 }
 
 function validateTarget(
@@ -501,7 +525,9 @@ function validateOptions(
     [...path, 'focusStrategy'],
     issues,
   )
-  validateOptionalEnum(options.behavior, ['instant', 'smooth'], [...path, 'behavior'], issues)
+  validateOptionalEnum(options.block, ['nearest', 'start', 'center', 'end'], [...path, 'block'], issues)
+  validateOptionalEnum(options.inline, ['nearest', 'start', 'center', 'end'], [...path, 'inline'], issues)
+  validateOptionalEnum(options.container, ['all', 'nearest'], [...path, 'container'], issues)
 }
 
 function validatePlatformExtensions(
