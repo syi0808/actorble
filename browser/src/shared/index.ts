@@ -405,6 +405,8 @@ export type ScrollMetrics = Readonly<{
   scrollHeight: number
   clientWidth: number
   clientHeight: number
+  clientLeft: number
+  clientTop: number
 }>
 
 export type ComputedCssInsets = Readonly<{

@@ -1078,7 +1078,7 @@ api/actorble-facade
 
 ### T48. Pure reveal planner
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add a mutation-free planner that converts target geometry, scroll-chain snapshots, and resolved reveal options into immutable per-surface scroll steps.
 - Dependencies: T45, T47, completed geometry engine and frame cache.
 - Decision constraints:

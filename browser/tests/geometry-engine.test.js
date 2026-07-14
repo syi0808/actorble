@@ -38,7 +38,29 @@ function createDomPort(rects, overrides = {}) {
       scrollHeight: 0,
       clientWidth: 0,
       clientHeight: 0,
+      clientLeft: 0,
+      clientTop: 0,
     })),
+    getComputedScrollStyle: vi.fn((element) => {
+      const style = getComputedStyle(element)
+      return {
+        overflowX: style.overflowX || style.overflow,
+        overflowY: style.overflowY || style.overflow,
+        scrollPadding: {
+          top: style.scrollPaddingTop,
+          right: style.scrollPaddingRight,
+          bottom: style.scrollPaddingBottom,
+          left: style.scrollPaddingLeft,
+        },
+        scrollMargin: {
+          top: style.scrollMarginTop,
+          right: style.scrollMarginRight,
+          bottom: style.scrollMarginBottom,
+          left: style.scrollMarginLeft,
+        },
+      }
+    }),
+    getViewportScrollElement: vi.fn(() => document.documentElement),
     getViewportScrollTarget: vi.fn(() => window),
     focus: vi.fn(),
     blur: vi.fn(),
@@ -243,6 +265,12 @@ describe('BrowserGeometryEngine', () => {
         overflowX: 'visible',
         overflowY: 'scroll',
       })),
+      getComputedScrollStyle: vi.fn(() => ({
+        overflowX: 'visible',
+        overflowY: 'scroll',
+        scrollPadding: { top: '', right: '', bottom: '', left: '' },
+        scrollMargin: { top: '', right: '', bottom: '', left: '' },
+      })),
       getScrollMetrics: vi.fn(() => ({
         scrollLeft: 0,
         scrollTop: 0,
@@ -250,6 +278,8 @@ describe('BrowserGeometryEngine', () => {
         scrollHeight: 160,
         clientWidth: 80,
         clientHeight: 60,
+        clientLeft: 0,
+        clientTop: 0,
       })),
     })
     const { timeline, resolveFrame } = createFrameTimeline()
@@ -268,7 +298,7 @@ describe('BrowserGeometryEngine', () => {
     expect(second).toEqual(first)
     expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(2)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(1)
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(1)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(1)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(1)
     expect(timeline.nextFrame).toHaveBeenCalledTimes(1)
 
@@ -281,7 +311,7 @@ describe('BrowserGeometryEngine', () => {
     })
     expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(4)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(2)
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(2)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
     expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
 
@@ -294,7 +324,7 @@ describe('BrowserGeometryEngine', () => {
     })
     expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(6)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(3)
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(3)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(3)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(3)
   })
 })

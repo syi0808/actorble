@@ -100,8 +100,8 @@ export class BrowserScrollChainResolver implements ScrollChainResolver {
       kind: 'element',
       scrollTarget: element,
       viewportRect: {
-        x: bounds.x,
-        y: bounds.y,
+        x: bounds.x + metrics.clientLeft,
+        y: bounds.y + metrics.clientTop,
         width: metrics.clientWidth,
         height: metrics.clientHeight,
       },

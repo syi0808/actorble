@@ -119,6 +119,8 @@ describe('BrowserDomAdapter', () => {
       scrollHeight: 402,
       clientWidth: 101,
       clientHeight: 202,
+      clientLeft: 3,
+      clientTop: 4,
     })) {
       Object.defineProperty(scrollbox, key, { configurable: true, value })
     }
@@ -145,6 +147,8 @@ describe('BrowserDomAdapter', () => {
       scrollHeight: 402,
       clientWidth: 101,
       clientHeight: 202,
+      clientLeft: 3,
+      clientTop: 4,
     })
     expect(adapter.getScrollMetrics(window)).toMatchObject({
       scrollLeft: 21,
@@ -153,6 +157,8 @@ describe('BrowserDomAdapter', () => {
       scrollHeight: 1402,
       clientWidth: 801,
       clientHeight: 602,
+      clientLeft: 0,
+      clientTop: 0,
     })
     expect(adapter.getComputedScrollStyle(scrollbox)).toEqual({
       overflowX: 'auto',

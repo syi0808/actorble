@@ -194,6 +194,8 @@ function cloneScrollMetrics(metrics: ScrollMetrics): ScrollMetrics {
     scrollHeight: metrics.scrollHeight,
     clientWidth: metrics.clientWidth,
     clientHeight: metrics.clientHeight,
+    clientLeft: metrics.clientLeft,
+    clientTop: metrics.clientTop,
   }
 }
 

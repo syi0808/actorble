@@ -89,6 +89,8 @@ export class BrowserDomAdapter implements DomAdapter {
         scrollHeight: Math.max(documentElement.scrollHeight, body?.scrollHeight ?? 0),
         clientWidth: target.innerWidth,
         clientHeight: target.innerHeight,
+        clientLeft: 0,
+        clientTop: 0,
       }
     }
 
@@ -99,6 +101,8 @@ export class BrowserDomAdapter implements DomAdapter {
       scrollHeight: target.scrollHeight,
       clientWidth: target.clientWidth,
       clientHeight: target.clientHeight,
+      clientLeft: target.clientLeft,
+      clientTop: target.clientTop,
     }
   }
 

@@ -81,6 +81,8 @@ describe('BrowserScrollChainResolver', () => {
       scrollHeight: 440,
       clientWidth: 120,
       clientHeight: 140,
+      clientLeft: 2,
+      clientTop: 3,
     })
     defineMetrics(outer, {
       scrollLeft: 0,
@@ -112,7 +114,7 @@ describe('BrowserScrollChainResolver', () => {
     ])
     expect(chain[0]).toMatchObject({
       scrollTarget: inner,
-      viewportRect: { x: 15, y: 25, width: 120, height: 140 },
+      viewportRect: { x: 17, y: 28, width: 120, height: 140 },
       metrics: { scrollLeft: 10, scrollTop: 20 },
       scrollPadding: { top: '5px', right: '6px', bottom: '7px', left: '8px' },
       parentId: chain[1].id,
