@@ -117,6 +117,62 @@ function createFrameTimeline() {
   }
 }
 
+function createAdvancingTimeline(frameInterval = 25) {
+  let now = 0
+
+  return {
+    now: vi.fn(() => now),
+    nextFrame: vi.fn(async () => {
+      now += frameInterval
+      return now
+    }),
+  }
+}
+
+function createControlledMotionTimeline() {
+  let now = 0
+  const pendingFrames = []
+
+  return {
+    timeline: {
+      now: vi.fn(() => now),
+      nextFrame: vi.fn(
+        ({ signal } = {}) =>
+          new Promise((resolve, reject) => {
+            const frame = { resolve, reject, signal, onAbort: null }
+
+            frame.onAbort = () => {
+              const index = pendingFrames.indexOf(frame)
+
+              if (index >= 0) {
+                pendingFrames.splice(index, 1)
+              }
+
+              reject(Object.assign(new Error('cancelled'), { code: 'ACTION_CANCELLED' }))
+            }
+            signal?.addEventListener('abort', frame.onAbort, { once: true })
+            pendingFrames.push(frame)
+          }),
+      ),
+    },
+    async frame(at) {
+      now = at
+      const frame = pendingFrames.shift()
+
+      if (!frame) {
+        throw new Error(`No pending frame at ${at}.`)
+      }
+
+      frame.signal?.removeEventListener('abort', frame.onAbort)
+      frame.resolve(at)
+      await Promise.resolve()
+    },
+    get pendingFrames() {
+      return pendingFrames.length
+    },
+  }
+}
+
 function createManualLayoutInvalidationTracker() {
   const listeners = []
 
@@ -665,20 +721,289 @@ describe('BrowserSurfaceEngine', () => {
     expect(dom.scrollTo).toHaveBeenCalledOnce()
   })
 
-  it('keeps timed motion deferred after observed settlement lands', async () => {
-    const settlementObserver = { settle: vi.fn(async () => {}) }
-    const engine = createSurfaceEngine({ dom: createDomPort(), settlementObserver })
+  it.each([
+    ['linear', [25, 50, 75, 100]],
+    ['ease-in', [6.25, 25, 56.25, 100]],
+    ['ease-out', [43.75, 75, 93.75, 100]],
+    ['ease-in-out', [12.5, 50, 87.5, 100]],
+  ])('interpolates timed explicit scroll with %s timing', async (timing, expectedX) => {
+    let offset = { x: 0, y: 0 }
+    const writes = []
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: 200,
+        scrollHeight: 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+        writes.push(position)
+      }),
+    })
+    const timeline = createAdvancingTimeline()
+    const engine = new BrowserSurfaceEngine({ dom, timeline })
 
     await expect(
-      engine.scrollTo({ x: 10, y: 20 }, { motion: { kind: 'timed', duration: 100 } }),
-    ).rejects.toMatchObject({ code: 'PLATFORM_UNSUPPORTED' })
+      engine.scrollTo(
+        { x: 100, y: 0 },
+        { motion: { kind: 'timed', duration: 100, timing }, settle: 'none' },
+      ),
+    ).resolves.toEqual({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: { x: 100, y: 0 },
+    })
+    expect(writes.map((position) => position.x)).toEqual(expectedX)
+    expect(dom.scrollTo.mock.calls.every(([, , options]) => options.behavior === 'instant')).toBe(true)
+  })
+
+  it('defaults timed scroll to ease-in-out and clamps every frame to current ranges', async () => {
+    let offset = { x: 0, y: 0 }
+    let maximum = 200
+    const writes = []
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: maximum + 100,
+        scrollHeight: 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+        writes.push(position)
+        if (writes.length === 1) maximum = 60
+      }),
+    })
+    const settlementObserver = { settle: vi.fn(async () => {}) }
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      timeline: createAdvancingTimeline(),
+      settlementObserver,
+    })
+
     await expect(
-      engine.scrollBy({ x: 1, y: 2 }, { settle: 'scroll-stable' }),
-    ).resolves.toMatchObject({ changed: false })
-    expect(settlementObserver.settle).toHaveBeenCalledWith(
-      [window],
-      expect.objectContaining({ operation: 'surface.scrollBy' }),
+      engine.scrollBy(
+        { x: 200, y: 0 },
+        { motion: { kind: 'timed', duration: 100 }, settle: 'scroll-stable' },
+      ),
+    ).resolves.toEqual({
+      changed: true,
+      before: { x: 0, y: 0 },
+      after: { x: 60, y: 0 },
+    })
+    expect(writes.map((position) => position.x)).toEqual([25, 60, 60, 60])
+    expect(settlementObserver.settle).toHaveBeenCalledAfter(dom.scrollTo)
+  })
+
+  it('finishes the current timed reveal step before replanning the next surface', async () => {
+    const target = document.createElement('button')
+    const inner = document.createElement('section')
+    const handle = targetHandle('target-1', target)
+    const offsets = new Map([
+      [inner, { x: 0, y: 0 }],
+      [window, { x: 0, y: 0 }],
+    ])
+    let layoutInvalidated = false
+    const geometry = {
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rect: { x: 0, y: 240, width: 20, height: 20 },
+          visibleRect: null,
+          coordinateSpace: 'viewport',
+        })
+        .mockResolvedValueOnce({
+          rect: { x: 0, y: 120, width: 20, height: 20 },
+          visibleRect: null,
+          coordinateSpace: 'viewport',
+        })
+        .mockResolvedValueOnce({
+          rect: { x: 0, y: 40, width: 20, height: 20 },
+          visibleRect: { x: 0, y: 40, width: 20, height: 20 },
+          coordinateSpace: 'viewport',
+        }),
+    }
+    const surface = (id, kind, scrollTarget, parentId) => {
+      const offset = offsets.get(scrollTarget)
+      return {
+        id,
+        kind,
+        scrollTarget,
+        viewportRect: { x: 0, y: 0, width: 100, height: 100 },
+        metrics: {
+          scrollLeft: offset.x,
+          scrollTop: offset.y,
+          scrollWidth: 100,
+          scrollHeight: 300,
+          clientWidth: 100,
+          clientHeight: 100,
+          clientLeft: 0,
+          clientTop: 0,
+        },
+        overflowAxes: ['y'],
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        parentId,
+      }
+    }
+    const resolver = {
+      resolve: vi.fn(() => [
+        surface('inner', 'element', inner, 'viewport'),
+        surface('viewport', 'viewport', window, null),
+      ]),
+    }
+    const planner = {
+      plan: vi.fn((input) => {
+        const current = input.surfaces[0]
+        const intendedTo =
+          current.id === 'inner'
+            ? { x: 0, y: 100 }
+            : { x: 0, y: layoutInvalidated ? 40 : 80 }
+
+        return [{
+          surfaceId: current.id,
+          from: { x: current.metrics.scrollLeft, y: current.metrics.scrollTop },
+          intendedTo,
+          axes: ['y'],
+        }]
+      }),
+    }
+    const writes = []
+    const dom = createDomPort({
+      getComputedScrollStyle: vi.fn(() => ({
+        overflowX: 'visible',
+        overflowY: 'visible',
+        scrollPadding: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+        scrollMargin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      })),
+      getScrollMetrics: vi.fn((scrollTarget) => {
+        const offset = offsets.get(scrollTarget)
+        return {
+          scrollLeft: offset.x,
+          scrollTop: offset.y,
+          scrollWidth: 100,
+          scrollHeight: 300,
+          clientWidth: 100,
+          clientHeight: 100,
+          clientLeft: 0,
+          clientTop: 0,
+        }
+      }),
+      scrollTo: vi.fn((scrollTarget, position) => {
+        offsets.set(scrollTarget, { ...position })
+        writes.push({ scrollTarget, position })
+        if (scrollTarget === inner && writes.length === 1) layoutInvalidated = true
+      }),
+    })
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      geometry,
+      revealPlanner: planner,
+      scrollChainResolver: resolver,
+      timeline: createAdvancingTimeline(),
+    })
+
+    const result = await engine.reveal(handle, {
+      visibility: 'full',
+      motion: { kind: 'timed', duration: 50, timing: 'linear' },
+      settle: 'none',
+    })
+
+    expect(writes).toEqual([
+      { scrollTarget: inner, position: { x: 0, y: 50 } },
+      { scrollTarget: inner, position: { x: 0, y: 100 } },
+      { scrollTarget: window, position: { x: 0, y: 20 } },
+      { scrollTarget: window, position: { x: 0, y: 40 } },
+    ])
+    expect(planner.plan.mock.calls[1][0].target.rect.y).toBe(120)
+    expect(result.steps.map((step) => step.to)).toEqual([
+      { x: 0, y: 100 },
+      { x: 0, y: 40 },
+    ])
+  })
+
+  it('stops a timed scroll halfway, preserves position, and accepts the next action', async () => {
+    let offset = { x: 0, y: 0 }
+    const controlled = createControlledMotionTimeline()
+    const controller = new AbortController()
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: 200,
+        scrollHeight: 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+      }),
+    })
+    const settlementObserver = { settle: vi.fn(async () => {}) }
+    const engine = new BrowserSurfaceEngine({
+      dom,
+      timeline: controlled.timeline,
+      settlementObserver,
+    })
+
+    const motion = engine.scrollTo(
+      { x: 100, y: 0 },
+      {
+        motion: { kind: 'timed', duration: 100, timing: 'linear' },
+        settle: 'scroll-stable',
+        signal: controller.signal,
+      },
     )
+    await controlled.frame(50)
+    expect(offset).toEqual({ x: 50, y: 0 })
+    expect(controlled.pendingFrames).toBe(1)
+
+    controller.abort('stop halfway')
+    await expect(motion).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
+    expect(offset).toEqual({ x: 50, y: 0 })
+    expect(dom.scrollTo).toHaveBeenCalledOnce()
+    expect(controlled.pendingFrames).toBe(0)
+    expect(settlementObserver.settle).not.toHaveBeenCalled()
+
+    await expect(
+      engine.scrollBy({ x: 10, y: 0 }, { motion: { kind: 'instant' }, settle: 'none' }),
+    ).resolves.toEqual({
+      changed: true,
+      before: { x: 50, y: 0 },
+      after: { x: 60, y: 0 },
+    })
+  })
+
+  it('treats zero and invalid timed durations as immediate clamped writes', async () => {
+    let offset = { x: 10, y: 0 }
+    const dom = createDomPort({
+      getScrollMetrics: vi.fn(() => ({
+        scrollLeft: offset.x,
+        scrollTop: offset.y,
+        scrollWidth: 150,
+        scrollHeight: 100,
+        clientWidth: 100,
+        clientHeight: 100,
+      })),
+      scrollTo: vi.fn((_target, position) => {
+        offset = { ...position }
+      }),
+    })
+    const timeline = createAdvancingTimeline()
+    const engine = new BrowserSurfaceEngine({ dom, timeline })
+
+    await engine.scrollTo(
+      { x: 100, y: 0 },
+      { motion: { kind: 'timed', duration: Number.NaN }, settle: 'none' },
+    )
+
+    expect(offset).toEqual({ x: 50, y: 0 })
+    expect(dom.scrollTo).toHaveBeenCalledOnce()
+    expect(timeline.nextFrame).not.toHaveBeenCalled()
   })
 
   it('maps viewport and document points with the viewport scroll offset only', () => {

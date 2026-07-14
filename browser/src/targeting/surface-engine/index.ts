@@ -27,9 +27,11 @@ import type {
   DomPort,
   OperationOptions,
   Point,
+  PointerMotionTiming,
   Rect,
   RevealOptions,
   RevealResult,
+  ScrollMotion,
   ScrollSettlePolicy,
   ScrollDelta,
   ScrollOptions,
@@ -140,7 +142,6 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   async reveal(target: TargetHandle, options: RevealOptions = {}): Promise<RevealResult> {
-    assertSupportedRevealOptions(options)
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
 
@@ -196,10 +197,17 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
       }
 
       assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-      this.#dom.scrollTo(freshSurface.scrollTarget, planned.intendedTo, {
-        behavior: scrollBehaviorFor(options),
-      })
-      this.#cache.invalidate('scroll')
+      const execution = this.#executeScroll(
+        freshSurface.scrollTarget,
+        planned.intendedTo,
+        options.motion,
+        'surface.reveal',
+        deadline,
+        options.signal,
+      )
+      if (execution !== undefined) {
+        await execution
+      }
       executedSteps.push({
         surfaceId: planned.surfaceId,
         from: Object.freeze({ ...planned.from }),
@@ -249,13 +257,21 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   async scrollTo(position: ScrollPosition, options: ScrollOptions = {}): Promise<ScrollResult> {
-    assertSupportedExplicitScrollOptions(options)
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.scrollTo', this.#clock, deadline, options.signal)
     const before = this.#getViewportScrollOffset()
     const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
-    this.#scrollViewportTo(position, options)
-    this.#cache.invalidate('scroll')
+    const execution = this.#executeScroll(
+      target,
+      position,
+      options.motion,
+      'surface.scrollTo',
+      deadline,
+      options.signal,
+    )
+    if (execution !== undefined) {
+      await execution
+    }
     await this.#settleSurfaces(
       samePoint(before, position) ? [] : [target],
       options.settle,
@@ -270,14 +286,22 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   async scrollBy(delta: ScrollDelta, options: ScrollOptions = {}): Promise<ScrollResult> {
-    assertSupportedExplicitScrollOptions(options)
     const deadline = deadlineFor(this.#clock, options.timeout)
     assertOperationBoundary('surface.scrollBy', this.#clock, deadline, options.signal)
     const before = this.#getViewportScrollOffset()
     const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
     const intended = { x: before.x + delta.x, y: before.y + delta.y }
-    this.#scrollViewportTo(intended, options)
-    this.#cache.invalidate('scroll')
+    const execution = this.#executeScroll(
+      target,
+      intended,
+      options.motion,
+      'surface.scrollBy',
+      deadline,
+      options.signal,
+    )
+    if (execution !== undefined) {
+      await execution
+    }
     await this.#settleSurfaces(
       samePoint(before, intended) ? [] : [target],
       options.settle,
@@ -329,14 +353,79 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     )
   }
 
-  #scrollViewportTo(position: ScrollPosition, options: ScrollOptions): void {
-    this.#dom.scrollTo(
-      this.#dom.getViewportScrollTarget(this.#dom.getRoot()),
-      { x: position.x, y: position.y },
-      options.motion?.kind === 'native-smooth'
-        ? { behavior: 'smooth' }
-        : { behavior: 'instant' },
-    )
+  #executeScroll(
+    target: Element | Window,
+    position: ScrollPosition,
+    motion: ScrollMotion | undefined,
+    operation: string,
+    deadline: OperationDeadline | undefined,
+    signal: CancellationSignalLike | undefined,
+  ): Promise<void> | undefined {
+    if (motion?.kind !== 'timed') {
+      this.#dom.scrollTo(target, position, {
+        behavior: motion?.kind === 'native-smooth' ? 'smooth' : 'instant',
+      })
+      this.#cache.invalidate('scroll')
+      return
+    }
+
+    return this.#executeTimedScroll(target, position, motion, operation, deadline, signal)
+  }
+
+  async #executeTimedScroll(
+    target: Element | Window,
+    position: ScrollPosition,
+    motion: Extract<ScrollMotion, { kind: 'timed' }>,
+    operation: string,
+    deadline: OperationDeadline | undefined,
+    signal: CancellationSignalLike | undefined,
+  ): Promise<void> {
+    const from = this.#readScrollPosition(target)
+    const duration = normalizeDuration(motion.duration)
+
+    if (duration === 0 || samePoint(from, position)) {
+      this.#writeTimedScrollFrame(target, position)
+      assertOperationBoundary(operation, this.#clock, deadline, signal)
+      return
+    }
+
+    const startedAt = this.#timeline.now()
+
+    while (true) {
+      try {
+        await this.#timeline.nextFrame({ signal })
+      } catch (error) {
+        if (signal?.aborted) {
+          throw cancellationError(operation, signal.reason)
+        }
+
+        throw error
+      }
+
+      assertOperationBoundary(operation, this.#clock, deadline, signal)
+      const progress = Math.min(1, Math.max(0, (this.#timeline.now() - startedAt) / duration))
+      const easedProgress = sampleTimingProgress(motion.timing ?? 'ease-in-out', progress)
+      const framePosition =
+        progress >= 1 ? position : interpolatePoint(from, position, easedProgress)
+
+      this.#writeTimedScrollFrame(target, framePosition)
+      assertOperationBoundary(operation, this.#clock, deadline, signal)
+
+      if (progress >= 1) {
+        return
+      }
+    }
+  }
+
+  #writeTimedScrollFrame(target: Element | Window, position: ScrollPosition): void {
+    const metrics = this.#cache.getScrollMetrics(target, () => this.#dom.getScrollMetrics(target))
+    const clamped = {
+      x: clamp(position.x, 0, Math.max(0, metrics.scrollWidth - metrics.clientWidth)),
+      y: clamp(position.y, 0, Math.max(0, metrics.scrollHeight - metrics.clientHeight)),
+    }
+
+    this.#dom.scrollTo(target, clamped, { behavior: 'instant' })
+    this.#cache.invalidate('scroll')
   }
 
   #getViewportScrollOffset(): Point {
@@ -415,34 +504,38 @@ function revealToScrollIntoViewOptions(
   return Object.keys(scrollOptions).length === 0 ? undefined : scrollOptions
 }
 
-function assertSupportedExplicitScrollOptions(options: ScrollOptions): void {
-  if (options.motion?.kind === 'timed') {
-    throw actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      'Timed scroll motion is not implemented by the surface engine yet.',
-      { details: { boundary: 'surface-engine', motion: options.motion.kind } },
-    )
-  }
-
-}
-
-function assertSupportedRevealOptions(options: RevealOptions): void {
-  if (options.motion?.kind === 'timed') {
-    throw actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      `${options.motion.kind} reveal motion is not implemented by the surface engine yet.`,
-      { details: { boundary: 'surface-engine', motion: options.motion.kind } },
-    )
-  }
-
-}
-
-function scrollBehaviorFor(options: RevealOptions | ScrollOptions): 'instant' | 'smooth' {
-  return options.motion?.kind === 'native-smooth' ? 'smooth' : 'instant'
-}
-
 function samePoint(left: Point, right: Point): boolean {
   return left.x === right.x && left.y === right.y
+}
+
+function normalizeDuration(duration: number): number {
+  return Number.isFinite(duration) && duration > 0 ? duration : 0
+}
+
+function interpolatePoint(from: Point, to: Point, progress: number): Point {
+  return {
+    x: from.x + (to.x - from.x) * progress,
+    y: from.y + (to.y - from.y) * progress,
+  }
+}
+
+function sampleTimingProgress(timing: PointerMotionTiming, progress: number): number {
+  switch (timing) {
+    case 'linear':
+      return progress
+    case 'ease-in':
+      return progress * progress
+    case 'ease-out':
+      return 1 - (1 - progress) * (1 - progress)
+    case 'ease-in-out':
+      return progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2
+  }
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value))
 }
 
 function assertViewportRevealGeometry(snapshot: RevealGeometrySnapshot): void {

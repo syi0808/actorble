@@ -1142,7 +1142,7 @@ api/actorble-facade
 
 ### T51. Timed scroll motion and interruption
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Add Timeline Engine-backed scroll interpolation for `motion.kind: 'timed'`, including easing, per-frame clamping, replanning handoff, and deterministic abort.
 - Dependencies: T49-T50, completed pointer motion timeline primitives.
 - Decision constraints:
