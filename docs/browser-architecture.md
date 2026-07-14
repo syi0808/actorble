@@ -148,7 +148,9 @@ class Stuntman {
   fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
   press(keys: string, options?: PressOptions): Promise<void>
 
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  reveal(target: TargetLike, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   drag(from: TargetLike, to: TargetLike, options?: DragOptions): Promise<void>
   selectText(targetOrRange: TextSelectionTarget, options?: SelectTextOptions): Promise<void>
   pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void>
@@ -510,12 +512,83 @@ strict: false
 ```ts
 class SurfaceEngine {
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot
-  getScrollableAncestors(target: TargetHandle): Element[]
-  ensureVisible(target: TargetHandle, options?: RevealOptions): Promise<void>
-  scrollTo(targetOrPosition: TargetLike | ScrollPosition, options?: ScrollOptions): Promise<void>
+  getScrollableAncestors(target: TargetHandle): readonly Element[]
+  reveal(target: TargetHandle, options?: RevealOptions): Promise<RevealResult>
+  scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
+  scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point
 }
 ```
+
+Decision history: `docs/adr/2026-07-14-browser-reveal-stability-runtime.md`.
+
+`reveal`, `scrollTo`, and `scrollBy` are distinct user intents.
+
+```txt
+reveal(target)
+= target visibility를 만족하도록 필요한 scroll surface만 이동
+
+scrollTo(position)
+= viewport 또는 explicit surface를 절대 좌표로 이동
+
+scrollBy(delta)
+= viewport 또는 explicit surface를 상대 좌표만큼 이동
+```
+
+기존 `scrollTo(target)` overload는 migration 기간의 deprecated alias이며 내부적으로
+`reveal(target)`에 위임합니다. 새 scenario schema와 facade overload는 position 기반
+`scrollTo`만 생성합니다.
+
+Surface Engine의 public architecture boundary는 유지하되 내부 책임은 다음처럼 나눕니다.
+
+```txt
+targeting/surface-engine/
+  -> public surface boundary and composition
+
+targeting/scroll-chain-resolver/
+  -> target에서 inner-to-outer scroll surface chain 계산
+
+targeting/reveal-planner/
+  -> visibility requirement와 alignment를 scroll step으로 계획
+
+targeting/scroll-settlement-observer/
+  -> native scrollend와 offset/quiet-window fallback 관찰
+```
+
+Scroll chain traversal은 `parentElement`에서 끝나지 않고 open shadow root의 host를 따라갑니다.
+Cross-origin iframe과 closed shadow root는 현재 non-goal이며 capability/fidelity limitation으로
+보고합니다.
+
+Reveal planning은 raw viewport가 아니라 다음 effective viewport를 사용합니다.
+
+```txt
+container viewport
+- CSS scroll-padding
+- caller-provided safeArea
+= effective viewport
+```
+
+Target의 CSS scroll-margin, requested block/inline alignment, scroll range clamp를 적용합니다.
+계획은 inner-to-outer 순서로 실행하며 각 step 뒤 geometry cache invalidation을 반영하고 다음
+surface delta를 재계산합니다. Oversized target은 가능한 최대 visibility를 확보하고
+`fullyVisible: false`를 반환하지만 reveal action 자체를 실패시키지 않습니다.
+
+```ts
+type RevealResult = Readonly<{
+  target: TargetHandle
+  changed: boolean
+  before: VisibilitySnapshot
+  after: VisibilitySnapshot
+  fullyVisible: boolean
+  visibilityRatio: number
+  steps: readonly RevealExecutionStep[]
+}>
+```
+
+Scroll motion은 `instant`, `native-smooth`, `timed`를 구분합니다. `instant`가 기본이며,
+`timed`는 Timeline Engine의 frame scheduling을 재사용합니다. 모든 mode는 동일한
+`AbortSignal`을 따르고 cancellation 시 현재 scroll position을 보존한 채 future frames와
+observer만 정리합니다.
 
 Surface Engine과 Geometry Engine의 경계:
 
@@ -1141,39 +1214,87 @@ PointerEngine.moveTo()
 - timeout
 ```
 
-권장 settle contract:
+Stability는 목적별 contract로 분리합니다.
 
 ```txt
-default settled:
-1. next microtask
-2. next animation frame
-3. mutation quiet window
-4. optional layout stable check
+interaction-stable
+= microtask flush + next animation frame + 필요한 target validity 확인
+
+scroll-stable
+= scroll offset unchanged for stable frames + quiet window
+
+visual-stable
+= mutation quiet + target geometry stable + scroll stable + target validity
 ```
 
-Wait strategy:
-
 ```ts
-type WaitStrategy =
+type StabilityPolicy =
   | 'none'
   | 'next-frame'
-  | 'settled'
-  | { kind: 'mutation-quiet'; quietMs: number }
-  | { kind: 'layout-stable'; frames: number; threshold: number }
-  | WaitCondition
+  | 'interaction-stable'
+  | 'visual-stable'
+  | CustomStabilityPolicy
+
+type ScrollSettlePolicy =
+  | 'none'
+  | 'next-frame'
+  | 'scroll-stable'
+  | {
+      kind: 'scroll-stable'
+      quietMs?: DurationMs
+      stableFrames?: number
+      threshold?: number
+    }
+```
+
+기본 scroll-stable 값은 `quietMs: 80`, `stableFrames: 2`, `threshold: 0.5`입니다.
+가능하면 native `scrollend`를 보조 signal로 사용하되, correctness는 scroll event,
+animation-frame offset sampling, quiet window fallback으로 보장합니다.
+
+Wait condition vocabulary:
+
+```ts
+type WaitCondition =
+  | VisibleCondition
+  | HiddenCondition
+  | AttachedCondition
+  | DetachedCondition
+  | EnabledCondition
+  | DisabledCondition
+  | FocusedCondition
+  | TextCondition
+  | ValueCondition
+  | AttributeCondition
+  | StableCondition
+  | UrlCondition
+  | CustomCondition
+  | { kind: 'all'; conditions: readonly WaitCondition[] }
+  | { kind: 'any'; conditions: readonly WaitCondition[] }
 ```
 
 Action option 예시:
 
 ```ts
-await stuntman.click(target, {
-  wait: 'settled',
+await actorble.click(target, {
+  wait: 'interaction-stable',
 })
 
-await stuntman.click(target, {
+await actorble.click(target, {
   wait: visible(text('Project created')),
 })
 ```
+
+Target-scoped `text`는 target이 생략되면 기존 root-scoped semantics를 유지합니다.
+`attached`는 locator가 현재 scope에서 resolve 가능함을 뜻하고, `detached`는 관찰하던 handle이
+DOM에서 제거됐거나 locator가 더 이상 resolve되지 않음을 뜻합니다. `enabled`/`disabled`는
+Interactability Engine을 재사용하고, `focused`는 실제 active element를 기준으로 합니다.
+`value`는 input/textarea/select를 우선 지원하며 attribute는 exact string 또는 RegExp부터
+지원합니다. `stable` timeout은 마지막 rect, 이전 rect, stable frame 수, mutation/scroll
+timestamp를 diagnostics에 포함합니다.
+
+Observer와 polling loop는 action 또는 runner lifecycle 동안만 활성화하고 abort, timeout,
+success의 모든 종료 경로에서 dispose합니다. DOM mutation callback은 dirty signal만 남기며
+geometry read는 animation frame boundary에서 coalesce합니다.
 
 Wait / Observation Engine은 Geometry cache invalidation과도 연결되어야 합니다.
 
@@ -1354,8 +1475,6 @@ hover visual reproduction
 - click ripple
 - keystroke overlay
 - focus ring
-- spotlight
-- mask
 - hide/show
 ```
 
@@ -1375,6 +1494,10 @@ Visual Layer
 Visual Layer must be non-interactive by default.
 Visual Layer must never affect target resolution or hit-testing.
 ```
+
+Browser Visual Layer는 Actorble interaction의 debug/feedback에 한정합니다. Spotlight, dimmed
+overlay, popover, caption, narration, scene transition, user-takeover policy는 Scenema 같은
+presentation runtime이 소유하며 `@actorble/browser`에 포함하지 않습니다.
 
 브라우저 구현체에서는 overlay root에 기본적으로 다음이 적용되어야 합니다.
 
@@ -1445,6 +1568,10 @@ type CapabilityReport = {
   pointerSequence:
     | 'none'
     | 'transactional'
+
+  scrolling: 'none' | 'viewport' | 'nested-dom'
+  reveal: 'none' | 'scroll-into-view' | 'planned'
+  stability: 'none' | 'frame' | 'observed'
 }
 ```
 
@@ -1536,6 +1663,27 @@ target:stale
 
 surface:resolved
 surface:scrolled
+
+reveal:start
+reveal:visibility-before
+reveal:scroll-chain
+reveal:plan
+reveal:step-start
+reveal:step-update
+reveal:step-end
+reveal:replan
+reveal:settle-start
+reveal:settle-end
+reveal:visibility-after
+reveal:complete
+
+stability:start
+stability:mutation
+stability:layout-sample
+stability:scroll-dirty
+stability:stable-frame
+stability:reset
+stability:complete
 
 geometry:computed
 geometry:clickable-point
@@ -1914,7 +2062,7 @@ Visual Layer
 - highlight
 - click ripple
 - keystroke overlay
-- mask/spotlight
+- interaction debug/feedback only
 
 Wait / Observation Engine
 - wait condition
@@ -1987,6 +2135,16 @@ Capability / Fidelity Reporter
 22. Text selection is a first-class intent action, separate from drag/drop.
 
 23. Low-level pointer replay must cross the public scenario boundary as a cleanup-safe transaction such as pointerSequence, not as independent pointerDown/pointerUp steps.
+
+24. Reveal is a target-visibility action; scrollTo and scrollBy are explicit position actions.
+
+25. Nested reveal planning remains an internal responsibility of Surface Engine.
+
+26. Scroll completion, interaction stability, and visual stability are separate contracts.
+
+27. Long-running pointer, gesture, typing, scroll, and wait operations share cancellation-safe cleanup invariants.
+
+28. Visual-stable is opt-in and must not become the default postcondition of every interaction action.
 ```
 
 ---

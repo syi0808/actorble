@@ -131,7 +131,9 @@ class Stuntman {
   fill(target, text, options?)
   press(keys, options?)
 
-  scrollTo(targetOrPosition, options?)
+  reveal(target, options?)
+  scrollTo(position, options?)
+  scrollBy(delta, options?)
   drag(from, to, options?)
   selectText(targetOrRange, options?)
   pointerSequence(sequence, options?)
@@ -374,6 +376,27 @@ Geometry Engine
 - visible rect가 얼마인가
 - 클릭 가능한 지점은 어디인가
 ```
+
+Target reveal과 explicit scroll은 서로 다른 public intent입니다.
+
+```txt
+reveal(target)
+= target의 required visibility를 만족하도록 필요한 surface chain을 이동
+
+scrollTo(position)
+= 명시한 surface의 절대 scroll position으로 이동
+
+scrollBy(delta)
+= 명시한 surface의 현재 position에서 상대 이동
+```
+
+Surface Engine은 reveal을 lifecycle을 가진 action primitive로 제공합니다. 플랫폼 구현은
+surface chain을 안쪽에서 바깥쪽으로 계획하고, 각 이동 뒤 geometry invalidation과 남은
+계획의 재평가를 허용해야 합니다. Oversized target처럼 requested visibility를 달성할 수
+없는 경우에는 가능한 최대 visibility를 확보하고 결과에 미달 상태를 보고합니다.
+
+`scrollTo(target)` compatibility overload를 유지하는 구현은 deprecated alias로만 제공하며
+내부적으로 `reveal(target)`에 위임합니다.
 
 ---
 
@@ -903,39 +926,60 @@ PointerEngine.moveTo()
 - timeout
 ```
 
-권장 settle contract:
+Stability는 하나의 `settled` 상태로 합치지 않습니다.
 
 ```txt
-default settled:
-1. next microtask
-2. next animation frame
-3. mutation quiet window
-4. optional layout stable check
+interaction-stable
+= 다음 interaction을 시작할 수 있는 최소 상태
+= microtask flush + next animation frame + 필요한 target validity 확인
+
+visual-stable
+= presentation layer가 다음 장면으로 진행할 수 있는 관찰 상태
+= mutation quiet + layout stable frames + scroll stable + watched target validity
+
+scroll-stable
+= 관찰 중인 scroll surface의 offset이 quiet window와 stable frame 조건을 만족
 ```
 
-Wait strategy 예시:
+권장 stability contract:
 
 ```ts
-type WaitStrategy =
+type StabilityPolicy =
   | 'none'
   | 'next-frame'
-  | 'settled'
-  | { kind: 'mutation-quiet'; quietMs: number }
-  | { kind: 'layout-stable'; frames: number; threshold: number }
-  | WaitCondition
+  | 'interaction-stable'
+  | 'visual-stable'
+  | CustomStabilityPolicy
+
+type ScrollSettlePolicy =
+  | 'none'
+  | 'next-frame'
+  | 'scroll-stable'
+  | {
+      kind: 'scroll-stable'
+      quietMs?: DurationMs
+      stableFrames?: number
+      threshold?: number
+    }
 ```
 
 Action option 예시:
 
 ```ts
-await stuntman.click(target, {
-  wait: 'settled',
+await actorble.click(target, {
+  wait: 'interaction-stable',
 })
 
-await stuntman.click(target, {
+await actorble.click(target, {
   wait: visible(text('Project created')),
 })
 ```
+
+Wait conditions are declarative UI-state primitives. The shared vocabulary includes
+visible, hidden, attached, detached, enabled, disabled, focused, text, value, attribute,
+stable, URL, custom, and `all` / `any` composition. Platform implementations may report
+unsupported conditions through capability or actionable errors, but must preserve timeout,
+cancellation, observer disposal, and last-observed diagnostics.
 
 Wait / Observation Engine은 Geometry cache invalidation과도 연결되어야 합니다.
 
@@ -1059,8 +1103,6 @@ hover visual reproduction
 - click ripple
 - keystroke overlay
 - focus ring
-- spotlight
-- mask
 - hide/show
 ```
 
@@ -1080,6 +1122,11 @@ Visual Layer
 Visual Layer must be non-interactive by default.
 Visual Layer must never affect target resolution or hit-testing.
 ```
+
+Visual Layer는 Actorble interaction의 cursor, target, click, focus, typing 같은 debug/feedback
+표현만 담당합니다. Product walkthrough의 spotlight, dimmed overlay, popover, caption, narration,
+scene transition, user-takeover policy는 presentation runtime의 책임이며 Actorble core에 포함하지
+않습니다.
 
 브라우저 구현체에서는 overlay root에 기본적으로 다음이 적용되어야 합니다.
 
@@ -1140,6 +1187,21 @@ type CapabilityReport = {
   pointerSequence:
     | 'none'
     | 'transactional'
+
+  scrolling:
+    | 'none'
+    | 'viewport'
+    | 'nested-dom'
+
+  reveal:
+    | 'none'
+    | 'scroll-into-view'
+    | 'planned'
+
+  stability:
+    | 'none'
+    | 'frame'
+    | 'observed'
 }
 ```
 
@@ -1467,7 +1529,7 @@ Visual Layer
 - cursor overlay
 - highlight
 - keystroke overlay
-- mask/spotlight
+- interaction debug/feedback only
 
 Diagnostics Engine
 - trace span
@@ -1533,7 +1595,9 @@ class Stuntman {
   fill(target, text, options?)
   press(keys, options?)
 
-  scrollTo(targetOrPosition, options?)
+  reveal(target, options?)
+  scrollTo(position, options?)
+  scrollBy(delta, options?)
   drag(from, to, options?)
   selectText(targetOrRange, options?)
   pointerSequence(sequence, options?)

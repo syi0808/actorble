@@ -15,6 +15,7 @@
 - T26-T33은 example에서 확인된 visual fidelity 문제를 다뤘다. 기본 입력 타이밍, click press 가시성, 조용한 visual 기본값, CSS pseudo-state mirror, cursor 의미 보정, browser smoke 검증을 순서대로 보강했다.
 - T34-T40은 scenario timeline과 runner 중 visual 안정성 문제를 다뤘다. `delay` step, run-level pacing, click 기반 type focus, scroll/resize/layout 변화에 따른 cursor tracking과 dispatch 좌표 보정을 순서대로 보강했다.
 - T0-T40 이후 follow-up 완료 기록과 최신 smoke 정합성은 `docs/tasks-2026-06-14.md`에서 관리한다. F 작업은 이 문서의 T41+ 항목으로 복제하지 않는다.
+- T45-T61은 browser reveal, explicit scroll, observed stability, wait condition, cancellation 개선 계획이다. 기준 결정은 Accepted 상태의 `../../docs/adr/2026-07-14-browser-reveal-stability-runtime.md`다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령과 2026-06-15 기준 결과:
@@ -52,6 +53,20 @@ targeting/target-resolver
 
 targeting/surface-engine
   -> shared
+  -> platform/platform-adapter/dom-adapter
+
+targeting/scroll-chain-resolver
+  -> shared
+  -> platform/platform-adapter/dom-adapter
+
+targeting/reveal-planner
+  -> shared
+  -> targeting/scroll-chain-resolver
+  -> targeting/geometry-engine의 narrow read port
+
+targeting/scroll-settlement-observer
+  -> shared
+  -> runtime/timeline-engine의 narrow frame/clock port
   -> platform/platform-adapter/dom-adapter
 
 targeting/geometry-engine
@@ -170,7 +185,10 @@ api/actorble-facade
 | `platform/platform-adapter/state-applier` | `shared` | `data-actorble-*` state attribute apply/cleanup | hover/active/focus-visible cleanup |
 | `platform/platform-adapter/style-adapter` | `shared` | runtime style injection/disposal | style element lifecycle, duplicate cleanup |
 | `targeting/target-resolver` | `shared`, dom adapter, diagnostics | `element`/`css` locator, strict mode, stale validation | 0/1/N candidate, snapshot handle, detached target |
-| `targeting/surface-engine` | `shared`, dom adapter | viewport surface, scrollable ancestors, `ensureVisible` | scroll delegation, coordinate-space metadata |
+| `targeting/surface-engine` | `shared`, dom adapter, scroll-chain/reveal/settlement ports | public surface boundary, reveal/explicit scroll composition | lifecycle ordering, result aggregation, no-op reveal |
+| `targeting/scroll-chain-resolver` | `shared`, dom adapter | nested DOM scroll surface chain과 open shadow host traversal | inner-to-outer ordering, overflow axis, viewport inclusion |
+| `targeting/reveal-planner` | `shared`, scroll chain, geometry read port | effective viewport와 alignment 기반 immutable plan | nearest/start/center/end, safeArea, clamp, oversized target |
+| `targeting/scroll-settlement-observer` | `shared`, dom adapter, frame/clock port | scroll offset stable frames와 quiet-window 관찰 | native scrollend hint, fallback, multi-surface abort disposal |
 | `targeting/geometry-engine` | `shared`, surface, dom adapter | rect, visible rect, center, clickable point result | deterministic geometry, no interactability decisions |
 | `targeting/interactability-engine` | `shared`, geometry, dom adapter | visible/enabled/editable/focusable/pointer-events/occlusion report | action-specific preflight and force policy |
 | `runtime/timeline-engine` | `shared` | controllable clock, timeout, cancellation, next-frame/settled primitive | fake clock, cancellation, timeout |
@@ -994,6 +1012,376 @@ api/actorble-facade
 - 기존 text/keyboard/scenario timeout 테스트가 영향을 받지 않는지 확인한다.
 - `pnpm test -- tests/action-orchestrator.test.js tests/gesture-engine.test.js tests/pointer-engine.test.js`
 - `pnpm typecheck`
+
+### T45. Reveal, explicit scroll, and stability public contracts
+
+- Status: [ ] Not started
+- Briefing: `reveal(target)`, position-only `scrollTo(position)`, `scrollBy(delta)`, result/policy types, and new scenario actions are fixed in shared contracts before engine work begins.
+- Dependencies: Completed T1, T15, option model, scenario schema, accepted reveal/stability ADR.
+- Decision constraints:
+  - `reveal` returns `RevealResult`; `scrollTo` and `scrollBy` return `ScrollResult`.
+  - Existing `scrollTo(target)` remains only as a deprecated compatibility overload and delegates to `reveal`; new scenario serialization does not emit the legacy shape.
+  - Reveal defaults are `visibility: 'any'`, `block/inline: 'nearest'`, `container: 'all'`, instant motion, and scroll-stable settlement.
+  - `ScrollPosition` and `ScrollDelta` use `{ x, y }`; explicit surface selection may be added to `ScrollOptions` without accepting a target as the position input.
+  - Stability names are `interaction-stable`, `visual-stable`, and `scroll-stable`; the existing `'settled'` name receives an explicit compatibility mapping rather than ambiguous new behavior.
+  - Options and diagnostics must not serialize raw DOM elements or target text beyond existing redaction policy.
+- Ask only if: The ADR has not been accepted when implementation is about to begin, or TypeScript overload compatibility cannot preserve current callers without an additional release decision.
+- Expert preflight: Cross-package API review to confirm whether desktop facades reserve the same method names; no desktop implementation is included.
+- Completion criteria:
+  - Shared/public exports include the new action, option, motion, settle, result, and scenario-step contracts.
+  - Facade, orchestrator, runner, and option resolver expose typed delegation shells without implementing nested reveal yet.
+  - Legacy target-based `scrollTo` is marked deprecated and routes through the reveal path.
+- Test expectations:
+  - Add type-contract fixtures for new calls, invalid target-based position calls, and the deprecated overload.
+  - Add facade/runner delegation tests before implementation.
+  - Run `pnpm test -- tests/actorble-facade.test.js tests/scenario-runner.test.js tests/options-model.test.js` and `pnpm typecheck`.
+
+### T46. Browser scroll adapter observation primitives
+
+- Status: [ ] Not started
+- Briefing: Extend the DOM adapter with narrow, testable primitives for scroll metrics, writes, event subscription, viewport/document surface access, computed scroll padding/margin, and open-shadow parent traversal.
+- Dependencies: T45, completed platform adapter and frame cache.
+- Decision constraints:
+  - All DOM, CSSOM, `scrollend`, and scroll-event access remains behind the browser adapter.
+  - Feature modules consume snapshots and disposer-returning subscriptions, not browser globals.
+  - Missing native `scrollend` is normal capability absence, not an error.
+  - Cross-origin iframe and closed shadow root inspection remain unsupported and produce fidelity limitations through existing reporting paths.
+- Ask only if: A required browser primitive cannot be represented without leaking a concrete DOM dependency across the adapter port.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Adapter ports can read current/range/client scroll metrics for Element and Window, write positions, subscribe/unsubscribe to scroll signals, and identify parent element or open-shadow host.
+  - Adapter can read the style values needed for overflow, scroll-padding, and target scroll-margin.
+  - Every subscription returns an idempotent disposer.
+- Test expectations:
+  - Add adapter tests for Element/Window metrics, fallback writes, open-shadow traversal, and listener disposal.
+  - Run `pnpm test -- tests/platform-adapter.test.js tests/shared-primitives.test.js` and `pnpm typecheck`.
+
+### T47. Nested scroll-chain resolver
+
+- Status: [ ] Not started
+- Briefing: Add `targeting/scroll-chain-resolver` to calculate the scroll surfaces that can affect a target, ordered inner-to-outer and ending with the document viewport when applicable.
+- Dependencies: T46, completed target resolver and surface cache.
+- Decision constraints:
+  - A surface is included only for axes whose computed overflow and scroll range can affect placement.
+  - Open shadow roots traverse through their host; duplicate surfaces are removed by identity.
+  - The resolver returns immutable snapshots with IDs, viewport rect, metrics, overflow axes, scroll padding, and parent relation.
+  - `container: 'nearest'` selection is applied by the planner/composer, not by changing the canonical chain.
+- Ask only if: Slotting, iframe ownership, or transformed ancestor behavior discovered in tests makes inner-to-outer ordering ambiguous.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Nested element containers and Window resolve deterministically in inner-to-outer order.
+  - Non-scrollable ancestors are skipped and axis-specific scrollability is retained.
+  - Open-shadow targets reach their host ancestors without crossing unsupported roots.
+- Test expectations:
+  - Create focused tests for nested panels, one-axis overflow, already-at-range boundaries, viewport inclusion, and open-shadow host traversal.
+  - Run `pnpm test -- tests/scroll-chain-resolver.test.js tests/surface-engine.test.js` and `pnpm typecheck`.
+
+### T48. Pure reveal planner
+
+- Status: [ ] Not started
+- Briefing: Add a mutation-free planner that converts target geometry, scroll-chain snapshots, and resolved reveal options into immutable per-surface scroll steps.
+- Dependencies: T45, T47, completed geometry engine and frame cache.
+- Decision constraints:
+  - Effective viewport subtracts scroll-padding and caller safeArea; target placement includes CSS scroll-margin and caller offset.
+  - Support `nearest`, `start`, `center`, and `end` for both axes, visibility `any`, `full`, and ratio, plus `container: 'all' | 'nearest'`.
+  - Intended positions are clamped to the available range.
+  - Oversized or clipped targets plan best-effort maximum visibility and do not encode action failure.
+  - The planner performs no DOM writes, event subscription, timeline scheduling, or tracing.
+- Ask only if: Existing geometry snapshots cannot express the clipping or coordinate data required without a geometry contract change.
+- Expert preflight: Verification-strategy review for alignment math and coordinate spaces before implementation.
+- Completion criteria:
+  - Planner returns no steps when the required visibility is already met.
+  - Each planned step records from, intendedTo, and active axes.
+  - Alignment, safe area, margin/padding, clamp, container policy, and oversized behavior are deterministic.
+- Test expectations:
+  - Use table-driven tests covering both axes, all alignments, fractional ratio, safeArea, offsets, clamping, and oversized targets.
+  - Run `pnpm test -- tests/reveal-planner.test.js tests/geometry-engine.test.js` and `pnpm typecheck`.
+
+### T49. Instant reveal and explicit viewport scroll vertical core
+
+- Status: [ ] Not started
+- Briefing: Compose chain resolution and planning inside Surface Engine, execute instant steps inner-to-outer, refresh geometry between steps, verify final visibility, and implement explicit viewport `scrollTo`/`scrollBy`.
+- Dependencies: T45-T48, layout invalidation tracker, frame geometry/surface cache.
+- Decision constraints:
+  - Surface Engine remains the only orchestrator-facing boundary; the new concrete modules stay internal.
+  - After each applied step, invalidate affected cache state and recompute only the next surface delta; full-plan replanning is deferred unless correctness tests require it.
+  - Reveal returns all executed steps, before/after snapshots, changed flag, ratio, and fullyVisible.
+  - Instant execution still honors timeout/AbortSignal at step boundaries.
+  - Pointer position does not move during reveal.
+- Ask only if: Sticky or virtualized test fixtures prove next-step-only recalculation insufficient for correctness.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Offscreen nested targets reveal inner container before outer viewport.
+  - Already-visible targets are no-ops.
+  - Final visibility is recomputed rather than inferred from intended positions.
+  - Explicit scroll methods never resolve a target.
+- Test expectations:
+  - Add Surface Engine tests for nested order, geometry refresh, no-op, partial/oversized result, absolute and relative viewport scrolling, timeout, and abort.
+  - Add public facade/orchestrator tests for delegation and legacy alias routing.
+  - Run `pnpm test -- tests/surface-engine.test.js tests/action-orchestrator.test.js tests/actorble-facade.test.js` and `pnpm typecheck`.
+
+### T50. Scroll settlement observer and native-smooth execution
+
+- Status: [ ] Not started
+- Briefing: Observe all changed surfaces until offsets remain within threshold for stable frames and the quiet window elapses; use native `scrollend` only as an acceleration hint and add native-smooth motion.
+- Dependencies: T46, T49, Timeline Engine.
+- Decision constraints:
+  - Default observed policy is quietMs 80, stableFrames 2, threshold 0.5.
+  - Correctness always has offset/frame/quiet fallback; native `scrollend` alone cannot complete the action.
+  - Multi-surface settlement completes only when every changed surface is stable.
+  - Success, timeout, cancellation, and partial setup failure dispose listeners and scheduled frames exactly once.
+- Ask only if: Browser support differences require a capability value beyond the documented `frame | observed` stability levels.
+- Expert preflight: Current official browser compatibility review for `scrollend` event targets and semantics.
+- Completion criteria:
+  - Instant and native-smooth reveal/scroll can select `none`, `next-frame`, or scroll-stable settlement.
+  - Scroll snap or late offset changes reset stable-frame counting.
+  - Cancellation rejects with `ACTION_CANCELLED` and leaves current offsets unchanged.
+- Test expectations:
+  - Use fake clock/frame tests for quiet windows, threshold jitter, reset, multi-surface completion, native hint, timeout, and disposer counts.
+  - Run `pnpm test -- tests/scroll-settlement-observer.test.js tests/surface-engine.test.js tests/timeline-engine.test.js` and `pnpm typecheck`.
+
+### T51. Timed scroll motion and interruption
+
+- Status: [ ] Not started
+- Briefing: Add Timeline Engine-backed scroll interpolation for `motion.kind: 'timed'`, including easing, per-frame clamping, replanning handoff, and deterministic abort.
+- Dependencies: T49-T50, completed pointer motion timeline primitives.
+- Decision constraints:
+  - Timed scroll supports linear, ease-in, ease-out, and ease-in-out only in this phase.
+  - Cancellation stops future frames, preserves the latest applied position, disposes settlement observation, and never rolls back.
+  - A new layout invalidation during a timed step may adjust the next step but does not teleport or restart the current interpolation.
+  - No synthetic wheel event or trusted-input claim is introduced.
+- Ask only if: Timeline Engine cannot share its animation clock without coupling scroll implementation to Pointer Engine.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Timed reveal and explicit scroll reach their final clamped position and then use the selected settlement policy.
+  - Mid-motion abort produces `ACTION_CANCELLED`, no further writes, and no live observers/frames.
+  - A subsequent Actorble action executes successfully.
+- Test expectations:
+  - Add fake-timeline interpolation/easing tests and the required halfway-abort smoke contract.
+  - Run `pnpm test -- tests/surface-engine.test.js tests/scroll-settlement-observer.test.js tests/timeline-engine.test.js` and `pnpm typecheck`.
+
+### T52. Action reveal and wait policy integration
+
+- Status: [ ] Not started
+- Briefing: Make Action Orchestrator lifecycle explicit as resolve, validate, optional reveal, fresh geometry, preflight, perform, action wait, and cleanup across target actions.
+- Dependencies: T45, T49-T51, completed unified timeout envelope and fresh-geometry work.
+- Decision constraints:
+  - `moveTo`, click variants, focus, typeInto, drag endpoints, and selectText endpoints reveal only when required; `geometry()` never reveals.
+  - `ActionRevealPolicy` is `false | true | RevealOptions`; true means resolved defaults.
+  - Reveal completes before pointer movement begins; simultaneous pointer/scroll choreography is out of scope.
+  - Ordinary action default wait becomes `interaction-stable`; reveal uses its own scroll settle policy.
+  - All phases share one action deadline and AbortSignal.
+- Ask only if: A current public action has documented semantics that intentionally preserve offscreen operation.
+- Expert preflight: Cross-module lifecycle review because this task changes every target-action path.
+- Completion criteria:
+  - Target actions skip reveal when current required visibility is satisfied and refresh geometry after a changed reveal.
+  - Pointer endpoints use post-reveal geometry.
+  - Trace records phase and cancellation cleanup consistently.
+- Test expectations:
+  - Extend fake-engine ordering tests for each target action and regression tests for stale geometry, reveal false, and no-op reveal.
+  - Run `pnpm test -- tests/action-orchestrator.test.js tests/geometry-engine.test.js` and `pnpm typecheck`.
+
+### T53. Interaction-stable compatibility contract
+
+- Status: [ ] Not started
+- Briefing: Replace the ambiguous internal `'settled'` default with an explicit interaction-stable contract while preserving a documented compatibility mapping for existing callers.
+- Dependencies: T45, T52, Timeline Engine and Wait Engine.
+- Decision constraints:
+  - Interaction-stable is microtask flush, next animation frame, and optional watched-target validity; it does not wait for mutation quiet or layout stability.
+  - Existing `'settled'` maps to interaction-stable for the deprecation window.
+  - Action defaults do not silently become visual-stable.
+- Ask only if: Existing tests or published docs demonstrate callers relying on mutation-quiet behavior from `'settled'`.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Timeline/Wait APIs and option normalization use the explicit name internally.
+  - Compatibility calls remain functional with deprecation coverage.
+  - Action trace output reports the resolved policy, not the legacy alias.
+- Test expectations:
+  - Update Timeline, Wait, option, and orchestrator tests to distinguish next-frame, interaction-stable, and legacy mapping.
+  - Run `pnpm test -- tests/timeline-engine.test.js tests/wait-observation-engine.test.js tests/options-model.test.js tests/action-orchestrator.test.js` and `pnpm typecheck`.
+
+### T54. Observed visual-stability engine
+
+- Status: [ ] Not started
+- Briefing: Add geometry stable-frame sampling, mutation quiet observation, scroll stability composition, target validity checking, and timeout diagnostics for opt-in visual stability.
+- Dependencies: T50, T53, geometry engine, layout invalidation tracker, frame cache, diagnostics.
+- Decision constraints:
+  - Default stable geometry uses 2 consecutive frames and 0.5px threshold; mutation quiet defaults to 80ms.
+  - Mutation callbacks mark dirty only; geometry is sampled at frame boundaries and cache reads are coalesced.
+  - Visual stability watches an explicit target when provided and can watch root mutation/scroll state without one.
+  - Timeout diagnostics include required/observed stable frames, last/previous rect, lastMutationAt, and lastScrollAt, with existing sensitive-data rules.
+- Ask only if: Layout Shift API integration is required to pass acceptance tests; it is not part of the initial policy.
+- Expert preflight: Performance verification review for observer scope and layout-read counts.
+- Completion criteria:
+  - A moving or resizing target resets stable frames and cannot complete early.
+  - Mutation and scroll dirtiness delay completion independently.
+  - Abort/timeout/success dispose MutationObserver, scroll subscriptions, and frames.
+- Test expectations:
+  - Add deterministic fake-frame tests for stable, moving, mutation-reset, scroll-reset, detached, timeout diagnostics, and disposer counts.
+  - Add a benchmark assertion or instrumentation test that mutation bursts coalesce geometry reads.
+  - Run `pnpm test -- tests/wait-observation-engine.test.js tests/tracker-scaffold.test.js` and `pnpm typecheck`.
+
+### T55. Attachment, focus, and interactability wait conditions
+
+- Status: [ ] Not started
+- Briefing: Expand Wait Engine with attached, detached, enabled, disabled, and focused conditions using existing resolver, interactability, and DOM-focus sources of truth.
+- Dependencies: T53, target resolver, interactability engine, focus adapter.
+- Decision constraints:
+  - Attached means the locator currently resolves in scope; detached succeeds when a watched handle leaves the tree or its locator no longer resolves.
+  - Enabled/disabled reuse Interactability Engine semantics rather than duplicating HTML/ARIA rules.
+  - Focused compares against actual active element across supported open roots.
+  - Poll/observer loops share the caller deadline and dispose on all exits.
+- Ask only if: A handle without locator makes detached semantics ambiguous for a supported public input shape.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Each condition is representable in public helpers, scenario input, trace summary, and timeout context.
+  - Resolver/interactability errors that mean “not yet” are retried; structural or unsupported errors remain actionable.
+- Test expectations:
+  - Add positive, transition, timeout, stale-handle, and cancellation tests for each condition.
+  - Run `pnpm test -- tests/wait-observation-engine.test.js tests/action-orchestrator.test.js tests/scenario-runner.test.js` and `pnpm typecheck`.
+
+### T56. Text, value, attribute, and URL wait conditions
+
+- Status: [ ] Not started
+- Briefing: Add target-scoped text, value, attribute, and URL state primitives while retaining existing root-scoped text behavior.
+- Dependencies: T55, DOM adapter observation primitives.
+- Decision constraints:
+  - Text target is optional; absent target preserves current root semantics.
+  - Text/value/attribute accept exact string or RegExp as documented; attribute absence is distinct from the empty string.
+  - Value initially supports input, textarea, and select; contenteditable value semantics remain out of scope unless an existing adapter already defines them.
+  - URL observes `location.href` and matches string path/URL policy consistently in direct and scenario calls; history patching must be lifecycle-safe if used.
+- Ask only if: String URL matching cannot preserve the current origin/path expectations without a public normalization decision.
+- Expert preflight: Security/privacy review for URL and value trace redaction.
+- Completion criteria:
+  - Each condition can transition asynchronously and return the standard WaitResult.
+  - Root text callers remain source-compatible.
+  - Unsupported value targets fail with an actionable error instead of polling forever.
+- Test expectations:
+  - Add exact/RegExp, absent attribute, select value, SPA history transition, timeout, redaction, and abort cases.
+  - Run `pnpm test -- tests/wait-observation-engine.test.js tests/docs-example-alignment.test.js` and `pnpm typecheck`.
+
+### T57. Stable wait and all/any composition
+
+- Status: [ ] Not started
+- Briefing: Expose observed visual stability as `stable(target?, options)` and add recursive `all`/`any` composition to the declarative condition vocabulary.
+- Dependencies: T54-T56.
+- Decision constraints:
+  - `stable` uses the visual-stability observer; it does not introduce a second geometry algorithm.
+  - `all` completes when every child is satisfied; `any` completes on the first satisfied child and cancels/disposes remaining branches.
+  - Nested composition shares one outer timeout/deadline and AbortSignal.
+  - `not` remains out of scope for this phase.
+- Ask only if: Child-condition errors need product-specific precedence beyond first structural error and aggregate timeout diagnostics.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Stable and composite helpers work in direct `waitFor` and scenarios.
+  - Composite cancellation leaves no branch polling, listeners, observers, or frames alive.
+  - Timeout diagnostics identify unfinished children without exposing raw sensitive values.
+- Test expectations:
+  - Add nested all/any, early-any disposal, stable target movement, outer timeout, and external abort tests.
+  - Run `pnpm test -- tests/wait-observation-engine.test.js tests/scenario-runner.test.js tests/action-orchestrator.test.js` and `pnpm typecheck`.
+
+### T58. Reveal and stability diagnostics and capability reporting
+
+- Status: [ ] Not started
+- Briefing: Add structured reveal/stability trace events, timeout snapshots, and capability/fidelity fields after behavior is stable.
+- Dependencies: T49-T57, diagnostics and capability reporter.
+- Decision constraints:
+  - Trace records surface IDs, numeric geometry/offset summaries, policies, frame counts, and outcomes; it does not retain raw DOM nodes.
+  - Report browser in-page support as `scrolling: 'nested-dom'`, `reveal: 'planned'`, and `stability: 'observed'` only when the corresponding behavior is implemented and tested.
+  - Fidelity limits continue to state cross-origin frame, closed-shadow-root, trusted input, and native wheel limitations.
+- Ask only if: Capability schema versioning requires a package-wide compatibility decision.
+- Expert preflight: Sensitive-data and trace-retention review.
+- Completion criteria:
+  - Documented reveal and stability event families appear in successful, failed, timed-out, and cancelled traces.
+  - Last-observed stability diagnostics are attached to timeout errors.
+  - Capability and fidelity reports match actual tested behavior.
+- Test expectations:
+  - Add trace snapshot tests, redaction tests, capability report tests, and docs-example alignment checks.
+  - Run `pnpm test -- tests/diagnostics-trace.test.js tests/capability-fidelity.test.js tests/docs-example-alignment.test.js` and `pnpm typecheck`.
+
+### T59. Pointer and gesture cancellation invariants
+
+- Status: [ ] Not started
+- Briefing: Audit move, click, drag, selection gesture, and pointerSequence interruption so every long-running pointer transaction closes pressed, active, dragging, capture, and visual state before the next action.
+- Dependencies: T52, completed unified action timeout envelope, pointer/gesture/store/visual modules.
+- Decision constraints:
+  - Abort after pointerdown emits pointerup or pointercancel cleanup according to existing gesture semantics and never dispatches unintended click activation.
+  - Scheduled motion frames and click dwell timers stop immediately.
+  - Cleanup is idempotent and preserves the last pointer position.
+  - This task hardens invariants; it does not expose new raw pointer primitives.
+- Ask only if: Existing platform behavior makes pointerup versus pointercancel externally observable in a way requiring a public policy decision.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Halfway move abort stops motion with no pressed button.
+  - Drag/selection/pointerSequence abort clears semantic and visual state.
+  - A subsequent click or move succeeds without manual reset.
+- Test expectations:
+  - Add the required move halfway-abort smoke and abort-at-each-gesture-phase table tests.
+  - Assert frame/timer/listener counts return to baseline.
+  - Run `pnpm test -- tests/pointer-engine.test.js tests/gesture-engine.test.js tests/action-orchestrator.test.js tests/visual-layer.test.js` and `pnpm typecheck`.
+
+### T60. Typing and wait cancellation invariants
+
+- Status: [ ] Not started
+- Briefing: Audit typing cadence, keyboard modifier state, wait polling, and observer cleanup so interruption stops future work and leaves the runtime ready for the next action.
+- Dependencies: T54-T57, text/keyboard/store modules, completed timeout envelope.
+- Decision constraints:
+  - Already inserted characters remain; cancellation stops remaining cadence and clears typing visual/semantic state.
+  - Press sequences release tracked modifiers during cleanup without fabricating additional text input.
+  - Wait success, timeout, abort, and `any` branch cancellation use the same idempotent disposer discipline.
+- Ask only if: Modifier cleanup would require dispatching events that conflict with an existing documented keyboard contract.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Mid-cadence abort inserts no additional characters after cancellation.
+  - Typing and modifier state are empty after every exit path.
+  - Wait observer, poll, frame, history, mutation, and scroll subscriptions return to baseline.
+  - A subsequent typeInto and waitFor succeeds.
+- Test expectations:
+  - Add halfway typing abort, modifier abort, wait observer disposal, composite branch disposal, and next-action smoke tests.
+  - Run `pnpm test -- tests/focus-keyboard-text-input.test.js tests/wait-observation-engine.test.js tests/action-orchestrator.test.js` and `pnpm typecheck`.
+
+### T61. Nested reveal and visual-stability browser vertical slice
+
+- Status: [ ] Not started
+- Briefing: Prove the complete runtime flow in a real browser fixture: nested reveal, pointer endpoint refresh, interaction, asynchronous UI mutation, observed stability, and cancellation recovery.
+- Dependencies: T45-T60.
+- Decision constraints:
+  - Fixture structure is viewport → scrollable page → scrollable panel → target input → asynchronous result.
+  - The primary success path uses `reveal(..., { block: 'center' })`, `moveTo`, `click`, `typeInto('Scenema')`, and `waitFor(stable(result))`.
+  - Include already-visible, oversized/safeArea, timed-reveal abort, and next-action recovery variants.
+  - This slice adds no Scenema overlay, scene, narration, transition, or takeover policy.
+- Ask only if: The repository's current smoke harness cannot observe real layout/scroll behavior and a Playwright dependency or equivalent browser harness must be approved.
+- Expert preflight: Browser verification strategy review across Chromium and at least one independent engine when CI capacity allows.
+- Completion criteria:
+  - Inner panel scroll precedes outer viewport movement and final target geometry lies in the effective viewport.
+  - Pointer/click/type use refreshed geometry and the async result does not complete stable early while moving.
+  - Timed reveal abort stops in place, disposes observers, reports `ACTION_CANCELLED`, and the next action succeeds.
+  - Trace and capability output explain the executed reveal and stability behavior.
+- Test expectations:
+  - Add a deterministic Vitest integration fixture where possible and a real-browser smoke for layout-dependent assertions.
+  - Run targeted new tests, then `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm example:typecheck`, `pnpm example:build`, and `pnpm example:smoke`.
+
+## 다음 개선 vertical slice
+
+T45-T61의 첫 end-to-end 증명은 다음 순서다.
+
+```txt
+public reveal/scroll/stability contracts
+-> browser scroll adapter primitives
+-> nested scroll chain
+-> pure reveal plan
+-> instant inner-to-outer execution
+-> per-step geometry refresh
+-> scroll settlement
+-> action reveal policy
+-> typeInto async result
+-> stable(result)
+-> cancellation recovery
+```
+
+가장 작은 중간 검증점은 T49의 instant nested reveal이다. Native smooth, timed motion,
+visual stability, 확장 wait condition을 기다리지 않고도 module graph와 geometry refresh가
+올바른지 먼저 증명한다.
 
 ## 첫 vertical slice
 
