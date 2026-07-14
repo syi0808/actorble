@@ -369,6 +369,17 @@ export type StabilityPolicy =
   /** @deprecated Use 'interaction-stable'. */
   | 'settled'
 
+export type ActionWaitPolicy = StabilityPolicy | WaitCondition
+
+export type ActionWaitOptions = Readonly<{
+  wait?: ActionWaitPolicy
+}>
+
+export type TargetActionLifecycleOptions = ActionWaitOptions &
+  Readonly<{
+    reveal?: ActionRevealPolicy
+  }>
+
 export type VisibilitySnapshot = Readonly<{
   visibilityRatio: number
   fullyVisible: boolean
@@ -448,10 +459,11 @@ export type PointerMovementOptions = Readonly<{
   motion?: PointerMotionProfile
 }>
 
-export type MoveOptions = OperationOptions & PointerMovementOptions
+export type MoveOptions = OperationOptions & PointerMovementOptions & TargetActionLifecycleOptions
 
 export type ClickOptions = OperationOptions &
   PointerMovementOptions &
+  TargetActionLifecycleOptions &
   Readonly<{
     button?: PointerButtonName
     clickCount?: number
@@ -459,9 +471,10 @@ export type ClickOptions = OperationOptions &
     pressDwell?: DurationMs
   }>
 
-export type ClickCurrentOptions = Omit<ClickOptions, 'force'>
+export type ClickCurrentOptions = Omit<ClickOptions, 'force' | 'reveal'>
 
 export type FocusOptions = OperationOptions &
+  TargetActionLifecycleOptions &
   Readonly<{
     focusVisible?: boolean
   }>
@@ -475,6 +488,7 @@ export type TypeFocusClickOptions = PointerMovementOptions &
   }>
 
 export type TypeOptions = OperationOptions &
+  ActionWaitOptions &
   Readonly<{
     delay?: DurationMs
     focusStrategy?: TypeFocusStrategy
@@ -482,12 +496,16 @@ export type TypeOptions = OperationOptions &
     afterFocusDelay?: DurationMs
   }>
 
+export type TypeIntoOptions = TypeOptions & TargetActionLifecycleOptions
+
 export type FillOptions = OperationOptions &
+  TargetActionLifecycleOptions &
   Readonly<{
     clear?: boolean
   }>
 
 export type PressOptions = OperationOptions &
+  ActionWaitOptions &
   Readonly<{
     delay?: DurationMs
   }>
@@ -514,6 +532,7 @@ export type ActionRevealPolicy = false | true | RevealOptions
 
 export type DragOptions = OperationOptions &
   PointerMovementOptions &
+  TargetActionLifecycleOptions &
   Readonly<{
     force?: boolean
   }>
@@ -531,7 +550,9 @@ export type TextSelectionTarget =
       focus: TextSelectionEndpoint
     }>
 
-export type SelectTextOptions = OperationOptions & PointerMovementOptions
+export type SelectTextOptions = OperationOptions &
+  PointerMovementOptions &
+  TargetActionLifecycleOptions
 
 export type PointerSequenceMoveStep = Readonly<{
   type: 'move'
@@ -562,7 +583,7 @@ export type PointerSequenceStep =
 
 export type PointerSequence = readonly PointerSequenceStep[]
 
-export type PointerSequenceOptions = OperationOptions
+export type PointerSequenceOptions = OperationOptions & ActionWaitOptions
 
 export type WaitOptions = OperationOptions
 
@@ -573,7 +594,7 @@ export type BrowserActionDefaults = Readonly<{
   doubleClick?: Readonly<Partial<ClickOptions>>
   focus?: Readonly<Partial<FocusOptions>>
   type?: Readonly<Partial<TypeOptions>>
-  typeInto?: Readonly<Partial<TypeOptions>>
+  typeInto?: Readonly<Partial<TypeIntoOptions>>
   fill?: Readonly<Partial<FillOptions>>
   press?: Readonly<Partial<PressOptions>>
   reveal?: Readonly<Partial<RevealOptions>>
@@ -815,7 +836,7 @@ export type ScenarioTypeIntoStep = Readonly<{
   action: 'typeInto'
   target: TargetLike
   input: string
-  options?: ScenarioStepOptions<TypeOptions>
+  options?: ScenarioStepOptions<TypeIntoOptions>
 }>
 
 export type ScenarioFillStep = Readonly<{

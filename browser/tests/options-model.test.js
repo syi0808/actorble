@@ -10,6 +10,11 @@ import {
   normalizeStabilityPolicy,
 } from '../src/options/index.js'
 
+const targetLifecycleDefaults = {
+  reveal: BROWSER_OPTION_DEFAULTS.reveal,
+  wait: 'interaction-stable',
+}
+
 describe('browser options model', () => {
   it('centralizes default runtime policy', () => {
     expect(BROWSER_OPTION_DEFAULTS.pointerMotion).toEqual({
@@ -84,16 +89,20 @@ describe('browser options model', () => {
 
   it('materializes centralized action defaults', () => {
     expect(resolveActionOptions('moveTo')).toEqual({
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
     expect(resolveActionOptions('click')).toEqual({
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
     expect(resolveActionOptions('selectText')).toEqual({
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
     expect(resolveActionOptions('typeInto')).toEqual({
+      ...targetLifecycleDefaults,
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
     })
     expect(resolveActionOptions('reveal')).toEqual(BROWSER_OPTION_DEFAULTS.reveal)
@@ -105,6 +114,7 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       duration: 120,
       motion: { kind: 'ease', timing: 'linear', duration: 120 },
     })
@@ -123,6 +133,7 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       motion: {
         kind: 'inertia',
         initialVelocity: BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
@@ -136,6 +147,7 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       motion: {
         kind: 'inertia',
         initialVelocity: 900,
@@ -153,6 +165,7 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       motion: {
         kind: 'spring',
         stiffness: BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
@@ -167,6 +180,7 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       motion: {
         kind: 'spring',
         stiffness: BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
@@ -218,6 +232,7 @@ describe('browser options model', () => {
     })
 
     expect(resolveActionOptions('click', { actorble, run })).toEqual({
+      ...targetLifecycleDefaults,
       duration: 0,
       pressDwell: 70,
     })
@@ -232,17 +247,21 @@ describe('browser options model', () => {
         },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       duration: 45,
       pressDwell: 15,
       signal,
     })
     expect(resolveActionOptions('typeInto', { actorble, run })).toEqual({
+      ...targetLifecycleDefaults,
       delay: 10,
     })
     expect(resolveActionOptions('typeInto', { actorble, run, options: { delay: 5 } })).toEqual({
+      ...targetLifecycleDefaults,
       delay: 5,
     })
     expect(resolveActionOptions('selectText', { actorble, run })).toEqual({
+      ...targetLifecycleDefaults,
       duration: 0,
       timeout: 50,
     })
@@ -253,6 +272,7 @@ describe('browser options model', () => {
         options: { timeout: 5, signal },
       }),
     ).toEqual({
+      ...targetLifecycleDefaults,
       duration: 0,
       timeout: 5,
       signal,

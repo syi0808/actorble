@@ -16,6 +16,7 @@ import type {
   ScrollOptions,
   SelectTextOptions,
   TypeOptions,
+  TypeIntoOptions,
   VisualTextVisibility,
   WaitOptions,
   StabilityPolicy,
@@ -118,7 +119,7 @@ export type BrowserActionOptionMap = Readonly<{
   doubleClick: ClickOptions
   focus: FocusOptions
   type: TypeOptions
-  typeInto: TypeOptions
+  typeInto: TypeIntoOptions
   fill: FillOptions
   press: PressOptions
   reveal: RevealOptions
@@ -381,26 +382,44 @@ const debugFeedbackDefaults = {
 } as const satisfies ResolvedBrowserFeedbackOptions
 
 function centralizedActionDefaults(action: BrowserActionName): Record<string, unknown> {
+  const lifecycle = ordinaryActionLifecycleDefaults(action)
+
   switch (action) {
     case 'moveTo':
     case 'drag':
     case 'selectText':
-      return { motion: BROWSER_OPTION_DEFAULTS.pointerMotion }
+      return { ...lifecycle, motion: BROWSER_OPTION_DEFAULTS.pointerMotion }
     case 'click':
     case 'clickCurrent':
     case 'doubleClick':
       return {
+        ...lifecycle,
         motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
         pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
       }
     case 'type':
     case 'typeInto':
-      return { delay: BROWSER_OPTION_DEFAULTS.typingDelay }
+      return { ...lifecycle, delay: BROWSER_OPTION_DEFAULTS.typingDelay }
     case 'reveal':
       return BROWSER_OPTION_DEFAULTS.reveal
     default:
-      return {}
+      return lifecycle
   }
+}
+
+function ordinaryActionLifecycleDefaults(action: BrowserActionName): Record<string, unknown> {
+  const wait = actionUsesActionWait(action) ? { wait: 'interaction-stable' } : {}
+  return actionUsesTargetReveal(action) ? { ...wait, reveal: true } : wait
+}
+
+function actionUsesActionWait(action: BrowserActionName): boolean {
+  return !['reveal', 'scrollTo', 'scrollBy', 'waitFor'].includes(action)
+}
+
+function actionUsesTargetReveal(action: BrowserActionName): boolean {
+  return ['moveTo', 'click', 'doubleClick', 'focus', 'typeInto', 'fill', 'drag', 'selectText'].includes(
+    action,
+  )
 }
 
 function actionDefaultsFor(
@@ -467,15 +486,17 @@ function normalizeResolvedActionOptions(
   action: BrowserActionName,
   options: Record<string, unknown>,
 ): Record<string, unknown> {
+  const normalized = normalizeActionRevealPolicy(action, options)
+
   if (!isPointerAction(action)) {
-    return options
+    return normalized
   }
 
-  const motion = options.motion
+  const motion = normalized.motion
 
   if (isInertiaMotionProfile(motion)) {
     return {
-      ...options,
+      ...normalized,
       motion: {
         kind: 'inertia',
         initialVelocity:
@@ -487,7 +508,7 @@ function normalizeResolvedActionOptions(
 
   if (isSpringMotionProfile(motion)) {
     return {
-      ...options,
+      ...normalized,
       motion: {
         kind: 'spring',
         stiffness: motion.stiffness ?? BROWSER_OPTION_DEFAULTS.springMotion.stiffness,
@@ -497,7 +518,25 @@ function normalizeResolvedActionOptions(
     }
   }
 
-  return options
+  return normalized
+}
+
+function normalizeActionRevealPolicy(
+  action: BrowserActionName,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!actionUsesTargetReveal(action) || options.reveal === false) {
+    return options
+  }
+
+  const reveal = options.reveal
+  return {
+    ...options,
+    reveal: {
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      ...(typeof reveal === 'object' && reveal !== null ? reveal : {}),
+    },
+  }
 }
 
 function isInertiaMotionProfile(

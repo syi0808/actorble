@@ -5,6 +5,12 @@ import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/in
 import { BrowserScenarioRunner } from '../src/runtime/scenario-runner/index.js'
 import { actorbleError, css } from '../src/shared/index.js'
 
+const targetLifecycleDefaults = {
+  reveal: BROWSER_OPTION_DEFAULTS.reveal,
+  wait: 'interaction-stable',
+}
+const actionWaitDefaults = { wait: 'interaction-stable' }
+
 function deferred() {
   let resolve
   let reject
@@ -425,6 +431,7 @@ describe('BrowserScenarioRunner', () => {
         'click',
         clickTarget,
         {
+          ...targetLifecycleDefaults,
           motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
           timeout: 100,
           pressDwell: 0,
@@ -436,6 +443,7 @@ describe('BrowserScenarioRunner', () => {
         typeTarget,
         'actorble',
         {
+          ...targetLifecycleDefaults,
           delay: 5,
           signal: expect.any(AbortSignal),
         },
@@ -483,6 +491,7 @@ describe('BrowserScenarioRunner', () => {
         'selectText',
         selectionTarget,
         {
+          ...targetLifecycleDefaults,
           motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
           timeout: 30,
           signal: expect.any(AbortSignal),
@@ -492,6 +501,7 @@ describe('BrowserScenarioRunner', () => {
         'pointerSequence',
         sequence,
         {
+          ...actionWaitDefaults,
           duration: 15,
           timeout: 40,
           signal: expect.any(AbortSignal),
@@ -538,6 +548,7 @@ describe('BrowserScenarioRunner', () => {
         'click',
         clickTarget,
         {
+          ...targetLifecycleDefaults,
           duration: 45,
           timeout: 10,
           pressDwell: 20,
@@ -548,6 +559,7 @@ describe('BrowserScenarioRunner', () => {
         'moveTo',
         moveTarget,
         {
+          ...targetLifecycleDefaults,
           motion: explicitMotion,
           signal: expect.any(AbortSignal),
         },
@@ -572,6 +584,7 @@ describe('BrowserScenarioRunner', () => {
     ).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(target, {
+      ...targetLifecycleDefaults,
       duration: 0,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
       signal: expect.any(AbortSignal),

@@ -2,6 +2,8 @@ import { Actorble, css } from '../../src/index.js'
 import type {
   RevealOptions,
   RevealResult,
+  MoveOptions,
+  TypeIntoOptions,
   ScenarioStep,
   ScrollDelta,
   ScrollOptions,
@@ -25,10 +27,17 @@ const revealOptions: RevealOptions = {
 }
 const scrollOptions: ScrollOptions = { motion: { kind: 'native-smooth' }, settle: 'next-frame' }
 const scrollByOptions: ScrollOptions = { motion: { kind: 'instant' }, settle: 'none' }
+const moveOptions: MoveOptions = {
+  reveal: { block: 'center', settle: 'scroll-stable' },
+  wait: { kind: 'custom', predicate: () => true },
+}
+const typeIntoOptions: TypeIntoOptions = { reveal: false, wait: 'interaction-stable' }
 
 const revealResult: Promise<RevealResult> = actorble.reveal(target, revealOptions)
 const scrollResult: Promise<ScrollResult> = actorble.scrollTo(position, scrollOptions)
 const scrollByResult: Promise<ScrollResult> = actorble.scrollBy(delta, scrollByOptions)
+const moveResult: Promise<void> = actorble.moveTo(target, moveOptions)
+const typeIntoResult: Promise<void> = actorble.typeInto(target, 'hello', typeIntoOptions)
 
 const steps: readonly ScenarioStep[] = [
   { action: 'reveal', target, options: revealOptions },
@@ -51,10 +60,18 @@ const stringMotion: ScrollOptions = { motion: 'instant' }
 // @ts-expect-error target-based scrollTo scenario steps were removed.
 const legacyTargetScroll: ScenarioStep = { action: 'scrollTo', target }
 
+// @ts-expect-error targetless type cannot reveal a target.
+actorble.type('hello', { reveal: true })
+
+// @ts-expect-error clickCurrent preserves the current pointer point and cannot reveal.
+actorble.clickCurrent({ reveal: true })
+
 void [
   revealResult,
   scrollResult,
   scrollByResult,
+  moveResult,
+  typeIntoResult,
   steps,
   coordinatePosition,
   numericVisibility,

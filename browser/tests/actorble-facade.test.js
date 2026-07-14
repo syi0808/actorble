@@ -4,6 +4,12 @@ import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/in
 import { BROWSER_OPTION_DEFAULTS } from '../src/options/index.js'
 import { css } from '../src/shared/index.js'
 
+const targetLifecycleDefaults = {
+  reveal: BROWSER_OPTION_DEFAULTS.reveal,
+  wait: 'interaction-stable',
+}
+const actionWaitDefaults = { wait: 'interaction-stable' }
+
 function targetHandle(id = 'target-1') {
   const target = document.createElement('button')
   target.id = id
@@ -197,27 +203,33 @@ describe('Actorble facade', () => {
     actorble.stop()
 
     expect(resolver.resolve).toHaveBeenCalledWith(locator, { strict: true })
-    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, moveOptions)
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
+      ...moveOptions,
+    })
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       ...clickOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
     expect(orchestrator.clickCurrent).toHaveBeenCalledWith({
+      ...actionWaitDefaults,
       ...clickCurrentOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
     expect(orchestrator.doubleClick).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       ...doubleClickOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
-    expect(orchestrator.focus).toHaveBeenCalledWith(locator, focusOptions)
-    expect(orchestrator.type).toHaveBeenCalledWith('hello', typeOptions)
-    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', typeIntoOptions)
-    expect(orchestrator.fill).toHaveBeenCalledWith(locator, 'filled', fillOptions)
-    expect(orchestrator.press).toHaveBeenCalledWith('Shift+K', pressOptions)
+    expect(orchestrator.focus).toHaveBeenCalledWith(locator, { ...targetLifecycleDefaults, ...focusOptions })
+    expect(orchestrator.type).toHaveBeenCalledWith('hello', { ...actionWaitDefaults, ...typeOptions })
+    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { ...targetLifecycleDefaults, ...typeIntoOptions })
+    expect(orchestrator.fill).toHaveBeenCalledWith(locator, 'filled', { ...targetLifecycleDefaults, ...fillOptions })
+    expect(orchestrator.press).toHaveBeenCalledWith('Shift+K', { ...actionWaitDefaults, ...pressOptions })
     expect(orchestrator.reveal).toHaveBeenCalledWith(locator, {
       ...BROWSER_OPTION_DEFAULTS.reveal,
       ...revealOptions,
@@ -225,16 +237,18 @@ describe('Actorble facade', () => {
     expect(orchestrator.scrollTo).toHaveBeenCalledWith(scrollPosition, scrollOptions)
     expect(orchestrator.scrollBy).toHaveBeenCalledWith(scrollDelta, scrollOptions)
     expect(orchestrator.drag).toHaveBeenCalledWith(locator, otherLocator, {
+      ...targetLifecycleDefaults,
       ...dragOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
     expect(orchestrator.selectText).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       ...selectTextOptions,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
     })
     expect(orchestrator.pointerSequence).toHaveBeenCalledWith(
       pointerSequence,
-      pointerSequenceOptions,
+      { ...actionWaitDefaults, ...pointerSequenceOptions },
     )
     expect(orchestrator.waitFor).toHaveBeenCalledWith(condition, waitOptions)
     expect(runner.run).toHaveBeenCalledWith(scenario, { timeout: 30 })
@@ -269,17 +283,19 @@ describe('Actorble facade', () => {
     await expect(actorble.pointerSequence(pointerSequence)).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       timeout: 10,
       pressDwell: 12,
     })
-    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { duration: 25 })
-    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { delay: 5 })
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { ...targetLifecycleDefaults, duration: 25 })
+    expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', { ...targetLifecycleDefaults, delay: 5 })
     expect(orchestrator.selectText).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       timeout: 30,
     })
-    expect(orchestrator.pointerSequence).toHaveBeenCalledWith(pointerSequence, { timeout: 40 })
+    expect(orchestrator.pointerSequence).toHaveBeenCalledWith(pointerSequence, { ...actionWaitDefaults, timeout: 40 })
   })
 
   it('applies actorble-level defaults to the default scenario runner', async () => {
@@ -308,6 +324,7 @@ describe('Actorble facade', () => {
     ).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       timeout: 50,
       pressDwell: 0,
@@ -332,11 +349,12 @@ describe('Actorble facade', () => {
     await expect(actorble.selectText(locator)).resolves.toBeUndefined()
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
+      ...targetLifecycleDefaults,
       duration: 0,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     })
-    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { motion })
-    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, { duration: 0 })
+    expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, { ...targetLifecycleDefaults, motion })
+    expect(orchestrator.selectText).toHaveBeenCalledWith(locator, { ...targetLifecycleDefaults, duration: 0 })
   })
 
   it('creates a default module graph that can resolve and click through the facade', async () => {

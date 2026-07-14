@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
 import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
-import { resolveActionOptions } from '../src/options/index.js'
+import { BROWSER_OPTION_DEFAULTS, resolveActionOptions } from '../src/options/index.js'
 import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
 import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
 import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
@@ -304,7 +304,7 @@ function createHarness(options = {}) {
     })),
     getScrollableAncestors: vi.fn(() => []),
     ensureVisible: vi.fn(async () => {
-      calls.push('surface.ensureVisible')
+      calls.push('surface.reveal')
     }),
     reveal: vi.fn(async (resolvedTarget) => {
       calls.push('surface.reveal')
@@ -738,9 +738,17 @@ function createRealTextHarness(options = {}) {
     })),
     getScrollableAncestors: vi.fn(() => []),
     ensureVisible: vi.fn(async () => {
-      calls.push('surface.ensureVisible')
+      calls.push('surface.reveal')
     }),
-    reveal: vi.fn(),
+    reveal: vi.fn(async (resolvedTarget) => ({
+      target: resolvedTarget,
+      changed: false,
+      before: { visibilityRatio: 1, fullyVisible: true },
+      after: { visibilityRatio: 1, fullyVisible: true },
+      fullyVisible: true,
+      visibilityRatio: 1,
+      steps: [],
+    })),
     scrollTo: vi.fn(),
     scrollBy: vi.fn(),
     mapPoint: vi.fn((point) => point),
@@ -892,7 +900,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.validate',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'wait.settle',
     ])
     expect(selection.applySelection).toHaveBeenCalledWith({
@@ -1481,7 +1489,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'interactability.canClick',
       'gesture.click',
@@ -1529,7 +1537,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'interactability.canClick',
       'gesture.doubleClick',
@@ -1999,13 +2007,71 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'gesture.hover',
       'state.hover:true',
       'event.pointermove',
       'wait.settle',
     ])
+  })
+
+  it('moveTo skips reveal when the action reveal policy is false', async () => {
+    const { calls, orchestrator, surface } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), { reveal: false, duration: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(surface.reveal).not.toHaveBeenCalled()
+    expect(calls).not.toContain('surface.reveal')
+    expect(calls).toContain('geometry.snapshot')
+  })
+
+  it('resolves custom reveal options before geometry and honors an explicit action wait', async () => {
+    const { orchestrator, surface, target, wait } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), {
+        reveal: { block: 'center', settle: 'none' },
+        wait: 'none',
+        duration: 0,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(surface.reveal).toHaveBeenCalledWith(target, {
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      block: 'center',
+      settle: 'none',
+    })
+    expect(wait.settle).toHaveBeenCalledWith('none', {})
+  })
+
+  it('routes declarative action waits through the wait engine', async () => {
+    const condition = { kind: 'custom', predicate: () => true }
+    const { orchestrator, wait } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), { reveal: false, wait: condition, duration: 0 }),
+    ).resolves.toBeUndefined()
+
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, {})
+    expect(wait.settle).not.toHaveBeenCalled()
+  })
+
+  it('rejects visual-stable action waits until the observed stability task lands', async () => {
+    const { orchestrator } = createHarness()
+
+    await expect(
+      orchestrator.moveTo(css('#target-1'), {
+        reveal: false,
+        wait: 'visual-stable',
+        duration: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLATFORM_UNSUPPORTED',
+      details: { policy: 'visual-stable' },
+    })
   })
 
   it('pointerSequence executes a cleanup-safe transaction and records trace output', async () => {
@@ -2036,7 +2102,10 @@ describe('BrowserActionOrchestrator', () => {
       sequence,
       expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
     )
-    expect(wait.settle).toHaveBeenCalledWith('settled', { timeout: 100 })
+    expect(wait.settle).toHaveBeenCalledWith(
+      'settled',
+      expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
+    )
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2242,11 +2311,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls.slice(0, 15)).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
-      'geometry.snapshot',
+      'surface.reveal',
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
+      'geometry.snapshot',
       'geometry.snapshot',
       'interactability.canClick',
       'interactability.canClick',
@@ -2766,7 +2835,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'interactability.canFocus',
       'focus.focus',
       'state.focus:true,focus-visible:true',
@@ -2775,11 +2844,11 @@ describe('BrowserActionOrchestrator', () => {
     expect(focus.focus).toHaveBeenCalledWith(target, {
       timeout: 100,
       focusVisible: true,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
     expect(wait.settle).toHaveBeenCalledWith('settled', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
@@ -3125,7 +3194,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'interactability.canClick',
@@ -3302,7 +3371,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'interactability.canClick',
@@ -3366,7 +3435,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'gesture.hover',
@@ -3403,7 +3472,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'gesture.hover',
@@ -3435,7 +3504,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'interactability.canClick',
@@ -3534,9 +3603,8 @@ describe('BrowserActionOrchestrator', () => {
         (error) => error,
       )
 
-      await vi.waitFor(() => {
-        expect(controlled.pendingDelayCount).toBe(1)
-      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(controlled.pendingDelayCount).toBe(1)
       expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
         point: { x: 20, y: 30 },
         cursor: 'pointer',
@@ -3858,7 +3926,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'interactability.canType',
       'text.typeInto',
@@ -3867,7 +3935,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {
       delay: 8,
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
   })
 
@@ -4064,7 +4132,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'interactability.canType',
       'text.fill',
@@ -4072,12 +4140,12 @@ describe('BrowserActionOrchestrator', () => {
     ])
     expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
       clear: false,
     })
     expect(wait.settle).toHaveBeenCalledWith('settled', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
   })
 
@@ -4093,6 +4161,7 @@ describe('BrowserActionOrchestrator', () => {
 
     expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
       timeout: 100,
+      signal: expect.any(AbortSignal),
     })
   })
 
@@ -4206,12 +4275,12 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual(['text.type', 'wait.settle'])
     expect(text.type).toHaveBeenCalledWith('abc', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
       delay: 0,
     })
     expect(wait.settle).toHaveBeenCalledWith('settled', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
     expect(resolver.resolve).not.toHaveBeenCalled()
     expect(resolver.validate).not.toHaveBeenCalled()
@@ -4348,17 +4417,17 @@ describe('BrowserActionOrchestrator', () => {
         ...resolveActionOptions('type'),
         timeout: 25,
       })
-
-      await vi.waitFor(() => {
-        expect(controlledTimeline.pendingDelayCount).toBe(1)
-      })
-      expect(input.value).toBe('a')
-      expect(store.snapshot().typing).toMatchObject({ element: input })
-
       const expectation = expect(result).rejects.toMatchObject({
         code: 'ACTION_TIMEOUT',
-        details: { operation: 'text.type', timeout: 25 },
+        details: { operation: 'action.type', timeout: 25 },
       })
+
+      for (let index = 0; index < 12; index += 1) {
+        await Promise.resolve()
+      }
+      expect(controlledTimeline.pendingDelayCount).toBe(1)
+      expect(input.value).toBe('a')
+      expect(store.snapshot().typing).toMatchObject({ element: input })
 
       await vi.advanceTimersByTimeAsync(25)
       await expectation
@@ -4393,12 +4462,12 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual(['keyboard.press', 'wait.settle'])
     expect(keyboard.press).toHaveBeenCalledWith('Shift+K', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
       delay: 7,
     })
     expect(wait.settle).toHaveBeenCalledWith('settled', {
       timeout: 100,
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     })
     expect(resolver.resolve).not.toHaveBeenCalled()
     expect(resolver.validate).not.toHaveBeenCalled()
@@ -4575,17 +4644,17 @@ describe('BrowserActionOrchestrator', () => {
         ...resolveActionOptions('typeInto'),
         timeout: 25,
       })
-
-      await vi.waitFor(() => {
-        expect(controlledTimeline.pendingDelayCount).toBe(1)
-      })
-      expect(input.value).toBe('a')
-      expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
-
       const expectation = expect(result).rejects.toMatchObject({
         code: 'ACTION_TIMEOUT',
-        details: { operation: 'text.typeInto', timeout: 25 },
+        details: { operation: 'action.typeInto', timeout: 25 },
       })
+
+      for (let index = 0; index < 12; index += 1) {
+        await Promise.resolve()
+      }
+      expect(controlledTimeline.pendingDelayCount).toBe(1)
+      expect(input.value).toBe('a')
+      expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
 
       await vi.advanceTimersByTimeAsync(25)
       await expectation
@@ -4603,7 +4672,7 @@ describe('BrowserActionOrchestrator', () => {
     expect(calls).toEqual([
       'resolver.resolve',
       'resolver.validate',
-      'surface.ensureVisible',
+      'surface.reveal',
       'geometry.snapshot',
       'visual.highlight',
       'interactability.canType',

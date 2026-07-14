@@ -24,7 +24,7 @@ import { BrowserTextInputEngine } from '../../input/text-input-engine/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
 import { NoopVisualLayer } from '../../visual/visual-layer/index.js'
 import { BrowserWaitObservationEngine } from '../wait-observation-engine/index.js'
-import { resolveBrowserFeedbackOptions } from '../../options/index.js'
+import { BROWSER_OPTION_DEFAULTS, resolveBrowserFeedbackOptions } from '../../options/index.js'
 import {
   ActorbleError,
   actorbleError,
@@ -42,6 +42,8 @@ import type {
   DurationMs,
   EventDispatchPort,
   ActorblePointerOptions,
+  ActionRevealPolicy,
+  ActionWaitPolicy,
   DragOptions,
   FillOptions,
   FocusOptions,
@@ -73,6 +75,7 @@ import type {
   TextSelectionEndpoint,
   TextSelectionTarget,
   TypeOptions,
+  TypeIntoOptions,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
@@ -134,7 +137,7 @@ export interface ActionOrchestrator {
   doubleClick(target: TargetLike, options?: ClickOptions): Promise<void>
   focus(target: TargetLike, options?: FocusOptions): Promise<void>
   type(text: string, options?: TypeOptions): Promise<void>
-  typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void>
+  typeInto(target: TargetLike, text: string, options?: TypeIntoOptions): Promise<void>
   fill(target: TargetLike, text: string, options?: FillOptions): Promise<void>
   press(keys: string, options?: PressOptions): Promise<void>
   reveal(target: TargetLike, options?: RevealOptions): Promise<RevealResult>
@@ -175,7 +178,7 @@ export type ActionOrchestratorOptions = Readonly<{
 type ActionPhase =
   | 'resolve'
   | 'validate'
-  | 'ensureVisible'
+  | 'reveal'
   | 'geometry'
   | 'preflight'
   | 'perform'
@@ -429,14 +432,16 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   async moveTo(target: TargetLike, options: MoveOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('moveTo', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('moveTo', target, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       const point = clickablePointOrThrow('moveTo', handle, snapshot)
@@ -464,7 +469,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         },
       )
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'moveTo',
@@ -479,11 +484,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: handle?.id,
       })
     } finally {
+      scope.dispose()
       this.#clearPointerContext()
     }
   }
 
   async click(target: TargetLike, options: ClickOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('click', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('click', target, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
@@ -493,8 +501,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       const point = clickablePointOrThrow('click', handle, snapshot)
@@ -544,7 +552,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'click',
@@ -573,12 +581,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: handle?.id,
       })
     } finally {
+      scope.dispose()
       this.#clickDispatchState = null
       this.#clearPointerContext()
     }
   }
 
   async clickCurrent(options: ClickCurrentOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('clickCurrent', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('clickCurrent', undefined, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
@@ -636,7 +647,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? point
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'clickCurrent',
@@ -666,12 +677,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: handle?.id,
       })
     } finally {
+      scope.dispose()
       this.#clickDispatchState = null
       this.#clearPointerContext()
     }
   }
 
   async doubleClick(target: TargetLike, options: ClickOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('doubleClick', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('doubleClick', target, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
@@ -681,8 +695,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       const point = clickablePointOrThrow('doubleClick', handle, snapshot)
@@ -731,7 +745,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const outputPoint = dispatchState?.lastActivationPoint ?? dispatchPoint
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'doubleClick',
@@ -759,12 +773,15 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: handle?.id,
       })
     } finally {
+      scope.dispose()
       this.#clickDispatchState = null
       this.#clearPointerContext()
     }
   }
 
   async focus(target: TargetLike, options: FocusOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('focus', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('focus', target, options)
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
@@ -772,8 +789,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
 
       phase = 'preflight'
       const report = await this.#interactability.canFocus(handle, options)
@@ -784,7 +801,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const snapshot = await this.#focus.focus(handle, options)
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
       this.#clearVisualFeedback()
 
       span.end({
@@ -812,10 +829,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         phase: failurePhase,
         targetId: handle?.id,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
   async type(text: string, options: TypeOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('type', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('type', undefined, {
       ...options,
       textLength: Array.from(text).length,
@@ -826,7 +847,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       await this.#text.type(text, typeOptions(options))
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
       this.#clearVisualFeedback()
 
       span.end({
@@ -844,14 +865,18 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         action: 'type',
         phase: failurePhase,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
   async typeInto(
     target: TargetLike,
     text: string,
-    options: TypeOptions = {},
+    options: TypeIntoOptions = {},
   ): Promise<void> {
+    const scope = createActionExecutionScope('typeInto', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('typeInto', target, {
       ...options,
       textLength: Array.from(text).length,
@@ -862,8 +887,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       this.#showTargetHighlight(handle, snapshot)
@@ -942,7 +967,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         this.#showTypingFeedback(typeTarget, false)
       }
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'typeInto',
@@ -968,6 +993,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: handle?.id,
       })
     } finally {
+      scope.dispose()
       this.#clickDispatchState = null
       this.#clearPointerContext()
     }
@@ -978,6 +1004,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     text: string,
     options: FillOptions = {},
   ): Promise<void> {
+    const scope = createActionExecutionScope('fill', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('fill', target, {
       ...options,
       textLength: Array.from(text).length,
@@ -987,8 +1015,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       handle = await this.#resolveTarget(target, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(handle, options)
+      phase = 'reveal'
+      await this.#revealTarget(handle, options)
       phase = 'geometry'
       const snapshot = await this.#geometry.snapshot(handle)
       this.#showTargetHighlight(handle, snapshot)
@@ -1005,7 +1033,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       }
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'fill',
@@ -1024,10 +1052,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         phase: failurePhase,
         targetId: handle?.id,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
   async press(keys: string, options: PressOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('press', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('press', undefined, {
       ...options,
       keys,
@@ -1039,7 +1071,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       const state = await this.#keyboard.press(keys, pressOptions(options))
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
       this.#clearVisualFeedback()
 
       span.end({
@@ -1059,10 +1091,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         action: 'press',
         phase: failurePhase,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
   async reveal(target: TargetLike, options: RevealOptions = {}): Promise<RevealResult> {
+    const scope = createActionExecutionScope('reveal', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('reveal', target, summarizeRevealOptions(options))
     let phase: ActionPhase = 'resolve'
     let handle: TargetHandle | undefined
@@ -1087,6 +1123,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         phase,
         targetId: handle?.id,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
@@ -1135,6 +1173,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   async drag(from: TargetLike, to: TargetLike, options: DragOptions = {}): Promise<void> {
+    const scope = createActionExecutionScope('drag', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('drag', from, {
       ...options,
       to: summarizeTarget(to),
@@ -1146,18 +1186,17 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
     try {
       source = await this.#resolveTarget(from, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(source, options)
+      phase = 'reveal'
+      await this.#revealTarget(source, options)
+
+      phase = 'resolve'
+      destination = await this.#resolveTarget(to, options)
+      phase = 'reveal'
+      await this.#revealTarget(destination, options)
       phase = 'geometry'
       const sourceSnapshot = await this.#geometry.snapshot(source)
       const sourcePoint = clickablePointOrThrow('drag', source, sourceSnapshot)
       this.#showTargetHighlight(source, sourceSnapshot)
-
-      phase = 'resolve'
-      destination = await this.#resolveTarget(to, options)
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(destination, options)
-      phase = 'geometry'
       const destinationSnapshot = await this.#geometry.snapshot(destination)
       const destinationPoint = clickablePointOrThrow('drag', destination, destinationSnapshot)
       this.#showTargetHighlight(destination, destinationSnapshot)
@@ -1259,7 +1298,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       )
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'drag',
@@ -1291,6 +1330,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         targetId: source?.id,
       })
     } finally {
+      scope.dispose()
       this.#clearPointerContext()
     }
   }
@@ -1299,6 +1339,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     targetOrRange: TextSelectionTarget,
     options: SelectTextOptions = {},
   ): Promise<void> {
+    const scope = createActionExecutionScope('selectText', options)
+    options = scope.options(options)
     const span = this.#startActionSpan('selectText', selectionTraceTarget(targetOrRange), options)
     let phase: ActionPhase = 'resolve'
     let primaryTarget: TargetHandle | undefined
@@ -1308,11 +1350,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       range = await this.#resolveTextSelectionRange(targetOrRange, options)
       primaryTarget = range.primaryTarget
 
-      phase = 'ensureVisible'
-      await this.#surface.ensureVisible(primaryTarget, options)
+      phase = 'reveal'
+      await this.#revealTarget(primaryTarget, options)
 
       if (range.secondaryTarget && range.secondaryTarget.id !== primaryTarget.id) {
-        await this.#surface.ensureVisible(range.secondaryTarget, options)
+        await this.#revealTarget(range.secondaryTarget, options)
       }
 
       phase = 'perform'
@@ -1329,7 +1371,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       span.event('selection:applied', selectionTraceMetadata(range, snapshot))
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'selectText',
@@ -1344,6 +1386,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         phase,
         targetId: primaryTarget?.id,
       })
+    } finally {
+      scope.dispose()
     }
   }
 
@@ -1351,6 +1395,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     sequence: PointerSequence,
     options: PointerSequenceOptions = {},
   ): Promise<void> {
+    const scope = createActionExecutionScope('pointerSequence', options)
+    options = scope.options(options)
     const metadata = pointerSequenceTraceMetadata(sequence)
     const span = this.#startActionSpan('pointerSequence', undefined, {
       ...options,
@@ -1377,7 +1423,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       })
 
       phase = 'wait'
-      await this.#wait.settle('settled', operationOptions(options))
+      await this.#waitAfterAction(options)
 
       span.end({
         action: 'pointerSequence',
@@ -1408,6 +1454,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         phase: failurePhase,
       })
     } finally {
+      scope.dispose()
       this.#clearPointerContext()
     }
   }
@@ -1446,6 +1493,51 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
   geometry(target: TargetLike): Promise<GeometrySnapshot> {
     return this.#geometry.snapshot(target)
+  }
+
+  async #revealTarget(
+    target: TargetHandle,
+    options: OperationOptions & Readonly<{ reveal?: ActionRevealPolicy }>,
+  ): Promise<void> {
+    if (options.reveal === false) {
+      return
+    }
+
+    const configured =
+      typeof options.reveal === 'object' && options.reveal !== null ? options.reveal : {}
+    const result = await this.#surface.reveal(target, {
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      ...configured,
+      ...operationOptions(options),
+    })
+
+    if (result.changed) {
+      this.#wait.invalidateGeometry('scroll')
+    }
+  }
+
+  async #waitAfterAction(
+    options: OperationOptions & Readonly<{ wait?: ActionWaitPolicy }>,
+  ): Promise<void> {
+    const policy = options.wait ?? 'interaction-stable'
+
+    if (typeof policy === 'object') {
+      await this.#wait.waitFor(policy, operationOptions(options))
+      return
+    }
+
+    if (policy === 'visual-stable') {
+      throw actorbleError(
+        'PLATFORM_UNSUPPORTED',
+        'Visual-stable action waits are not implemented yet.',
+        { details: { policy } },
+      )
+    }
+
+    await this.#wait.settle(
+      policy === 'interaction-stable' || policy === 'settled' ? 'settled' : policy,
+      operationOptions(options),
+    )
   }
 
   #startActionSpan(
@@ -3341,6 +3433,70 @@ function normalizeDuration(duration: DurationMs): DurationMs {
   return duration
 }
 
+type ActionExecutionScope = Readonly<{
+  options<TOptions extends OperationOptions>(options: TOptions): TOptions
+  dispose(): void
+}>
+
+function createActionExecutionScope(
+  action: ActionName,
+  options: OperationOptions,
+): ActionExecutionScope {
+  if (options.timeout === undefined) {
+    return {
+      options<TOptions extends OperationOptions>(input: TOptions): TOptions {
+        return input
+      },
+      dispose() {},
+    }
+  }
+
+  const controller = new AbortController()
+  const externalSignal = options.signal
+  const timeout = normalizeDuration(options.timeout)
+  let timerId: ReturnType<typeof setTimeout> | undefined
+  let disposed = false
+
+  const onExternalAbort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort(externalSignal?.reason)
+    }
+  }
+
+  if (externalSignal?.aborted) {
+    onExternalAbort()
+  } else {
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true })
+  }
+
+  timerId = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      controller.abort(
+        timeoutError(`action.${action}`, timeout, {
+          details: { action },
+        }),
+      )
+    }
+  }, timeout)
+
+  return {
+    options<TOptions extends OperationOptions>(input: TOptions): TOptions {
+      return { ...input, signal: controller.signal } as TOptions
+    },
+    dispose() {
+      if (disposed) {
+        return
+      }
+
+      disposed = true
+      if (timerId !== undefined) {
+        clearTimeout(timerId)
+      }
+      externalSignal?.removeEventListener('abort', onExternalAbort)
+    },
+  }
+}
+
 function normalizeActionError(
   error: unknown,
   context: Readonly<{
@@ -3350,6 +3506,14 @@ function normalizeActionError(
   }>,
 ): ActorbleError {
   if (error instanceof ActorbleError) {
+    const reason = error.details?.reason
+    if (
+      error.code === 'ACTION_CANCELLED' &&
+      reason instanceof ActorbleError &&
+      reason.code === 'ACTION_TIMEOUT'
+    ) {
+      return reason
+    }
     return error
   }
 

@@ -58,6 +58,7 @@ import type {
   TargetLike,
   TextSelectionTarget,
   TypeOptions,
+  TypeIntoOptions,
   WaitCondition,
   WaitOptions,
 } from '../../shared/index.js'
@@ -223,7 +224,7 @@ export class Actorble {
     )
   }
 
-  typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<void> {
+  typeInto(target: TargetLike, text: string, options?: TypeIntoOptions): Promise<void> {
     return this.#orchestrator.typeInto(
       target,
       text,

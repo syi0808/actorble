@@ -1162,7 +1162,7 @@ api/actorble-facade
 
 ### T52. Action reveal and wait policy integration
 
-- Status: [ ] Not started
+- Status: [x] Completed
 - Briefing: Make Action Orchestrator lifecycle explicit as resolve, validate, optional reveal, fresh geometry, preflight, perform, action wait, and cleanup across target actions.
 - Dependencies: T45, T49-T51, completed unified timeout envelope and fresh-geometry work.
 - Decision constraints:
