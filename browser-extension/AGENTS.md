@@ -25,4 +25,3 @@ WXT generates the extension manifest, so there is no source `manifest.json`. Kee
 Use `src/entrypoints/sidepanel` for the WXT side panel entrypoint. It maps to the `side-panel` architecture boundary in the design docs.
 
 Keep placeholder modules short. Add runtime APIs only when implementing a specific behavior.
-

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserInteractabilityEngine } from '../src/targeting/interactability-engine/index.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BrowserInteractabilityEngine } from '../src/targeting/interactability-engine/index.js';
 
 function targetHandle(id, target, options = {}) {
   return {
@@ -10,12 +10,12 @@ function targetHandle(id, target, options = {}) {
     validity: 'live',
     debug: {},
     ...options,
-  }
+  };
 }
 
 function geometryFor(target, overrides = {}) {
-  const rect = overrides.rect ?? { x: 10, y: 20, width: 100, height: 40 }
-  const visibleRect = overrides.visibleRect === undefined ? rect : overrides.visibleRect
+  const rect = overrides.rect ?? { x: 10, y: 20, width: 100, height: 40 };
+  const visibleRect = overrides.visibleRect === undefined ? rect : overrides.visibleRect;
 
   return {
     target,
@@ -39,11 +39,11 @@ function geometryFor(target, overrides = {}) {
         : { ok: false, reason: 'not-visible' }),
     coordinateSpace: 'viewport',
     computedAt: 1000,
-  }
+  };
 }
 
 function createDomPort(overrides = {}) {
-  const root = document
+  const root = document;
 
   return {
     getRoot: vi.fn(() => root),
@@ -77,7 +77,7 @@ function createDomPort(overrides = {}) {
     scrollIntoView: vi.fn(),
     scrollTo: vi.fn(),
     ...overrides,
-  }
+  };
 }
 
 function createGeometry(snapshot) {
@@ -87,25 +87,25 @@ function createGeometry(snapshot) {
     getVisibleRect: vi.fn(() => snapshot.visibleRect),
     getCenter: vi.fn(() => snapshot.center),
     getClickablePoint: vi.fn(() => snapshot.clickablePoint),
-  }
+  };
 }
 
 describe('BrowserInteractabilityEngine', () => {
   beforeEach(() => {
-    document.body.innerHTML = ''
-  })
+    document.body.innerHTML = '';
+  });
 
   it('separates click, focus, and type preflight for visible enabled controls', async () => {
-    document.body.innerHTML = '<input id="name" />'
-    const input = document.querySelector('#name')
-    const handle = targetHandle('target-1', input)
-    const geometry = geometryFor(handle)
+    document.body.innerHTML = '<input id="name" />';
+    const input = document.querySelector('#name');
+    const handle = targetHandle('target-1', input);
+    const geometry = geometryFor(handle);
     const engine = new BrowserInteractabilityEngine({
       dom: createDomPort({
         elementFromPoint: vi.fn(() => input),
       }),
       geometry: createGeometry(geometry),
-    })
+    });
 
     await expect(engine.canClick(handle, geometry)).resolves.toMatchObject({
       target: handle,
@@ -120,29 +120,29 @@ describe('BrowserInteractabilityEngine', () => {
       blockingReasons: [],
       forceBypassedReasons: [],
       unforceableReasons: [],
-    })
+    });
     await expect(engine.canFocus(handle)).resolves.toMatchObject({
       canClick: true,
       canFocus: true,
       canType: true,
       blockingReasons: [],
-    })
+    });
     await expect(engine.canType(handle)).resolves.toMatchObject({
       canFocus: true,
       canType: true,
       blockingReasons: [],
-    })
-  })
+    });
+  });
 
   it('keeps disabled controls blocked even when click force is enabled', async () => {
-    document.body.innerHTML = '<button id="save" disabled>Save</button>'
-    const button = document.querySelector('#save')
-    const handle = targetHandle('target-1', button)
-    const geometry = geometryFor(handle)
+    document.body.innerHTML = '<button id="save" disabled>Save</button>';
+    const button = document.querySelector('#save');
+    const handle = targetHandle('target-1', button);
+    const geometry = geometryFor(handle);
     const engine = new BrowserInteractabilityEngine({
       dom: createDomPort({ elementFromPoint: vi.fn(() => button) }),
       geometry: createGeometry(geometry),
-    })
+    });
 
     await expect(engine.canClick(handle, geometry, { force: true })).resolves.toMatchObject({
       enabled: false,
@@ -151,18 +151,18 @@ describe('BrowserInteractabilityEngine', () => {
       blockingReasons: ['disabled'],
       forceBypassedReasons: [],
       unforceableReasons: ['disabled'],
-    })
-  })
+    });
+  });
 
   it('allows readonly inputs to focus but not type', async () => {
-    document.body.innerHTML = '<input id="name" readonly />'
-    const input = document.querySelector('#name')
-    const handle = targetHandle('target-1', input)
-    const geometry = geometryFor(handle)
+    document.body.innerHTML = '<input id="name" readonly />';
+    const input = document.querySelector('#name');
+    const handle = targetHandle('target-1', input);
+    const geometry = geometryFor(handle);
     const engine = new BrowserInteractabilityEngine({
       dom: createDomPort({ elementFromPoint: vi.fn(() => input) }),
       geometry: createGeometry(geometry),
-    })
+    });
 
     await expect(engine.canFocus(handle)).resolves.toMatchObject({
       enabled: true,
@@ -171,24 +171,24 @@ describe('BrowserInteractabilityEngine', () => {
       canFocus: true,
       canType: false,
       blockingReasons: [],
-    })
+    });
     await expect(engine.canType(handle)).resolves.toMatchObject({
       canFocus: true,
       canType: false,
       blockingReasons: ['readonly'],
       unforceableReasons: ['readonly'],
-    })
-  })
+    });
+  });
 
   it('treats negative tabindex targets as programmatically focusable', async () => {
-    document.body.innerHTML = '<div id="panel" tabindex="-1">Details</div>'
-    const panel = document.querySelector('#panel')
-    const handle = targetHandle('target-1', panel)
-    const geometry = geometryFor(handle)
+    document.body.innerHTML = '<div id="panel" tabindex="-1">Details</div>';
+    const panel = document.querySelector('#panel');
+    const handle = targetHandle('target-1', panel);
+    const geometry = geometryFor(handle);
     const engine = new BrowserInteractabilityEngine({
       dom: createDomPort({ elementFromPoint: vi.fn(() => panel) }),
       geometry: createGeometry(geometry),
-    })
+    });
 
     await expect(engine.canFocus(handle)).resolves.toMatchObject({
       enabled: true,
@@ -197,18 +197,18 @@ describe('BrowserInteractabilityEngine', () => {
       canFocus: true,
       blockingReasons: [],
       unforceableReasons: [],
-    })
-  })
+    });
+  });
 
   it('classifies pointer-events none as force-bypassable for click only', async () => {
-    document.body.innerHTML = '<button id="save" style="pointer-events: none">Save</button>'
-    const button = document.querySelector('#save')
-    const handle = targetHandle('target-1', button)
-    const geometry = geometryFor(handle)
+    document.body.innerHTML = '<button id="save" style="pointer-events: none">Save</button>';
+    const button = document.querySelector('#save');
+    const handle = targetHandle('target-1', button);
+    const geometry = geometryFor(handle);
     const engine = new BrowserInteractabilityEngine({
       dom: createDomPort({ elementFromPoint: vi.fn(() => null) }),
       geometry: createGeometry(geometry),
-    })
+    });
 
     await expect(engine.canClick(handle, geometry)).resolves.toMatchObject({
       receivesPointerEvents: false,
@@ -216,29 +216,29 @@ describe('BrowserInteractabilityEngine', () => {
       blockingReasons: ['pointer-events-none', 'occluded'],
       forceBypassedReasons: [],
       unforceableReasons: [],
-    })
+    });
     await expect(engine.canClick(handle, geometry, { force: true })).resolves.toMatchObject({
       receivesPointerEvents: false,
       canClick: true,
       blockingReasons: ['pointer-events-none', 'occluded'],
       forceBypassedReasons: ['pointer-events-none', 'occluded'],
       unforceableReasons: [],
-    })
-  })
+    });
+  });
 
   it('reports occlusion and lets click force bypass the occluder', async () => {
     document.body.innerHTML = `
       <button id="save">Save</button>
       <div id="overlay"></div>
-    `
-    const button = document.querySelector('#save')
-    const overlay = document.querySelector('#overlay')
-    const handle = targetHandle('target-1', button)
-    const geometry = geometryFor(handle)
+    `;
+    const button = document.querySelector('#save');
+    const overlay = document.querySelector('#overlay');
+    const handle = targetHandle('target-1', button);
+    const geometry = geometryFor(handle);
     const dom = createDomPort({
       elementFromPoint: vi.fn(() => overlay),
-    })
-    const engine = new BrowserInteractabilityEngine({ dom, geometry: createGeometry(geometry) })
+    });
+    const engine = new BrowserInteractabilityEngine({ dom, geometry: createGeometry(geometry) });
 
     await expect(engine.canClick(handle, geometry)).resolves.toMatchObject({
       canClick: false,
@@ -246,33 +246,32 @@ describe('BrowserInteractabilityEngine', () => {
       blockingReasons: ['occluded'],
       forceBypassedReasons: [],
       unforceableReasons: [],
-    })
+    });
     await expect(engine.canClick(handle, geometry, { force: true })).resolves.toMatchObject({
       canClick: true,
       occludedBy: { selector: '#overlay' },
       blockingReasons: ['occluded'],
       forceBypassedReasons: ['occluded'],
       unforceableReasons: [],
-    })
-    expect(dom.elementFromPoint).toHaveBeenCalledWith(
-      geometry.clickablePoint.point,
-      { ignoreActorbleInternal: true },
-    )
-  })
+    });
+    expect(dom.elementFromPoint).toHaveBeenCalledWith(geometry.clickablePoint.point, {
+      ignoreActorbleInternal: true,
+    });
+  });
 
   it('does not cache interactability judgment reads across repeated inspections', async () => {
-    document.body.innerHTML = '<button id="save">Save</button>'
-    const button = document.querySelector('#save')
-    const handle = targetHandle('target-1', button)
-    const geometry = geometryFor(handle)
-    const dom = createDomPort({ elementFromPoint: vi.fn(() => button) })
-    const engine = new BrowserInteractabilityEngine({ dom, geometry: createGeometry(geometry) })
+    document.body.innerHTML = '<button id="save">Save</button>';
+    const button = document.querySelector('#save');
+    const handle = targetHandle('target-1', button);
+    const geometry = geometryFor(handle);
+    const dom = createDomPort({ elementFromPoint: vi.fn(() => button) });
+    const engine = new BrowserInteractabilityEngine({ dom, geometry: createGeometry(geometry) });
 
-    await engine.canClick(handle, geometry)
-    await engine.canClick(handle, geometry)
+    await engine.canClick(handle, geometry);
+    await engine.canClick(handle, geometry);
 
-    expect(dom.describeElement).toHaveBeenCalledTimes(2)
-    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2)
-    expect(dom.elementFromPoint).toHaveBeenCalledTimes(2)
-  })
-})
+    expect(dom.describeElement).toHaveBeenCalledTimes(2);
+    expect(dom.getComputedStyle).toHaveBeenCalledTimes(2);
+    expect(dom.elementFromPoint).toHaveBeenCalledTimes(2);
+  });
+});

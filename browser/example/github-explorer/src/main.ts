@@ -1,11 +1,11 @@
-import '../../shared/styles.css'
-import { testId } from '../../../src/index.js'
-import { byId } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import { testId } from '../../../src/index.js';
+import { byId } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
 const stageHtml = `
   <div class="browser-frame github-surface" data-testid="github-surface">
@@ -98,7 +98,7 @@ const stageHtml = `
       </section>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'GitHub explorer',
@@ -111,126 +111,126 @@ mountTaskExample({
   run: runGitHubScenario,
   typeFirstField: typeGitHubQuery,
   clickPrimary: clickGitHubPrimary,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  const queryInput = byId<HTMLInputElement>('github-query')
-  const searchButton = byId<HTMLButtonElement>('github-search')
-  const repoResult = byId<HTMLButtonElement>('github-repo-result')
-  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
-  const issueButton = byId<HTMLButtonElement>('github-issue-example')
+  const queryInput = byId<HTMLInputElement>('github-query');
+  const searchButton = byId<HTMLButtonElement>('github-search');
+  const repoResult = byId<HTMLButtonElement>('github-repo-result');
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab');
+  const issueButton = byId<HTMLButtonElement>('github-issue-example');
 
-  searchButton.addEventListener('click', openGitHubSearch)
-  repoResult.addEventListener('click', openGitHubRepository)
-  issuesTab.addEventListener('click', openGitHubIssues)
-  issueButton.addEventListener('click', openGitHubIssue)
+  searchButton.addEventListener('click', openGitHubSearch);
+  repoResult.addEventListener('click', openGitHubRepository);
+  issuesTab.addEventListener('click', openGitHubIssues);
+  issueButton.addEventListener('click', openGitHubIssue);
 
-  context.bindDomEvents('repoInput', queryInput)
-  context.bindDomEvents('openRepo', searchButton)
-  context.bindDomEvents('repoResult', repoResult)
-  context.bindDomEvents('issuesTab', issuesTab)
-  context.bindDomEvents('issueRow', issueButton)
+  context.bindDomEvents('repoInput', queryInput);
+  context.bindDomEvents('openRepo', searchButton);
+  context.bindDomEvents('repoResult', repoResult);
+  context.bindDomEvents('issuesTab', issuesTab);
+  context.bindDomEvents('issueRow', issueButton);
 }
 
 async function runGitHubScenario(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  await typeGitHubQuery(context)
-  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 })
+  await typeGitHubQuery(context);
+  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
-  })
-  await actorble.click(testId('github-repo-result'), { pressDwell: 180, timeout: 1500 })
-  await actorble.click(testId('github-issues-tab'), { pressDwell: 180, timeout: 1500 })
+  });
+  await actorble.click(testId('github-repo-result'), { pressDwell: 180, timeout: 1500 });
+  await actorble.click(testId('github-issues-tab'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-issues')?.dataset.state === 'open',
-  })
-  await actorble.click(testId('github-issue-example'), { pressDwell: 180, timeout: 1500 })
+  });
+  await actorble.click(testId('github-issue-example'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-outcome')?.dataset.state === 'issue-open',
-  })
+  });
 }
 
 async function typeGitHubQuery(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
   await actorble.moveTo(testId('github-query'), {
     motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
-  })
+  });
   await actorble.typeInto(testId('github-query'), 'actorble browser', {
     ...clickFocusTyping(90, 5000),
-  })
+  });
 }
 
 async function clickGitHubPrimary(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  context.ensureInputValue('github-query', 'actorble browser')
-  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 })
+  context.ensureInputValue('github-query', 'actorble browser');
+  await actorble.click(testId('github-search'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('github-repo-result')?.dataset.state === 'ready',
-  })
+  });
 }
 
 function openGitHubSearch(): void {
-  const query = byId<HTMLInputElement>('github-query').value.trim() || 'actorble browser'
-  const repoResult = byId<HTMLButtonElement>('github-repo-result')
-  const repoStatus = byId<HTMLElement>('github-repo-status')
-  const outcome = byId<HTMLElement>('github-outcome')
+  const query = byId<HTMLInputElement>('github-query').value.trim() || 'actorble browser';
+  const repoResult = byId<HTMLButtonElement>('github-repo-result');
+  const repoStatus = byId<HTMLElement>('github-repo-status');
+  const outcome = byId<HTMLElement>('github-outcome');
 
-  repoResult.disabled = false
-  repoResult.dataset.state = 'ready'
-  repoResult.textContent = `actorble/browser matches "${query}"`
-  repoStatus.dataset.state = 'searched'
-  repoStatus.textContent = 'Repository result ready'
-  outcome.dataset.state = 'searched'
-  outcome.textContent = 'Repository result is ready to open'
+  repoResult.disabled = false;
+  repoResult.dataset.state = 'ready';
+  repoResult.textContent = `actorble/browser matches "${query}"`;
+  repoStatus.dataset.state = 'searched';
+  repoStatus.textContent = 'Repository result ready';
+  outcome.dataset.state = 'searched';
+  outcome.textContent = 'Repository result is ready to open';
 }
 
 function openGitHubRepository(): void {
-  const repoStatus = byId<HTMLElement>('github-repo-status')
-  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
-  const outcome = byId<HTMLElement>('github-outcome')
+  const repoStatus = byId<HTMLElement>('github-repo-status');
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab');
+  const outcome = byId<HTMLElement>('github-outcome');
 
-  repoStatus.dataset.state = 'repo-open'
-  repoStatus.textContent = 'Repository opened'
-  issuesTab.disabled = false
-  outcome.dataset.state = 'repo-open'
-  outcome.textContent = 'Repository open; Issues tab is available'
+  repoStatus.dataset.state = 'repo-open';
+  repoStatus.textContent = 'Repository opened';
+  issuesTab.disabled = false;
+  outcome.dataset.state = 'repo-open';
+  outcome.textContent = 'Repository open; Issues tab is available';
 }
 
 function openGitHubIssues(): void {
-  const issues = byId<HTMLElement>('github-issues')
-  const issuesTab = byId<HTMLButtonElement>('github-issues-tab')
-  const issueButton = byId<HTMLButtonElement>('github-issue-example')
-  const secondaryIssue = document.querySelector<HTMLButtonElement>('.secondary-issue')
-  const placeholder = document.querySelector<HTMLElement>('.issue-placeholder')
-  const outcome = byId<HTMLElement>('github-outcome')
+  const issues = byId<HTMLElement>('github-issues');
+  const issuesTab = byId<HTMLButtonElement>('github-issues-tab');
+  const issueButton = byId<HTMLButtonElement>('github-issue-example');
+  const secondaryIssue = document.querySelector<HTMLButtonElement>('.secondary-issue');
+  const placeholder = document.querySelector<HTMLElement>('.issue-placeholder');
+  const outcome = byId<HTMLElement>('github-outcome');
 
-  issues.dataset.state = 'open'
-  issuesTab.dataset.state = 'active'
-  issueButton.hidden = false
+  issues.dataset.state = 'open';
+  issuesTab.dataset.state = 'active';
+  issueButton.hidden = false;
 
   if (secondaryIssue) {
-    secondaryIssue.hidden = false
+    secondaryIssue.hidden = false;
   }
 
   if (placeholder) {
-    placeholder.hidden = true
+    placeholder.hidden = true;
   }
 
-  outcome.dataset.state = 'issues-open'
-  outcome.textContent = 'Issues loaded; choose an issue to inspect'
+  outcome.dataset.state = 'issues-open';
+  outcome.textContent = 'Issues loaded; choose an issue to inspect';
 }
 
 function openGitHubIssue(): void {
-  const outcome = byId<HTMLElement>('github-outcome')
+  const outcome = byId<HTMLElement>('github-outcome');
 
-  outcome.dataset.state = 'issue-open'
-  outcome.textContent = 'Opened issue #42: Improve browser examples'
+  outcome.dataset.state = 'issue-open';
+  outcome.textContent = 'Opened issue #42: Improve browser examples';
 }

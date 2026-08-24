@@ -1,4 +1,4 @@
-@import "../../ui/tokens.css";
+@import '../../ui/tokens.css';
 
 :root {
   color-scheme: light dark;
@@ -15,7 +15,12 @@
   --ok: #0f766e;
   --radius: 6px;
   font-family:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
 * {
@@ -31,8 +36,8 @@ body {
 .trace-shell {
   display: grid;
   grid-template:
-    "header header" auto
-    "runs workbench" minmax(0, 1fr) / minmax(240px, 0.28fr) minmax(0, 1fr);
+    'header header' auto
+    'runs workbench' minmax(0, 1fr) / minmax(240px, 0.28fr) minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -126,28 +131,28 @@ h2 {
   font-weight: 500;
 }
 
-.status-pill[data-status="running"],
-.status-dot[data-status="running"] {
+.status-pill[data-status='running'],
+.status-dot[data-status='running'] {
   color: var(--accent);
   background: var(--accent-soft);
 }
 
-.status-pill[data-status="completed"],
-.status-dot[data-status="completed"] {
+.status-pill[data-status='completed'],
+.status-dot[data-status='completed'] {
   color: var(--ok);
   background: #e2f0e5;
 }
 
-.status-pill[data-status="failed"],
-.status-dot[data-status="failed"] {
+.status-pill[data-status='failed'],
+.status-dot[data-status='failed'] {
   color: var(--danger);
   background: #f8e2df;
 }
 
-.status-pill[data-status="paused"],
-.status-pill[data-status="stopped"],
-.status-dot[data-status="paused"],
-.status-dot[data-status="stopped"] {
+.status-pill[data-status='paused'],
+.status-pill[data-status='stopped'],
+.status-dot[data-status='paused'],
+.status-dot[data-status='stopped'] {
   color: var(--warning);
   background: #f4ead2;
 }
@@ -238,8 +243,13 @@ h2 {
 .metric-strip dd {
   margin: 4px 0 0;
   font:
-    22px / 1.1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    22px / 1.1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
 }
 
 .diagnostic-grid {
@@ -283,8 +293,13 @@ h2 {
   margin: 0;
   min-width: 0;
   font:
-    12px / 1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    12px / 1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
   overflow-wrap: anywhere;
 }
 
@@ -314,8 +329,13 @@ h2 {
 .detail-meta {
   color: var(--muted);
   font:
-    11px / 1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    11px / 1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
   overflow-wrap: anywhere;
 }
 
@@ -333,17 +353,22 @@ pre {
   color: var(--text);
   background: #fbfcfd;
   font:
-    11px / 1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    11px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
   overflow: auto;
 }
 
 @media (max-width: 840px) {
   .trace-shell {
     grid-template:
-      "header" auto
-      "runs" auto
-      "workbench" minmax(0, 1fr) / minmax(0, 1fr);
+      'header' auto
+      'runs' auto
+      'workbench' minmax(0, 1fr) / minmax(0, 1fr);
   }
 
   .run-rail {

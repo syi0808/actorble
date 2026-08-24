@@ -11,7 +11,7 @@ import {
   type TraceCollector,
   type TraceEvent,
   type TraceSpanHandle,
-} from '@actorble/browser'
+} from '@actorble/browser';
 import {
   createExtensionMessage,
   isActorbleExtensionMessage,
@@ -19,90 +19,79 @@ import {
   type ActorbleExtensionMessageByKind,
   type ExtensionMessageKind,
   type RequiredRunCorrelation,
-} from '../../messaging/index.js'
-import { failure, ok, type ExtensionResult } from '../../shared/result.js'
-import type { BrowserRuntimeRunOptions } from '../../scenario/compile-to-browser-runtime.js'
+} from '../../messaging/index.js';
+import { failure, ok, type ExtensionResult } from '../../shared/result.js';
+import type { BrowserRuntimeRunOptions } from '../../scenario/compile-to-browser-runtime.js';
 import type {
   RuntimeDebugSnapshot,
   RuntimeRunStatus,
   RuntimeTraceErrorSnapshot,
   RuntimeTraceSpanSnapshot,
   TraceDisplayEvent,
-} from '../../trace/index.js'
+} from '../../trace/index.js';
 
 export type ContentActorbleFacade = Pick<
   Actorble,
-  | 'run'
-  | 'pause'
-  | 'resume'
-  | 'stop'
-  | 'destroy'
-  | 'getCapabilities'
-  | 'getFidelity'
-  | 'getTrace'
->
+  'run' | 'pause' | 'resume' | 'stop' | 'destroy' | 'getCapabilities' | 'getFidelity' | 'getTrace'
+>;
 
 export type ContentRuntimeMessage = Extract<
   ActorbleExtensionMessage,
   Readonly<{
-    kind: 'scenario:run' | 'scenario:pause' | 'scenario:resume' | 'scenario:stop'
+    kind: 'scenario:run' | 'scenario:pause' | 'scenario:resume' | 'scenario:stop';
   }>
->
+>;
 
 export type ContentRuntimeReceipt = RequiredRunCorrelation &
   Readonly<{
-    kind: ExtensionMessageKind
-    status: RuntimeRunStatus
-  }>
+    kind: ExtensionMessageKind;
+    status: RuntimeRunStatus;
+  }>;
 
 export type ContentRuntimeHost = Readonly<{
-  handleMessage(message: unknown): Promise<ExtensionResult<ContentRuntimeReceipt>>
-  dispose(): void
-}>
+  handleMessage(message: unknown): Promise<ExtensionResult<ContentRuntimeReceipt>>;
+  dispose(): void;
+}>;
 
 export type ContentRuntimeHostOptions = Readonly<{
-  createActorble(options: ActorbleFacadeOptions): ContentActorbleFacade
-  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>
-  now?: () => number
-}>
+  createActorble(options: ActorbleFacadeOptions): ContentActorbleFacade;
+  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>;
+  now?: () => number;
+}>;
 
-type ScenarioRunMessage = ActorbleExtensionMessageByKind<'scenario:run'>
+type ScenarioRunMessage = ActorbleExtensionMessageByKind<'scenario:run'>;
 type ScenarioControlMessage = ActorbleExtensionMessageByKind<
   'scenario:pause' | 'scenario:resume' | 'scenario:stop'
->
+>;
 
 type ActiveRun = {
-  token: number
-  correlation: RequiredRunCorrelation
-  actorble: ContentActorbleFacade
-  controller: AbortController
-  stopped: boolean
-  cleaned: boolean
-}
+  token: number;
+  correlation: RequiredRunCorrelation;
+  actorble: ContentActorbleFacade;
+  controller: AbortController;
+  stopped: boolean;
+  cleaned: boolean;
+};
 
-export function createContentRuntimeHost(
-  options: ContentRuntimeHostOptions,
-): ContentRuntimeHost {
-  const getNow = options.now ?? Date.now
-  let activeRun: ActiveRun | null = null
-  let nextRunToken = 1
+export function createContentRuntimeHost(options: ContentRuntimeHostOptions): ContentRuntimeHost {
+  const getNow = options.now ?? Date.now;
+  let activeRun: ActiveRun | null = null;
+  let nextRunToken = 1;
 
-  async function handleMessage(
-    message: unknown,
-  ): Promise<ExtensionResult<ContentRuntimeReceipt>> {
+  async function handleMessage(message: unknown): Promise<ExtensionResult<ContentRuntimeReceipt>> {
     if (!isActorbleExtensionMessage(message)) {
       return runtimeFailure('Content runtime received an unsupported message.', {
         kind: readMessageKind(message),
-      })
+      });
     }
 
     switch (message.kind) {
       case 'scenario:run':
-        return startRun(message)
+        return startRun(message);
       case 'scenario:pause':
       case 'scenario:resume':
       case 'scenario:stop':
-        return controlRun(message)
+        return controlRun(message);
       case 'scenario:validate':
       case 'scenario:compile':
       case 'record:start':
@@ -122,7 +111,7 @@ export function createContentRuntimeHost(
           code: 'unsupported_message',
           message: `${message.kind} is not handled by the content runtime host.`,
           details: { kind: message.kind },
-        })
+        });
     }
   }
 
@@ -133,28 +122,28 @@ export function createContentRuntimeHost(
       return runtimeFailure('An Actorble run is already active.', {
         activeRunId: activeRun.correlation.runId,
         requestedRunId: message.payload.runId,
-      })
+      });
     }
 
-    const correlation = correlationFrom(message.payload)
+    const correlation = correlationFrom(message.payload);
     const trace = new ForwardingDiagnosticsTrace({
       correlation,
       now: getNow,
       sendMessage: options.sendMessage,
-    })
-    let actorble: ContentActorbleFacade
+    });
+    let actorble: ContentActorbleFacade;
 
     try {
       const actorbleOptions = {
         trace,
         feedback: 'debug',
         motion: true,
-      } as ActorbleFacadeOptions
-      actorble = options.createActorble(actorbleOptions)
+      } as ActorbleFacadeOptions;
+      actorble = options.createActorble(actorbleOptions);
     } catch (error) {
       return runtimeFailure('Actorble runtime could not be created.', {
         error: describeUnknownError(error),
-      })
+      });
     }
 
     const run = {
@@ -164,22 +153,22 @@ export function createContentRuntimeHost(
       controller: new AbortController(),
       stopped: false,
       cleaned: false,
-    } satisfies ActiveRun
+    } satisfies ActiveRun;
 
-    activeRun = run
+    activeRun = run;
 
     try {
-      await emitStatus(run, 'running')
+      await emitStatus(run, 'running');
     } catch (error) {
-      cleanupRun(run)
+      cleanupRun(run);
       return runtimeFailure('Runtime status delivery failed.', {
         error: describeUnknownError(error),
-      })
+      });
     }
 
-    void executeRun(run, message.payload.compilation)
+    void executeRun(run, message.payload.compilation);
 
-    return ok(receiptFor(message.kind, correlation, 'running'))
+    return ok(receiptFor(message.kind, correlation, 'running'));
   }
 
   async function controlRun(
@@ -189,35 +178,35 @@ export function createContentRuntimeHost(
       return runtimeFailure('No active Actorble run matches the requested control message.', {
         kind: message.kind,
         runId: message.payload.runId,
-      })
+      });
     }
 
-    const run = activeRun
+    const run = activeRun;
 
     try {
       switch (message.kind) {
         case 'scenario:pause':
-          run.actorble.pause()
-          await emitStatus(run, 'paused')
-          return ok(receiptFor(message.kind, run.correlation, 'paused'))
+          run.actorble.pause();
+          await emitStatus(run, 'paused');
+          return ok(receiptFor(message.kind, run.correlation, 'paused'));
         case 'scenario:resume':
-          run.actorble.resume()
-          await emitStatus(run, 'running')
-          return ok(receiptFor(message.kind, run.correlation, 'running'))
+          run.actorble.resume();
+          await emitStatus(run, 'running');
+          return ok(receiptFor(message.kind, run.correlation, 'running'));
         case 'scenario:stop':
-          run.stopped = true
-          run.controller.abort('Stopped by user.')
-          run.actorble.stop()
-          await emitStatus(run, 'stopped', 'Stopped by user.')
-          cleanupRun(run)
-          return ok(receiptFor(message.kind, run.correlation, 'stopped'))
+          run.stopped = true;
+          run.controller.abort('Stopped by user.');
+          run.actorble.stop();
+          await emitStatus(run, 'stopped', 'Stopped by user.');
+          cleanupRun(run);
+          return ok(receiptFor(message.kind, run.correlation, 'stopped'));
       }
     } catch (error) {
       return runtimeFailure('Actorble run control failed.', {
         kind: message.kind,
         runId: message.payload.runId,
         error: describeUnknownError(error),
-      })
+      });
     }
   }
 
@@ -229,17 +218,17 @@ export function createContentRuntimeHost(
       await run.actorble.run(
         compilation.scenario,
         runOptionsWithSignal(compilation.runOptions, run.controller.signal),
-      )
+      );
 
       if (isCurrentRun(run)) {
-        await emitStatus(run, 'completed')
+        await emitStatus(run, 'completed');
       }
     } catch (error) {
       if (isCurrentRun(run) && !run.stopped) {
-        await emitStatus(run, 'failed', describeUnknownError(error))
+        await emitStatus(run, 'failed', describeUnknownError(error));
       }
     } finally {
-      cleanupRun(run)
+      cleanupRun(run);
     }
   }
 
@@ -248,7 +237,7 @@ export function createContentRuntimeHost(
     status: RuntimeRunStatus,
     message?: string,
   ): Promise<void> {
-    const debugSnapshot = runtimeDebugSnapshotFor(run.actorble)
+    const debugSnapshot = runtimeDebugSnapshotFor(run.actorble);
 
     await options.sendMessage(
       createExtensionMessage({
@@ -260,51 +249,51 @@ export function createContentRuntimeHost(
           ...(debugSnapshot === undefined ? {} : { debugSnapshot }),
         },
       }),
-    )
+    );
   }
 
   function cleanupRun(run: ActiveRun): void {
     if (run.cleaned) {
-      return
+      return;
     }
 
-    run.cleaned = true
+    run.cleaned = true;
 
     if (activeRun?.token === run.token) {
-      activeRun = null
+      activeRun = null;
     }
 
-    run.actorble.destroy()
+    run.actorble.destroy();
   }
 
   function isCurrentRun(run: ActiveRun): boolean {
-    return activeRun?.token === run.token && !run.cleaned
+    return activeRun?.token === run.token && !run.cleaned;
   }
 
   function dispose(): void {
     if (activeRun === null) {
-      return
+      return;
     }
 
-    const run = activeRun
+    const run = activeRun;
 
-    run.stopped = true
-    run.controller.abort('Content runtime disposed.')
-    run.actorble.stop()
-    cleanupRun(run)
+    run.stopped = true;
+    run.controller.abort('Content runtime disposed.');
+    run.actorble.stop();
+    cleanupRun(run);
   }
 
   return {
     handleMessage,
     dispose,
-  }
+  };
 }
 
 function runtimeDebugSnapshotFor(
   actorble: ContentActorbleFacade,
 ): RuntimeDebugSnapshot | undefined {
   try {
-    const trace = actorble.getTrace()
+    const trace = actorble.getTrace();
 
     return {
       capturedAt: Date.now(),
@@ -326,21 +315,21 @@ function runtimeDebugSnapshotFor(
         warnings: trace.warnings.map((warning) => ({
           message: warning.message,
           at: warning.at,
-          ...(warning.details === undefined ? {} : {
-            details: sanitizeRecord(warning.details),
-          }),
+          ...(warning.details === undefined
+            ? {}
+            : {
+                details: sanitizeRecord(warning.details),
+              }),
         })),
       },
-    }
+    };
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
-function runtimeTraceSpanSnapshotFrom(
-  span: Trace['spans'][number],
-): RuntimeTraceSpanSnapshot {
-  const error = runtimeTraceErrorSnapshotFrom(span.error)
+function runtimeTraceSpanSnapshotFrom(span: Trace['spans'][number]): RuntimeTraceSpanSnapshot {
+  const error = runtimeTraceErrorSnapshotFrom(span.error);
 
   return {
     id: span.id,
@@ -349,18 +338,20 @@ function runtimeTraceSpanSnapshotFrom(
     status: span.status,
     startedAt: span.startedAt,
     ...(span.endedAt === undefined ? {} : { endedAt: span.endedAt }),
-    ...(span.attributes === undefined ? {} : {
-      attributes: sanitizeRecord(span.attributes),
-    }),
+    ...(span.attributes === undefined
+      ? {}
+      : {
+          attributes: sanitizeRecord(span.attributes),
+        }),
     ...(error === undefined ? {} : { error }),
-  }
+  };
 }
 
 function runtimeTraceErrorSnapshotFrom(
   error: Trace['spans'][number]['error'],
 ): RuntimeTraceErrorSnapshot | undefined {
   if (error === undefined) {
-    return undefined
+    return undefined;
   }
 
   return {
@@ -368,14 +359,14 @@ function runtimeTraceErrorSnapshotFrom(
     message: error.message,
     ...(error.code === undefined ? {} : { code: error.code }),
     ...(error.details === undefined ? {} : { details: sanitizeRecord(error.details) }),
-  }
+  };
 }
 
 function sanitizeRecord(
   value: Readonly<Record<string, unknown>>,
 ): Readonly<Record<string, unknown>> {
-  const sanitized = sanitizeUnknown(value)
-  return isRecord(sanitized) ? sanitized : {}
+  const sanitized = sanitizeUnknown(value);
+  return isRecord(sanitized) ? sanitized : {};
 }
 
 function sanitizeUnknown(value: unknown, seen = new WeakSet<object>()): unknown {
@@ -385,121 +376,121 @@ function sanitizeUnknown(value: unknown, seen = new WeakSet<object>()): unknown 
     typeof value === 'number' ||
     typeof value === 'boolean'
   ) {
-    return value
+    return value;
   }
 
   if (value === undefined) {
-    return undefined
+    return undefined;
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeUnknown(item, seen))
+    return value.map((item) => sanitizeUnknown(item, seen));
   }
 
   if (typeof value === 'object') {
     if (seen.has(value)) {
-      return '[Circular]'
+      return '[Circular]';
     }
 
-    seen.add(value)
+    seen.add(value);
 
     if (value instanceof Error) {
       return {
         name: value.name,
         message: value.message,
-      }
+      };
     }
 
-    const record: Record<string, unknown> = {}
+    const record: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value)) {
-      const sanitized = sanitizeUnknown(nested, seen)
+      const sanitized = sanitizeUnknown(nested, seen);
       if (sanitized !== undefined) {
-        record[key] = sanitized
+        record[key] = sanitized;
       }
     }
 
-    return record
+    return record;
   }
 
-  return String(value)
+  return String(value);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 type ForwardingDiagnosticsTraceOptions = Readonly<{
-  correlation: RequiredRunCorrelation
-  now: () => number
-  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>
-}>
+  correlation: RequiredRunCorrelation;
+  now: () => number;
+  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>;
+}>;
 
 class ForwardingDiagnosticsTrace implements TraceCollector {
-  readonly #correlation: RequiredRunCorrelation
-  readonly #delegate: BrowserDiagnosticsTrace
-  readonly #sendMessage: ContentRuntimeHostOptions['sendMessage']
+  readonly #correlation: RequiredRunCorrelation;
+  readonly #delegate: BrowserDiagnosticsTrace;
+  readonly #sendMessage: ContentRuntimeHostOptions['sendMessage'];
 
   constructor(options: ForwardingDiagnosticsTraceOptions) {
-    this.#correlation = options.correlation
-    this.#sendMessage = options.sendMessage
+    this.#correlation = options.correlation;
+    this.#sendMessage = options.sendMessage;
     this.#delegate = new BrowserDiagnosticsTrace({
       clock: {
         now: options.now,
       },
-    })
+    });
   }
 
   startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle {
-    const span = this.#delegate.startSpan(name, attributes)
+    const span = this.#delegate.startSpan(name, attributes);
 
     return {
       id: span.id,
       end: (terminalAttributes?: ActorbleErrorDetails) => {
-        span.end(terminalAttributes)
+        span.end(terminalAttributes);
       },
       error: (error: ActorbleError, terminalAttributes?: ActorbleErrorDetails) => {
-        span.error(error, terminalAttributes)
+        span.error(error, terminalAttributes);
       },
       cancel: (reason?: unknown) => {
-        span.cancel(reason)
+        span.cancel(reason);
       },
       event: (eventName: DebugEventName, data?: unknown) => {
-        span.event(eventName, data)
-        this.#forwardLatestEvent(eventName)
+        span.event(eventName, data);
+        this.#forwardLatestEvent(eventName);
       },
-    }
+    };
   }
 
   appendEvent(name: DebugEventName, data?: unknown): void {
-    this.#delegate.appendEvent(name, data)
-    this.#forwardLatestEvent(name)
+    this.#delegate.appendEvent(name, data);
+    this.#forwardLatestEvent(name);
   }
 
   attachSnapshot(name: string, data: unknown): void {
-    this.#delegate.attachSnapshot(name, data)
+    this.#delegate.attachSnapshot(name, data);
   }
 
   warn(message: string, details?: ActorbleErrorDetails): void {
-    this.#delegate.warn(message, details)
+    this.#delegate.warn(message, details);
   }
 
   getTrace(): Trace {
-    return this.#delegate.getTrace()
+    return this.#delegate.getTrace();
   }
 
   on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
-    this.#delegate.on(name, listener)
+    this.#delegate.on(name, listener);
   }
 
   off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
-    this.#delegate.off(name, listener)
+    this.#delegate.off(name, listener);
   }
 
   #forwardLatestEvent(expectedName: DebugEventName): void {
-    const event = this.#delegate.getTrace().events.at(-1)
+    const event = this.#delegate.getTrace().events.at(-1);
 
     if (event === undefined || event.name !== expectedName) {
-      return
+      return;
     }
 
     void this.#sendMessage(
@@ -510,7 +501,7 @@ class ForwardingDiagnosticsTrace implements TraceCollector {
           event: traceDisplayEventFrom(event, this.#correlation),
         },
       }),
-    ).catch(() => undefined)
+    ).catch(() => undefined);
   }
 }
 
@@ -518,7 +509,7 @@ function traceDisplayEventFrom(
   event: TraceEvent,
   correlation: RequiredRunCorrelation,
 ): TraceDisplayEvent {
-  const details = traceEventDetails(event)
+  const details = traceEventDetails(event);
 
   return {
     runId: correlation.runId,
@@ -526,23 +517,21 @@ function traceDisplayEventFrom(
     timestamp: event.at,
     name: event.name,
     ...(details === undefined ? {} : { details }),
-  }
+  };
 }
 
-function traceEventDetails(
-  event: TraceEvent,
-): Readonly<Record<string, unknown>> | undefined {
-  const details: Record<string, unknown> = {}
+function traceEventDetails(event: TraceEvent): Readonly<Record<string, unknown>> | undefined {
+  const details: Record<string, unknown> = {};
 
   if (event.spanId !== undefined) {
-    details.spanId = event.spanId
+    details.spanId = event.spanId;
   }
 
   if (event.data !== undefined) {
-    details.data = event.data
+    details.data = event.data;
   }
 
-  return Object.keys(details).length === 0 ? undefined : details
+  return Object.keys(details).length === 0 ? undefined : details;
 }
 
 function runOptionsWithSignal(
@@ -552,7 +541,7 @@ function runOptionsWithSignal(
   return {
     ...runOptions,
     signal,
-  }
+  };
 }
 
 function correlationFrom(correlation: RequiredRunCorrelation): RequiredRunCorrelation {
@@ -561,19 +550,16 @@ function correlationFrom(correlation: RequiredRunCorrelation): RequiredRunCorrel
     ...(correlation.frameId === undefined ? {} : { frameId: correlation.frameId }),
     scenarioId: correlation.scenarioId,
     runId: correlation.runId,
-  }
+  };
 }
 
-function matchesRun(
-  active: RequiredRunCorrelation,
-  requested: RequiredRunCorrelation,
-): boolean {
+function matchesRun(active: RequiredRunCorrelation, requested: RequiredRunCorrelation): boolean {
   return (
     active.tabId === requested.tabId &&
     active.frameId === requested.frameId &&
     active.scenarioId === requested.scenarioId &&
     active.runId === requested.runId
-  )
+  );
 }
 
 function receiptFor(
@@ -585,7 +571,7 @@ function receiptFor(
     kind,
     ...correlation,
     status,
-  }
+  };
 }
 
 function runtimeFailure(
@@ -596,17 +582,17 @@ function runtimeFailure(
     code: 'runtime_error',
     message,
     ...(details === undefined ? {} : { details }),
-  })
+  });
 }
 
 function readMessageKind(message: unknown): unknown {
   if (typeof message !== 'object' || message === null || Array.isArray(message)) {
-    return undefined
+    return undefined;
   }
 
-  return (message as Readonly<{ kind?: unknown }>).kind
+  return (message as Readonly<{ kind?: unknown }>).kind;
 }
 
 function describeUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error ? error.message : String(error);
 }

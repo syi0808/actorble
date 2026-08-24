@@ -13,23 +13,23 @@ export type ExtensionIssueCode =
   | 'storage_error'
   | 'runtime_error'
   | 'inspector_error'
-  | 'recorder_error'
+  | 'recorder_error';
 
-export type ExtensionIssuePath = readonly (string | number)[]
+export type ExtensionIssuePath = readonly (string | number)[];
 
 export type ExtensionIssue = Readonly<{
-  code: ExtensionIssueCode
-  message: string
-  path?: ExtensionIssuePath
-  details?: Readonly<Record<string, unknown>>
-}>
+  code: ExtensionIssueCode;
+  message: string;
+  path?: ExtensionIssuePath;
+  details?: Readonly<Record<string, unknown>>;
+}>;
 
 export type ExtensionResult<TValue> =
   | Readonly<{ ok: true; value: TValue }>
-  | Readonly<{ ok: false; issues: readonly ExtensionIssue[] }>
+  | Readonly<{ ok: false; issues: readonly ExtensionIssue[] }>;
 
 export function ok<TValue>(value: TValue): ExtensionResult<TValue> {
-  return { ok: true, value }
+  return { ok: true, value };
 }
 
 export function failure<TValue = never>(
@@ -38,7 +38,7 @@ export function failure<TValue = never>(
   return {
     ok: false,
     issues: Array.isArray(issue) ? issue : [issue],
-  }
+  };
 }
 
 export function notImplementedIssue(
@@ -49,5 +49,5 @@ export function notImplementedIssue(
     code: 'not_implemented',
     message: `${boundary} is not implemented yet.`,
     details: { boundary, ...details },
-  }
+  };
 }

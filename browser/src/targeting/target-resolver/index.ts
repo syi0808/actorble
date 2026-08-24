@@ -1,6 +1,6 @@
-import { ActorbleError, actorbleError, element as elementLocator } from '../../shared/index.js'
-import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
-import type { SpanRecorder } from '../../diagnostics/diagnostics-trace/index.js'
+import { ActorbleError, actorbleError, element as elementLocator } from '../../shared/index.js';
+import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js';
+import type { SpanRecorder } from '../../diagnostics/diagnostics-trace/index.js';
 import type {
   Clock,
   DomPort,
@@ -11,77 +11,77 @@ import type {
   TargetInspection,
   TargetLike,
   TargetValidity,
-} from '../../shared/index.js'
+} from '../../shared/index.js';
 
 export type TargetCandidate = Readonly<{
-  element: Element
-  score: number
-  reasons: readonly string[]
-  order: number
-}>
+  element: Element;
+  score: number;
+  reasons: readonly string[];
+  order: number;
+}>;
 
 export interface TargetResolver {
-  resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle>
-  resolveAll(locator: Locator, options?: ResolveOptions): Promise<readonly TargetHandle[]>
-  exists(locator: Locator, options?: ResolveOptions): Promise<boolean>
-  inspect(target: TargetLike): Promise<TargetInspection>
-  validate(target: TargetHandle): Promise<TargetHandle>
+  resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle>;
+  resolveAll(locator: Locator, options?: ResolveOptions): Promise<readonly TargetHandle[]>;
+  exists(locator: Locator, options?: ResolveOptions): Promise<boolean>;
+  inspect(target: TargetLike): Promise<TargetInspection>;
+  validate(target: TargetHandle): Promise<TargetHandle>;
 }
 
 export type TargetResolverOptions = Readonly<{
-  dom?: DomPort
-  trace?: SpanRecorder
-  clock?: Clock
-  idPrefix?: string
-}>
+  dom?: DomPort;
+  trace?: SpanRecorder;
+  clock?: Clock;
+  idPrefix?: string;
+}>;
 
 const defaultClock: Clock = {
   now() {
-    return Date.now()
+    return Date.now();
   },
-}
+};
 
 export class BrowserTargetResolver implements TargetResolver {
-  readonly #dom: DomPort
-  readonly #trace?: SpanRecorder
-  readonly #clock: Clock
-  readonly #idPrefix: string
-  #nextTargetId = 1
-  #browserLimitsWarned = false
+  readonly #dom: DomPort;
+  readonly #trace?: SpanRecorder;
+  readonly #clock: Clock;
+  readonly #idPrefix: string;
+  #nextTargetId = 1;
+  #browserLimitsWarned = false;
 
   constructor(options: TargetResolverOptions = {}) {
-    this.#dom = options.dom ?? new BrowserDomAdapter()
-    this.#trace = options.trace
-    this.#clock = options.clock ?? defaultClock
-    this.#idPrefix = options.idPrefix ?? 'target'
+    this.#dom = options.dom ?? new BrowserDomAdapter();
+    this.#trace = options.trace;
+    this.#clock = options.clock ?? defaultClock;
+    this.#idPrefix = options.idPrefix ?? 'target';
   }
 
   async resolve(locator: Locator, options: ResolveOptions = {}): Promise<TargetHandle> {
     const span = this.#trace?.startSpan('target.resolve', {
       locator: summarizeLocator(locator),
       strict: options.strict === true,
-    })
+    });
 
     try {
-      const pass = createResolutionPass()
-      const fastCandidate = this.#resolveFirstCandidate(locator, pass, options)
+      const pass = createResolutionPass();
+      const fastCandidate = this.#resolveFirstCandidate(locator, pass, options);
 
       if (fastCandidate !== undefined) {
         if (fastCandidate === null) {
-          throw this.#emptyResolveError(locator)
+          throw this.#emptyResolveError(locator);
         }
 
-        const handle = this.#createHandle(fastCandidate.element, locator, pass)
-        span?.end({ targetId: handle.id, count: 1 })
-        return handle
+        const handle = this.#createHandle(fastCandidate.element, locator, pass);
+        span?.end({ targetId: handle.id, count: 1 });
+        return handle;
       }
 
-      const candidates = this.#resolveCandidates(locator, pass)
-      const ambiguity = resolutionAmbiguity(candidates, options.strict === true)
-      this.#recordResolutionDiagnostics(locator, candidates, ambiguity, pass)
+      const candidates = this.#resolveCandidates(locator, pass);
+      const ambiguity = resolutionAmbiguity(candidates, options.strict === true);
+      this.#recordResolutionDiagnostics(locator, candidates, ambiguity, pass);
 
       if (candidates.length === 0) {
-        throw this.#emptyResolveError(locator)
+        throw this.#emptyResolveError(locator);
       }
 
       if (ambiguity === 'strict-multiple-candidates') {
@@ -95,16 +95,16 @@ export class BrowserTargetResolver implements TargetResolver {
               ambiguity,
             },
           },
-        )
+        );
       }
 
-      const handle = this.#createHandle(candidates[0].element, locator, pass)
-      span?.end({ targetId: handle.id, count: candidates.length })
-      return handle
+      const handle = this.#createHandle(candidates[0].element, locator, pass);
+      span?.end({ targetId: handle.id, count: candidates.length });
+      return handle;
     } catch (error) {
-      const normalized = normalizeError(error, `Unable to resolve ${describeLocator(locator)}.`)
-      span?.error(normalized)
-      throw normalized
+      const normalized = normalizeError(error, `Unable to resolve ${describeLocator(locator)}.`);
+      span?.error(normalized);
+      throw normalized;
     }
   }
 
@@ -114,63 +114,73 @@ export class BrowserTargetResolver implements TargetResolver {
   ): Promise<readonly TargetHandle[]> {
     const span = this.#trace?.startSpan('target.resolveAll', {
       locator: summarizeLocator(locator),
-    })
+    });
 
     try {
-      const pass = createResolutionPass()
-      const candidates = this.#resolveCandidates(locator, pass)
-      this.#recordResolutionDiagnostics(locator, candidates, resolutionAmbiguity(candidates, false), pass)
-      const handles = candidates.map((candidate) => this.#createHandle(candidate.element, locator, pass))
-      span?.end({ count: handles.length })
-      return handles
+      const pass = createResolutionPass();
+      const candidates = this.#resolveCandidates(locator, pass);
+      this.#recordResolutionDiagnostics(
+        locator,
+        candidates,
+        resolutionAmbiguity(candidates, false),
+        pass,
+      );
+      const handles = candidates.map((candidate) =>
+        this.#createHandle(candidate.element, locator, pass),
+      );
+      span?.end({ count: handles.length });
+      return handles;
     } catch (error) {
-      const normalized = normalizeError(error, `Unable to resolve all ${describeLocator(locator)}.`)
-      span?.error(normalized)
-      throw normalized
+      const normalized = normalizeError(
+        error,
+        `Unable to resolve all ${describeLocator(locator)}.`,
+      );
+      span?.error(normalized);
+      throw normalized;
     }
   }
 
   async exists(locator: Locator, _options: ResolveOptions = {}): Promise<boolean> {
-    const pass = createResolutionPass()
-    return this.#hasCandidate(locator, pass)
+    const pass = createResolutionPass();
+    return this.#hasCandidate(locator, pass);
   }
 
   async inspect(target: TargetLike): Promise<TargetInspection> {
-    const handle = await this.#toHandle(target)
-    const validity = this.#currentValidity(handle)
-    const debug = this.#dom.describeElement(handle.element)
+    const handle = await this.#toHandle(target);
+    const validity = this.#currentValidity(handle);
+    const debug = this.#dom.describeElement(handle.element);
     const inspectedTarget: TargetHandle = {
       ...handle,
       validity,
       debug,
-    }
+    };
 
     return {
       target: inspectedTarget,
       debug,
       validity,
-    }
+    };
   }
 
   async validate(target: TargetHandle): Promise<TargetHandle> {
     const span = this.#trace?.startSpan('target.validate', {
       targetId: target.id,
       locator: target.locator === undefined ? undefined : summarizeLocator(target.locator),
-    })
+    });
 
     try {
-      const validity = this.#currentValidity(target)
+      const validity = this.#currentValidity(target);
 
       if (validity === 'live') {
-        span?.end({ targetId: target.id, validity })
-        return target
+        span?.end({ targetId: target.id, validity });
+        return target;
       }
 
       if (validity === 'stale' && target.locator !== undefined) {
         try {
-          const recovered = await this.resolve(target.locator)
-          span?.end({ targetId: recovered.id, validity: 'live', recovered: true })
-          return recovered
+          const recovered = await this.resolve(target.locator);
+          span?.end({ targetId: recovered.id, validity: 'live', recovered: true });
+          return recovered;
         } catch (error) {
           throw actorbleError(
             'TARGET_STALE',
@@ -182,7 +192,7 @@ export class BrowserTargetResolver implements TargetResolver {
                 locator: summarizeLocator(target.locator),
               },
             },
-          )
+          );
         }
       }
 
@@ -195,43 +205,43 @@ export class BrowserTargetResolver implements TargetResolver {
             locator: target.locator === undefined ? undefined : summarizeLocator(target.locator),
           },
         },
-      )
+      );
     } catch (error) {
-      const normalized = normalizeError(error, `Unable to validate target ${target.id}.`)
-      span?.error(normalized)
-      throw normalized
+      const normalized = normalizeError(error, `Unable to validate target ${target.id}.`);
+      span?.error(normalized);
+      throw normalized;
     }
   }
 
   #resolveCandidates(locator: Locator, pass: ResolutionPass): readonly TargetCandidate[] {
     const candidates = (() => {
       switch (locator.kind) {
-      case 'css':
-        return this.#rankElements(
-          this.#dom
-            .querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot())
-            .filter((candidate) => this.#isElementInScope(candidate)),
-          100,
-          ['css'],
-        )
-      case 'element':
-        return this.#isElementInScope(locator.element)
-          ? this.#rankElements([locator.element], 100, ['element'])
-          : []
-      case 'role':
-        return this.#rankRoleLocator(locator, pass)
-      case 'text':
-        return this.#rankTextLocator(locator, pass)
-      case 'label':
-        return this.#rankLabelLocator(locator, pass)
-      case 'testId':
-        return this.#rankTestIdLocator(locator)
-      case 'point':
-        return this.#rankPointLocator(locator)
+        case 'css':
+          return this.#rankElements(
+            this.#dom
+              .querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot())
+              .filter((candidate) => this.#isElementInScope(candidate)),
+            100,
+            ['css'],
+          );
+        case 'element':
+          return this.#isElementInScope(locator.element)
+            ? this.#rankElements([locator.element], 100, ['element'])
+            : [];
+        case 'role':
+          return this.#rankRoleLocator(locator, pass);
+        case 'text':
+          return this.#rankTextLocator(locator, pass);
+        case 'label':
+          return this.#rankLabelLocator(locator, pass);
+        case 'testId':
+          return this.#rankTestIdLocator(locator);
+        case 'point':
+          return this.#rankPointLocator(locator);
       }
-    })()
+    })();
 
-    return applyLocatorMatchIndex(locator, candidates)
+    return applyLocatorMatchIndex(locator, candidates);
   }
 
   #resolveFirstCandidate(
@@ -240,10 +250,10 @@ export class BrowserTargetResolver implements TargetResolver {
     options: ResolveOptions,
   ): TargetCandidate | null | undefined {
     if (options.strict === true || this.#trace !== undefined) {
-      return undefined
+      return undefined;
     }
     if (locatorMatchIndex(locator) !== undefined) {
-      return undefined
+      return undefined;
     }
 
     switch (locator.kind) {
@@ -252,19 +262,19 @@ export class BrowserTargetResolver implements TargetResolver {
           this.#dom.querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot()),
           100,
           ['css'],
-        )
+        );
       case 'element':
         return this.#isElementInScope(locator.element)
           ? { element: locator.element, score: 100, reasons: ['element'], order: 0 }
-          : null
+          : null;
       case 'testId': {
-        const attribute = locator.attribute ?? 'data-testid'
-        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`
+        const attribute = locator.attribute ?? 'data-testid';
+        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`;
         return this.#firstScopedCandidate(
           this.#dom.querySelectorAll(selector, this.#dom.getRoot()),
           100,
           ['testId', `attribute:${attribute}`],
-        )
+        );
       }
       case 'point': {
         if (locator.coordinateSpace !== undefined && locator.coordinateSpace !== 'viewport') {
@@ -274,24 +284,24 @@ export class BrowserTargetResolver implements TargetResolver {
             {
               details: { locator: summarizeLocator(locator) },
             },
-          )
+          );
         }
 
-        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true })
+        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true });
         return element !== null && this.#isElementInScope(element)
           ? { element, score: 100, reasons: ['point'], order: 0 }
-          : null
+          : null;
       }
       case 'role':
       case 'text':
       case 'label':
-        return undefined
+        return undefined;
     }
   }
 
   #hasCandidate(locator: Locator, pass: ResolutionPass): boolean {
     if (locatorMatchIndex(locator) !== undefined) {
-      return this.#resolveCandidates(locator, pass).length > 0
+      return this.#resolveCandidates(locator, pass).length > 0;
     }
 
     switch (locator.kind) {
@@ -300,19 +310,22 @@ export class BrowserTargetResolver implements TargetResolver {
           this.#firstScopedElement(
             this.#dom.querySelectorAll(locator.selector, locator.root ?? this.#dom.getRoot()),
           ) !== null
-        )
+        );
       case 'element':
-        return this.#isElementInScope(locator.element)
+        return this.#isElementInScope(locator.element);
       case 'role':
-        return this.#hasRoleCandidate(locator, pass)
+        return this.#hasRoleCandidate(locator, pass);
       case 'text':
-        return this.#hasTextCandidate(locator, pass)
+        return this.#hasTextCandidate(locator, pass);
       case 'label':
-        return this.#hasLabelCandidate(locator, pass)
+        return this.#hasLabelCandidate(locator, pass);
       case 'testId': {
-        const attribute = locator.attribute ?? 'data-testid'
-        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`
-        return this.#firstScopedElement(this.#dom.querySelectorAll(selector, this.#dom.getRoot())) !== null
+        const attribute = locator.attribute ?? 'data-testid';
+        const selector = `[${attribute}="${escapeCssString(locator.value)}"]`;
+        return (
+          this.#firstScopedElement(this.#dom.querySelectorAll(selector, this.#dom.getRoot())) !==
+          null
+        );
       }
       case 'point': {
         if (locator.coordinateSpace !== undefined && locator.coordinateSpace !== 'viewport') {
@@ -322,11 +335,11 @@ export class BrowserTargetResolver implements TargetResolver {
             {
               details: { locator: summarizeLocator(locator) },
             },
-          )
+          );
         }
 
-        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true })
-        return element !== null && this.#isElementInScope(element)
+        const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true });
+        return element !== null && this.#isElementInScope(element);
       }
     }
   }
@@ -334,75 +347,86 @@ export class BrowserTargetResolver implements TargetResolver {
   #hasRoleCandidate(locator: Extract<Locator, { kind: 'role' }>, pass: ResolutionPass): boolean {
     for (const element of this.#dom.querySelectorAll('*', this.#dom.getRoot())) {
       if (!this.#isElementInScope(element)) {
-        continue
+        continue;
       }
 
       if (locator.includeHidden !== true && this.#isHidden(element, pass)) {
-        continue
+        continue;
       }
 
-      const debug = this.#describeElement(element, pass)
+      const debug = this.#describeElement(element, pass);
       if (debug.role !== locator.role) {
-        continue
+        continue;
       }
 
       if (
         locator.name !== undefined &&
         matchText(debug.name ?? '', locator.name, locator.exact === true) === null
       ) {
-        continue
+        continue;
       }
 
-      return true
+      return true;
     }
 
-    return false
+    return false;
   }
 
   #hasTextCandidate(locator: Extract<Locator, { kind: 'text' }>, pass: ResolutionPass): boolean {
     for (const element of this.#dom.querySelectorAll('*', this.#dom.getRoot())) {
       if (!this.#isElementInScope(element) || this.#isHidden(element, pass)) {
-        continue
+        continue;
       }
 
-      if (matchText(this.#dom.getTextContent(element), locator.value, locator.exact === true) !== null) {
-        return true
+      if (
+        matchText(this.#dom.getTextContent(element), locator.value, locator.exact === true) !== null
+      ) {
+        return true;
       }
     }
 
-    return false
+    return false;
   }
 
   #hasLabelCandidate(locator: Extract<Locator, { kind: 'label' }>, pass: ResolutionPass): boolean {
-    const labels = this.#dom.querySelectorAll('label', this.#dom.getRoot())
+    const labels = this.#dom.querySelectorAll('label', this.#dom.getRoot());
 
     for (const labelElement of labels) {
       if (!this.#isElementInScope(labelElement) || this.#isHidden(labelElement, pass)) {
-        continue
+        continue;
       }
 
-      if (matchText(this.#dom.getTextContent(labelElement), locator.value, locator.exact === true) === null) {
-        continue
+      if (
+        matchText(this.#dom.getTextContent(labelElement), locator.value, locator.exact === true) ===
+        null
+      ) {
+        continue;
       }
 
       for (const control of this.#associatedLabelControls(labelElement)) {
         if (this.#isElementInScope(control) && !this.#isHidden(control, pass)) {
-          return true
+          return true;
         }
       }
     }
 
     for (const element of this.#dom.querySelectorAll(labelableSelector, this.#dom.getRoot())) {
       if (!this.#isElementInScope(element) || this.#isHidden(element, pass)) {
-        continue
+        continue;
       }
 
-      if (matchText(this.#describeElement(element, pass).name ?? '', locator.value, locator.exact === true) !== null) {
-        return true
+      if (
+        matchText(
+          this.#describeElement(element, pass).name ?? '',
+          locator.value,
+          locator.exact === true,
+        ) !== null
+      ) {
+        return true;
       }
     }
 
-    return false
+    return false;
   }
 
   #firstScopedCandidate(
@@ -410,57 +434,57 @@ export class BrowserTargetResolver implements TargetResolver {
     score: number,
     reasons: readonly string[],
   ): TargetCandidate | null {
-    const element = this.#firstScopedElement(elements)
-    return element === null ? null : { element, score, reasons, order: 0 }
+    const element = this.#firstScopedElement(elements);
+    return element === null ? null : { element, score, reasons, order: 0 };
   }
 
   #firstScopedElement(elements: readonly Element[]): Element | null {
     for (const element of elements) {
       if (this.#isElementInScope(element)) {
-        return element
+        return element;
       }
     }
 
-    return null
+    return null;
   }
 
   #rankRoleLocator(
     locator: Extract<Locator, { kind: 'role' }>,
     pass: ResolutionPass,
   ): readonly TargetCandidate[] {
-    const candidates: TargetCandidate[] = []
+    const candidates: TargetCandidate[] = [];
 
     this.#allElements().forEach((element, order) => {
       if (locator.includeHidden !== true && this.#isHidden(element, pass)) {
-        return
+        return;
       }
 
-      const debug = this.#describeElement(element, pass)
+      const debug = this.#describeElement(element, pass);
       if (debug.role !== locator.role) {
-        return
+        return;
       }
 
-      let nameMatch: TextMatch | undefined
+      let nameMatch: TextMatch | undefined;
       if (locator.name !== undefined) {
-        const match = matchText(debug.name ?? '', locator.name, locator.exact === true)
+        const match = matchText(debug.name ?? '', locator.name, locator.exact === true);
 
         if (match === null) {
-          return
+          return;
         }
 
-        nameMatch = match
+        nameMatch = match;
       }
 
-      const nameScore = nameMatch === undefined ? 0 : roleNameScore(nameMatch.kind)
+      const nameScore = nameMatch === undefined ? 0 : roleNameScore(nameMatch.kind);
       candidates.push({
         element,
         score: 80 + nameScore,
         reasons: ['role', ...(nameMatch === undefined ? [] : [`name:${nameMatch.kind}`])],
         order,
-      })
-    })
+      });
+    });
 
-    return sortCandidates(candidates)
+    return sortCandidates(candidates);
   }
 
   #rankTextLocator(
@@ -469,13 +493,17 @@ export class BrowserTargetResolver implements TargetResolver {
   ): readonly TargetCandidate[] {
     const candidates = this.#allElements().flatMap((element, order): readonly TargetCandidate[] => {
       if (this.#isHidden(element, pass)) {
-        return []
+        return [];
       }
 
-      const match = matchText(this.#dom.getTextContent(element), locator.value, locator.exact === true)
+      const match = matchText(
+        this.#dom.getTextContent(element),
+        locator.value,
+        locator.exact === true,
+      );
 
       if (match === null) {
-        return []
+        return [];
       }
 
       return [
@@ -485,26 +513,33 @@ export class BrowserTargetResolver implements TargetResolver {
           reasons: [`text:${match.kind}`],
           order,
         },
-      ]
-    })
+      ];
+    });
 
-    return sortCandidates(this.#withoutAncestorMatches(candidates))
+    return sortCandidates(this.#withoutAncestorMatches(candidates));
   }
 
   #rankLabelLocator(
     locator: Extract<Locator, { kind: 'label' }>,
     pass: ResolutionPass,
   ): readonly TargetCandidate[] {
-    const candidates: TargetCandidate[] = []
+    const candidates: TargetCandidate[] = [];
     const labels = this.#dom
       .querySelectorAll('label', this.#dom.getRoot())
-      .filter((labelElement) => this.#isElementInScope(labelElement) && !this.#isHidden(labelElement, pass))
+      .filter(
+        (labelElement) =>
+          this.#isElementInScope(labelElement) && !this.#isHidden(labelElement, pass),
+      );
 
     labels.forEach((labelElement, order) => {
-      const match = matchText(this.#dom.getTextContent(labelElement), locator.value, locator.exact === true)
+      const match = matchText(
+        this.#dom.getTextContent(labelElement),
+        locator.value,
+        locator.exact === true,
+      );
 
       if (match === null) {
-        return
+        return;
       }
 
       for (const control of this.#associatedLabelControls(labelElement)) {
@@ -514,20 +549,24 @@ export class BrowserTargetResolver implements TargetResolver {
             score: labelScore(match.kind),
             reasons: ['label', `label:${match.kind}`],
             order,
-          })
+          });
         }
       }
-    })
+    });
 
     this.#allLabelableControls().forEach((element, order) => {
       if (this.#isHidden(element, pass)) {
-        return
+        return;
       }
 
-      const match = matchText(this.#describeElement(element, pass).name ?? '', locator.value, locator.exact === true)
+      const match = matchText(
+        this.#describeElement(element, pass).name ?? '',
+        locator.value,
+        locator.exact === true,
+      );
 
       if (match === null) {
-        return
+        return;
       }
 
       candidates.push({
@@ -535,15 +574,15 @@ export class BrowserTargetResolver implements TargetResolver {
         score: accessibleLabelScore(match.kind),
         reasons: ['accessible-name', `label:${match.kind}`],
         order: labels.length + order,
-      })
-    })
+      });
+    });
 
-    return sortCandidates(dedupeCandidates(candidates))
+    return sortCandidates(dedupeCandidates(candidates));
   }
 
   #rankTestIdLocator(locator: Extract<Locator, { kind: 'testId' }>): readonly TargetCandidate[] {
-    const attribute = locator.attribute ?? 'data-testid'
-    const selector = `[${attribute}="${escapeCssString(locator.value)}"]`
+    const attribute = locator.attribute ?? 'data-testid';
+    const selector = `[${attribute}="${escapeCssString(locator.value)}"]`;
 
     return this.#rankElements(
       this.#dom
@@ -551,7 +590,7 @@ export class BrowserTargetResolver implements TargetResolver {
         .filter((candidate) => this.#isElementInScope(candidate)),
       100,
       ['testId', `attribute:${attribute}`],
-    )
+    );
   }
 
   #rankPointLocator(locator: Extract<Locator, { kind: 'point' }>): readonly TargetCandidate[] {
@@ -562,16 +601,16 @@ export class BrowserTargetResolver implements TargetResolver {
         {
           details: { locator: summarizeLocator(locator) },
         },
-      )
+      );
     }
 
-    const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true })
+    const element = this.#dom.elementFromPoint(locator.point, { ignoreActorbleInternal: true });
 
     if (element === null || !this.#isElementInScope(element)) {
-      return []
+      return [];
     }
 
-    return this.#rankElements([element], 100, ['point'])
+    return this.#rankElements([element], 100, ['point']);
   }
 
   #rankElements(
@@ -586,140 +625,148 @@ export class BrowserTargetResolver implements TargetResolver {
         reasons,
         order,
       })),
-    )
+    );
   }
 
   #allElements(): readonly Element[] {
     return this.#dom
       .querySelectorAll('*', this.#dom.getRoot())
-      .filter((candidate) => this.#isElementInScope(candidate))
+      .filter((candidate) => this.#isElementInScope(candidate));
   }
 
   #allLabelableControls(): readonly Element[] {
     return this.#dom
       .querySelectorAll(labelableSelector, this.#dom.getRoot())
-      .filter((candidate) => this.#isElementInScope(candidate))
+      .filter((candidate) => this.#isElementInScope(candidate));
   }
 
   #associatedLabelControls(labelElement: Element): readonly Element[] {
-    const forId = this.#dom.getAttribute(labelElement, 'for')
+    const forId = this.#dom.getAttribute(labelElement, 'for');
 
     if (forId) {
-      return this.#dom.querySelectorAll(`[id="${escapeCssString(forId)}"]`, this.#dom.getRoot()).slice(0, 1)
+      return this.#dom
+        .querySelectorAll(`[id="${escapeCssString(forId)}"]`, this.#dom.getRoot())
+        .slice(0, 1);
     }
 
-    return this.#dom.querySelectorAll(labelableSelector, labelElement).slice(0, 1)
+    return this.#dom.querySelectorAll(labelableSelector, labelElement).slice(0, 1);
   }
 
   #withoutAncestorMatches(candidates: readonly TargetCandidate[]): readonly TargetCandidate[] {
     if (candidates.length < 2) {
-      return candidates
+      return candidates;
     }
 
-    const candidateElements = new Set(candidates.map((candidate) => candidate.element))
-    const ancestorsWithMatchedDescendants = new Set<Element>()
-    const nearestMatchedAncestorByElement = new WeakMap<Element, Element | null>()
+    const candidateElements = new Set(candidates.map((candidate) => candidate.element));
+    const ancestorsWithMatchedDescendants = new Set<Element>();
+    const nearestMatchedAncestorByElement = new WeakMap<Element, Element | null>();
     const findNearestMatchedAncestor = (element: Element): Element | null => {
       if (nearestMatchedAncestorByElement.has(element)) {
-        return nearestMatchedAncestorByElement.get(element) ?? null
+        return nearestMatchedAncestorByElement.get(element) ?? null;
       }
 
-      const inspected: Element[] = []
-      let current = this.#dom.getParentElement(element)
-      let matchedAncestor: Element | null = null
+      const inspected: Element[] = [];
+      let current = this.#dom.getParentElement(element);
+      let matchedAncestor: Element | null = null;
 
       while (current !== null) {
         if (candidateElements.has(current)) {
-          matchedAncestor = current
-          break
+          matchedAncestor = current;
+          break;
         }
 
         if (nearestMatchedAncestorByElement.has(current)) {
-          matchedAncestor = nearestMatchedAncestorByElement.get(current) ?? null
-          break
+          matchedAncestor = nearestMatchedAncestorByElement.get(current) ?? null;
+          break;
         }
 
-        inspected.push(current)
-        current = this.#dom.getParentElement(current)
+        inspected.push(current);
+        current = this.#dom.getParentElement(current);
       }
 
       for (const inspectedElement of inspected) {
-        nearestMatchedAncestorByElement.set(inspectedElement, matchedAncestor)
+        nearestMatchedAncestorByElement.set(inspectedElement, matchedAncestor);
       }
-      nearestMatchedAncestorByElement.set(element, matchedAncestor)
+      nearestMatchedAncestorByElement.set(element, matchedAncestor);
 
-      return matchedAncestor
-    }
+      return matchedAncestor;
+    };
 
     for (const candidate of candidates) {
-      const ancestor = findNearestMatchedAncestor(candidate.element)
+      const ancestor = findNearestMatchedAncestor(candidate.element);
 
       if (ancestor !== null) {
-        ancestorsWithMatchedDescendants.add(ancestor)
+        ancestorsWithMatchedDescendants.add(ancestor);
       }
     }
 
-    return candidates.filter((candidate) => !ancestorsWithMatchedDescendants.has(candidate.element))
+    return candidates.filter(
+      (candidate) => !ancestorsWithMatchedDescendants.has(candidate.element),
+    );
   }
 
   #isHidden(element: Element, pass: ResolutionPass): boolean {
-    const cached = pass.hiddenByElement.get(element)
+    const cached = pass.hiddenByElement.get(element);
     if (cached !== undefined) {
-      return cached
+      return cached;
     }
 
-    const inspected: Element[] = []
-    let current: Element | null = element
+    const inspected: Element[] = [];
+    let current: Element | null = element;
 
     while (current) {
-      const cachedCurrent = pass.hiddenByElement.get(current)
+      const cachedCurrent = pass.hiddenByElement.get(current);
       if (cachedCurrent !== undefined) {
-        cacheHidden(inspected, cachedCurrent, pass)
-        return cachedCurrent
+        cacheHidden(inspected, cachedCurrent, pass);
+        return cachedCurrent;
       }
 
-      inspected.push(current)
-      const debug = this.#describeElement(current, pass)
-      const attributes = debug.attributes ?? {}
+      inspected.push(current);
+      const debug = this.#describeElement(current, pass);
+      const attributes = debug.attributes ?? {};
 
       if ('hidden' in attributes || attributes['aria-hidden'] === 'true') {
-        cacheHidden(inspected, true, pass)
-        return true
+        cacheHidden(inspected, true, pass);
+        return true;
       }
 
-      const style = this.#getComputedStyle(current, pass)
-      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
-        cacheHidden(inspected, true, pass)
-        return true
+      const style = this.#getComputedStyle(current, pass);
+      if (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.visibility === 'collapse'
+      ) {
+        cacheHidden(inspected, true, pass);
+        return true;
       }
 
-      current = this.#dom.getParentElement(current)
+      current = this.#dom.getParentElement(current);
     }
 
-    cacheHidden(inspected, false, pass)
-    return false
+    cacheHidden(inspected, false, pass);
+    return false;
   }
 
   #describeElement(element: Element, pass: ResolutionPass): TargetDebugInfo {
-    const cached = pass.debugByElement.get(element)
+    const cached = pass.debugByElement.get(element);
     if (cached !== undefined) {
-      return cached
+      return cached;
     }
 
-    const debug = this.#dom.describeElement(element)
-    pass.debugByElement.set(element, debug)
-    return debug
+    const debug = this.#dom.describeElement(element);
+    pass.debugByElement.set(element, debug);
+    return debug;
   }
 
   #getComputedStyle(element: Element, pass: ResolutionPass): CSSStyleDeclaration {
-    const cached = pass.styleByElement.get(element)
+    const cached = pass.styleByElement.get(element);
     if (cached !== undefined) {
-      return cached
+      return cached;
     }
 
-    const style = this.#dom.getComputedStyle(element)
-    pass.styleByElement.set(element, style)
-    return style
+    const style = this.#dom.getComputedStyle(element);
+    pass.styleByElement.set(element, style);
+    return style;
   }
 
   #recordResolutionDiagnostics(
@@ -733,37 +780,39 @@ export class BrowserTargetResolver implements TargetResolver {
       rankingPolicy,
       ambiguity,
       candidates: this.#snapshotCandidates(candidates, pass),
-    })
+    });
 
-    this.#warnBrowserFidelityLimits()
+    this.#warnBrowserFidelityLimits();
   }
 
   #warnBrowserFidelityLimits(): void {
     if (this.#trace === undefined || this.#browserLimitsWarned) {
-      return
+      return;
     }
 
-    this.#browserLimitsWarned = true
-    this.#trace.warn('Browser resolver cannot inspect cross-origin frames or closed shadow roots.', {
-      unsupported: ['cross-origin-frame', 'closed-shadow-root'],
-    })
+    this.#browserLimitsWarned = true;
+    this.#trace.warn(
+      'Browser resolver cannot inspect cross-origin frames or closed shadow roots.',
+      {
+        unsupported: ['cross-origin-frame', 'closed-shadow-root'],
+      },
+    );
     this.#trace.warn(
       'Browser actions dispatch synthetic events; native drag/drop fidelity is unavailable.',
       {
         trustedEvents: false,
         dragAndDrop: 'pointer-gesture',
         nativeDnD: false,
-        unsupported: [
-          'html5-dnd',
-          'native-dnd',
-          'editor-selection-drag',
-          'custom-dnd-adapter',
-        ],
+        unsupported: ['html5-dnd', 'native-dnd', 'editor-selection-drag', 'custom-dnd-adapter'],
       },
-    )
+    );
   }
 
-  #createHandle(element: Element, locator: Locator | undefined, pass: ResolutionPass): TargetHandle {
+  #createHandle(
+    element: Element,
+    locator: Locator | undefined,
+    pass: ResolutionPass,
+  ): TargetHandle {
     return {
       id: `${this.#idPrefix}-${this.#nextTargetId++}`,
       element,
@@ -772,40 +821,42 @@ export class BrowserTargetResolver implements TargetResolver {
       root: this.#dom.getRoot(),
       validity: 'live',
       debug: this.#describeElement(element, pass),
-    }
+    };
   }
 
   #toHandle(target: TargetLike): Promise<TargetHandle> {
     if (isTargetHandle(target)) {
-      return Promise.resolve(target)
+      return Promise.resolve(target);
     }
 
     if (isLocator(target)) {
-      return this.resolve(target)
+      return this.resolve(target);
     }
 
-    return this.resolve(elementLocator(target))
+    return this.resolve(elementLocator(target));
   }
 
   #currentValidity(target: TargetHandle): TargetValidity {
     if (target.validity === 'detached') {
-      return 'detached'
+      return 'detached';
     }
 
     if (target.validity === 'stale') {
-      return 'stale'
+      return 'stale';
     }
 
     if (!this.#isElementInScope(target.element)) {
-      return target.locator !== undefined && target.locator.kind !== 'element' ? 'stale' : 'detached'
+      return target.locator !== undefined && target.locator.kind !== 'element'
+        ? 'stale'
+        : 'detached';
     }
 
-    return 'live'
+    return 'live';
   }
 
   #isElementInScope(element: Element): boolean {
-    const root = this.#dom.getRoot()
-    return this.#dom.isConnected(element) && this.#dom.contains(root, element)
+    const root = this.#dom.getRoot();
+    return this.#dom.isConnected(element) && this.#dom.contains(root, element);
   }
 
   #emptyResolveError(locator: Locator): ActorbleError {
@@ -816,12 +867,12 @@ export class BrowserTargetResolver implements TargetResolver {
         {
           details: { locator: summarizeLocator(locator), count: 0 },
         },
-      )
+      );
     }
 
     return actorbleError('TARGET_NOT_FOUND', `No target matched ${describeLocator(locator)}.`, {
       details: { locator: summarizeLocator(locator), count: 0 },
-    })
+    });
   }
 
   #snapshotCandidates(
@@ -833,51 +884,47 @@ export class BrowserTargetResolver implements TargetResolver {
       score: candidate.score,
       reasons: candidate.reasons,
       debug: this.#describeElement(candidate.element, pass),
-    }))
+    }));
   }
 }
 
 export function createTargetResolver(options: TargetResolverOptions = {}): TargetResolver {
-  return new BrowserTargetResolver(options)
+  return new BrowserTargetResolver(options);
 }
 
-type ResolutionAmbiguity = 'no-candidates' | 'single-best' | 'strict-multiple-candidates'
+type ResolutionAmbiguity = 'no-candidates' | 'single-best' | 'strict-multiple-candidates';
 
 type TextMatch = Readonly<{
-  kind: 'exact' | 'regex' | 'partial'
-}>
+  kind: 'exact' | 'regex' | 'partial';
+}>;
 
 type TargetCandidateSnapshot = Readonly<{
-  index: number
-  score: number
-  reasons: readonly string[]
-  debug: TargetDebugInfo
-}>
+  index: number;
+  score: number;
+  reasons: readonly string[];
+  debug: TargetDebugInfo;
+}>;
 
 type ResolutionPass = Readonly<{
-  debugByElement: WeakMap<Element, TargetDebugInfo>
-  styleByElement: WeakMap<Element, CSSStyleDeclaration>
-  hiddenByElement: WeakMap<Element, boolean>
-}>
+  debugByElement: WeakMap<Element, TargetDebugInfo>;
+  styleByElement: WeakMap<Element, CSSStyleDeclaration>;
+  hiddenByElement: WeakMap<Element, boolean>;
+}>;
 
-const rankingPolicy = 'score-desc-dom-order'
-const labelableSelector = 'button,input,meter,output,progress,select,textarea'
+const rankingPolicy = 'score-desc-dom-order';
+const labelableSelector = 'button,input,meter,output,progress,select,textarea';
 
 function createResolutionPass(): ResolutionPass {
   return {
     debugByElement: new WeakMap(),
     styleByElement: new WeakMap(),
     hiddenByElement: new WeakMap(),
-  }
+  };
 }
 
-function cacheHidden(
-  elements: readonly Element[],
-  value: boolean,
-  pass: ResolutionPass,
-): void {
+function cacheHidden(elements: readonly Element[], value: boolean, pass: ResolutionPass): void {
   for (const element of elements) {
-    pass.hiddenByElement.set(element, value)
+    pass.hiddenByElement.set(element, value);
   }
 }
 
@@ -886,32 +933,34 @@ function resolutionAmbiguity(
   strict: boolean,
 ): ResolutionAmbiguity {
   if (candidates.length === 0) {
-    return 'no-candidates'
+    return 'no-candidates';
   }
 
-  return strict && candidates.length > 1 ? 'strict-multiple-candidates' : 'single-best'
+  return strict && candidates.length > 1 ? 'strict-multiple-candidates' : 'single-best';
 }
 
 function sortCandidates(candidates: readonly TargetCandidate[]): readonly TargetCandidate[] {
-  return [...candidates].sort((left, right) => right.score - left.score || left.order - right.order)
+  return [...candidates].sort(
+    (left, right) => right.score - left.score || left.order - right.order,
+  );
 }
 
 function dedupeCandidates(candidates: readonly TargetCandidate[]): readonly TargetCandidate[] {
-  const bestByElement = new Map<Element, TargetCandidate>()
+  const bestByElement = new Map<Element, TargetCandidate>();
 
   for (const candidate of candidates) {
-    const current = bestByElement.get(candidate.element)
+    const current = bestByElement.get(candidate.element);
 
     if (
       current === undefined ||
       candidate.score > current.score ||
       (candidate.score === current.score && candidate.order < current.order)
     ) {
-      bestByElement.set(candidate.element, candidate)
+      bestByElement.set(candidate.element, candidate);
     }
   }
 
-  return Array.from(bestByElement.values())
+  return Array.from(bestByElement.values());
 }
 
 function matchText(
@@ -919,79 +968,79 @@ function matchText(
   expectedValue: string | RegExp,
   exact: boolean,
 ): TextMatch | null {
-  const actual = normalizeWhitespace(actualValue)
+  const actual = normalizeWhitespace(actualValue);
 
   if (expectedValue instanceof RegExp) {
-    expectedValue.lastIndex = 0
-    return expectedValue.test(actual) ? { kind: 'regex' } : null
+    expectedValue.lastIndex = 0;
+    return expectedValue.test(actual) ? { kind: 'regex' } : null;
   }
 
-  const expected = normalizeWhitespace(expectedValue)
+  const expected = normalizeWhitespace(expectedValue);
 
   if (actual === expected) {
-    return { kind: 'exact' }
+    return { kind: 'exact' };
   }
 
   if (!exact && actual.includes(expected)) {
-    return { kind: 'partial' }
+    return { kind: 'partial' };
   }
 
-  return null
+  return null;
 }
 
 function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim()
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function roleNameScore(kind: TextMatch['kind']): number {
   switch (kind) {
     case 'exact':
-      return 20
+      return 20;
     case 'regex':
-      return 18
+      return 18;
     case 'partial':
-      return 10
+      return 10;
   }
 }
 
 function textScore(kind: TextMatch['kind']): number {
   switch (kind) {
     case 'exact':
-      return 100
+      return 100;
     case 'regex':
-      return 95
+      return 95;
     case 'partial':
-      return 80
+      return 80;
   }
 }
 
 function labelScore(kind: TextMatch['kind']): number {
   switch (kind) {
     case 'exact':
-      return 100
+      return 100;
     case 'regex':
-      return 95
+      return 95;
     case 'partial':
-      return 90
+      return 90;
   }
 }
 
 function accessibleLabelScore(kind: TextMatch['kind']): number {
-  return labelScore(kind) - 10
+  return labelScore(kind) - 10;
 }
 
 function escapeCssString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\a ')
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\a ');
 }
 
 function normalizeError(error: unknown, fallbackMessage: string): ActorbleError {
   if (error instanceof ActorbleError) {
-    return error
+    return error;
   }
 
   return actorbleError('PLATFORM_UNSUPPORTED', fallbackMessage, {
     cause: error,
-  })
+  });
 }
 
 function isTargetHandle(target: TargetLike): target is TargetHandle {
@@ -1002,11 +1051,11 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
     'element' in target &&
     'resolvedAt' in target &&
     'debug' in target
-  )
+  );
 }
 
 function isLocator(target: TargetLike): target is Locator {
-  return typeof target === 'object' && target !== null && 'kind' in target
+  return typeof target === 'object' && target !== null && 'kind' in target;
 }
 
 function locatorMatchIndex(locator: Locator): number | undefined {
@@ -1016,10 +1065,10 @@ function locatorMatchIndex(locator: Locator): number | undefined {
     case 'text':
     case 'label':
     case 'testId':
-      return locator.matchIndex
+      return locator.matchIndex;
     case 'element':
     case 'point':
-      return undefined
+      return undefined;
   }
 }
 
@@ -1027,85 +1076,85 @@ function applyLocatorMatchIndex(
   locator: Locator,
   candidates: readonly TargetCandidate[],
 ): readonly TargetCandidate[] {
-  const matchIndex = locatorMatchIndex(locator)
+  const matchIndex = locatorMatchIndex(locator);
   if (matchIndex === undefined) {
-    return candidates
+    return candidates;
   }
 
   if (!Number.isInteger(matchIndex) || matchIndex < 0) {
-    return []
+    return [];
   }
 
-  const candidate = candidates[matchIndex]
-  return candidate === undefined ? [] : [candidate]
+  const candidate = candidates[matchIndex];
+  return candidate === undefined ? [] : [candidate];
 }
 
 function describeLocator(locator: Locator): string {
   switch (locator.kind) {
     case 'css':
-      return formatLocatorDescription(`css(${JSON.stringify(locator.selector)})`, locator)
+      return formatLocatorDescription(`css(${JSON.stringify(locator.selector)})`, locator);
     case 'element':
-      return 'element()'
+      return 'element()';
     case 'role':
-      return formatLocatorDescription(`role(${JSON.stringify(locator.role)})`, locator)
+      return formatLocatorDescription(`role(${JSON.stringify(locator.role)})`, locator);
     case 'text':
-      return formatLocatorDescription(`text(${formatTextMatcher(locator.value)})`, locator)
+      return formatLocatorDescription(`text(${formatTextMatcher(locator.value)})`, locator);
     case 'label':
-      return formatLocatorDescription(`label(${formatTextMatcher(locator.value)})`, locator)
+      return formatLocatorDescription(`label(${formatTextMatcher(locator.value)})`, locator);
     case 'testId':
-      return formatLocatorDescription(`testId(${JSON.stringify(locator.value)})`, locator)
+      return formatLocatorDescription(`testId(${JSON.stringify(locator.value)})`, locator);
     case 'point':
-      return `point(${locator.point.x}, ${locator.point.y})`
+      return `point(${locator.point.x}, ${locator.point.y})`;
   }
 }
 
 function formatLocatorDescription(base: string, locator: Locator): string {
-  const matchIndex = locatorMatchIndex(locator)
-  return matchIndex === undefined ? base : `${base} matchIndex:${matchIndex}`
+  const matchIndex = locatorMatchIndex(locator);
+  return matchIndex === undefined ? base : `${base} matchIndex:${matchIndex}`;
 }
 
 function formatTextMatcher(value: string | RegExp): string {
-  return value instanceof RegExp ? value.toString() : JSON.stringify(value)
+  return value instanceof RegExp ? value.toString() : JSON.stringify(value);
 }
 
 function summarizeLocator(locator: Locator): Readonly<Record<string, unknown>> {
   switch (locator.kind) {
     case 'css':
-      return withOptionalMatchIndex({ kind: locator.kind, selector: locator.selector }, locator)
+      return withOptionalMatchIndex({ kind: locator.kind, selector: locator.selector }, locator);
     case 'element':
-      return { kind: locator.kind }
+      return { kind: locator.kind };
     case 'role':
       return {
         kind: locator.kind,
         role: locator.role,
         name: locator.name instanceof RegExp ? locator.name.toString() : locator.name,
         ...(locator.matchIndex === undefined ? {} : { matchIndex: locator.matchIndex }),
-      }
+      };
     case 'text':
     case 'label':
       return {
         kind: locator.kind,
         value: locator.value instanceof RegExp ? locator.value.toString() : locator.value,
         ...(locator.matchIndex === undefined ? {} : { matchIndex: locator.matchIndex }),
-      }
+      };
     case 'testId':
       return withOptionalMatchIndex(
         { kind: locator.kind, value: locator.value, attribute: locator.attribute },
         locator,
-      )
+      );
     case 'point':
       return {
         kind: locator.kind,
         point: locator.point,
         coordinateSpace: locator.coordinateSpace,
-      }
+      };
   }
 }
 
 function withOptionalMatchIndex<TValue extends Readonly<Record<string, unknown>>>(
   value: TValue,
   locator: Locator,
-): TValue | TValue & Readonly<{ matchIndex: number }> {
-  const matchIndex = locatorMatchIndex(locator)
-  return matchIndex === undefined ? value : { ...value, matchIndex }
+): TValue | (TValue & Readonly<{ matchIndex: number }>) {
+  const matchIndex = locatorMatchIndex(locator);
+  return matchIndex === undefined ? value : { ...value, matchIndex };
 }

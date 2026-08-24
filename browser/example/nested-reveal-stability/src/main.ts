@@ -1,37 +1,37 @@
-import '../../shared/styles.css'
-import './styles.css'
-import { stable, testId } from '../../../src/index.js'
-import { byId } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import './styles.css';
+import { stable, testId } from '../../../src/index.js';
+import { byId } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
-type ScrollSample = Readonly<{ surface: 'panel' | 'viewport'; at: number }>
+type ScrollSample = Readonly<{ surface: 'panel' | 'viewport'; at: number }>;
 
 type NestedRevealSmokeState = {
-  trackScroll: boolean
-  scrollOrder: ScrollSample[]
-  panelScrollTop: number
-  viewportScrollY: number
-  pointerInsideTarget: boolean
-  motionStartedAt: number | null
-  motionEndedAt: number | null
-  stableCompletedAt: number | null
-  alreadyVisibleChanged: boolean | null
-  oversizedFullyVisible: boolean | null
-  timedAbortCode: string | null
-  timedAbortPosition: number | null
-  timedStoppedPosition: number | null
-  recoverySucceeded: boolean
-  revealTraceEvents: string[]
-  capabilities: Record<string, unknown>
-}
+  trackScroll: boolean;
+  scrollOrder: ScrollSample[];
+  panelScrollTop: number;
+  viewportScrollY: number;
+  pointerInsideTarget: boolean;
+  motionStartedAt: number | null;
+  motionEndedAt: number | null;
+  stableCompletedAt: number | null;
+  alreadyVisibleChanged: boolean | null;
+  oversizedFullyVisible: boolean | null;
+  timedAbortCode: string | null;
+  timedAbortPosition: number | null;
+  timedStoppedPosition: number | null;
+  recoverySucceeded: boolean;
+  revealTraceEvents: string[];
+  capabilities: Record<string, unknown>;
+};
 
 declare global {
   interface Window {
-    __actorbleNestedReveal?: NestedRevealSmokeState
+    __actorbleNestedReveal?: NestedRevealSmokeState;
   }
 }
 
@@ -73,16 +73,17 @@ const stageHtml = `
       </div>
     </section>
   </div>
-`
+`;
 
-let activeState = createSmokeState()
+let activeState = createSmokeState();
 
-window.addEventListener('scroll', () => recordScroll('viewport'), { passive: true })
+window.addEventListener('scroll', () => recordScroll('viewport'), { passive: true });
 
 mountTaskExample({
   title: 'Nested reveal lab',
   eyebrow: 'Deterministic surfaces',
-  summary: 'Reveal a nested input, interact with fresh geometry, and wait for real visual stability.',
+  summary:
+    'Reveal a nested input, interact with fresh geometry, and wait for real visual stability.',
   stageLabel: 'Nested reveal and stability example',
   stageHtml,
   successMessage: 'Nested reveal scenario complete',
@@ -99,47 +100,47 @@ mountTaskExample({
   run: runVerticalSlice,
   typeFirstField: revealTargetOnly,
   clickPrimary: runAbortRecoveryOnly,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  activeState = createSmokeState()
-  window.__actorbleNestedReveal = activeState
+  activeState = createSmokeState();
+  window.__actorbleNestedReveal = activeState;
 
-  const panel = byId<HTMLElement>('nested-scroll-panel')
-  const input = byId<HTMLInputElement>('nested-target')
-  const result = byId<HTMLElement>('async-result')
+  const panel = byId<HTMLElement>('nested-scroll-panel');
+  const input = byId<HTMLInputElement>('nested-target');
+  const result = byId<HTMLElement>('async-result');
 
-  panel.addEventListener('scroll', () => recordScroll('panel'), { passive: true })
+  panel.addEventListener('scroll', () => recordScroll('panel'), { passive: true });
   input.addEventListener('pointerdown', (event) => {
-    const rect = input.getBoundingClientRect()
+    const rect = input.getBoundingClientRect();
     activeState.pointerInsideTarget =
       event.clientX >= rect.left &&
       event.clientX <= rect.right &&
       event.clientY >= rect.top &&
-      event.clientY <= rect.bottom
-  })
-  input.addEventListener('change', () => startResultMotion(result, input.value))
+      event.clientY <= rect.bottom;
+  });
+  input.addEventListener('change', () => startResultMotion(result, input.value));
   result.addEventListener('transitionend', (event) => {
     if (event.propertyName === 'transform') {
-      activeState.motionEndedAt = performance.now()
-      result.dataset.motion = 'ended'
+      activeState.motionEndedAt = performance.now();
+      result.dataset.motion = 'ended';
     }
-  })
+  });
 
-  context.bindDomEvents('nestedInput', input)
+  context.bindDomEvents('nestedInput', input);
 }
 
 async function runVerticalSlice(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
-  const panel = byId<HTMLElement>('nested-scroll-panel')
+  const actorble = context.actorble();
+  const panel = byId<HTMLElement>('nested-scroll-panel');
 
-  activeState.trackScroll = false
-  window.scrollTo(0, 0)
-  panel.scrollTo(0, 0)
-  activeState.scrollOrder.splice(0)
-  await nextFrame()
-  activeState.scrollOrder.splice(0)
-  activeState.trackScroll = true
+  activeState.trackScroll = false;
+  window.scrollTo(0, 0);
+  panel.scrollTo(0, 0);
+  activeState.scrollOrder.splice(0);
+  await nextFrame();
+  activeState.scrollOrder.splice(0);
+  activeState.trackScroll = true;
 
   await actorble.reveal(testId('nested-target'), {
     block: 'center',
@@ -148,28 +149,31 @@ async function runVerticalSlice(context: TaskExampleContext): Promise<void> {
     motion: { kind: 'instant' },
     settle: 'scroll-stable',
     timeout: 5000,
-  })
+  });
 
-  activeState.panelScrollTop = panel.scrollTop
-  activeState.viewportScrollY = window.scrollY
+  activeState.panelScrollTop = panel.scrollTop;
+  activeState.viewportScrollY = window.scrollY;
 
-  await actorble.moveTo(testId('nested-target'), { timeout: 2500 })
-  await actorble.click(testId('nested-target'), { timeout: 2500 })
+  await actorble.moveTo(testId('nested-target'), { timeout: 2500 });
+  await actorble.click(testId('nested-target'), { timeout: 2500 });
   await actorble.typeInto(testId('nested-target'), 'Scenema', {
     ...clickFocusTyping(28, 5000),
-  })
-  await actorble.waitFor(stable(testId('async-result'), {
-    quietMs: 100,
-    stableFrames: 3,
-    threshold: 0.25,
-  }), { timeout: 5000 })
-  activeState.stableCompletedAt = performance.now()
+  });
+  await actorble.waitFor(
+    stable(testId('async-result'), {
+      quietMs: 100,
+      stableFrames: 3,
+      threshold: 0.25,
+    }),
+    { timeout: 5000 },
+  );
+  activeState.stableCompletedAt = performance.now();
 
   const alreadyVisible = await actorble.reveal(testId('nested-target'), {
     block: 'nearest',
     settle: 'none',
-  })
-  activeState.alreadyVisibleChanged = alreadyVisible.changed
+  });
+  activeState.alreadyVisibleChanged = alreadyVisible.changed;
 
   const oversized = await actorble.reveal(testId('oversized-target'), {
     visibility: 'full',
@@ -177,97 +181,96 @@ async function runVerticalSlice(context: TaskExampleContext): Promise<void> {
     safeArea: { top: 24, right: 24, bottom: 24, left: 24 },
     settle: 'scroll-stable',
     timeout: 5000,
-  })
-  activeState.oversizedFullyVisible = oversized.fullyVisible
+  });
+  activeState.oversizedFullyVisible = oversized.fullyVisible;
 
-  await runAbortRecovery(context)
-  captureDiagnostics(context)
+  await runAbortRecovery(context);
+  captureDiagnostics(context);
 }
 
 async function revealTargetOnly(context: TaskExampleContext): Promise<void> {
   const result = await context.actorble().reveal(testId('nested-target'), {
     block: 'center',
     settle: 'scroll-stable',
-  })
-  activeState.panelScrollTop = byId<HTMLElement>('nested-scroll-panel').scrollTop
-  activeState.viewportScrollY = window.scrollY
-  activeState.alreadyVisibleChanged = result.changed
+  });
+  activeState.panelScrollTop = byId<HTMLElement>('nested-scroll-panel').scrollTop;
+  activeState.viewportScrollY = window.scrollY;
+  activeState.alreadyVisibleChanged = result.changed;
 }
 
 async function runAbortRecoveryOnly(context: TaskExampleContext): Promise<void> {
-  await runAbortRecovery(context)
-  captureDiagnostics(context)
+  await runAbortRecovery(context);
+  captureDiagnostics(context);
 }
 
 async function runAbortRecovery(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
-  const panel = byId<HTMLElement>('nested-scroll-panel')
+  const actorble = context.actorble();
+  const panel = byId<HTMLElement>('nested-scroll-panel');
 
-  window.scrollTo(0, 0)
-  panel.scrollTo(0, 0)
-  await nextFrame()
+  window.scrollTo(0, 0);
+  panel.scrollTo(0, 0);
+  await nextFrame();
 
-  const controller = new AbortController()
+  const controller = new AbortController();
   const running = actorble.reveal(testId('nested-target'), {
     block: 'center',
     motion: { kind: 'timed', duration: 900, timing: 'ease-in-out' },
     settle: 'none',
     signal: controller.signal,
     timeout: 3000,
-  })
-  window.setTimeout(() => controller.abort('smoke interruption'), 96)
+  });
+  window.setTimeout(() => controller.abort('smoke interruption'), 96);
 
   try {
-    await running
+    await running;
   } catch (error) {
-    activeState.timedAbortCode = errorCode(error)
+    activeState.timedAbortCode = errorCode(error);
   }
 
-  activeState.timedAbortPosition = panel.scrollTop + window.scrollY
-  await delay(180)
-  activeState.timedStoppedPosition = panel.scrollTop + window.scrollY
+  activeState.timedAbortPosition = panel.scrollTop + window.scrollY;
+  await delay(180);
+  activeState.timedStoppedPosition = panel.scrollTop + window.scrollY;
 
   await actorble.reveal(testId('nested-target'), {
     block: 'center',
     motion: { kind: 'instant' },
     settle: 'scroll-stable',
     timeout: 5000,
-  })
-  await actorble.moveTo(testId('nested-target'), { timeout: 2500 })
-  activeState.recoverySucceeded = true
+  });
+  await actorble.moveTo(testId('nested-target'), { timeout: 2500 });
+  activeState.recoverySucceeded = true;
 }
 
 function startResultMotion(result: HTMLElement, value: string): void {
-  result.dataset.state = 'idle'
-  result.dataset.motion = 'running'
-  result.innerHTML = `<strong>Project ${escapeText(value || 'Untitled')} created</strong><span>Observing layout and mutation quiet windows</span>`
-  result.getBoundingClientRect()
-  activeState.motionStartedAt = performance.now()
+  result.dataset.state = 'idle';
+  result.dataset.motion = 'running';
+  result.innerHTML = `<strong>Project ${escapeText(value || 'Untitled')} created</strong><span>Observing layout and mutation quiet windows</span>`;
+  result.getBoundingClientRect();
+  activeState.motionStartedAt = performance.now();
 
   requestAnimationFrame(() => {
-    result.dataset.state = 'moving'
-  })
+    result.dataset.state = 'moving';
+  });
 }
 
 function recordScroll(surface: ScrollSample['surface']): void {
   if (!activeState.trackScroll) {
-    return
+    return;
   }
 
-  const previous = activeState.scrollOrder.at(-1)
+  const previous = activeState.scrollOrder.at(-1);
   if (previous?.surface !== surface) {
-    activeState.scrollOrder.push({ surface, at: performance.now() })
+    activeState.scrollOrder.push({ surface, at: performance.now() });
   }
 }
 
 function captureDiagnostics(context: TaskExampleContext): void {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
   activeState.revealTraceEvents = actorble
     .getTrace()
-    .events
-    .map((event) => event.name)
-    .filter((name) => name.startsWith('reveal:') || name.startsWith('stability:'))
-  activeState.capabilities = { ...actorble.getCapabilities() }
+    .events.map((event) => event.name)
+    .filter((name) => name.startsWith('reveal:') || name.startsWith('stability:'));
+  activeState.capabilities = { ...actorble.getCapabilities() };
 }
 
 function createSmokeState(): NestedRevealSmokeState {
@@ -288,25 +291,25 @@ function createSmokeState(): NestedRevealSmokeState {
     recoverySucceeded: false,
     revealTraceEvents: [],
     capabilities: {},
-  }
+  };
 }
 
 function errorCode(error: unknown): string {
   return typeof error === 'object' && error !== null && 'code' in error
     ? String(error.code)
-    : 'UNKNOWN'
+    : 'UNKNOWN';
 }
 
 function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 function delay(duration: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, duration))
+  return new Promise((resolve) => window.setTimeout(resolve, duration));
 }
 
 function escapeText(value: string): string {
-  const element = document.createElement('span')
-  element.textContent = value
-  return element.innerHTML
+  const element = document.createElement('span');
+  element.textContent = value;
+  return element.innerHTML;
 }

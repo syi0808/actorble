@@ -1,22 +1,22 @@
-import '../../shared/styles.css'
-import { testId } from '../../../src/index.js'
-import { byId, escapeHtml } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import { testId } from '../../../src/index.js';
+import { byId, escapeHtml } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
 const articleCopy =
-  'Research note: visible verification before a captured quote\nis trusted before it enters a selection-driven automation brief.'
-const selectedQuote = 'visible verification before a captured quote\nis trusted'
-const noteText = 'Use in weekly automation brief.'
-const selectedQuoteOffset = articleCopy.indexOf(selectedQuote)
-let currentSourceQuote = ''
-let sourceSelectionListenerBound = false
+  'Research note: visible verification before a captured quote\nis trusted before it enters a selection-driven automation brief.';
+const selectedQuote = 'visible verification before a captured quote\nis trusted';
+const noteText = 'Use in weekly automation brief.';
+const selectedQuoteOffset = articleCopy.indexOf(selectedQuote);
+let currentSourceQuote = '';
+let sourceSelectionListenerBound = false;
 
 if (selectedQuoteOffset < 0) {
-  throw new Error('Research quote is not present in the source copy.')
+  throw new Error('Research quote is not present in the source copy.');
 }
 
 const stageHtml = `
@@ -85,7 +85,7 @@ const stageHtml = `
       </aside>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'Research clipping',
@@ -106,195 +106,198 @@ mountTaskExample({
   run: runResearchClippingScenario,
   typeFirstField: selectResearchQuote,
   clickPrimary: saveResearchQuote,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  currentSourceQuote = ''
+  currentSourceQuote = '';
 
-  const sourceCopy = byId<HTMLElement>('research-source-copy')
-  const saveButton = byId<HTMLButtonElement>('save-quote')
-  const noteInput = byId<HTMLTextAreaElement>('quote-note')
-  const publishButton = byId<HTMLButtonElement>('publish-clipping')
+  const sourceCopy = byId<HTMLElement>('research-source-copy');
+  const saveButton = byId<HTMLButtonElement>('save-quote');
+  const noteInput = byId<HTMLTextAreaElement>('quote-note');
+  const publishButton = byId<HTMLButtonElement>('publish-clipping');
 
-  sourceCopy.addEventListener('pointerup', syncQuotePreviewFromSelection)
-  sourceCopy.addEventListener('mouseup', syncQuotePreviewFromSelection)
-  saveButton.addEventListener('click', saveSelectedQuote)
-  publishButton.addEventListener('click', publishClipping)
+  sourceCopy.addEventListener('pointerup', syncQuotePreviewFromSelection);
+  sourceCopy.addEventListener('mouseup', syncQuotePreviewFromSelection);
+  saveButton.addEventListener('click', saveSelectedQuote);
+  publishButton.addEventListener('click', publishClipping);
 
   if (!sourceSelectionListenerBound) {
-    document.addEventListener('selectionchange', syncQuotePreviewFromSelection)
-    sourceSelectionListenerBound = true
+    document.addEventListener('selectionchange', syncQuotePreviewFromSelection);
+    sourceSelectionListenerBound = true;
   }
 
-  context.bindDomEvents('researchSource', sourceCopy)
-  context.bindDomEvents('saveQuote', saveButton)
-  context.bindDomEvents('quoteNote', noteInput)
-  context.bindDomEvents('publishClipping', publishButton)
+  context.bindDomEvents('researchSource', sourceCopy);
+  context.bindDomEvents('saveQuote', saveButton);
+  context.bindDomEvents('quoteNote', noteInput);
+  context.bindDomEvents('publishClipping', publishButton);
 }
 
 async function runResearchClippingScenario(context: TaskExampleContext): Promise<void> {
-  await selectResearchQuote(context)
-  await saveResearchQuote(context)
-  await typeResearchNote(context)
-  await publishResearchClipping(context)
+  await selectResearchQuote(context);
+  await saveResearchQuote(context);
+  await typeResearchNote(context);
+  await publishResearchClipping(context);
   await context.actorble().waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('clipping-status')?.dataset.state === 'published',
-  })
+  });
 }
 
 async function selectResearchQuote(context: TaskExampleContext): Promise<void> {
-  const target = testId('research-source-copy')
+  const target = testId('research-source-copy');
 
-  await context.actorble().selectText({
-    anchor: { target, offset: selectedQuoteOffset },
-    focus: { target, offset: selectedQuoteOffset + selectedQuote.length },
-  }, {
-    duration: 1440,
-    motion: { kind: 'ease', timing: 'ease-in-out', duration: 1440 },
-  })
-  updateQuotePreview()
+  await context.actorble().selectText(
+    {
+      anchor: { target, offset: selectedQuoteOffset },
+      focus: { target, offset: selectedQuoteOffset + selectedQuote.length },
+    },
+    {
+      duration: 1440,
+      motion: { kind: 'ease', timing: 'ease-in-out', duration: 1440 },
+    },
+  );
+  updateQuotePreview();
 }
 
 async function saveResearchQuote(context: TaskExampleContext): Promise<void> {
   if (!currentQuotePreview()) {
-    await selectResearchQuote(context)
+    await selectResearchQuote(context);
   }
 
-  await context.actorble().click(testId('save-quote'), { pressDwell: 180, timeout: 1500 })
+  await context.actorble().click(testId('save-quote'), { pressDwell: 180, timeout: 1500 });
   await context.actorble().waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('clipping-status')?.dataset.state === 'saved',
-  })
+  });
 }
 
 async function typeResearchNote(context: TaskExampleContext): Promise<void> {
   await context.actorble().typeInto(testId('quote-note'), noteText, {
     ...clickFocusTyping(40, 5000),
-  })
+  });
 }
 
 async function publishResearchClipping(context: TaskExampleContext): Promise<void> {
   await context.actorble().click(testId('publish-clipping'), {
     pressDwell: 180,
     timeout: 1500,
-  })
+  });
 }
 
 function updateQuotePreview(): void {
-  setQuotePreview(selectedSourceQuote())
+  setQuotePreview(selectedSourceQuote());
 }
 
 function syncQuotePreviewFromSelection(): void {
-  const quote = selectedSourceQuote()
+  const quote = selectedSourceQuote();
 
   if (!quote) {
-    return
+    return;
   }
 
-  setQuotePreview(quote)
+  setQuotePreview(quote);
 }
 
 function setQuotePreview(quote: string): void {
-  const status = byId<HTMLElement>('clipping-status')
+  const status = byId<HTMLElement>('clipping-status');
 
-  currentSourceQuote = quote
-  byId<HTMLElement>('quote-preview-output').textContent = quote || 'Waiting'
-  status.dataset.state = quote ? 'selected' : 'idle'
-  status.textContent = quote ? 'Quote selected' : 'Waiting for quote'
+  currentSourceQuote = quote;
+  byId<HTMLElement>('quote-preview-output').textContent = quote || 'Waiting';
+  status.dataset.state = quote ? 'selected' : 'idle';
+  status.textContent = quote ? 'Quote selected' : 'Waiting for quote';
 }
 
 function saveSelectedQuote(): void {
-  const quote = selectedSourceQuote() || currentQuotePreview()
-  const status = byId<HTMLElement>('clipping-status')
+  const quote = selectedSourceQuote() || currentQuotePreview();
+  const status = byId<HTMLElement>('clipping-status');
 
   if (!quote) {
-    status.dataset.state = 'error'
-    status.textContent = 'Quote missing'
-    return
+    status.dataset.state = 'error';
+    status.textContent = 'Quote missing';
+    return;
   }
 
-  setQuotePreview(quote)
-  byId<HTMLElement>('saved-quote-output').textContent = quote
-  status.dataset.state = 'saved'
-  status.textContent = 'Quote saved'
+  setQuotePreview(quote);
+  byId<HTMLElement>('saved-quote-output').textContent = quote;
+  status.dataset.state = 'saved';
+  status.textContent = 'Quote saved';
 }
 
 function publishClipping(): void {
-  const quote = currentSavedQuote()
-  const status = byId<HTMLElement>('clipping-status')
+  const quote = currentSavedQuote();
+  const status = byId<HTMLElement>('clipping-status');
 
   if (!quote) {
-    status.dataset.state = 'error'
-    status.textContent = 'Saved quote missing'
-    return
+    status.dataset.state = 'error';
+    status.textContent = 'Saved quote missing';
+    return;
   }
 
-  const note = byId<HTMLTextAreaElement>('quote-note').value.trim()
+  const note = byId<HTMLTextAreaElement>('quote-note').value.trim();
 
-  byId<HTMLElement>('published-note-output').textContent = note || 'No note'
-  status.dataset.state = 'published'
-  status.textContent = 'Clipping published'
+  byId<HTMLElement>('published-note-output').textContent = note || 'No note';
+  status.dataset.state = 'published';
+  status.textContent = 'Clipping published';
 }
 
 function currentQuotePreview(): string {
-  return currentSourceQuote || readOutputText('quote-preview-output')
+  return currentSourceQuote || readOutputText('quote-preview-output');
 }
 
 function currentSavedQuote(): string {
-  return readOutputText('saved-quote-output')
+  return readOutputText('saved-quote-output');
 }
 
 function readOutputText(id: string): string {
-  const text = byId<HTMLElement>(id).textContent?.trim() ?? ''
+  const text = byId<HTMLElement>(id).textContent?.trim() ?? '';
 
-  return text === 'Waiting' ? '' : text
+  return text === 'Waiting' ? '' : text;
 }
 
 function selectedSourceQuote(): string {
-  const selection = document.getSelection()
-  const sourceCopy = document.getElementById('research-source-copy')
+  const selection = document.getSelection();
+  const sourceCopy = document.getElementById('research-source-copy');
 
   if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !sourceCopy) {
-    return ''
+    return '';
   }
 
-  const sourceRange = document.createRange()
-  sourceRange.selectNodeContents(sourceCopy)
+  const sourceRange = document.createRange();
+  sourceRange.selectNodeContents(sourceCopy);
 
-  const selectedRanges: string[] = []
+  const selectedRanges: string[] = [];
 
   for (let index = 0; index < selection.rangeCount; index += 1) {
-    const range = selection.getRangeAt(index)
+    const range = selection.getRangeAt(index);
 
     if (!rangeIntersectsNode(range, sourceCopy)) {
-      continue
+      continue;
     }
 
-    const clippedRange = range.cloneRange()
+    const clippedRange = range.cloneRange();
 
     if (clippedRange.compareBoundaryPoints(Range.START_TO_START, sourceRange) < 0) {
-      clippedRange.setStart(sourceRange.startContainer, sourceRange.startOffset)
+      clippedRange.setStart(sourceRange.startContainer, sourceRange.startOffset);
     }
 
     if (clippedRange.compareBoundaryPoints(Range.END_TO_END, sourceRange) > 0) {
-      clippedRange.setEnd(sourceRange.endContainer, sourceRange.endOffset)
+      clippedRange.setEnd(sourceRange.endContainer, sourceRange.endOffset);
     }
 
-    const text = clippedRange.toString().trim()
+    const text = clippedRange.toString().trim();
 
     if (text) {
-      selectedRanges.push(text)
+      selectedRanges.push(text);
     }
   }
 
-  return selectedRanges.join('\n').trim()
+  return selectedRanges.join('\n').trim();
 }
 
 function rangeIntersectsNode(range: Range, node: Node): boolean {
   try {
-    return range.intersectsNode(node)
+    return range.intersectsNode(node);
   } catch {
-    return false
+    return false;
   }
 }

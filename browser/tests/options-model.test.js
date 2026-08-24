@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
   BROWSER_OPTION_DEFAULTS,
   resolveActionOptions,
@@ -8,12 +8,12 @@ import {
   resolveBrowserFeedbackOptions,
   resolveRunOptions,
   normalizeStabilityPolicy,
-} from '../src/options/index.js'
+} from '../src/options/index.js';
 
 const targetLifecycleDefaults = {
   reveal: BROWSER_OPTION_DEFAULTS.reveal,
   wait: 'interaction-stable',
-}
+};
 
 describe('browser options model', () => {
   it('centralizes default runtime policy', () => {
@@ -21,18 +21,18 @@ describe('browser options model', () => {
       kind: 'ease',
       timing: 'ease-in-out',
       duration: 250,
-    })
+    });
     expect(BROWSER_OPTION_DEFAULTS.inertiaMotion).toEqual({
       initialVelocity: 1200,
       deceleration: 4800,
-    })
+    });
     expect(BROWSER_OPTION_DEFAULTS.springMotion).toEqual({
       stiffness: 170,
       damping: 26,
       mass: 1,
-    })
-    expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60)
-    expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80)
+    });
+    expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60);
+    expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80);
 
     expect(resolveActorbleOptions().feedback).toEqual({
       enabled: true,
@@ -43,8 +43,8 @@ describe('browser options model', () => {
       typingIndicator: false,
       keystrokeOverlay: false,
       textVisibility: undefined,
-    })
-  })
+    });
+  });
 
   it('normalizes public feedback at the browser option boundary', () => {
     expect(resolveBrowserFeedbackOptions('off')).toMatchObject({
@@ -55,13 +55,13 @@ describe('browser options model', () => {
       focusOverlay: false,
       typingIndicator: false,
       keystrokeOverlay: false,
-    })
+    });
     expect(resolveBrowserFeedbackOptions('cursor')).toMatchObject({
       enabled: true,
       cursor: true,
       targetHighlight: false,
       clickFeedback: false,
-    })
+    });
     expect(resolveActorbleOptions({ feedback: 'debug' }).feedback).toMatchObject({
       enabled: true,
       cursor: true,
@@ -70,7 +70,7 @@ describe('browser options model', () => {
       focusOverlay: true,
       typingIndicator: true,
       keystrokeOverlay: true,
-    })
+    });
     expect(
       resolveActorbleOptions({
         feedback: { target: true, click: true, text: 'masked' },
@@ -84,28 +84,28 @@ describe('browser options model', () => {
       typingIndicator: false,
       keystrokeOverlay: false,
       textVisibility: 'masked',
-    })
-  })
+    });
+  });
 
   it('materializes centralized action defaults', () => {
     expect(resolveActionOptions('moveTo')).toEqual({
       ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
-    })
+    });
     expect(resolveActionOptions('click')).toEqual({
       ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
-    })
+    });
     expect(resolveActionOptions('selectText')).toEqual({
       ...targetLifecycleDefaults,
       motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
-    })
+    });
     expect(resolveActionOptions('typeInto')).toEqual({
       ...targetLifecycleDefaults,
       delay: BROWSER_OPTION_DEFAULTS.typingDelay,
-    })
-    expect(resolveActionOptions('reveal')).toEqual(BROWSER_OPTION_DEFAULTS.reveal)
+    });
+    expect(resolveActionOptions('reveal')).toEqual(BROWSER_OPTION_DEFAULTS.reveal);
     expect(
       resolveActionOptions('selectText', {
         options: {
@@ -117,23 +117,23 @@ describe('browser options model', () => {
       ...targetLifecycleDefaults,
       duration: 120,
       motion: { kind: 'ease', timing: 'linear', duration: 120 },
-    })
-  })
+    });
+  });
 
   it('maps the deprecated settled name to interaction-stable explicitly', () => {
-    expect(normalizeStabilityPolicy('settled')).toBe('interaction-stable')
-    expect(normalizeStabilityPolicy('visual-stable')).toBe('visual-stable')
+    expect(normalizeStabilityPolicy('settled')).toBe('interaction-stable');
+    expect(normalizeStabilityPolicy('visual-stable')).toBe('visual-stable');
     expect(
       resolveActionOptions('click', {
         actorble: { actionDefaults: { click: { wait: 'settled' } } },
       }).wait,
-    ).toBe('interaction-stable')
+    ).toBe('interaction-stable');
     expect(
       resolveActionOptions('click', {
         options: { wait: 'settled' },
       }).wait,
-    ).toBe('interaction-stable')
-  })
+    ).toBe('interaction-stable');
+  });
 
   it('materializes default inertia motion parameters at the option boundary', () => {
     expect(
@@ -149,7 +149,7 @@ describe('browser options model', () => {
         initialVelocity: BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
         deceleration: BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
       },
-    })
+    });
     expect(
       resolveActionOptions('click', {
         options: {
@@ -164,8 +164,8 @@ describe('browser options model', () => {
         deceleration: BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
       },
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
-    })
-  })
+    });
+  });
 
   it('materializes default spring motion parameters at the option boundary', () => {
     expect(
@@ -182,7 +182,7 @@ describe('browser options model', () => {
         damping: BROWSER_OPTION_DEFAULTS.springMotion.damping,
         mass: BROWSER_OPTION_DEFAULTS.springMotion.mass,
       },
-    })
+    });
     expect(
       resolveActionOptions('click', {
         options: {
@@ -198,11 +198,11 @@ describe('browser options model', () => {
         mass: BROWSER_OPTION_DEFAULTS.springMotion.mass,
       },
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
-    })
-  })
+    });
+  });
 
   it('normalizes run-level motion and action defaults', () => {
-    const signal = new AbortController().signal
+    const signal = new AbortController().signal;
 
     expect(
       resolveRunOptions({
@@ -220,18 +220,18 @@ describe('browser options model', () => {
       actionDefaults: {
         click: { timeout: 50, pressDwell: 0 },
       },
-    })
-  })
+    });
+  });
 
   it('merges defaults, actorble defaults, run policy, run action defaults, and call options in order', () => {
-    const signal = new AbortController().signal
+    const signal = new AbortController().signal;
     const actorble = resolveActorbleOptions({
       actionDefaults: {
         click: { duration: 300, pressDwell: 90 },
         typeInto: { delay: 25 },
         selectText: { timeout: 100 },
       },
-    })
+    });
     const run = resolveRunOptions({
       motion: false,
       actionDefaults: {
@@ -239,13 +239,13 @@ describe('browser options model', () => {
         typeInto: { delay: 10 },
         selectText: { timeout: 50 },
       },
-    })
+    });
 
     expect(resolveActionOptions('click', { actorble, run })).toEqual({
       ...targetLifecycleDefaults,
       duration: 0,
       pressDwell: 70,
-    })
+    });
     expect(
       resolveActionOptions('click', {
         actorble,
@@ -261,20 +261,20 @@ describe('browser options model', () => {
       duration: 45,
       pressDwell: 15,
       signal,
-    })
+    });
     expect(resolveActionOptions('typeInto', { actorble, run })).toEqual({
       ...targetLifecycleDefaults,
       delay: 10,
-    })
+    });
     expect(resolveActionOptions('typeInto', { actorble, run, options: { delay: 5 } })).toEqual({
       ...targetLifecycleDefaults,
       delay: 5,
-    })
+    });
     expect(resolveActionOptions('selectText', { actorble, run })).toEqual({
       ...targetLifecycleDefaults,
       duration: 0,
       timeout: 50,
-    })
+    });
     expect(
       resolveActionOptions('selectText', {
         actorble,
@@ -286,16 +286,16 @@ describe('browser options model', () => {
       duration: 0,
       timeout: 5,
       signal,
-    })
-  })
-})
+    });
+  });
+});
 
 describe('browser options boundary', () => {
   it('does not import runtime, visual, or platform concrete modules', async () => {
-    const source = await readFile(join(process.cwd(), 'src/options/index.ts'), 'utf8')
+    const source = await readFile(join(process.cwd(), 'src/options/index.ts'), 'utf8');
 
-    expect(source).not.toMatch(/from\s+['"]\.\.\/runtime\//)
-    expect(source).not.toMatch(/from\s+['"]\.\.\/visual\//)
-    expect(source).not.toMatch(/from\s+['"]\.\.\/platform\//)
-  })
-})
+    expect(source).not.toMatch(/from\s+['"]\.\.\/runtime\//);
+    expect(source).not.toMatch(/from\s+['"]\.\.\/visual\//);
+    expect(source).not.toMatch(/from\s+['"]\.\.\/platform\//);
+  });
+});

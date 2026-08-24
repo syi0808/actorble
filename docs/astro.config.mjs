@@ -1,9 +1,9 @@
-import { defineConfig } from 'astro/config'
-import starlight from '@astrojs/starlight'
-import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'astro/config';
+import starlight from '@astrojs/starlight';
+import { fileURLToPath } from 'node:url';
 
-const repoRoot = fileURLToPath(new URL('..', import.meta.url))
-const browserSource = fileURLToPath(new URL('../browser/src/index.ts', import.meta.url))
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const browserSource = fileURLToPath(new URL('../browser/src/index.ts', import.meta.url));
 
 export default defineConfig({
   site: 'https://syi0808.github.io',
@@ -24,8 +24,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Actorble',
-      description:
-        'Scenario-based UI control for browser automation and future native platforms.',
+      description: 'Scenario-based UI control for browser automation and future native platforms.',
       favicon: '/favicon.svg',
       logo: {
         dark: './src/assets/actorble-wordmark.svg',
@@ -70,4 +69,4 @@ export default defineConfig({
       ],
     }),
   ],
-})
+});

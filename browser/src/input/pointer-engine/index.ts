@@ -4,122 +4,122 @@ import type {
   Point,
   PointerButtonName,
   PointerMotionTiming,
-} from '../../shared/index.js'
-import { actorbleError } from '../../shared/index.js'
-import { BrowserPointerSignalBus } from '../pointer-signals/index.js'
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
-import type { PointerSignalBus } from '../pointer-signals/index.js'
-import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../shared/index.js';
+import { actorbleError } from '../../shared/index.js';
+import { BrowserPointerSignalBus } from '../pointer-signals/index.js';
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js';
+import type { PointerSignalBus } from '../pointer-signals/index.js';
+import type { TimelineEngine } from '../../runtime/timeline-engine/index.js';
 
-export type PointerMotionStatus = 'idle' | 'moving' | 'settling' | 'cancelled'
+export type PointerMotionStatus = 'idle' | 'moving' | 'settling' | 'cancelled';
 
-export type PointerPath = readonly Point[]
+export type PointerPath = readonly Point[];
 
-export type PointerEndpointResolver = (currentPoint: Point) => Point | Promise<Point>
+export type PointerEndpointResolver = (currentPoint: Point) => Point | Promise<Point>;
 
 export type PointerMoveOptions = MoveOptions &
   Readonly<{
-    resolveEndpoint?: PointerEndpointResolver
-  }>
+    resolveEndpoint?: PointerEndpointResolver;
+  }>;
 
 export type PointerState = Readonly<{
-  id: string
-  position: Point
-  previousPosition: Point | null
+  id: string;
+  position: Point;
+  previousPosition: Point | null;
   motion: Readonly<{
-    status: PointerMotionStatus
-    from?: Point
-    to?: Point
-    path?: PointerPath
-  }>
+    status: PointerMotionStatus;
+    from?: Point;
+    to?: Point;
+    path?: PointerPath;
+  }>;
   buttons: Readonly<{
-    pressed: readonly PointerButtonName[]
-    primary: PointerButtonName | null
-  }>
+    pressed: readonly PointerButtonName[];
+    primary: PointerButtonName | null;
+  }>;
   surface: Readonly<{
-    id: string | null
-    coordinateSpace: CoordinateSpace
-  }>
-}>
+    id: string | null;
+    coordinateSpace: CoordinateSpace;
+  }>;
+}>;
 
 export interface PointerEngine {
-  getState(): PointerState
-  syncPosition(point: Point): PointerState
-  moveTo(point: Point, options?: PointerMoveOptions): Promise<PointerState>
-  down(button?: PointerButtonName): Promise<PointerState>
-  up(button?: PointerButtonName): Promise<PointerState>
-  cancel(): Promise<PointerState>
+  getState(): PointerState;
+  syncPosition(point: Point): PointerState;
+  moveTo(point: Point, options?: PointerMoveOptions): Promise<PointerState>;
+  down(button?: PointerButtonName): Promise<PointerState>;
+  up(button?: PointerButtonName): Promise<PointerState>;
+  cancel(): Promise<PointerState>;
 }
 
 export type PointerEngineOptions = Readonly<{
-  signals?: PointerSignalBus
-  timeline?: TimelineEngine
-  id?: string
-  initialPosition?: Point
+  signals?: PointerSignalBus;
+  timeline?: TimelineEngine;
+  id?: string;
+  initialPosition?: Point;
   surface?: Readonly<{
-    id: string | null
-    coordinateSpace: CoordinateSpace
-  }>
-}>
+    id: string | null;
+    coordinateSpace: CoordinateSpace;
+  }>;
+}>;
 
 type NormalizedMotionProfile =
   | Readonly<{
-      kind: 'ease'
-      duration: number
-      timing: PointerMotionTiming
+      kind: 'ease';
+      duration: number;
+      timing: PointerMotionTiming;
     }>
   | Readonly<{
-      kind: 'inertia'
-      duration: number
+      kind: 'inertia';
+      duration: number;
     }>
   | Readonly<{
-      kind: 'spring'
-      stiffness: number
-      damping: number
-      mass: number
-    }>
+      kind: 'spring';
+      stiffness: number;
+      damping: number;
+      mass: number;
+    }>;
 
 type SpringVelocity = {
-  x: number
-  y: number
-}
+  x: number;
+  y: number;
+};
 
-const SPRING_FRAME_FALLBACK_MS = 16
-const SPRING_INTEGRATION_STEP_MS = 16
-const SPRING_SETTLE_DISTANCE_PX = 0.01
-const SPRING_SETTLE_VELOCITY_PX_PER_SECOND = 1
-const SPRING_MAX_FRAMES = 1_000
+const SPRING_FRAME_FALLBACK_MS = 16;
+const SPRING_INTEGRATION_STEP_MS = 16;
+const SPRING_SETTLE_DISTANCE_PX = 0.01;
+const SPRING_SETTLE_VELOCITY_PX_PER_SECOND = 1;
+const SPRING_MAX_FRAMES = 1_000;
 
 type InternalPointerState = {
-  id: string
-  position: Point
-  previousPosition: Point | null
+  id: string;
+  position: Point;
+  previousPosition: Point | null;
   motion: {
-    status: PointerMotionStatus
-    from?: Point
-    to?: Point
-    path?: Point[]
-  }
+    status: PointerMotionStatus;
+    from?: Point;
+    to?: Point;
+    path?: Point[];
+  };
   buttons: {
-    pressed: PointerButtonName[]
-    primary: PointerButtonName | null
-  }
+    pressed: PointerButtonName[];
+    primary: PointerButtonName | null;
+  };
   surface: {
-    id: string | null
-    coordinateSpace: CoordinateSpace
-  }
-}
+    id: string | null;
+    coordinateSpace: CoordinateSpace;
+  };
+};
 
 export class BrowserPointerEngine implements PointerEngine {
-  readonly #signals: PointerSignalBus
-  readonly #timeline: TimelineEngine
-  #state: InternalPointerState
-  #motionRunId = 0
+  readonly #signals: PointerSignalBus;
+  readonly #timeline: TimelineEngine;
+  #state: InternalPointerState;
+  #motionRunId = 0;
 
   constructor(options: PointerEngineOptions = {}) {
-    const position = clonePoint(options.initialPosition ?? { x: 0, y: 0 })
-    this.#signals = options.signals ?? new BrowserPointerSignalBus()
-    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
+    const position = clonePoint(options.initialPosition ?? { x: 0, y: 0 });
+    this.#signals = options.signals ?? new BrowserPointerSignalBus();
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine();
     this.#state = {
       id: options.id ?? 'pointer-1',
       position,
@@ -130,16 +130,16 @@ export class BrowserPointerEngine implements PointerEngine {
         id: options.surface?.id ?? null,
         coordinateSpace: options.surface?.coordinateSpace ?? 'viewport',
       },
-    }
+    };
   }
 
   getState(): PointerState {
-    return cloneState(this.#state)
+    return cloneState(this.#state);
   }
 
   syncPosition(point: Point): PointerState {
-    const previousPoint = clonePoint(this.#state.position)
-    const nextPoint = clonePoint(point)
+    const previousPoint = clonePoint(this.#state.position);
+    const nextPoint = clonePoint(point);
 
     this.#state = {
       ...this.#state,
@@ -151,17 +151,17 @@ export class BrowserPointerEngine implements PointerEngine {
         to: nextPoint,
         path: [],
       },
-    }
+    };
 
-    return this.getState()
+    return this.getState();
   }
 
   async moveTo(point: Point, options: PointerMoveOptions = {}): Promise<PointerState> {
-    let target = clonePoint(point)
-    const from = clonePoint(this.#state.position)
-    const motion = normalizeMotionProfile(options)
-    const motionRunId = ++this.#motionRunId
-    const isMoving = motion.kind === 'spring' || motion.duration > 0
+    let target = clonePoint(point);
+    const from = clonePoint(this.#state.position);
+    const motion = normalizeMotionProfile(options);
+    const motionRunId = ++this.#motionRunId;
+    const isMoving = motion.kind === 'spring' || motion.duration > 0;
 
     this.#state = {
       ...this.#state,
@@ -171,64 +171,64 @@ export class BrowserPointerEngine implements PointerEngine {
         to: target,
         path: [],
       },
-    }
+    };
 
     if (samePoint(from, target) || (motion.kind !== 'spring' && motion.duration === 0)) {
-      this.#applyMovement(target)
-      this.#finishMovement(from, target)
-      return this.getState()
+      this.#applyMovement(target);
+      this.#finishMovement(from, target);
+      return this.getState();
     }
 
     if (motion.kind === 'spring') {
-      return this.#moveWithSpring(from, target, motion, motionRunId, options)
+      return this.#moveWithSpring(from, target, motion, motionRunId, options);
     }
 
-    let segmentFrom = clonePoint(from)
-    let segmentStartedAt = this.#timeline.now()
-    let segmentDuration = motion.duration
-    const deadline = segmentStartedAt + motion.duration
+    let segmentFrom = clonePoint(from);
+    let segmentStartedAt = this.#timeline.now();
+    let segmentDuration = motion.duration;
+    const deadline = segmentStartedAt + motion.duration;
 
     try {
       while (true) {
-        await this.#timeline.nextFrame(options)
+        await this.#timeline.nextFrame(options);
 
         if (!this.#isActiveMotion(motionRunId)) {
-          return this.getState()
+          return this.getState();
         }
 
-        const now = this.#timeline.now()
+        const now = this.#timeline.now();
         const progress =
-          segmentDuration === 0 ? 1 : Math.min(1, (now - segmentStartedAt) / segmentDuration)
+          segmentDuration === 0 ? 1 : Math.min(1, (now - segmentStartedAt) / segmentDuration);
         const nextPoint =
           progress >= 1
             ? target
-            : interpolatePoint(segmentFrom, target, sampleMotionProgress(motion, progress))
+            : interpolatePoint(segmentFrom, target, sampleMotionProgress(motion, progress));
 
-        this.#applyMovement(nextPoint)
+        this.#applyMovement(nextPoint);
 
         if (progress >= 1) {
-          this.#finishMovement(from, target)
-          return this.getState()
+          this.#finishMovement(from, target);
+          return this.getState();
         }
 
         const refreshedTarget = options.resolveEndpoint
           ? await resolveDynamicEndpoint(options, target)
-          : null
+          : null;
 
         if (refreshedTarget && !samePoint(target, refreshedTarget)) {
-          target = refreshedTarget
-          segmentFrom = clonePoint(this.#state.position)
-          segmentStartedAt = now
-          segmentDuration = Math.max(0, deadline - now)
-          this.#setMotionTarget(target)
+          target = refreshedTarget;
+          segmentFrom = clonePoint(this.#state.position);
+          segmentStartedAt = now;
+          segmentDuration = Math.max(0, deadline - now);
+          this.#setMotionTarget(target);
         }
       }
     } catch (error) {
       if (this.#isActiveMotion(motionRunId)) {
-        this.#cancelMotion()
+        this.#cancelMotion();
       }
 
-      throw error
+      throw error;
     }
   }
 
@@ -239,57 +239,57 @@ export class BrowserPointerEngine implements PointerEngine {
     motionRunId: number,
     options: PointerMoveOptions,
   ): Promise<PointerState> {
-    let target = clonePoint(initialTarget)
-    let position = clonePoint(this.#state.position)
-    const velocity: SpringVelocity = { x: 0, y: 0 }
-    let previousTimestamp = this.#timeline.now()
-    let frameCount = 0
+    let target = clonePoint(initialTarget);
+    let position = clonePoint(this.#state.position);
+    const velocity: SpringVelocity = { x: 0, y: 0 };
+    let previousTimestamp = this.#timeline.now();
+    let frameCount = 0;
 
     try {
       while (frameCount < SPRING_MAX_FRAMES) {
-        await this.#timeline.nextFrame(options)
+        await this.#timeline.nextFrame(options);
 
         if (!this.#isActiveMotion(motionRunId)) {
-          return this.getState()
+          return this.getState();
         }
 
-        const now = this.#timeline.now()
-        const elapsed = normalizeSpringFrameDuration(now - previousTimestamp)
-        previousTimestamp = now
-        position = stepSpring(position, target, velocity, motion, elapsed)
+        const now = this.#timeline.now();
+        const elapsed = normalizeSpringFrameDuration(now - previousTimestamp);
+        previousTimestamp = now;
+        position = stepSpring(position, target, velocity, motion, elapsed);
 
-        this.#applyMovement(roundPoint(position))
-        frameCount += 1
+        this.#applyMovement(roundPoint(position));
+        frameCount += 1;
 
         const refreshedTarget = options.resolveEndpoint
           ? await resolveDynamicEndpoint(options, target)
-          : null
+          : null;
 
         if (!this.#isActiveMotion(motionRunId)) {
-          return this.getState()
+          return this.getState();
         }
 
         if (refreshedTarget && !samePoint(target, refreshedTarget)) {
-          target = refreshedTarget
-          this.#setMotionTarget(target)
+          target = refreshedTarget;
+          this.#setMotionTarget(target);
         }
 
         if (isSpringSettled(position, target, velocity)) {
-          this.#applyMovement(target)
-          this.#finishMovement(from, target)
-          return this.getState()
+          this.#applyMovement(target);
+          this.#finishMovement(from, target);
+          return this.getState();
         }
       }
 
-      this.#applyMovement(target)
-      this.#finishMovement(from, target)
-      return this.getState()
+      this.#applyMovement(target);
+      this.#finishMovement(from, target);
+      return this.getState();
     } catch (error) {
       if (this.#isActiveMotion(motionRunId)) {
-        this.#cancelMotion()
+        this.#cancelMotion();
       }
 
-      throw error
+      throw error;
     }
   }
 
@@ -300,21 +300,21 @@ export class BrowserPointerEngine implements PointerEngine {
         ...this.#state.motion,
         to: clonePoint(target),
       },
-    }
+    };
   }
 
   #isActiveMotion(motionRunId: number): boolean {
-    return this.#motionRunId === motionRunId && this.#state.motion.status !== 'cancelled'
+    return this.#motionRunId === motionRunId && this.#state.motion.status !== 'cancelled';
   }
 
   #cancelMotion(): void {
     const hasOpenState =
       this.#state.motion.status === 'moving' ||
       this.#state.motion.status === 'settling' ||
-      this.#state.buttons.pressed.length > 0
+      this.#state.buttons.pressed.length > 0;
 
     if (!hasOpenState) {
-      return
+      return;
     }
 
     this.#state = {
@@ -327,15 +327,15 @@ export class BrowserPointerEngine implements PointerEngine {
         pressed: [],
         primary: null,
       },
-    }
-    this.#signals.emit({ type: 'pointer:cancelled' })
+    };
+    this.#signals.emit({ type: 'pointer:cancelled' });
   }
 
   async down(button: PointerButtonName = 'primary'): Promise<PointerState> {
-    const pressed = [...this.#state.buttons.pressed]
+    const pressed = [...this.#state.buttons.pressed];
 
     if (!pressed.includes(button)) {
-      pressed.push(button)
+      pressed.push(button);
     }
 
     this.#state = {
@@ -344,18 +344,18 @@ export class BrowserPointerEngine implements PointerEngine {
         pressed,
         primary: this.#state.buttons.primary ?? button,
       },
-    }
+    };
     this.#signals.emit({
       type: 'pointer:down',
       point: clonePoint(this.#state.position),
       button,
-    })
+    });
 
-    return this.getState()
+    return this.getState();
   }
 
   async up(button: PointerButtonName = 'primary'): Promise<PointerState> {
-    const pressed = this.#state.buttons.pressed.filter((pressedButton) => pressedButton !== button)
+    const pressed = this.#state.buttons.pressed.filter((pressedButton) => pressedButton !== button);
 
     this.#state = {
       ...this.#state,
@@ -366,29 +366,29 @@ export class BrowserPointerEngine implements PointerEngine {
             ? (pressed[0] ?? null)
             : this.#state.buttons.primary,
       },
-    }
+    };
     this.#signals.emit({
       type: 'pointer:up',
       point: clonePoint(this.#state.position),
       button,
-    })
+    });
 
-    return this.getState()
+    return this.getState();
   }
 
   async cancel(): Promise<PointerState> {
-    this.#motionRunId += 1
-    this.#cancelMotion()
+    this.#motionRunId += 1;
+    this.#cancelMotion();
 
-    return this.getState()
+    return this.getState();
   }
 
   #applyMovement(point: Point): void {
-    const previousPoint = clonePoint(this.#state.position)
-    const nextPoint = clonePoint(point)
-    const path = this.#state.motion.path ?? []
+    const previousPoint = clonePoint(this.#state.position);
+    const nextPoint = clonePoint(point);
+    const path = this.#state.motion.path ?? [];
 
-    path.push(nextPoint)
+    path.push(nextPoint);
 
     this.#state = {
       ...this.#state,
@@ -398,12 +398,12 @@ export class BrowserPointerEngine implements PointerEngine {
         ...this.#state.motion,
         path,
       },
-    }
+    };
     this.#signals.emit({
       type: 'pointer:moved',
       point: clonePoint(nextPoint),
       previousPoint,
-    })
+    });
   }
 
   #finishMovement(from: Point, target: Point): void {
@@ -415,12 +415,12 @@ export class BrowserPointerEngine implements PointerEngine {
         from: clonePoint(from),
         to: clonePoint(target),
       },
-    }
+    };
   }
 }
 
 export function createPointerEngine(options: PointerEngineOptions = {}): PointerEngine {
-  return new BrowserPointerEngine(options)
+  return new BrowserPointerEngine(options);
 }
 
 function cloneState(state: InternalPointerState): PointerState {
@@ -441,49 +441,49 @@ function cloneState(state: InternalPointerState): PointerState {
       primary: state.buttons.primary,
     },
     surface: { ...state.surface },
-  }
+  };
 }
 
 function clonePoint(point: Point): Point {
-  return { x: point.x, y: point.y }
+  return { x: point.x, y: point.y };
 }
 
 function normalizeDuration(duration: number): number {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return 0
+    return 0;
   }
 
-  return duration
+  return duration;
 }
 
 function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
-  const motion = options.motion
+  const motion = options.motion;
 
   if (!motion) {
     return {
       kind: 'ease',
       duration: normalizeDuration(options.duration ?? 0),
       timing: 'linear',
-    }
+    };
   }
 
-  const profileKind = readMotionProfileKind(motion)
+  const profileKind = readMotionProfileKind(motion);
 
   switch (profileKind) {
     case 'ease': {
-      const easeMotion = motion as Extract<NonNullable<MoveOptions['motion']>, { kind: 'ease' }>
+      const easeMotion = motion as Extract<NonNullable<MoveOptions['motion']>, { kind: 'ease' }>;
 
       return {
         kind: 'ease',
         duration: normalizeDuration(easeMotion.duration ?? options.duration ?? 0),
         timing: easeMotion.timing ?? 'ease-in-out',
-      }
+      };
     }
     case 'inertia': {
       const inertiaMotion = motion as Extract<
         NonNullable<MoveOptions['motion']>,
         { kind: 'inertia' }
-      >
+      >;
 
       return {
         kind: 'inertia',
@@ -491,25 +491,25 @@ function normalizeMotionProfile(options: MoveOptions): NormalizedMotionProfile {
           inertiaMotion.initialVelocity,
           inertiaMotion.deceleration,
         ),
-      }
+      };
     }
     case 'spring': {
       const springMotion = motion as Extract<
         NonNullable<MoveOptions['motion']>,
         { kind: 'spring' }
-      >
+      >;
 
       return {
         kind: 'spring',
         stiffness: normalizeSpringParameter(springMotion.stiffness, 'stiffness'),
         damping: normalizeSpringParameter(springMotion.damping, 'damping'),
         mass: normalizeSpringParameter(springMotion.mass, 'mass'),
-      }
+      };
     }
     case 'linear':
-      throw unsupportedMotionProfile(profileKind)
+      throw unsupportedMotionProfile(profileKind);
     default:
-      throw unsupportedMotionProfile(profileKind)
+      throw unsupportedMotionProfile(profileKind);
   }
 }
 
@@ -525,10 +525,10 @@ function normalizeInertiaDuration(
     initialVelocity <= 0 ||
     deceleration <= 0
   ) {
-    return 0
+    return 0;
   }
 
-  return normalizeDuration((initialVelocity / deceleration) * 1000)
+  return normalizeDuration((initialVelocity / deceleration) * 1000);
 }
 
 function normalizeSpringParameter(value: number | undefined, field: string): number {
@@ -543,16 +543,16 @@ function normalizeSpringParameter(value: number | undefined, field: string): num
           field,
         },
       },
-    )
+    );
   }
 
-  return value
+  return value;
 }
 
 function readMotionProfileKind(motion: NonNullable<MoveOptions['motion']>): string {
-  const kind = (motion as { kind?: unknown }).kind
+  const kind = (motion as { kind?: unknown }).kind;
 
-  return typeof kind === 'string' ? kind : 'unknown'
+  return typeof kind === 'string' ? kind : 'unknown';
 }
 
 function unsupportedMotionProfile(profileKind: string): never {
@@ -566,39 +566,39 @@ function unsupportedMotionProfile(profileKind: string): never {
         supportedKinds: ['ease', 'inertia', 'spring'],
       },
     },
-  )
+  );
 }
 
 async function resolveDynamicEndpoint(
   options: PointerMoveOptions,
   currentTarget: Point,
 ): Promise<Point | null> {
-  const endpoint = await options.resolveEndpoint?.(clonePoint(currentTarget))
+  const endpoint = await options.resolveEndpoint?.(clonePoint(currentTarget));
 
-  return endpoint ? clonePoint(endpoint) : null
+  return endpoint ? clonePoint(endpoint) : null;
 }
 
 function samePoint(left: Point, right: Point): boolean {
-  return left.x === right.x && left.y === right.y
+  return left.x === right.x && left.y === right.y;
 }
 
 function interpolatePoint(from: Point, to: Point, progress: number): Point {
   return {
     x: interpolate(from.x, to.x, progress),
     y: interpolate(from.y, to.y, progress),
-  }
+  };
 }
 
 function interpolate(from: number, to: number, progress: number): number {
-  return from + (to - from) * progress
+  return from + (to - from) * progress;
 }
 
 function normalizeSpringFrameDuration(duration: number): number {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return SPRING_FRAME_FALLBACK_MS
+    return SPRING_FRAME_FALLBACK_MS;
   }
 
-  return duration
+  return duration;
 }
 
 function stepSpring(
@@ -608,93 +608,91 @@ function stepSpring(
   motion: Extract<NormalizedMotionProfile, { kind: 'spring' }>,
   elapsedMs: number,
 ): Point {
-  const stepCount = Math.max(1, Math.ceil(elapsedMs / SPRING_INTEGRATION_STEP_MS))
-  const stepSeconds = elapsedMs / stepCount / 1000
-  let next = { x: position.x, y: position.y }
+  const stepCount = Math.max(1, Math.ceil(elapsedMs / SPRING_INTEGRATION_STEP_MS));
+  const stepSeconds = elapsedMs / stepCount / 1000;
+  let next = { x: position.x, y: position.y };
 
   for (let index = 0; index < stepCount; index += 1) {
     const accelerationX =
-      ((target.x - next.x) * motion.stiffness - velocity.x * motion.damping) / motion.mass
+      ((target.x - next.x) * motion.stiffness - velocity.x * motion.damping) / motion.mass;
     const accelerationY =
-      ((target.y - next.y) * motion.stiffness - velocity.y * motion.damping) / motion.mass
+      ((target.y - next.y) * motion.stiffness - velocity.y * motion.damping) / motion.mass;
 
-    velocity.x += accelerationX * stepSeconds
-    velocity.y += accelerationY * stepSeconds
+    velocity.x += accelerationX * stepSeconds;
+    velocity.y += accelerationY * stepSeconds;
     next = {
       x: next.x + velocity.x * stepSeconds,
       y: next.y + velocity.y * stepSeconds,
-    }
+    };
   }
 
-  return next
+  return next;
 }
 
 function isSpringSettled(position: Point, target: Point, velocity: SpringVelocity): boolean {
   return (
     distanceBetween(position, target) <= SPRING_SETTLE_DISTANCE_PX &&
     vectorMagnitude(velocity) <= SPRING_SETTLE_VELOCITY_PX_PER_SECOND
-  )
+  );
 }
 
 function distanceBetween(from: Point, to: Point): number {
-  return Math.hypot(to.x - from.x, to.y - from.y)
+  return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
 function vectorMagnitude(vector: SpringVelocity): number {
-  return Math.hypot(vector.x, vector.y)
+  return Math.hypot(vector.x, vector.y);
 }
 
 function roundPoint(point: Point): Point {
   return {
     x: roundMotionProgress(point.x),
     y: roundMotionProgress(point.y),
-  }
+  };
 }
 
 function sampleMotionProgress(motion: NormalizedMotionProfile, progress: number): number {
-  const clampedProgress = clampProgress(progress)
+  const clampedProgress = clampProgress(progress);
 
   switch (motion.kind) {
     case 'ease':
-      return sampleTimingProgress(motion.timing, clampedProgress)
+      return sampleTimingProgress(motion.timing, clampedProgress);
     case 'inertia':
-      return sampleInertiaProgress(clampedProgress)
+      return sampleInertiaProgress(clampedProgress);
     case 'spring':
-      return clampedProgress
+      return clampedProgress;
   }
 }
 
 function sampleInertiaProgress(progress: number): number {
-  return roundMotionProgress(1 - (1 - progress) * (1 - progress))
+  return roundMotionProgress(1 - (1 - progress) * (1 - progress));
 }
 
 function roundMotionProgress(progress: number): number {
-  return Math.round(progress * 1_000_000_000_000) / 1_000_000_000_000
+  return Math.round(progress * 1_000_000_000_000) / 1_000_000_000_000;
 }
 
 function sampleTimingProgress(timing: PointerMotionTiming, progress: number): number {
   switch (timing) {
     case 'linear':
-      return progress
+      return progress;
     case 'ease-in':
-      return progress * progress
+      return progress * progress;
     case 'ease-out':
-      return 1 - (1 - progress) * (1 - progress)
+      return 1 - (1 - progress) * (1 - progress);
     case 'ease-in-out':
-      return progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2
+      return progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
   }
 }
 
 function clampProgress(progress: number): number {
   if (!Number.isFinite(progress) || progress <= 0) {
-    return 0
+    return 0;
   }
 
   if (progress >= 1) {
-    return 1
+    return 1;
   }
 
-  return progress
+  return progress;
 }

@@ -1,5 +1,5 @@
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
-import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js'
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js';
+import type { LayoutInvalidationTracker } from '../layout-invalidation-tracker/index.js';
 import type {
   ComputedScrollStyleSnapshot,
   Disposable,
@@ -7,176 +7,174 @@ import type {
   Rect,
   ScrollMetrics,
   TimestampMs,
-} from '../../shared/index.js'
+} from '../../shared/index.js';
 
 export type FrameGeometrySurfaceCacheTimeline = Readonly<{
-  nextFrame(): Promise<TimestampMs>
-}>
+  nextFrame(): Promise<TimestampMs>;
+}>;
 
 export type FrameGeometrySurfaceCacheOptions = Readonly<{
   layoutInvalidation?: Pick<LayoutInvalidationTracker, 'subscribe'> &
-    Partial<Pick<LayoutInvalidationTracker, 'subscribeDirty'>>
-  timeline?: FrameGeometrySurfaceCacheTimeline
-}>
+    Partial<Pick<LayoutInvalidationTracker, 'subscribeDirty'>>;
+  timeline?: FrameGeometrySurfaceCacheTimeline;
+}>;
 
 export class FrameGeometrySurfaceCache implements Disposable {
-  readonly #timeline: FrameGeometrySurfaceCacheTimeline
-  readonly #layoutInvalidationSubscription?: Disposable
-  readonly #boundingRects = new Map<Element, Rect>()
-  readonly #viewportRects = new Map<Document | ShadowRoot | Element, Rect>()
-  readonly #scrollMetrics = new Map<object, ScrollMetrics>()
-  readonly #computedStyles = new Map<Element, CSSStyleDeclaration>()
-  readonly #computedScrollStyles = new Map<Element, ComputedScrollStyleSnapshot>()
-  readonly #scrollableAncestors = new Map<Element, readonly Element[]>()
-  #framePending = false
-  #frameToken = 0
+  readonly #timeline: FrameGeometrySurfaceCacheTimeline;
+  readonly #layoutInvalidationSubscription?: Disposable;
+  readonly #boundingRects = new Map<Element, Rect>();
+  readonly #viewportRects = new Map<Document | ShadowRoot | Element, Rect>();
+  readonly #scrollMetrics = new Map<object, ScrollMetrics>();
+  readonly #computedStyles = new Map<Element, CSSStyleDeclaration>();
+  readonly #computedScrollStyles = new Map<Element, ComputedScrollStyleSnapshot>();
+  readonly #scrollableAncestors = new Map<Element, readonly Element[]>();
+  #framePending = false;
+  #frameToken = 0;
 
   constructor(options: FrameGeometrySurfaceCacheOptions = {}) {
-    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
-    const layoutInvalidation = options.layoutInvalidation
-    this.#layoutInvalidationSubscription = layoutInvalidation?.subscribeDirty !== undefined
-      ? layoutInvalidation.subscribeDirty((event) => this.invalidate(event.reason))
-      : layoutInvalidation?.subscribe((event) => this.invalidate(event.reason))
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine();
+    const layoutInvalidation = options.layoutInvalidation;
+    this.#layoutInvalidationSubscription =
+      layoutInvalidation?.subscribeDirty !== undefined
+        ? layoutInvalidation.subscribeDirty((event) => this.invalidate(event.reason))
+        : layoutInvalidation?.subscribe((event) => this.invalidate(event.reason));
   }
 
   getBoundingRect(element: Element, read: () => Rect): Rect {
-    const cached = this.#boundingRects.get(element)
+    const cached = this.#boundingRects.get(element);
 
     if (cached !== undefined) {
-      return cloneRect(cached)
+      return cloneRect(cached);
     }
 
-    const rect = cloneRect(read())
-    this.#boundingRects.set(element, rect)
-    this.#scheduleFrameClear()
-    return cloneRect(rect)
+    const rect = cloneRect(read());
+    this.#boundingRects.set(element, rect);
+    this.#scheduleFrameClear();
+    return cloneRect(rect);
   }
 
   getViewportRect(root: Document | ShadowRoot | Element, read: () => Rect): Rect {
-    const cached = this.#viewportRects.get(root)
+    const cached = this.#viewportRects.get(root);
 
     if (cached !== undefined) {
-      return cloneRect(cached)
+      return cloneRect(cached);
     }
 
-    const rect = cloneRect(read())
-    this.#viewportRects.set(root, rect)
-    this.#scheduleFrameClear()
-    return cloneRect(rect)
+    const rect = cloneRect(read());
+    this.#viewportRects.set(root, rect);
+    this.#scheduleFrameClear();
+    return cloneRect(rect);
   }
 
   getScrollMetrics(target: Element | Window, read: () => ScrollMetrics): ScrollMetrics {
-    const cached = this.#scrollMetrics.get(target)
+    const cached = this.#scrollMetrics.get(target);
 
     if (cached !== undefined) {
-      return cloneScrollMetrics(cached)
+      return cloneScrollMetrics(cached);
     }
 
-    const metrics = cloneScrollMetrics(read())
-    this.#scrollMetrics.set(target, metrics)
-    this.#scheduleFrameClear()
-    return cloneScrollMetrics(metrics)
+    const metrics = cloneScrollMetrics(read());
+    this.#scrollMetrics.set(target, metrics);
+    this.#scheduleFrameClear();
+    return cloneScrollMetrics(metrics);
   }
 
   getComputedStyle(element: Element, read: () => CSSStyleDeclaration): CSSStyleDeclaration {
-    const cached = this.#computedStyles.get(element)
+    const cached = this.#computedStyles.get(element);
 
     if (cached !== undefined) {
-      return cached
+      return cached;
     }
 
-    const style = read()
-    this.#computedStyles.set(element, style)
-    this.#scheduleFrameClear()
-    return style
+    const style = read();
+    this.#computedStyles.set(element, style);
+    this.#scheduleFrameClear();
+    return style;
   }
 
   getComputedScrollStyle(
     element: Element,
     read: () => ComputedScrollStyleSnapshot,
   ): ComputedScrollStyleSnapshot {
-    const cached = this.#computedScrollStyles.get(element)
+    const cached = this.#computedScrollStyles.get(element);
 
     if (cached !== undefined) {
-      return cloneComputedScrollStyle(cached)
+      return cloneComputedScrollStyle(cached);
     }
 
-    const style = cloneComputedScrollStyle(read())
-    this.#computedScrollStyles.set(element, style)
-    this.#scheduleFrameClear()
-    return cloneComputedScrollStyle(style)
+    const style = cloneComputedScrollStyle(read());
+    this.#computedScrollStyles.set(element, style);
+    this.#scheduleFrameClear();
+    return cloneComputedScrollStyle(style);
   }
 
-  getScrollableAncestors(
-    target: Element,
-    read: () => readonly Element[],
-  ): readonly Element[] {
-    const cached = this.#scrollableAncestors.get(target)
+  getScrollableAncestors(target: Element, read: () => readonly Element[]): readonly Element[] {
+    const cached = this.#scrollableAncestors.get(target);
 
     if (cached !== undefined) {
-      return [...cached]
+      return [...cached];
     }
 
-    const ancestors = [...read()]
-    this.#scrollableAncestors.set(target, ancestors)
-    this.#scheduleFrameClear()
-    return [...ancestors]
+    const ancestors = [...read()];
+    this.#scrollableAncestors.set(target, ancestors);
+    this.#scheduleFrameClear();
+    return [...ancestors];
   }
 
   invalidate(_reason: LayoutInvalidationReason | string = 'manual'): void {
-    this.#clear()
+    this.#clear();
   }
 
   dispose(): void {
-    this.#layoutInvalidationSubscription?.dispose()
-    this.#frameToken += 1
-    this.#framePending = false
-    this.#clear()
+    this.#layoutInvalidationSubscription?.dispose();
+    this.#frameToken += 1;
+    this.#framePending = false;
+    this.#clear();
   }
 
   #scheduleFrameClear(): void {
     if (this.#framePending) {
-      return
+      return;
     }
 
-    this.#framePending = true
-    const token = this.#frameToken + 1
-    this.#frameToken = token
+    this.#framePending = true;
+    const token = this.#frameToken + 1;
+    this.#frameToken = token;
 
     this.#timeline.nextFrame().then(
       () => {
         if (this.#frameToken !== token) {
-          return
+          return;
         }
 
-        this.#framePending = false
-        this.#clear()
+        this.#framePending = false;
+        this.#clear();
       },
       () => {
         if (this.#frameToken !== token) {
-          return
+          return;
         }
 
-        this.#framePending = false
-        this.#clear()
+        this.#framePending = false;
+        this.#clear();
       },
-    )
+    );
   }
 
   #clear(): void {
-    this.#boundingRects.clear()
-    this.#viewportRects.clear()
-    this.#scrollMetrics.clear()
-    this.#computedStyles.clear()
-    this.#computedScrollStyles.clear()
-    this.#scrollableAncestors.clear()
+    this.#boundingRects.clear();
+    this.#viewportRects.clear();
+    this.#scrollMetrics.clear();
+    this.#computedStyles.clear();
+    this.#computedScrollStyles.clear();
+    this.#scrollableAncestors.clear();
   }
 }
 
 export function createFrameGeometrySurfaceCache(
   options: FrameGeometrySurfaceCacheOptions = {},
 ): FrameGeometrySurfaceCache {
-  return new FrameGeometrySurfaceCache(options)
+  return new FrameGeometrySurfaceCache(options);
 }
 
 function cloneRect(rect: Rect): Rect {
@@ -185,7 +183,7 @@ function cloneRect(rect: Rect): Rect {
     y: rect.y,
     width: rect.width,
     height: rect.height,
-  }
+  };
 }
 
 function cloneScrollMetrics(metrics: ScrollMetrics): ScrollMetrics {
@@ -198,16 +196,14 @@ function cloneScrollMetrics(metrics: ScrollMetrics): ScrollMetrics {
     clientHeight: metrics.clientHeight,
     clientLeft: metrics.clientLeft,
     clientTop: metrics.clientTop,
-  }
+  };
 }
 
-function cloneComputedScrollStyle(
-  style: ComputedScrollStyleSnapshot,
-): ComputedScrollStyleSnapshot {
+function cloneComputedScrollStyle(style: ComputedScrollStyleSnapshot): ComputedScrollStyleSnapshot {
   return {
     overflowX: style.overflowX,
     overflowY: style.overflowY,
     scrollPadding: { ...style.scrollPadding },
     scrollMargin: { ...style.scrollMargin },
-  }
+  };
 }

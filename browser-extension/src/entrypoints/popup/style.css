@@ -1,4 +1,4 @@
-@import "../../ui/tokens.css";
+@import '../../ui/tokens.css';
 
 :root {
   color-scheme: light;
@@ -80,12 +80,12 @@ h1 {
   background: var(--disabled);
 }
 
-.status-dot[data-tone="ready"] {
+.status-dot[data-tone='ready'] {
   background: var(--accent);
 }
 
-.status-dot[data-tone="blocked"],
-.status-dot[data-tone="error"] {
+.status-dot[data-tone='blocked'],
+.status-dot[data-tone='error'] {
   background: var(--danger);
 }
 

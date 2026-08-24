@@ -1,84 +1,84 @@
-import { describe, expect, it } from 'vitest'
-import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json'
-import { createExtensionMessage, type ActorbleExtensionMessage } from '../src/messaging/index.js'
-import type { LocatorPreviewSnapshot } from '../src/inspector/locator-preview.js'
-import type { TargetPickerSnapshot } from '../src/inspector/target-picker.js'
+import { describe, expect, it } from 'vitest';
+import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json';
+import { createExtensionMessage, type ActorbleExtensionMessage } from '../src/messaging/index.js';
+import type { LocatorPreviewSnapshot } from '../src/inspector/locator-preview.js';
+import type { TargetPickerSnapshot } from '../src/inspector/target-picker.js';
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
   type ScenarioTargetTextStep,
-} from '../src/scenario/types.js'
-import { failure, ok, type ExtensionResult } from '../src/shared/result.js'
+} from '../src/scenario/types.js';
+import { failure, ok, type ExtensionResult } from '../src/shared/result.js';
 import type {
   ScenarioJsonExport,
   ScenarioRecordInput,
   ScenarioRecord,
-} from '../src/storage/index.js'
+} from '../src/storage/index.js';
 import {
   createSidepanelScenarioEditor,
   type SidepanelRecordSession,
   type SidepanelScenarioEditor,
   type SidepanelScenarioEditorClient,
-} from '../src/entrypoints/sidepanel/scenario-editor.js'
+} from '../src/entrypoints/sidepanel/scenario-editor.js';
 import {
   createSidepanelRecompositionViewModel,
   type SidepanelRecompositionInput,
-} from '../src/entrypoints/sidepanel/recomposition-view-model.js'
+} from '../src/entrypoints/sidepanel/recomposition-view-model.js';
 
 const newestScenario = scenarioRecord(
   'newest-scenario',
   'Newest scenario',
   '2026-06-17T00:02:00.000Z',
   browserLoginFlow as ScenarioDocument,
-)
+);
 
 const olderScenario = scenarioRecord(
   'older-scenario',
   'Older scenario',
   '2026-06-17T00:00:00.000Z',
   scenarioDocument('older-scenario', 'Older scenario'),
-)
+);
 
 describe('sidepanel recomposition view model', () => {
   it('groups an empty session around the recomposed information architecture', async () => {
-    const { editor } = createTestEditor({ scenarios: [] })
+    const { editor } = createTestEditor({ scenarios: [] });
 
-    await editor.refresh()
+    await editor.refresh();
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(Object.keys(view)).toEqual([
       'scenarioShell',
       'builderWorkbench',
       'targetAssignment',
       'recordedDraftReview',
       'debugDrawer',
-    ])
-    expect(view).not.toHaveProperty('document')
-    expect(view).not.toHaveProperty('recording')
-    expect(view).not.toHaveProperty('targetPicker')
-    expect(view).not.toHaveProperty('locatorPreview')
-    expect(view).not.toHaveProperty('validation')
-    expect(view).not.toHaveProperty('run')
-    expect(view.scenarioShell.status).toBe('empty')
-    expect(view.scenarioShell.buttons.create.disabled).toBe(false)
-    expect(view.builderWorkbench.status).toBe('empty')
-    expect(view.builderWorkbench.buttons.addStep.disabled).toBe(true)
-    expect(view.targetAssignment.status).toBe('unavailable')
-    expect(view.targetAssignment.buttons.start.disabled).toBe(true)
-    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
+    ]);
+    expect(view).not.toHaveProperty('document');
+    expect(view).not.toHaveProperty('recording');
+    expect(view).not.toHaveProperty('targetPicker');
+    expect(view).not.toHaveProperty('locatorPreview');
+    expect(view).not.toHaveProperty('validation');
+    expect(view).not.toHaveProperty('run');
+    expect(view.scenarioShell.status).toBe('empty');
+    expect(view.scenarioShell.buttons.create.disabled).toBe(false);
+    expect(view.builderWorkbench.status).toBe('empty');
+    expect(view.builderWorkbench.buttons.addStep.disabled).toBe(true);
+    expect(view.targetAssignment.status).toBe('unavailable');
+    expect(view.targetAssignment.buttons.start.disabled).toBe(true);
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop');
     expect(view.debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'validation',
       attention: false,
-    })
-  })
+    });
+  });
 
   it('renders a saved scenario as shell, workbench, and target assignment state', async () => {
-    const { editor } = createTestEditor()
+    const { editor } = createTestEditor();
 
-    await editor.refresh()
+    await editor.refresh();
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(view.scenarioShell).toMatchObject({
       status: 'saved',
       dirty: false,
@@ -91,7 +91,7 @@ describe('sidepanel recomposition view model', () => {
         name: 'Browser login flow',
         description: '',
       },
-    })
+    });
     expect(view.builderWorkbench.selectedStep).toMatchObject({
       id: 'email',
       actionFamily: 'fill',
@@ -102,7 +102,7 @@ describe('sidepanel recomposition view model', () => {
           targetSlots: true,
         },
       },
-    })
+    });
     expect(view.targetAssignment).toMatchObject({
       status: 'idle',
       selectedTargetSlotId: 'step-target:email',
@@ -112,29 +112,29 @@ describe('sidepanel recomposition view model', () => {
           pending: false,
         },
       },
-    })
-    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
+    });
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop');
     expect(view.targetAssignment.slots).toEqual([
       expect.objectContaining({
         id: 'step-target:email',
         label: 'Target',
         selected: true,
       }),
-    ])
-    expect(view.debugDrawer.views.validation.summary).toBe('Ready')
-  })
+    ]);
+    expect(view.debugDrawer.views.validation.summary).toBe('Ready');
+  });
 
   it('renders a dirty draft without storing UI state in the draft document', async () => {
-    const { editor } = createTestEditor()
-    await editor.refresh()
+    const { editor } = createTestEditor();
+    await editor.refresh();
 
     editor.createScenario({
       id: 'draft-document',
       name: 'Draft document',
       initialStepFamily: 'delay',
-    })
+    });
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(view.scenarioShell).toMatchObject({
       status: 'draft',
       dirty: true,
@@ -142,7 +142,7 @@ describe('sidepanel recomposition view model', () => {
       metadata: {
         name: 'Draft document',
       },
-    })
+    });
     expect(view.builderWorkbench).toMatchObject({
       status: 'ready',
       selectedStep: {
@@ -156,59 +156,59 @@ describe('sidepanel recomposition view model', () => {
           },
         },
       },
-    })
-    expect(view.targetAssignment.status).toBe('unavailable')
-    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer')
-    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('selectedTargetSlot')
-  })
+    });
+    expect(view.targetAssignment.status).toBe('unavailable');
+    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer');
+    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('selectedTargetSlot');
+  });
 
   it('honors manual debug drawer expansion and active view without changing document state', async () => {
-    const { editor } = createTestEditor()
-    await editor.refresh()
+    const { editor } = createTestEditor();
+    await editor.refresh();
 
     const expandedView = viewFor(editor, {
       debugDrawer: {
         expanded: true,
         activeView: 'run-trace',
       },
-    })
+    });
     const collapsedView = viewFor(editor, {
       debugDrawer: {
         expanded: false,
         activeView: 'locator',
       },
-    })
+    });
 
     expect(expandedView.debugDrawer).toMatchObject({
       expanded: true,
       activeView: 'run-trace',
-    })
+    });
     expect(collapsedView.debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'locator',
-    })
-    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer')
-  })
+    });
+    expect(editor.getSnapshot().draftDocument).not.toHaveProperty('debugDrawer');
+  });
 
   it('renders the selected target slot and target picker progress in assignment state', async () => {
     const { editor } = createTestEditor({
       scenarios: [],
       createStepId: () => 'slot-step',
-    })
-    await editor.refresh()
+    });
+    await editor.refresh();
     editor.createScenario({
       id: 'slot-document',
       name: 'Slot document',
       initialStepFamily: 'drag',
-    })
-    editor.selectTargetSlot('drag-to:slot-step')
+    });
+    editor.selectTargetSlot('drag-to:slot-step');
 
     const view = viewFor(editor, {
       targetPicker: {
         status: 'starting',
         issues: [],
       },
-    })
+    });
     expect(view.targetAssignment).toMatchObject({
       status: 'starting',
       selectedTargetSlotId: 'drag-to:slot-step',
@@ -218,30 +218,30 @@ describe('sidepanel recomposition view model', () => {
           pending: true,
         },
       },
-    })
-    expect(view.targetAssignment.buttons).not.toHaveProperty('stop')
+    });
+    expect(view.targetAssignment.buttons).not.toHaveProperty('stop');
     expect(view.targetAssignment.slots).toEqual([
       expect.objectContaining({ id: 'drag-from:slot-step', selected: false }),
       expect.objectContaining({ id: 'drag-to:slot-step', selected: true }),
-    ])
-  })
+    ]);
+  });
 
   it('renders active recording as scenario shell lifecycle state', async () => {
     const { editor } = createTestEditor({
       createRecordId: () => 'record-sidepanel-1',
       sendResponse(message) {
         if (message.kind === 'record:start') {
-          return ok(commandReceiptForRecord(message, 'recording'))
+          return ok(commandReceiptForRecord(message, 'recording'));
         }
 
-        return ok({ contentReady: true })
+        return ok({ contentReady: true });
       },
-    })
-    await editor.refresh()
+    });
+    await editor.refresh();
 
-    await editor.startRecording()
+    await editor.startRecording();
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(view.scenarioShell).toMatchObject({
       status: 'recording',
       recordStatus: 'recording',
@@ -252,25 +252,25 @@ describe('sidepanel recomposition view model', () => {
           pending: false,
         },
       },
-    })
-    expect(view.debugDrawer.views.validation.summary).toBe('Ready')
-  })
+    });
+    expect(view.debugDrawer.views.validation.summary).toBe('Ready');
+  });
 
   it('renders recorded draft review inside the builder flow', async () => {
     const { editor } = createTestEditor({
       sendResponse(message) {
         if (message.kind === 'record:draft:get') {
-          return ok(recordedDraft('record-popup-1'))
+          return ok(recordedDraft('record-popup-1'));
         }
 
-        return ok({ contentReady: true })
+        return ok({ contentReady: true });
       },
-    })
-    await editor.refresh()
+    });
+    await editor.refresh();
 
-    await editor.loadRecordedDraft('record-popup-1')
+    await editor.loadRecordedDraft('record-popup-1');
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(view.recordedDraftReview).toMatchObject({
       draftId: 'record-popup-1',
       summary: '1 source event · valid',
@@ -279,32 +279,37 @@ describe('sidepanel recomposition view model', () => {
         append: { disabled: false },
         saveAsNew: { disabled: false },
       },
-    })
-    expect(view.scenarioShell.recordStatus).toBe('stopped')
-  })
+    });
+    expect(view.scenarioShell.recordStatus).toBe('stopped');
+  });
 
   it('keeps validation errors in the collapsed debug drawer by default', async () => {
-    const invalid = scenarioRecord('invalid-scenario', 'Invalid scenario', '2026-06-17T00:03:00.000Z', {
-      schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
-      id: 'invalid-scenario',
-      name: 'Invalid scenario',
-      steps: [
-        {
-          action: 'fill',
-          target: {
-            strategy: 'label',
-            label: 'Email',
+    const invalid = scenarioRecord(
+      'invalid-scenario',
+      'Invalid scenario',
+      '2026-06-17T00:03:00.000Z',
+      {
+        schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
+        id: 'invalid-scenario',
+        name: 'Invalid scenario',
+        steps: [
+          {
+            action: 'fill',
+            target: {
+              strategy: 'label',
+              label: 'Email',
+            },
+            input: '',
           },
-          input: '',
-        },
-      ],
-    } as unknown as ScenarioDocument)
-    const { editor } = createTestEditor({ scenarios: [invalid] })
-    await editor.refresh()
+        ],
+      } as unknown as ScenarioDocument,
+    );
+    const { editor } = createTestEditor({ scenarios: [invalid] });
+    await editor.refresh();
 
-    editor.validateDraft()
+    editor.validateDraft();
 
-    const view = viewFor(editor)
+    const view = viewFor(editor);
     expect(view.debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'validation',
@@ -315,16 +320,16 @@ describe('sidepanel recomposition view model', () => {
           summary: '1 issue',
         },
       },
-    })
+    });
     expect(view.builderWorkbench.steps[0]).toMatchObject({
       validationStatus: 'invalid',
-    })
-  })
+    });
+  });
 
   it('keeps failed run detail in the collapsed debug drawer by default', async () => {
-    const { editor } = createTestEditor()
-    await editor.refresh()
-    await editor.runSelectedScenario()
+    const { editor } = createTestEditor();
+    await editor.refresh();
+    await editor.runSelectedScenario();
 
     editor.ingestMessage(
       createExtensionMessage({
@@ -346,7 +351,7 @@ describe('sidepanel recomposition view model', () => {
           },
         },
       }),
-    )
+    );
     editor.ingestMessage(
       createExtensionMessage({
         kind: 'runtime:status',
@@ -358,10 +363,10 @@ describe('sidepanel recomposition view model', () => {
           message: 'Run failed at password.',
         },
       }),
-    )
+    );
 
-    const view = viewFor(editor)
-    expect(view.scenarioShell.runStatus).toBe('failed')
+    const view = viewFor(editor);
+    expect(view.scenarioShell.runStatus).toBe('failed');
     expect(view.debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'failure',
@@ -376,12 +381,12 @@ describe('sidepanel recomposition view model', () => {
           eventCount: 1,
         },
       },
-    })
-  })
+    });
+  });
 
   it('derives locator preview state and candidate selection from preview status', async () => {
-    const { editor } = createTestEditor()
-    await editor.refresh()
+    const { editor } = createTestEditor();
+    await editor.refresh();
 
     const view = viewFor(editor, {
       locatorPreview: {
@@ -416,7 +421,7 @@ describe('sidepanel recomposition view model', () => {
         ],
         issues: [],
       },
-    })
+    });
 
     expect(view.targetAssignment.locatorPreview).toMatchObject({
       status: 'ready',
@@ -431,12 +436,12 @@ describe('sidepanel recomposition view model', () => {
           selectable: false,
         },
       ],
-    })
-  })
+    });
+  });
 
   it('surfaces locator diagnostics in the collapsed debug drawer by default', async () => {
-    const { editor } = createTestEditor()
-    await editor.refresh()
+    const { editor } = createTestEditor();
+    await editor.refresh();
 
     const view = viewFor(editor, {
       locatorPreview: {
@@ -449,7 +454,7 @@ describe('sidepanel recomposition view model', () => {
           },
         ],
       },
-    })
+    });
 
     expect(view.debugDrawer).toMatchObject({
       expanded: false,
@@ -462,36 +467,36 @@ describe('sidepanel recomposition view model', () => {
           issueSummary: 'Could not inspect locator candidates.',
         },
       },
-    })
-  })
+    });
+  });
 
   it('keeps debug drawer state out of saved scenario documents', async () => {
-    const { editor, saves } = createTestEditor({ scenarios: [] })
-    await editor.refresh()
+    const { editor, saves } = createTestEditor({ scenarios: [] });
+    await editor.refresh();
     editor.createScenario({
       id: 'drawer-state-document',
       name: 'Drawer state document',
       initialStepFamily: 'delay',
-    })
+    });
 
     const view = viewFor(editor, {
       debugDrawer: {
         expanded: true,
         activeView: 'failure',
       },
-    })
-    const result = await editor.saveDraft()
+    });
+    const result = await editor.saveDraft();
 
     expect(view.debugDrawer).toMatchObject({
       expanded: true,
       activeView: 'failure',
-    })
-    expect(result).toMatchObject({ ok: true })
-    expect(saves).toHaveLength(1)
-    expect(JSON.stringify(saves[0].document)).not.toContain('debugDrawer')
-    expect(JSON.stringify(saves[0].document)).not.toContain('activeView')
-    expect(JSON.stringify(saves[0].document)).not.toContain('expanded')
-  })
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(saves).toHaveLength(1);
+    expect(JSON.stringify(saves[0].document)).not.toContain('debugDrawer');
+    expect(JSON.stringify(saves[0].document)).not.toContain('activeView');
+    expect(JSON.stringify(saves[0].document)).not.toContain('expanded');
+  });
 
   it('surfaces content readiness failures in the scenario shell', async () => {
     const { editor } = createTestEditor({
@@ -500,16 +505,16 @@ describe('sidepanel recomposition view model', () => {
           return failure({
             code: 'content_not_ready',
             message: 'Content script is not ready for tab 7.',
-          })
+          });
         }
 
-        return ok({ contentReady: true })
+        return ok({ contentReady: true });
       },
-    })
-    await editor.refresh()
+    });
+    await editor.refresh();
 
-    const result = await editor.runSelectedScenario()
-    const view = viewFor(editor)
+    const result = await editor.runSelectedScenario();
+    const view = viewFor(editor);
 
     expect(result).toMatchObject({
       ok: false,
@@ -518,7 +523,7 @@ describe('sidepanel recomposition view model', () => {
           code: 'content_not_ready',
         },
       ],
-    })
+    });
     expect(view.scenarioShell).toMatchObject({
       issueSummary: 'Content script is not ready for tab 7.',
       buttons: {
@@ -527,35 +532,37 @@ describe('sidepanel recomposition view model', () => {
           pending: false,
         },
       },
-    })
-  })
-})
+    });
+  });
+});
 
 type TestEditorOptions = Readonly<{
-  scenarios?: readonly ScenarioRecord[]
-  createRunId?: () => string
-  createDryRunId?: () => string
-  createRecordId?: () => string
-  createStepId?: () => string
+  scenarios?: readonly ScenarioRecord[];
+  createRunId?: () => string;
+  createDryRunId?: () => string;
+  createRecordId?: () => string;
+  createStepId?: () => string;
   sendResponse?:
     | ExtensionResult<unknown>
     | Promise<ExtensionResult<unknown>>
-    | ((message: ActorbleExtensionMessage) => ExtensionResult<unknown> | Promise<ExtensionResult<unknown>>)
-}>
+    | ((
+        message: ActorbleExtensionMessage,
+      ) => ExtensionResult<unknown> | Promise<ExtensionResult<unknown>>);
+}>;
 
 function createTestEditor(options: TestEditorOptions = {}) {
-  let scenarios = [...(options.scenarios ?? [newestScenario, olderScenario])]
-  const sent: ActorbleExtensionMessage[] = []
-  const saves: ScenarioRecordInput[] = []
+  let scenarios = [...(options.scenarios ?? [newestScenario, olderScenario])];
+  const sent: ActorbleExtensionMessage[] = [];
+  const saves: ScenarioRecordInput[] = [];
 
   const client: SidepanelScenarioEditorClient = {
     async listScenarios() {
-      return ok(scenarios)
+      return ok(scenarios);
     },
     async updateScenario(id, update) {
-      const existing = scenarios.find((scenario) => scenario.id === id)
+      const existing = scenarios.find((scenario) => scenario.id === id);
       if (existing === undefined) {
-        throw new Error(`Missing scenario record ${id}.`)
+        throw new Error(`Missing scenario record ${id}.`);
       }
 
       const next = {
@@ -563,28 +570,28 @@ function createTestEditor(options: TestEditorOptions = {}) {
         name: update.name ?? existing.name,
         document: update.document ?? existing.document,
         updatedAt: '2026-06-17T00:10:00.000Z',
-      }
-      scenarios = scenarios.map((scenario) => (scenario.id === id ? next : scenario))
-      return ok(next)
+      };
+      scenarios = scenarios.map((scenario) => (scenario.id === id ? next : scenario));
+      return ok(next);
     },
     async saveScenario(input) {
-      saves.push(input)
+      saves.push(input);
       const record = scenarioRecord(
         input.id ?? input.document.id ?? 'generated-scenario',
         input.name ?? input.document.name ?? 'Untitled scenario',
         '2026-06-17T00:10:00.000Z',
         input.document,
-      )
-      scenarios = [record, ...scenarios]
-      return ok(record)
+      );
+      scenarios = [record, ...scenarios];
+      return ok(record);
     },
     async importScenarioJson() {
-      return ok(scenarios[0])
+      return ok(scenarios[0]);
     },
     async exportScenarioJson(id) {
-      const record = scenarios.find((scenario) => scenario.id === id)
+      const record = scenarios.find((scenario) => scenario.id === id);
       if (record === undefined) {
-        throw new Error(`Missing scenario record ${id}.`)
+        throw new Error(`Missing scenario record ${id}.`);
       }
 
       return ok({
@@ -592,29 +599,29 @@ function createTestEditor(options: TestEditorOptions = {}) {
         filename: `${id}.json`,
         jsonText: `${JSON.stringify(record.document, null, 2)}\n`,
         document: record.document,
-      } satisfies ScenarioJsonExport)
+      } satisfies ScenarioJsonExport);
     },
     async getActiveTab() {
-      return { id: 7, url: 'http://localhost:3000/login' }
+      return { id: 7, url: 'http://localhost:3000/login' };
     },
     async sendMessage(message) {
-      sent.push(message)
+      sent.push(message);
       if (typeof options.sendResponse === 'function') {
-        return options.sendResponse(message)
+        return options.sendResponse(message);
       }
 
-      return options.sendResponse ?? ok({ contentReady: true })
+      return options.sendResponse ?? ok({ contentReady: true });
     },
-  }
+  };
 
   const editor = createSidepanelScenarioEditor(client, {
     createRunId: options.createRunId ?? (() => 'run-1'),
     createDryRunId: options.createDryRunId ?? (() => 'dry-run-1'),
     createRecordId: options.createRecordId ?? (() => 'record-1'),
     ...(options.createStepId === undefined ? {} : { createStepId: options.createStepId }),
-  })
+  });
 
-  return { editor, sent, saves }
+  return { editor, sent, saves };
 }
 
 function viewFor(
@@ -626,14 +633,14 @@ function viewFor(
     targetPicker: input.targetPicker ?? idleTargetPicker(),
     locatorPreview: input.locatorPreview ?? idleLocatorPreview(),
     ...(input.debugDrawer === undefined ? {} : { debugDrawer: input.debugDrawer }),
-  })
+  });
 }
 
 function idleTargetPicker(): TargetPickerSnapshot {
   return {
     status: 'idle',
     issues: [],
-  }
+  };
 }
 
 function idleLocatorPreview(): LocatorPreviewSnapshot {
@@ -641,7 +648,7 @@ function idleLocatorPreview(): LocatorPreviewSnapshot {
     status: 'idle',
     candidates: [],
     issues: [],
-  }
+  };
 }
 
 function scenarioRecord(
@@ -657,7 +664,7 @@ function scenarioRecord(
     document,
     createdAt: '2026-06-17T00:00:00.000Z',
     updatedAt,
-  }
+  };
 }
 
 function scenarioDocument(id: string, name: string): ScenarioDocument {
@@ -679,7 +686,7 @@ function scenarioDocument(id: string, name: string): ScenarioDocument {
         reason: 'Let the page settle.',
       },
     ],
-  }
+  };
 }
 
 function commandReceiptForRecord(
@@ -705,13 +712,10 @@ function commandReceiptForRecord(
       startedAt: 100,
       updatedAt: 110,
     } satisfies SidepanelRecordSession,
-  }
+  };
 }
 
-function recordedDraft(
-  draftId: string,
-  stepPatch: Partial<ScenarioTargetTextStep> = {},
-) {
+function recordedDraft(draftId: string, stepPatch: Partial<ScenarioTargetTextStep> = {}) {
   return {
     draftId,
     sessionId: draftId,
@@ -742,5 +746,5 @@ function recordedDraft(
         },
       ],
     } satisfies ScenarioDocument,
-  }
+  };
 }

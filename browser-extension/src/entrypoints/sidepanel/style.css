@@ -1,4 +1,4 @@
-@import "../../ui/tokens.css";
+@import '../../ui/tokens.css';
 
 :root {
   color-scheme: light;
@@ -201,8 +201,13 @@ textarea:not(.ui-textarea) {
   color: var(--text);
   background: var(--surface);
   font:
-    12px / 1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    12px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
 }
 
 input:not(.ui-input),
@@ -263,7 +268,7 @@ button:not(.ui-button):disabled {
   opacity: 0.52;
 }
 
-button:not(.ui-button)[data-pending="true"] {
+button:not(.ui-button)[data-pending='true'] {
   cursor: progress;
 }
 
@@ -341,8 +346,12 @@ button:not(.ui-button)[data-pending="true"] {
   min-height: 42px;
   max-height: 90px;
   font:
-    13px / 1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    13px / 1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
 .step-card-icon,
@@ -381,7 +390,7 @@ button:not(.ui-button)[data-pending="true"] {
 
 .step-list:empty::before {
   color: var(--muted);
-  content: "Add a step to start";
+  content: 'Add a step to start';
   font-size: 13px;
 }
 
@@ -396,10 +405,10 @@ button:not(.ui-button)[data-pending="true"] {
   left: 42px;
   width: 2px;
   background: color-mix(in srgb, var(--border) 78%, transparent);
-  content: "";
+  content: '';
 }
 
-.workflow-step-list-item[data-dragging="true"] {
+.workflow-step-list-item[data-dragging='true'] {
   z-index: 3;
 }
 
@@ -416,7 +425,7 @@ button:not(.ui-button)[data-pending="true"] {
   background: var(--surface);
 }
 
-.step-card[data-selected="true"] {
+.step-card[data-selected='true'] {
   border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
   background: var(--surface);
   box-shadow:
@@ -424,16 +433,16 @@ button:not(.ui-button)[data-pending="true"] {
     0 12px 28px rgb(33 48 38 / 9%);
 }
 
-.step-card[data-validation="invalid"] {
+.step-card[data-validation='invalid'] {
   border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
 }
 
-.step-card[data-validation="pending"] {
+.step-card[data-validation='pending'] {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
   background: var(--surface);
 }
 
-.step-card[data-validation="invalid"][data-selected="true"] {
+.step-card[data-validation='invalid'][data-selected='true'] {
   border-color: color-mix(in srgb, var(--danger) 68%, var(--border));
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--danger) 14%, transparent),
@@ -530,7 +539,7 @@ button:not(.ui-button)[data-pending="true"] {
   font-weight: 500;
 }
 
-.step-card[data-validation="invalid"] .step-status {
+.step-card[data-validation='invalid'] .step-status {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
@@ -641,7 +650,7 @@ button:not(.ui-button)[data-pending="true"] {
   background: var(--accent-soft);
 }
 
-.action-select-item[data-state="checked"] {
+.action-select-item[data-state='checked'] {
   color: var(--accent-strong);
 }
 
@@ -696,7 +705,7 @@ button:not(.ui-button)[data-pending="true"] {
 
 .target-slot-list:empty::before {
   color: var(--muted);
-  content: "No target slots";
+  content: 'No target slots';
   font-size: 13px;
 }
 
@@ -718,13 +727,13 @@ button:not(.ui-button)[data-pending="true"] {
   background: var(--surface);
 }
 
-.target-slot-select[data-selected="true"] {
+.target-slot-select[data-selected='true'] {
   border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
   background: var(--surface);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.target-slot-select[data-validation="invalid"] {
+.target-slot-select[data-validation='invalid'] {
   border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
 }
 
@@ -789,7 +798,7 @@ button:not(.ui-button)[data-pending="true"] {
 .locator-preview-list:empty::before,
 .debug-locator-candidates:empty::before {
   color: var(--muted);
-  content: "No locator diagnostics";
+  content: 'No locator diagnostics';
   font-size: 13px;
 }
 
@@ -808,20 +817,20 @@ button:not(.ui-button)[data-pending="true"] {
   align-items: center;
 }
 
-.locator-preview-list li[data-status="unique"],
-.debug-locator-candidates li[data-status="unique"] {
+.locator-preview-list li[data-status='unique'],
+.debug-locator-candidates li[data-status='unique'] {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
 }
 
-.locator-preview-list li[data-status="ambiguous"],
-.locator-preview-list li[data-status="zero-match"],
-.debug-locator-candidates li[data-status="ambiguous"],
-.debug-locator-candidates li[data-status="zero-match"] {
+.locator-preview-list li[data-status='ambiguous'],
+.locator-preview-list li[data-status='zero-match'],
+.debug-locator-candidates li[data-status='ambiguous'],
+.debug-locator-candidates li[data-status='zero-match'] {
   border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
 }
 
-.locator-preview-list li[data-status="error"],
-.debug-locator-candidates li[data-status="error"] {
+.locator-preview-list li[data-status='error'],
+.debug-locator-candidates li[data-status='error'] {
   border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
 }
 
@@ -908,7 +917,7 @@ button:not(.ui-button)[data-pending="true"] {
   border-top: 1px solid var(--border);
 }
 
-.debug-drawer[data-attention="true"] {
+.debug-drawer[data-attention='true'] {
   border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
 }
 
@@ -931,7 +940,7 @@ button:not(.ui-button)[data-pending="true"] {
 
 .debug-drawer-panel[hidden],
 .debug-panel[hidden],
-.debug-panel[data-state="inactive"] {
+.debug-panel[data-state='inactive'] {
   display: none;
 }
 
@@ -951,8 +960,8 @@ button:not(.ui-button)[data-pending="true"] {
   padding-inline: 8px;
 }
 
-.debug-drawer-tabs button[data-selected="true"],
-.debug-drawer-tabs button[data-state="active"] {
+.debug-drawer-tabs button[data-selected='true'],
+.debug-drawer-tabs button[data-state='active'] {
   border-color: var(--accent);
   color: var(--accent-strong);
   background: var(--accent-soft);
@@ -975,7 +984,7 @@ button:not(.ui-button)[data-pending="true"] {
 
 .issue-list:empty::before {
   color: var(--muted);
-  content: "No issues";
+  content: 'No issues';
   font-size: 13px;
 }
 
@@ -991,9 +1000,7 @@ button:not(.ui-button)[data-pending="true"] {
 
 .issue-path {
   color: var(--danger);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -1006,8 +1013,13 @@ button:not(.ui-button)[data-pending="true"] {
   overflow-wrap: anywhere;
   color: var(--muted);
   font:
-    12px / 1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
+    12px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    monospace;
 }
 
 .status-pill {
@@ -1023,31 +1035,31 @@ button:not(.ui-button)[data-pending="true"] {
   font-weight: 500;
 }
 
-.status-pill[data-status="running"],
-.status-pill[data-status="recording"],
-.status-pill[data-status="completed"],
-.status-pill[data-status="ready"] {
+.status-pill[data-status='running'],
+.status-pill[data-status='recording'],
+.status-pill[data-status='completed'],
+.status-pill[data-status='ready'] {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
-.status-pill[data-status="unknown"],
-.status-pill[data-status="checking"] {
+.status-pill[data-status='unknown'],
+.status-pill[data-status='checking'] {
   border-color: var(--border);
   color: var(--muted);
   background: var(--surface-soft);
 }
 
-.status-pill[data-status="paused"],
-.status-pill[data-status="stopped"],
-.status-pill[data-status="blocked"] {
+.status-pill[data-status='paused'],
+.status-pill[data-status='stopped'],
+.status-pill[data-status='blocked'] {
   border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 }
 
-.status-pill[data-status="failed"] {
+.status-pill[data-status='failed'] {
   border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));

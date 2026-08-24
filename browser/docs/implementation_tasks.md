@@ -169,34 +169,34 @@ api/actorble-facade
 
 ## 모듈별 구현 계획
 
-| 모듈 | 직접 의존 | 첫 구현 범위 | 테스트 초점 |
-| --- | --- | --- | --- |
-| `shared` | 없음 | 완료된 primitive를 유지하고 누락된 error code/option만 태스크별로 추가 | feature module import 금지, helper shape 안정성 |
-| `diagnostics/diagnostics-trace` | `shared` | 완료된 in-memory collector 유지, 필요 시 span attributes만 확장 | span lifecycle, snapshot immutability, feature import 금지 |
-| `platform/platform-adapter/dom-adapter` | `shared` | root/query/rect/style/hit-test/focus/scroll/describeElement 구현 | jsdom DOM read/write, internal overlay hit-test 제외 |
-| `platform/platform-adapter/event-dispatcher` | `shared` | pointer/mouse/keyboard/input event descriptor를 실제 DOM event로 dispatch | dispatch order, bubbling/cancelable/defaultPrevented |
-| `platform/platform-adapter/state-applier` | `shared` | `data-actorble-*` state attribute apply/cleanup | hover/active/focus-visible cleanup |
-| `platform/platform-adapter/style-adapter` | `shared` | runtime style injection/disposal | style element lifecycle, duplicate cleanup |
-| `targeting/target-resolver` | `shared`, dom adapter, diagnostics | `element`/`css` locator, strict mode, stale validation | 0/1/N candidate, snapshot handle, detached target |
-| `targeting/surface-engine` | `shared`, dom adapter, scroller2 adapter, `scroller2` | public surface boundary, option/result/error/trace mapping | public delegation, result mapping, cancellation/timeout |
-| `targeting/scroller2-platform-adapter` | `shared`, `scroller2` | Actorble DomPort를 scroller2 ScrollPlatform에 연결 | metrics/style/rect/write mapping, nested chain integration |
-| `targeting/geometry-engine` | `shared`, surface, dom adapter | rect, visible rect, center, clickable point result | deterministic geometry, no interactability decisions |
-| `targeting/interactability-engine` | `shared`, geometry, dom adapter | visible/enabled/editable/focusable/pointer-events/occlusion report | action-specific preflight and force policy |
-| `runtime/timeline-engine` | `shared` | controllable clock, timeout, cancellation, next-frame/settled primitive | fake clock, cancellation, timeout |
-| `input/pointer-signals` | `shared` | in-memory signal bus | subscribe/unsubscribe, signal order |
-| `input/pointer-engine` | `shared`, timeline, signals | position/previous/motion/buttons, move/down/up/cancel | DOM-free pointer state and emitted signals |
-| `state/interaction-state-store` | `shared`, pointer signals | hover/active/focus/typing slices and effect descriptors | reducer diff, no platform concrete imports |
-| `input/gesture-engine` | `shared`, pointer engine, signals, timeline | click and double-click pointer sequence, drag extension point | fake pointer/timeline sequence |
-| `input/focus-engine` | `shared`, dom adapter, store | focus request, activeElement sync, focus-visible modality | platform focus sync, focus failure |
-| `input/keyboard-engine` | `shared`, event dispatcher, store | keyDown/keyUp/press, modifier state | modifier ordering, keyboard modality |
-| `input/text-input-engine` | `shared`, focus, event dispatcher, store | `type`, `typeInto`, `fill` strategy split | focus before type, input/change dispatch |
-| `runtime/wait-observation-engine` | `shared`, timeline, dom adapter | wait strategies: none, next-frame, settled, custom predicate | timeout, mutation quiet hook shape |
-| `runtime/action-orchestrator` | resolver/surface/geometry/interactability/input/wait/timeline/diagnostics | `moveTo`, `click`, `typeInto` transaction lifecycle | resolve before dispatch, cleanup, trace context |
-| `runtime/scenario-runner` | orchestrator, timeline, diagnostics | ordered step execution, pause/resume/stop state | delegation and cancellation |
-| `api/actorble-facade` | runner/orchestrator/resolver/diagnostics/capabilities | composition root and public API delegation | facade methods delegate to injected modules |
-| `visual/pseudo-state-mirror` | store, state/style adapters, diagnostics | best-effort `:hover`/`:active`/`:focus-visible` mirror | warning not action failure |
-| `visual/visual-layer` | dom/state adapters | non-interactive overlay root and cursor/highlight shell | `pointer-events: none`, hit-test exclusion |
-| `capability/capability-fidelity` | platform adapter, shared | synthetic browser runtime capability report | report shape and unsupported limits |
+| 모듈                                         | 직접 의존                                                                 | 첫 구현 범위                                                              | 테스트 초점                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `shared`                                     | 없음                                                                      | 완료된 primitive를 유지하고 누락된 error code/option만 태스크별로 추가    | feature module import 금지, helper shape 안정성            |
+| `diagnostics/diagnostics-trace`              | `shared`                                                                  | 완료된 in-memory collector 유지, 필요 시 span attributes만 확장           | span lifecycle, snapshot immutability, feature import 금지 |
+| `platform/platform-adapter/dom-adapter`      | `shared`                                                                  | root/query/rect/style/hit-test/focus/scroll/describeElement 구현          | jsdom DOM read/write, internal overlay hit-test 제외       |
+| `platform/platform-adapter/event-dispatcher` | `shared`                                                                  | pointer/mouse/keyboard/input event descriptor를 실제 DOM event로 dispatch | dispatch order, bubbling/cancelable/defaultPrevented       |
+| `platform/platform-adapter/state-applier`    | `shared`                                                                  | `data-actorble-*` state attribute apply/cleanup                           | hover/active/focus-visible cleanup                         |
+| `platform/platform-adapter/style-adapter`    | `shared`                                                                  | runtime style injection/disposal                                          | style element lifecycle, duplicate cleanup                 |
+| `targeting/target-resolver`                  | `shared`, dom adapter, diagnostics                                        | `element`/`css` locator, strict mode, stale validation                    | 0/1/N candidate, snapshot handle, detached target          |
+| `targeting/surface-engine`                   | `shared`, dom adapter, scroller2 adapter, `scroller2`                     | public surface boundary, option/result/error/trace mapping                | public delegation, result mapping, cancellation/timeout    |
+| `targeting/scroller2-platform-adapter`       | `shared`, `scroller2`                                                     | Actorble DomPort를 scroller2 ScrollPlatform에 연결                        | metrics/style/rect/write mapping, nested chain integration |
+| `targeting/geometry-engine`                  | `shared`, surface, dom adapter                                            | rect, visible rect, center, clickable point result                        | deterministic geometry, no interactability decisions       |
+| `targeting/interactability-engine`           | `shared`, geometry, dom adapter                                           | visible/enabled/editable/focusable/pointer-events/occlusion report        | action-specific preflight and force policy                 |
+| `runtime/timeline-engine`                    | `shared`                                                                  | controllable clock, timeout, cancellation, next-frame/settled primitive   | fake clock, cancellation, timeout                          |
+| `input/pointer-signals`                      | `shared`                                                                  | in-memory signal bus                                                      | subscribe/unsubscribe, signal order                        |
+| `input/pointer-engine`                       | `shared`, timeline, signals                                               | position/previous/motion/buttons, move/down/up/cancel                     | DOM-free pointer state and emitted signals                 |
+| `state/interaction-state-store`              | `shared`, pointer signals                                                 | hover/active/focus/typing slices and effect descriptors                   | reducer diff, no platform concrete imports                 |
+| `input/gesture-engine`                       | `shared`, pointer engine, signals, timeline                               | click and double-click pointer sequence, drag extension point             | fake pointer/timeline sequence                             |
+| `input/focus-engine`                         | `shared`, dom adapter, store                                              | focus request, activeElement sync, focus-visible modality                 | platform focus sync, focus failure                         |
+| `input/keyboard-engine`                      | `shared`, event dispatcher, store                                         | keyDown/keyUp/press, modifier state                                       | modifier ordering, keyboard modality                       |
+| `input/text-input-engine`                    | `shared`, focus, event dispatcher, store                                  | `type`, `typeInto`, `fill` strategy split                                 | focus before type, input/change dispatch                   |
+| `runtime/wait-observation-engine`            | `shared`, timeline, dom adapter                                           | wait strategies: none, next-frame, settled, custom predicate              | timeout, mutation quiet hook shape                         |
+| `runtime/action-orchestrator`                | resolver/surface/geometry/interactability/input/wait/timeline/diagnostics | `moveTo`, `click`, `typeInto` transaction lifecycle                       | resolve before dispatch, cleanup, trace context            |
+| `runtime/scenario-runner`                    | orchestrator, timeline, diagnostics                                       | ordered step execution, pause/resume/stop state                           | delegation and cancellation                                |
+| `api/actorble-facade`                        | runner/orchestrator/resolver/diagnostics/capabilities                     | composition root and public API delegation                                | facade methods delegate to injected modules                |
+| `visual/pseudo-state-mirror`                 | store, state/style adapters, diagnostics                                  | best-effort `:hover`/`:active`/`:focus-visible` mirror                    | warning not action failure                                 |
+| `visual/visual-layer`                        | dom/state adapters                                                        | non-interactive overlay root and cursor/highlight shell                   | `pointer-events: none`, hit-test exclusion                 |
+| `capability/capability-fidelity`             | platform adapter, shared                                                  | synthetic browser runtime capability report                               | report shape and unsupported limits                        |
 
 ## 작업 순서
 

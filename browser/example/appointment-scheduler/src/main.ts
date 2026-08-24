@@ -1,23 +1,31 @@
-import '../../shared/styles.css'
-import { testId, type Scenario } from '../../../src/index.js'
-import { byId, escapeHtml } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import { testId, type Scenario } from '../../../src/index.js';
+import { byId, escapeHtml } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
-const defaultPatient = 'Jisoo Han'
-const defaultReason = 'Follow-up consultation'
-const humanStepPacing = 520
-const humanTypingDelay = 170
-const humanPressDelay = 280
-const humanPressDwell = 340
-const humanMoveDuration = 840
-const humanDragDuration = 1040
-const humanMoveMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanMoveDuration } as const
-const humanDragMotion = { kind: 'ease', timing: 'ease-in-out', duration: humanDragDuration } as const
-let bindDynamicAppointmentEvents: ((target: HTMLElement) => void) | undefined
+const defaultPatient = 'Jisoo Han';
+const defaultReason = 'Follow-up consultation';
+const humanStepPacing = 520;
+const humanTypingDelay = 170;
+const humanPressDelay = 280;
+const humanPressDwell = 340;
+const humanMoveDuration = 840;
+const humanDragDuration = 1040;
+const humanMoveMotion = {
+  kind: 'ease',
+  timing: 'ease-in-out',
+  duration: humanMoveDuration,
+} as const;
+const humanDragMotion = {
+  kind: 'ease',
+  timing: 'ease-in-out',
+  duration: humanDragDuration,
+} as const;
+let bindDynamicAppointmentEvents: ((target: HTMLElement) => void) | undefined;
 
 const stageHtml = `
   <div class="browser-frame scheduler-surface" data-testid="scheduler-surface">
@@ -140,12 +148,13 @@ const stageHtml = `
       </aside>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'Appointment scheduler',
   eyebrow: 'Scheduling task',
-  summary: 'Search for a patient, create an appointment, drag it into an open time slot, and confirm it.',
+  summary:
+    'Search for a patient, create an appointment, drag it into an open time slot, and confirm it.',
   stageLabel: 'Appointment scheduling example',
   stageHtml,
   successMessage: 'Scheduler scenario complete',
@@ -153,72 +162,72 @@ mountTaskExample({
   run: runSchedulerScenario,
   typeFirstField: typePatientSearch,
   clickPrimary: clickSchedulerPrimary,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  const searchInput = byId<HTMLInputElement>('patient-search')
-  const searchButton = byId<HTMLButtonElement>('patient-search-submit')
-  const patientResult = byId<HTMLButtonElement>('patient-result')
-  const appointmentTray = byId<HTMLElement>('appointment-tray')
-  const targetSlot = byId<HTMLElement>('slot-1030')
-  const reasonInput = byId<HTMLInputElement>('appointment-reason')
-  const confirmButton = byId<HTMLButtonElement>('appointment-confirm')
+  const searchInput = byId<HTMLInputElement>('patient-search');
+  const searchButton = byId<HTMLButtonElement>('patient-search-submit');
+  const patientResult = byId<HTMLButtonElement>('patient-result');
+  const appointmentTray = byId<HTMLElement>('appointment-tray');
+  const targetSlot = byId<HTMLElement>('slot-1030');
+  const reasonInput = byId<HTMLInputElement>('appointment-reason');
+  const confirmButton = byId<HTMLButtonElement>('appointment-confirm');
 
-  searchButton.addEventListener('click', () => searchPatient(searchInput.value))
+  searchButton.addEventListener('click', () => searchPatient(searchInput.value));
   searchInput.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') {
-      return
+      return;
     }
 
-    event.preventDefault()
-    searchPatient(searchInput.value)
-  })
+    event.preventDefault();
+    searchPatient(searchInput.value);
+  });
   patientResult.addEventListener('click', (event) => {
     if (event.detail >= 2) {
-      openPatientAppointment()
+      openPatientAppointment();
     }
-  })
-  targetSlot.addEventListener('pointerup', scheduleAppointment)
-  confirmButton.addEventListener('click', confirmAppointment)
+  });
+  targetSlot.addEventListener('pointerup', scheduleAppointment);
+  confirmButton.addEventListener('click', confirmAppointment);
 
-  context.bindDomEvents('patientSearch', searchInput)
-  context.bindDomEvents('searchButton', searchButton)
-  context.bindDomEvents('patientResult', patientResult)
-  context.bindDomEvents('appointmentTray', appointmentTray)
-  context.bindDomEvents('targetSlot', targetSlot)
-  context.bindDomEvents('reasonInput', reasonInput)
-  context.bindDomEvents('confirmButton', confirmButton)
-  bindDynamicAppointmentEvents = (target) => context.bindDomEvents('appointmentCard', target)
+  context.bindDomEvents('patientSearch', searchInput);
+  context.bindDomEvents('searchButton', searchButton);
+  context.bindDomEvents('patientResult', patientResult);
+  context.bindDomEvents('appointmentTray', appointmentTray);
+  context.bindDomEvents('targetSlot', targetSlot);
+  context.bindDomEvents('reasonInput', reasonInput);
+  context.bindDomEvents('confirmButton', confirmButton);
+  bindDynamicAppointmentEvents = (target) => context.bindDomEvents('appointmentCard', target);
 }
 
 async function runSchedulerScenario(context: TaskExampleContext): Promise<void> {
   await context.actorble().run(schedulerScenario(), {
     pacing: { betweenSteps: humanStepPacing },
     timeout: 20000,
-  })
+  });
 }
 
 async function typePatientSearch(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
   await actorble.typeInto(testId('patient-search'), defaultPatient, {
     ...clickFocusTyping(humanTypingDelay, 7000),
-  })
+  });
 }
 
 async function clickSchedulerPrimary(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  context.ensureInputValue('patient-search', defaultPatient)
+  context.ensureInputValue('patient-search', defaultPatient);
   await actorble.moveTo(testId('patient-search-submit'), {
     motion: humanMoveMotion,
     timeout: 2500,
-  })
-  await actorble.clickCurrent({ pressDwell: humanPressDwell, timeout: 2500 })
+  });
+  await actorble.clickCurrent({ pressDwell: humanPressDwell, timeout: 2500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('patient-result')?.dataset.state === 'ready',
-  })
+  });
 }
 
 function schedulerScenario(): Scenario {
@@ -261,7 +270,12 @@ function schedulerScenario(): Scenario {
         },
         options: { timeout: 2500 },
       },
-      { action: 'fill', target: testId('appointment-reason'), input: defaultReason, options: { timeout: 2500 } },
+      {
+        action: 'fill',
+        target: testId('appointment-reason'),
+        input: defaultReason,
+        options: { timeout: 2500 },
+      },
       { action: 'delay', duration: 1240, reason: 'show appointment details before scheduling' },
       {
         action: 'drag',
@@ -293,93 +307,94 @@ function schedulerScenario(): Scenario {
         action: 'waitFor',
         input: {
           kind: 'custom',
-          predicate: () => document.getElementById('appointment-status')?.dataset.state === 'confirmed',
+          predicate: () =>
+            document.getElementById('appointment-status')?.dataset.state === 'confirmed',
         },
         options: { timeout: 2500 },
       },
     ],
-  }
+  };
 }
 
 function searchPatient(rawQuery: string): void {
-  const query = rawQuery.trim() || defaultPatient
-  const result = byId<HTMLButtonElement>('patient-result')
-  const status = byId<HTMLElement>('appointment-status')
+  const query = rawQuery.trim() || defaultPatient;
+  const result = byId<HTMLButtonElement>('patient-result');
+  const status = byId<HTMLElement>('appointment-status');
 
-  result.disabled = false
-  result.dataset.state = 'ready'
+  result.disabled = false;
+  result.dataset.state = 'ready';
   result.innerHTML = `
     <strong>${escapeHtml(query)}</strong>
     <small>MRN 2048 - last visit May 22</small>
-  `
-  status.dataset.state = 'patient-ready'
-  status.textContent = 'Patient found; open the result'
+  `;
+  status.dataset.state = 'patient-ready';
+  status.textContent = 'Patient found; open the result';
 }
 
 function openPatientAppointment(): void {
-  const tray = byId<HTMLElement>('appointment-tray')
-  const reason = byId<HTMLInputElement>('appointment-reason')
-  const confirm = byId<HTMLButtonElement>('appointment-confirm')
-  const status = byId<HTMLElement>('appointment-status')
+  const tray = byId<HTMLElement>('appointment-tray');
+  const reason = byId<HTMLInputElement>('appointment-reason');
+  const confirm = byId<HTMLButtonElement>('appointment-confirm');
+  const status = byId<HTMLElement>('appointment-status');
 
-  tray.dataset.state = 'ready'
-  tray.innerHTML = appointmentCardHtml(defaultPatient)
-  reason.disabled = false
-  confirm.disabled = false
-  status.dataset.state = 'draft'
-  status.textContent = 'Appointment draft ready'
-  bindAppointmentCard()
-  renderSummary('Unscheduled')
+  tray.dataset.state = 'ready';
+  tray.innerHTML = appointmentCardHtml(defaultPatient);
+  reason.disabled = false;
+  confirm.disabled = false;
+  status.dataset.state = 'draft';
+  status.textContent = 'Appointment draft ready';
+  bindAppointmentCard();
+  renderSummary('Unscheduled');
 }
 
 function bindAppointmentCard(): void {
-  const card = byId<HTMLButtonElement>('appointment-card')
+  const card = byId<HTMLButtonElement>('appointment-card');
 
   card.addEventListener('pointerdown', () => {
-    document.body.dataset.activeAppointment = card.id
-  })
+    document.body.dataset.activeAppointment = card.id;
+  });
   card.addEventListener('pointerup', () => {
-    delete document.body.dataset.activeAppointment
-  })
+    delete document.body.dataset.activeAppointment;
+  });
   card.addEventListener('pointercancel', () => {
-    delete document.body.dataset.activeAppointment
-  })
-  bindDynamicAppointmentEvents?.(card)
+    delete document.body.dataset.activeAppointment;
+  });
+  bindDynamicAppointmentEvents?.(card);
 }
 
 function scheduleAppointment(): void {
-  const activeAppointment = document.body.dataset.activeAppointment
+  const activeAppointment = document.body.dataset.activeAppointment;
 
   if (!activeAppointment) {
-    return
+    return;
   }
 
-  const card = byId<HTMLButtonElement>(activeAppointment)
-  const tray = byId<HTMLElement>('appointment-tray')
-  const slot = byId<HTMLElement>('slot-1030')
-  const status = byId<HTMLElement>('appointment-status')
+  const card = byId<HTMLButtonElement>(activeAppointment);
+  const tray = byId<HTMLElement>('appointment-tray');
+  const slot = byId<HTMLElement>('slot-1030');
+  const status = byId<HTMLElement>('appointment-status');
 
-  slot.innerHTML = ''
-  slot.append(card)
-  slot.dataset.state = 'scheduled'
-  tray.dataset.state = 'empty'
-  tray.innerHTML = '<p class="muted">Appointment moved to the schedule.</p>'
-  status.dataset.state = 'scheduled'
-  status.textContent = 'Appointment scheduled for 10:30'
-  delete document.body.dataset.activeAppointment
-  renderSummary('10:30')
+  slot.innerHTML = '';
+  slot.append(card);
+  slot.dataset.state = 'scheduled';
+  tray.dataset.state = 'empty';
+  tray.innerHTML = '<p class="muted">Appointment moved to the schedule.</p>';
+  status.dataset.state = 'scheduled';
+  status.textContent = 'Appointment scheduled for 10:30';
+  delete document.body.dataset.activeAppointment;
+  renderSummary('10:30');
 }
 
 function confirmAppointment(): void {
-  const reason = byId<HTMLInputElement>('appointment-reason').value.trim() || defaultReason
-  const status = byId<HTMLElement>('appointment-status')
-  const card = byId<HTMLButtonElement>('appointment-card')
+  const reason = byId<HTMLInputElement>('appointment-reason').value.trim() || defaultReason;
+  const status = byId<HTMLElement>('appointment-status');
+  const card = byId<HTMLButtonElement>('appointment-card');
 
-  card.dataset.state = 'confirmed'
-  card.querySelector('small')!.textContent = reason
-  status.dataset.state = 'confirmed'
-  status.textContent = `Confirmed 10:30 visit for ${defaultPatient}`
-  renderSummary('10:30', reason)
+  card.dataset.state = 'confirmed';
+  card.querySelector('small')!.textContent = reason;
+  status.dataset.state = 'confirmed';
+  status.textContent = `Confirmed 10:30 visit for ${defaultPatient}`;
+  renderSummary('10:30', reason);
 }
 
 function appointmentCardHtml(patient: string): string {
@@ -395,7 +410,7 @@ function appointmentCardHtml(patient: string): string {
       <strong>${escapeHtml(patient)}</strong>
       <small>Drag to an open slot</small>
     </button>
-  `
+  `;
 }
 
 function renderSummary(time: string, reason = 'Pending'): void {
@@ -412,5 +427,5 @@ function renderSummary(time: string, reason = 'Pending'): void {
       <dt>Reason</dt>
       <dd>${escapeHtml(reason)}</dd>
     </div>
-  `
+  `;
 }

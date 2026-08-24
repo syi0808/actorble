@@ -1,43 +1,42 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest';
 import {
   createContentLocatorPreviewHost,
   type ContentLocatorPreviewActorble,
-} from '../src/entrypoints/content/locator-preview-host.js'
+} from '../src/entrypoints/content/locator-preview-host.js';
 import {
   createLocatorCandidates,
   type LocatorCandidate,
-} from '../src/inspector/locator-preview.js'
-import {
-  createExtensionMessage,
-  type InspectorTargetMetadata,
-} from '../src/messaging/index.js'
+} from '../src/inspector/locator-preview.js';
+import { createExtensionMessage, type InspectorTargetMetadata } from '../src/messaging/index.js';
 
 describe('content locator preview host', () => {
   it('reports the selected match index for ambiguous locator candidates', async () => {
-    const buttons = createFakeDocumentOrder(2)
-    const targetElement = buttons[1]
+    const buttons = createFakeDocumentOrder(2);
+    const targetElement = buttons[1];
     if (targetElement === undefined) {
-      throw new Error('Expected target button.')
+      throw new Error('Expected target button.');
     }
     const actorble = createActorblePreviewFacade({
       testId: buttons.map((element) => ({ element })),
-    })
+    });
     const host = createContentLocatorPreviewHost({
       createActorble: () => actorble,
-    })
-    const documentOrderIndex = buttons.indexOf(targetElement)
+    });
+    const documentOrderIndex = buttons.indexOf(targetElement);
     const testIdCandidate = createLocatorCandidates({
       ...target,
       documentOrderIndex,
-    }).find((candidate) => candidate.strategy === 'testId')
+    }).find((candidate) => candidate.strategy === 'testId');
     if (testIdCandidate === undefined) {
-      throw new Error('Expected testId candidate.')
+      throw new Error('Expected testId candidate.');
     }
 
-    const result = await host.handleMessage(previewMessage([testIdCandidate], {
-      ...target,
-      documentOrderIndex,
-    }))
+    const result = await host.handleMessage(
+      previewMessage([testIdCandidate], {
+        ...target,
+        documentOrderIndex,
+      }),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -51,21 +50,21 @@ describe('content locator preview host', () => {
           },
         ],
       },
-    })
-  })
+    });
+  });
 
   it('counts matches through Actorble resolveAll and reports strictness per candidate', async () => {
     const actorble = createActorblePreviewFacade({
       role: 1,
       label: 2,
       testId: 0,
-    })
+    });
     const host = createContentLocatorPreviewHost({
       createActorble: () => actorble,
-    })
-    const candidates = createLocatorCandidates(target).slice(0, 3)
+    });
+    const candidates = createLocatorCandidates(target).slice(0, 3);
 
-    const result = await host.handleMessage(previewMessage(candidates))
+    const result = await host.handleMessage(previewMessage(candidates));
 
     expect(result).toMatchObject({
       ok: true,
@@ -94,26 +93,32 @@ describe('content locator preview host', () => {
           },
         ],
       },
-    })
-    expect(actorble.resolveAll).toHaveBeenCalledTimes(3)
-    expect(actorble.resolveAll).toHaveBeenNthCalledWith(1, {
-      kind: 'role',
-      role: 'button',
-      name: 'Sign in',
-      exact: true,
-    }, { strict: false })
-    expect(actorble.destroy).toHaveBeenCalledOnce()
-  })
+    });
+    expect(actorble.resolveAll).toHaveBeenCalledTimes(3);
+    expect(actorble.resolveAll).toHaveBeenNthCalledWith(
+      1,
+      {
+        kind: 'role',
+        role: 'button',
+        name: 'Sign in',
+        exact: true,
+      },
+      { strict: false },
+    );
+    expect(actorble.destroy).toHaveBeenCalledOnce();
+  });
 
   it('keeps per-candidate preview errors visible without failing the whole preview', async () => {
     const actorble = createActorblePreviewFacade({
       role: new Error('Invalid selector'),
-    })
+    });
     const host = createContentLocatorPreviewHost({
       createActorble: () => actorble,
-    })
+    });
 
-    const result = await host.handleMessage(previewMessage(createLocatorCandidates(target).slice(0, 1)))
+    const result = await host.handleMessage(
+      previewMessage(createLocatorCandidates(target).slice(0, 1)),
+    );
 
     expect(result).toMatchObject({
       ok: true,
@@ -128,10 +133,10 @@ describe('content locator preview host', () => {
           },
         ],
       },
-    })
-    expect(actorble.destroy).toHaveBeenCalledOnce()
-  })
-})
+    });
+    expect(actorble.destroy).toHaveBeenCalledOnce();
+  });
+});
 
 const target = {
   tagName: 'button',
@@ -147,7 +152,7 @@ const target = {
     width: 100,
     height: 40,
   },
-} satisfies InspectorTargetMetadata
+} satisfies InspectorTargetMetadata;
 
 function previewMessage(
   candidates: readonly LocatorCandidate[],
@@ -162,51 +167,48 @@ function previewMessage(
       target: selectedTarget,
       candidates,
     },
-  })
+  });
 }
 
 function createActorblePreviewFacade(
   countsByKind: Readonly<Record<string, number | Error | readonly unknown[]>>,
 ): ContentLocatorPreviewActorble {
   const resolveAll = vi.fn(async (locator: Readonly<{ kind: string }>) => {
-    const countOrError = countsByKind[locator.kind] ?? 0
+    const countOrError = countsByKind[locator.kind] ?? 0;
     if (countOrError instanceof Error) {
-      throw countOrError
+      throw countOrError;
     }
 
     if (typeof countOrError !== 'number') {
-      return countOrError
+      return countOrError;
     }
 
-    return Array.from(
-      { length: countOrError },
-      (_, index) => ({ id: `${locator.kind}-${index}` }),
-    )
-  })
+    return Array.from({ length: countOrError }, (_, index) => ({ id: `${locator.kind}-${index}` }));
+  });
 
   return {
     resolveAll: resolveAll as unknown as ContentLocatorPreviewActorble['resolveAll'],
     destroy: vi.fn(),
-  }
+  };
 }
 
 type FakeDomElement = Readonly<{
   ownerDocument: Readonly<{
-    querySelectorAll(selector: string): readonly FakeDomElement[]
-  }>
-}>
+    querySelectorAll(selector: string): readonly FakeDomElement[];
+  }>;
+}>;
 
 function createFakeDocumentOrder(count: number): readonly FakeDomElement[] {
-  const elements: FakeDomElement[] = []
+  const elements: FakeDomElement[] = [];
   const ownerDocument = {
     querySelectorAll() {
-      return elements
+      return elements;
     },
-  }
+  };
 
   for (let index = 0; index < count; index += 1) {
-    elements.push({ ownerDocument })
+    elements.push({ ownerDocument });
   }
 
-  return elements
+  return elements;
 }

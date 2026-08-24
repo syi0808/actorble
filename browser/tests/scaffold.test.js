@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { describe, expect, it } from 'vitest';
+import { access } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const componentDirectories = [
   'src/api/actorble-facade',
@@ -32,14 +32,14 @@ const componentDirectories = [
   'src/diagnostics/diagnostics-trace',
   'src/shared',
   'src/options',
-]
+];
 
 describe('architecture scaffold', () => {
   it('tracks every documented browser component boundary with an index module', async () => {
     await Promise.all(
       componentDirectories.map(async (directory) => {
-        await access(join(directory, 'index.ts'))
+        await access(join(directory, 'index.ts'));
       }),
-    )
-  })
-})
+    );
+  });
+});

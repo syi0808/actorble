@@ -8,7 +8,7 @@ sidebar:
 The package entrypoint is `@actorble/browser`. Start with `createActorble()`, locator helpers, and facade methods.
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 ```
 
 Low-level target types, engine interfaces, platform adapters, and custom composition hooks are documented in [Advanced API](../advanced-api/).
@@ -16,18 +16,18 @@ Low-level target types, engine interfaces, platform adapters, and custom composi
 ## createActorble
 
 ```ts
-function createActorble(options?: ActorbleFacadeOptions): Actorble
+function createActorble(options?: ActorbleFacadeOptions): Actorble;
 ```
 
 Creates the browser facade and wires the default browser modules for target resolution, geometry, action orchestration, scenario execution, diagnostics, visual feedback, and fidelity reports.
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble({ feedback: 'cursor' })
+const actorble = createActorble({ feedback: 'cursor' });
 
-await actorble.click(css('#save'))
-actorble.destroy()
+await actorble.click(css('#save'));
+actorble.destroy();
 ```
 
 ### Options
@@ -38,15 +38,15 @@ actorble.destroy()
 type CommonActorbleOptions = Pick<
   ActorbleFacadeOptions,
   'root' | 'debug' | 'feedback' | 'motion' | 'actionDefaults'
->
+>;
 
 type CommonActorbleOptionsShape = {
-  root?: Document | ShadowRoot | Element
-  debug?: boolean
-  feedback?: ActorbleFeedback
-  motion?: boolean
-  actionDefaults?: BrowserActionDefaults
-}
+  root?: Document | ShadowRoot | Element;
+  debug?: boolean;
+  feedback?: ActorbleFeedback;
+  motion?: boolean;
+  actionDefaults?: BrowserActionDefaults;
+};
 ```
 
 ### root
@@ -56,7 +56,7 @@ type CommonActorbleOptionsShape = {
 Limits DOM access to a document or shadow root. Passing an element uses its owner document.
 
 ```ts
-const actorble = createActorble({ root: document })
+const actorble = createActorble({ root: document });
 ```
 
 ### debug
@@ -74,7 +74,7 @@ Reserved on the shared options shape. It is not wired to facade behavior yet.
 ```ts
 const actorble = createActorble({
   feedback: 'debug',
-})
+});
 ```
 
 ```ts
@@ -83,14 +83,14 @@ type ActorbleFeedback =
   | 'cursor'
   | 'debug'
   | {
-      cursor?: boolean
-      target?: boolean
-      click?: boolean
-      focus?: boolean
-      typing?: boolean
-      keystroke?: boolean
-      text?: 'hidden' | 'masked' | 'plain'
-    }
+      cursor?: boolean;
+      target?: boolean;
+      click?: boolean;
+      focus?: boolean;
+      typing?: boolean;
+      keystroke?: boolean;
+      text?: 'hidden' | 'masked' | 'plain';
+    };
 ```
 
 Custom visual layer injection is an advanced composition hook exposed as `visualLayer`; it is separate from the public feedback preset.
@@ -101,17 +101,17 @@ Dependency injection options such as `resolver`, `orchestrator`, `trace`, and `d
 
 ```ts
 class Actorble {
-  constructor(options?: ActorbleFacadeOptions)
+  constructor(options?: ActorbleFacadeOptions);
 }
 ```
 
 `Actorble` is the facade for resolving targets, running actions, waiting, executing scenarios, reading reports, and cleaning up runtime state.
 
 ```ts
-import { Actorble, testId } from '@actorble/browser'
+import { Actorble, testId } from '@actorble/browser';
 
-const actorble = new Actorble()
-await actorble.typeInto(testId('project-name'), 'Orbit')
+const actorble = new Actorble();
+await actorble.typeInto(testId('project-name'), 'Orbit');
 ```
 
 ### actorble.resolve
@@ -123,7 +123,7 @@ resolve(locator: Locator, options?: ResolveOptions): Promise<TargetHandle>
 Resolves one locator into a target handle. Use `strict: true` when ambiguous matches should reject instead of returning the highest-ranked match.
 
 ```ts
-const save = await actorble.resolve(css('#save'), { strict: true })
+const save = await actorble.resolve(css('#save'), { strict: true });
 ```
 
 `TargetHandle` is usually passed back into Actorble methods. Its full shape is documented in [Advanced API](../advanced-api/#targethandle).
@@ -137,7 +137,7 @@ resolveAll(locator: Locator, options?: ResolveOptions): Promise<readonly TargetH
 Returns every target that matches a locator.
 
 ```ts
-const rows = await actorble.resolveAll(css('[data-row]'))
+const rows = await actorble.resolveAll(css('[data-row]'));
 ```
 
 ### actorble.exists
@@ -163,8 +163,8 @@ inspect(target: TargetLike): Promise<TargetInspection>
 Returns the current target handle, debug information, and validity.
 
 ```ts
-const info = await actorble.inspect(css('#save'))
-console.log(info.validity)
+const info = await actorble.inspect(css('#save'));
+console.log(info.validity);
 ```
 
 ### actorble.geometry
@@ -176,8 +176,8 @@ geometry(target: TargetLike): Promise<GeometrySnapshot>
 Computes the target rectangle, visible rectangle, center point, and clickable-point result.
 
 ```ts
-const snapshot = await actorble.geometry(css('#save'))
-console.log(snapshot.center)
+const snapshot = await actorble.geometry(css('#save'));
+console.log(snapshot.center);
 ```
 
 ### actorble.moveTo
@@ -189,7 +189,7 @@ moveTo(target: TargetLike, options?: MoveOptions): Promise<void>
 Resolves and reveals a target, computes geometry, moves the synthetic pointer, and waits for settlement.
 
 ```ts
-await actorble.moveTo(css('#save'), { duration: 200 })
+await actorble.moveTo(css('#save'), { duration: 200 });
 ```
 
 ### actorble.click
@@ -205,7 +205,7 @@ await actorble.click(css('#create-project'), {
   timeout: 2_000,
   force: false,
   pressDwell: 80,
-})
+});
 ```
 
 ### actorble.typeInto
@@ -220,7 +220,7 @@ Resolves and reveals a target, focuses it, types text through synthetic browser 
 await actorble.typeInto(label('Project name'), 'Orbit', {
   focusStrategy: 'programmatic',
   delay: 40,
-})
+});
 ```
 
 ### actorble.waitFor
@@ -235,7 +235,7 @@ Waits for a browser condition to be satisfied.
 await actorble.waitFor({
   kind: 'custom',
   predicate: () => document.body.textContent?.includes('Saved') ?? false,
-})
+});
 ```
 
 ### actorble.run
@@ -254,7 +254,7 @@ await actorble.run({
     { action: 'typeInto', target: css('#project-name'), input: 'Orbit' },
     { action: 'click', target: css('#create-project') },
   ],
-})
+});
 ```
 
 ### actorble.pause
@@ -315,19 +315,19 @@ Subscribes to future diagnostics trace events by exact event name. Existing even
 
 ```ts
 actorble.on('action:failure', (event) => {
-  console.log(event.name, event.at, event.spanId, event.data)
-})
+  console.log(event.name, event.at, event.spanId, event.data);
+});
 ```
 
 `TraceEvent` has a stable top-level shape:
 
 ```ts
 type TraceEvent = {
-  name: DebugEventName
-  at: TimestampMs
-  spanId?: string
-  data?: unknown
-}
+  name: DebugEventName;
+  at: TimestampMs;
+  spanId?: string;
+  data?: unknown;
+};
 ```
 
 Supported event names currently emitted by the browser runtime are:
@@ -387,25 +387,25 @@ type Locator =
   | TextLocator
   | LabelLocator
   | TestIdLocator
-  | PointLocator
+  | PointLocator;
 ```
 
 ### css
 
 ```ts
-function css(selector: string, options?: { root?: ParentNode }): CssLocator
+function css(selector: string, options?: { root?: ParentNode }): CssLocator;
 ```
 
 Creates a CSS selector locator. Use `root` to limit lookup to a parent node.
 
 ```ts
-await actorble.click(css('button.primary'))
+await actorble.click(css('button.primary'));
 ```
 
 ### element
 
 ```ts
-function element(target: Element): ElementLocator
+function element(target: Element): ElementLocator;
 ```
 
 Wraps an existing DOM element as a locator.
@@ -416,11 +416,11 @@ Wraps an existing DOM element as a locator.
 function role(
   roleName: string,
   options?: {
-    name?: string | RegExp
-    exact?: boolean
-    includeHidden?: boolean
+    name?: string | RegExp;
+    exact?: boolean;
+    includeHidden?: boolean;
   },
-): RoleLocator
+): RoleLocator;
 ```
 
 Creates an accessibility role locator.
@@ -428,10 +428,7 @@ Creates an accessibility role locator.
 ### text
 
 ```ts
-function text(
-  value: string | RegExp,
-  options?: { exact?: boolean },
-): TextLocator
+function text(value: string | RegExp, options?: { exact?: boolean }): TextLocator;
 ```
 
 Creates a text-content locator.
@@ -439,10 +436,7 @@ Creates a text-content locator.
 ### label
 
 ```ts
-function label(
-  value: string | RegExp,
-  options?: { exact?: boolean },
-): LabelLocator
+function label(value: string | RegExp, options?: { exact?: boolean }): LabelLocator;
 ```
 
 Creates a form-label locator.
@@ -450,10 +444,7 @@ Creates a form-label locator.
 ### testId
 
 ```ts
-function testId(
-  value: string,
-  options?: { attribute?: string },
-): TestIdLocator
+function testId(value: string, options?: { attribute?: string }): TestIdLocator;
 ```
 
 Creates a test id locator. The default attribute is resolved by the target resolver.
@@ -465,7 +456,7 @@ function point(
   xOrPoint: number | Point,
   y?: number,
   options?: { coordinateSpace?: CoordinateSpace },
-): PointLocator
+): PointLocator;
 ```
 
 Creates a point locator.
@@ -476,57 +467,58 @@ Most public methods accept operation options.
 
 ```ts
 type OperationOptions = {
-  timeout?: DurationMs
-  signal?: CancellationSignalLike
-}
+  timeout?: DurationMs;
+  signal?: CancellationSignalLike;
+};
 ```
 
 ### ResolveOptions
 
 ```ts
 type ResolveOptions = OperationOptions & {
-  strict?: boolean
-}
+  strict?: boolean;
+};
 ```
 
 ### Pointer movement options
 
 ```ts
 type PointerMovementOptions = {
-  duration?: DurationMs
-  motion?: PointerMotionProfile
-}
+  duration?: DurationMs;
+  motion?: PointerMotionProfile;
+};
 ```
 
 ```ts
 type PointerMotionProfile =
   | {
-      kind: 'ease'
-      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
-      duration?: DurationMs
+      kind: 'ease';
+      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+      duration?: DurationMs;
     }
   | {
-      kind: 'inertia'
-      initialVelocity?: number
-      deceleration?: number
+      kind: 'inertia';
+      initialVelocity?: number;
+      deceleration?: number;
     }
   | {
-      kind: 'spring'
-      stiffness?: number
-      damping?: number
-      mass?: number
-    }
+      kind: 'spring';
+      stiffness?: number;
+      damping?: number;
+      mass?: number;
+    };
 ```
 
 ### ClickOptions
 
 ```ts
-type ClickOptions = OperationOptions & PointerMovementOptions & {
-  button?: PointerButtonName
-  clickCount?: number
-  force?: boolean
-  pressDwell?: DurationMs
-}
+type ClickOptions = OperationOptions &
+  PointerMovementOptions & {
+    button?: PointerButtonName;
+    clickCount?: number;
+    force?: boolean;
+    pressDwell?: DurationMs;
+  };
 ```
 
 `force` bypasses forceable interactability blockers but does not bypass unforceable blockers.
@@ -535,11 +527,11 @@ type ClickOptions = OperationOptions & PointerMovementOptions & {
 
 ```ts
 type TypeOptions = OperationOptions & {
-  delay?: DurationMs
-  focusStrategy?: 'programmatic' | 'click' | 'none'
-  focusClick?: TypeFocusClickOptions
-  afterFocusDelay?: DurationMs
-}
+  delay?: DurationMs;
+  focusStrategy?: 'programmatic' | 'click' | 'none';
+  focusClick?: TypeFocusClickOptions;
+  afterFocusDelay?: DurationMs;
+};
 ```
 
 Use `focusStrategy: 'none'` only when the target is already focused.
@@ -548,19 +540,19 @@ Use `focusStrategy: 'none'` only when the target is already focused.
 
 ```ts
 type TextSelectionEndpoint = {
-  target: TargetLike
-  offset?: number
-  point?: Point
-}
+  target: TargetLike;
+  offset?: number;
+  point?: Point;
+};
 
 type TextSelectionTarget =
   | TargetLike
   | {
-      anchor: TextSelectionEndpoint
-      focus: TextSelectionEndpoint
-    }
+      anchor: TextSelectionEndpoint;
+      focus: TextSelectionEndpoint;
+    };
 
-type SelectTextOptions = OperationOptions & PointerMovementOptions
+type SelectTextOptions = OperationOptions & PointerMovementOptions;
 ```
 
 With default motion enabled, `selectText` dispatches a synthetic pointer/mouse
@@ -577,11 +569,11 @@ type PointerSequenceStep =
   | { type: 'move'; to: Point; duration?: DurationMs }
   | { type: 'down'; button?: PointerButtonName }
   | { type: 'up'; button?: PointerButtonName }
-  | { type: 'pause'; duration: DurationMs }
+  | { type: 'pause'; duration: DurationMs };
 
-type PointerSequence = readonly PointerSequenceStep[]
+type PointerSequence = readonly PointerSequenceStep[];
 
-type PointerSequenceOptions = OperationOptions
+type PointerSequenceOptions = OperationOptions;
 ```
 
 ## WaitCondition
@@ -602,25 +594,25 @@ type WaitCondition =
   | { kind: 'stable'; target?: TargetLike; options?: StableWaitOptions }
   | { kind: 'all'; conditions: readonly WaitCondition[] }
   | { kind: 'any'; conditions: readonly WaitCondition[] }
-  | { kind: 'custom'; predicate: () => boolean | Promise<boolean> }
+  | { kind: 'custom'; predicate: () => boolean | Promise<boolean> };
 ```
 
 `waitFor()` resolves when the condition is satisfied or rejects on timeout/cancellation.
 Target-state helpers are exported for direct and scenario use:
 
 ```ts
-await actorble.waitFor(attached(css('#save')))
-await actorble.waitFor(enabled(css('#save')))
-await actorble.waitFor(focused(css('#project-name')))
-await actorble.waitFor(text('Saved'))
-await actorble.waitFor(text('Saved', { target: css('#status') }))
-await actorble.waitFor(value(css('#project-name'), 'Actorble'))
-await actorble.waitFor(attribute(css('#panel'), 'data-state', 'ready'))
-await actorble.waitFor(attribute(css('#panel'), 'aria-busy', null))
-await actorble.waitFor(url('/projects/actorble'))
-await actorble.waitFor(stable(css('#panel'), { quietMs: 80, stableFrames: 2, threshold: 0.5 }))
-await actorble.waitFor(all(attached(css('#save')), enabled(css('#save'))))
-await actorble.waitFor(any(text('Saved'), url('/projects/actorble')))
+await actorble.waitFor(attached(css('#save')));
+await actorble.waitFor(enabled(css('#save')));
+await actorble.waitFor(focused(css('#project-name')));
+await actorble.waitFor(text('Saved'));
+await actorble.waitFor(text('Saved', { target: css('#status') }));
+await actorble.waitFor(value(css('#project-name'), 'Actorble'));
+await actorble.waitFor(attribute(css('#panel'), 'data-state', 'ready'));
+await actorble.waitFor(attribute(css('#panel'), 'aria-busy', null));
+await actorble.waitFor(url('/projects/actorble'));
+await actorble.waitFor(stable(css('#panel'), { quietMs: 80, stableFrames: 2, threshold: 0.5 }));
+await actorble.waitFor(all(attached(css('#save')), enabled(css('#save'))));
+await actorble.waitFor(any(text('Saved'), url('/projects/actorble')));
 ```
 
 `detached` succeeds when the watched target leaves the configured root or its locator no longer
@@ -649,18 +641,24 @@ waits until timeout or cancellation.
 
 ```ts
 type Scenario = {
-  id?: string
-  name?: string
-  steps: readonly ScenarioStep[]
-}
+  id?: string;
+  name?: string;
+  steps: readonly ScenarioStep[];
+};
 ```
 
 ```ts
 type ScenarioStep =
   | { id?: string; action: 'click'; target: TargetLike; options?: Omit<ClickOptions, 'signal'> }
-  | { id?: string; action: 'typeInto'; target: TargetLike; input: string; options?: Omit<TypeOptions, 'signal'> }
+  | {
+      id?: string;
+      action: 'typeInto';
+      target: TargetLike;
+      input: string;
+      options?: Omit<TypeOptions, 'signal'>;
+    }
   | { id?: string; action: 'waitFor'; input: WaitCondition; options?: Omit<WaitOptions, 'signal'> }
-  | { id?: string; action: 'delay'; duration: DurationMs; reason?: string }
+  | { id?: string; action: 'delay'; duration: DurationMs; reason?: string };
 ```
 
 Scenario step options omit `signal` because the runner owns cancellation for the active run.
@@ -671,20 +669,20 @@ Scenario step options omit `signal` because the runner owns cancellation for the
 
 ```ts
 type CapabilityReport = {
-  pointerInput: 'none' | 'visual' | 'synthetic' | 'native'
-  keyboardInput: 'none' | 'synthetic' | 'native'
-  textInput: 'none' | 'set-value' | 'insert-text' | 'composition' | 'native'
-  pseudoState: 'none' | 'mirror' | 'native'
-  trustedEvents: boolean
-  crossOriginFrame: boolean
-  closedShadowRoot: boolean
-  dragAndDrop: DragAndDropCapability
-  textSelection: TextSelectionCapability
-  pointerSequence: PointerSequenceCapability
-  scrolling: 'none' | 'viewport' | 'nested-dom'
-  reveal: 'none' | 'scroll-into-view' | 'planned'
-  stability: 'none' | 'frame' | 'observed'
-}
+  pointerInput: 'none' | 'visual' | 'synthetic' | 'native';
+  keyboardInput: 'none' | 'synthetic' | 'native';
+  textInput: 'none' | 'set-value' | 'insert-text' | 'composition' | 'native';
+  pseudoState: 'none' | 'mirror' | 'native';
+  trustedEvents: boolean;
+  crossOriginFrame: boolean;
+  closedShadowRoot: boolean;
+  dragAndDrop: DragAndDropCapability;
+  textSelection: TextSelectionCapability;
+  pointerSequence: PointerSequenceCapability;
+  scrolling: 'none' | 'viewport' | 'nested-dom';
+  reveal: 'none' | 'scroll-into-view' | 'planned';
+  stability: 'none' | 'frame' | 'observed';
+};
 ```
 
 The in-page browser runtime reports `scrolling: 'nested-dom'`, `reveal: 'planned'`, and
@@ -694,29 +692,29 @@ The in-page browser runtime reports `scrolling: 'nested-dom'`, `reveal: 'planned
 
 ```ts
 type FidelityReport = {
-  pointerInput: InputFidelity
-  keyboardInput: InputFidelity
-  textInput: InputFidelity
-  pseudoState: PseudoStateCapability
-  visualOverlay: VisualOverlayFidelity
-  trustedEvents: boolean
-  limits: readonly string[]
-}
+  pointerInput: InputFidelity;
+  keyboardInput: InputFidelity;
+  textInput: InputFidelity;
+  pseudoState: PseudoStateCapability;
+  visualOverlay: VisualOverlayFidelity;
+  trustedEvents: boolean;
+  limits: readonly string[];
+};
 ```
 
 ## Error helpers
 
 ```ts
 class ActorbleError extends Error {
-  readonly code: ActorbleErrorCode
-  readonly details?: ActorbleErrorDetails
+  readonly code: ActorbleErrorCode;
+  readonly details?: ActorbleErrorDetails;
 }
 
 function actorbleError(
   code: ActorbleErrorCode,
   message: string,
   options?: ActorbleErrorOptions,
-): ActorbleError
+): ActorbleError;
 ```
 
 `ActorbleErrorCode` currently includes `NOT_IMPLEMENTED`, `TARGET_NOT_FOUND`, `TARGET_AMBIGUOUS`, `TARGET_STALE`, `TARGET_DETACHED`, `ACTION_TIMEOUT`, `ACTION_CANCELLED`, `INTERACTABILITY_FAILED`, `TEXT_SELECTION_UNSUPPORTED`, `POINTER_SEQUENCE_INCOMPLETE`, and `PLATFORM_UNSUPPORTED`.

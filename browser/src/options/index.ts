@@ -20,26 +20,26 @@ import type {
   VisualTextVisibility,
   WaitOptions,
   StabilityPolicy,
-} from '../shared/index.js'
+} from '../shared/index.js';
 
-export type { BrowserActionDefaults } from '../shared/index.js'
+export type { BrowserActionDefaults } from '../shared/index.js';
 
 const DEFAULT_POINTER_MOTION = {
   kind: 'ease',
   timing: 'ease-in-out',
   duration: 250,
-} as const satisfies PointerMotionProfile
+} as const satisfies PointerMotionProfile;
 
 const DEFAULT_INERTIA_MOTION = {
   initialVelocity: 1200,
   deceleration: 4800,
-} as const
+} as const;
 
 const DEFAULT_SPRING_MOTION = {
   stiffness: 170,
   damping: 26,
   mass: 1,
-} as const
+} as const;
 
 const DEFAULT_FEEDBACK = {
   enabled: true,
@@ -49,7 +49,7 @@ const DEFAULT_FEEDBACK = {
   focusOverlay: false,
   typingIndicator: false,
   keystrokeOverlay: false,
-} as const satisfies ResolvedBrowserFeedbackOptions
+} as const satisfies ResolvedBrowserFeedbackOptions;
 
 export const BROWSER_OPTION_DEFAULTS = {
   pointerMotion: DEFAULT_POINTER_MOTION,
@@ -66,33 +66,33 @@ export const BROWSER_OPTION_DEFAULTS = {
     settle: 'scroll-stable',
   },
   feedback: DEFAULT_FEEDBACK,
-} as const
+} as const;
 
 export type BrowserFeedbackOptions = Readonly<{
-  cursor?: boolean
-  targetHighlight?: boolean
-  clickFeedback?: boolean
-  focusOverlay?: boolean
-  typingIndicator?: boolean
-  keystrokeOverlay?: boolean
-  textVisibility?: VisualTextVisibility
-}>
+  cursor?: boolean;
+  targetHighlight?: boolean;
+  clickFeedback?: boolean;
+  focusOverlay?: boolean;
+  typingIndicator?: boolean;
+  keystrokeOverlay?: boolean;
+  textVisibility?: VisualTextVisibility;
+}>;
 
 export type ResolvedBrowserFeedbackOptions = Readonly<{
-  enabled: boolean
-  cursor: boolean
-  targetHighlight: boolean
-  clickFeedback: boolean
-  focusOverlay: boolean
-  typingIndicator: boolean
-  keystrokeOverlay: boolean
-  textVisibility?: VisualTextVisibility
-}>
+  enabled: boolean;
+  cursor: boolean;
+  targetHighlight: boolean;
+  clickFeedback: boolean;
+  focusOverlay: boolean;
+  typingIndicator: boolean;
+  keystrokeOverlay: boolean;
+  textVisibility?: VisualTextVisibility;
+}>;
 
 export type BrowserFeedbackInput =
   | ActorbleFeedback
   | BrowserFeedbackOptions
-  | ResolvedBrowserFeedbackOptions
+  | ResolvedBrowserFeedbackOptions;
 
 export type BrowserActionName =
   | 'moveTo'
@@ -110,63 +110,62 @@ export type BrowserActionName =
   | 'drag'
   | 'selectText'
   | 'pointerSequence'
-  | 'waitFor'
+  | 'waitFor';
 
 export type BrowserActionOptionMap = Readonly<{
-  moveTo: MoveOptions
-  click: ClickOptions
-  clickCurrent: ClickCurrentOptions
-  doubleClick: ClickOptions
-  focus: FocusOptions
-  type: TypeOptions
-  typeInto: TypeIntoOptions
-  fill: FillOptions
-  press: PressOptions
-  reveal: RevealOptions
-  scrollTo: ScrollOptions
-  scrollBy: ScrollOptions
-  drag: DragOptions
-  selectText: SelectTextOptions
-  pointerSequence: PointerSequenceOptions
-  waitFor: WaitOptions
-}>
+  moveTo: MoveOptions;
+  click: ClickOptions;
+  clickCurrent: ClickCurrentOptions;
+  doubleClick: ClickOptions;
+  focus: FocusOptions;
+  type: TypeOptions;
+  typeInto: TypeIntoOptions;
+  fill: FillOptions;
+  press: PressOptions;
+  reveal: RevealOptions;
+  scrollTo: ScrollOptions;
+  scrollBy: ScrollOptions;
+  drag: DragOptions;
+  selectText: SelectTextOptions;
+  pointerSequence: PointerSequenceOptions;
+  waitFor: WaitOptions;
+}>;
 
 export type BrowserActionOptions<TAction extends BrowserActionName> =
-  BrowserActionOptionMap[TAction]
+  BrowserActionOptionMap[TAction];
 
 export type BrowserActorbleOptions = ActorbleOptions &
   Readonly<{
-    motion?: boolean
-    actionDefaults?: BrowserActionDefaults
-  }>
+    motion?: boolean;
+    actionDefaults?: BrowserActionDefaults;
+  }>;
 
 export type ResolvedActorbleOptions = Readonly<{
-  root?: ActorbleOptions['root']
-  debug: boolean
-  pointer?: ActorbleOptions['pointer']
-  feedback: ResolvedBrowserFeedbackOptions
-  motion: boolean
-  actionDefaults: BrowserActionDefaults
-}>
+  root?: ActorbleOptions['root'];
+  debug: boolean;
+  pointer?: ActorbleOptions['pointer'];
+  feedback: ResolvedBrowserFeedbackOptions;
+  motion: boolean;
+  actionDefaults: BrowserActionDefaults;
+}>;
 
 export type BrowserRunOptions = RunOptions &
   Readonly<{
-    motion?: boolean
-    actionDefaults?: BrowserActionDefaults
-  }>
+    motion?: boolean;
+    actionDefaults?: BrowserActionDefaults;
+  }>;
 
 export type ResolvedRunOptions = RunOptions &
   Readonly<{
-    motion?: boolean
-    actionDefaults: BrowserActionDefaults
-  }>
+    motion?: boolean;
+    actionDefaults: BrowserActionDefaults;
+  }>;
 
-export type BrowserActionResolutionInput<TAction extends BrowserActionName> =
-  Readonly<{
-    actorble?: BrowserActorbleOptions | ResolvedActorbleOptions
-    run?: BrowserRunOptions | ResolvedRunOptions
-    options?: Readonly<Partial<BrowserActionOptions<TAction>>>
-  }>
+export type BrowserActionResolutionInput<TAction extends BrowserActionName> = Readonly<{
+  actorble?: BrowserActorbleOptions | ResolvedActorbleOptions;
+  run?: BrowserRunOptions | ResolvedRunOptions;
+  options?: Readonly<Partial<BrowserActionOptions<TAction>>>;
+}>;
 
 export function resolveActorbleOptions(
   options: BrowserActorbleOptions | ResolvedActorbleOptions = {},
@@ -179,7 +178,7 @@ export function resolveActorbleOptions(
       feedback: options.feedback,
       motion: options.motion ?? true,
       actionDefaults: options.actionDefaults ?? {},
-    }
+    };
   }
 
   return {
@@ -189,7 +188,7 @@ export function resolveActorbleOptions(
     feedback: resolveBrowserFeedbackOptions(options.feedback),
     motion: options.motion ?? true,
     actionDefaults: options.actionDefaults ?? {},
-  }
+  };
 }
 
 export function resolveRunOptions(
@@ -201,75 +200,75 @@ export function resolveRunOptions(
     ...(options.pacing === undefined ? {} : { pacing: options.pacing }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
     actionDefaults: options.actionDefaults ?? {},
-  }
+  };
 }
 
 export function resolveActionOptions<TAction extends BrowserActionName>(
   action: TAction,
   input: BrowserActionResolutionInput<TAction> = {},
 ): BrowserActionOptions<TAction> {
-  const actorble = resolveActorbleOptions(input.actorble)
-  const run = resolveRunOptions(input.run)
-  let resolved: Record<string, unknown> = {}
+  const actorble = resolveActorbleOptions(input.actorble);
+  const run = resolveRunOptions(input.run);
+  let resolved: Record<string, unknown> = {};
 
-  resolved = mergeActionLayer(action, resolved, centralizedActionDefaults(action))
-  resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, actorble.actionDefaults))
+  resolved = mergeActionLayer(action, resolved, centralizedActionDefaults(action));
+  resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, actorble.actionDefaults));
 
   if (actorble.motion === false && shouldDisableMotion(action, resolved)) {
-    resolved = mergeActionLayer(action, resolved, { duration: 0 })
+    resolved = mergeActionLayer(action, resolved, { duration: 0 });
   }
 
   if (run.motion === false && shouldDisableMotion(action, resolved)) {
-    resolved = mergeActionLayer(action, resolved, { duration: 0 })
+    resolved = mergeActionLayer(action, resolved, { duration: 0 });
   }
 
-  resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, run.actionDefaults))
-  resolved = mergeActionLayer(action, resolved, input.options)
-  resolved = normalizeResolvedActionOptions(action, resolved)
+  resolved = mergeActionLayer(action, resolved, actionDefaultsFor(action, run.actionDefaults));
+  resolved = mergeActionLayer(action, resolved, input.options);
+  resolved = normalizeResolvedActionOptions(action, resolved);
 
-  return resolved as BrowserActionOptions<TAction>
+  return resolved as BrowserActionOptions<TAction>;
 }
 
 export function resolveBrowserFeedbackOptions(
   feedback: BrowserFeedbackInput | undefined = undefined,
 ): ResolvedBrowserFeedbackOptions {
   if (feedback === undefined) {
-    return { ...DEFAULT_FEEDBACK }
+    return { ...DEFAULT_FEEDBACK };
   }
 
   if (feedback === 'off') {
-    return { ...feedbackOffDefaults }
+    return { ...feedbackOffDefaults };
   }
 
   if (feedback === 'cursor') {
-    return { ...feedbackOffDefaults, enabled: true, cursor: true }
+    return { ...feedbackOffDefaults, enabled: true, cursor: true };
   }
 
   if (feedback === 'debug') {
-    return { ...debugFeedbackDefaults }
+    return { ...debugFeedbackDefaults };
   }
 
   if (isResolvedBrowserFeedbackOptions(feedback)) {
-    return { ...feedback }
+    return { ...feedback };
   }
 
   if (isPublicFeedbackObject(feedback)) {
-    return resolvePublicFeedbackObject(feedback)
+    return resolvePublicFeedbackObject(feedback);
   }
 
-  return resolveInternalFeedbackObject(feedback)
+  return resolveInternalFeedbackObject(feedback);
 }
 
 export function normalizeStabilityPolicy(
   policy: StabilityPolicy,
 ): Exclude<StabilityPolicy, 'settled'> {
-  return policy === 'settled' ? 'interaction-stable' : policy
+  return policy === 'settled' ? 'interaction-stable' : policy;
 }
 
 function isResolvedActorbleOptions(
   options: BrowserActorbleOptions | ResolvedActorbleOptions,
 ): options is ResolvedActorbleOptions {
-  return isResolvedBrowserFeedbackOptions(options.feedback)
+  return isResolvedBrowserFeedbackOptions(options.feedback);
 }
 
 function isResolvedBrowserFeedbackOptions(
@@ -280,7 +279,7 @@ function isResolvedBrowserFeedbackOptions(
     feedback !== null &&
     'enabled' in feedback &&
     'targetHighlight' in feedback
-  )
+  );
 }
 
 function isPublicFeedbackObject(
@@ -295,7 +294,7 @@ function isPublicFeedbackObject(
       'typing' in feedback ||
       'keystroke' in feedback ||
       'text' in feedback)
-  )
+  );
 }
 
 function resolvePublicFeedbackObject(
@@ -309,7 +308,7 @@ function resolvePublicFeedbackObject(
     typingIndicator: feedback.typing ?? false,
     keystrokeOverlay: feedback.keystroke ?? false,
     textVisibility: feedback.text,
-  })
+  });
 }
 
 function resolveInternalFeedbackObject(
@@ -323,12 +322,10 @@ function resolveInternalFeedbackObject(
     typingIndicator: feedback.typingIndicator ?? quietFeedbackDefaults.typingIndicator,
     keystrokeOverlay: feedback.keystrokeOverlay ?? quietFeedbackDefaults.keystrokeOverlay,
     textVisibility: feedback.textVisibility,
-  })
+  });
 }
 
-function resolveFeedbackChannels(
-  feedback: BrowserFeedbackOptions,
-): ResolvedBrowserFeedbackOptions {
+function resolveFeedbackChannels(feedback: BrowserFeedbackOptions): ResolvedBrowserFeedbackOptions {
   const resolved = {
     cursor: feedback.cursor ?? false,
     targetHighlight: feedback.targetHighlight ?? false,
@@ -337,19 +334,19 @@ function resolveFeedbackChannels(
     typingIndicator: feedback.typingIndicator ?? false,
     keystrokeOverlay: feedback.keystrokeOverlay ?? false,
     textVisibility: feedback.textVisibility,
-  }
+  };
   const enabled =
     resolved.cursor ||
     resolved.targetHighlight ||
     resolved.clickFeedback ||
     resolved.focusOverlay ||
     resolved.typingIndicator ||
-    resolved.keystrokeOverlay
+    resolved.keystrokeOverlay;
 
   return {
     enabled,
     ...resolved,
-  }
+  };
 }
 
 const feedbackOffDefaults = {
@@ -360,7 +357,7 @@ const feedbackOffDefaults = {
   focusOverlay: false,
   typingIndicator: false,
   keystrokeOverlay: false,
-} as const satisfies ResolvedBrowserFeedbackOptions
+} as const satisfies ResolvedBrowserFeedbackOptions;
 
 const quietFeedbackDefaults = {
   cursor: true,
@@ -369,7 +366,7 @@ const quietFeedbackDefaults = {
   focusOverlay: false,
   typingIndicator: false,
   keystrokeOverlay: false,
-} as const satisfies BrowserFeedbackOptions
+} as const satisfies BrowserFeedbackOptions;
 
 const debugFeedbackDefaults = {
   enabled: true,
@@ -379,16 +376,16 @@ const debugFeedbackDefaults = {
   focusOverlay: true,
   typingIndicator: true,
   keystrokeOverlay: true,
-} as const satisfies ResolvedBrowserFeedbackOptions
+} as const satisfies ResolvedBrowserFeedbackOptions;
 
 function centralizedActionDefaults(action: BrowserActionName): Record<string, unknown> {
-  const lifecycle = ordinaryActionLifecycleDefaults(action)
+  const lifecycle = ordinaryActionLifecycleDefaults(action);
 
   switch (action) {
     case 'moveTo':
     case 'drag':
     case 'selectText':
-      return { ...lifecycle, motion: BROWSER_OPTION_DEFAULTS.pointerMotion }
+      return { ...lifecycle, motion: BROWSER_OPTION_DEFAULTS.pointerMotion };
     case 'click':
     case 'clickCurrent':
     case 'doubleClick':
@@ -396,30 +393,37 @@ function centralizedActionDefaults(action: BrowserActionName): Record<string, un
         ...lifecycle,
         motion: BROWSER_OPTION_DEFAULTS.pointerMotion,
         pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
-      }
+      };
     case 'type':
     case 'typeInto':
-      return { ...lifecycle, delay: BROWSER_OPTION_DEFAULTS.typingDelay }
+      return { ...lifecycle, delay: BROWSER_OPTION_DEFAULTS.typingDelay };
     case 'reveal':
-      return BROWSER_OPTION_DEFAULTS.reveal
+      return BROWSER_OPTION_DEFAULTS.reveal;
     default:
-      return lifecycle
+      return lifecycle;
   }
 }
 
 function ordinaryActionLifecycleDefaults(action: BrowserActionName): Record<string, unknown> {
-  const wait = actionUsesActionWait(action) ? { wait: 'interaction-stable' } : {}
-  return actionUsesTargetReveal(action) ? { ...wait, reveal: true } : wait
+  const wait = actionUsesActionWait(action) ? { wait: 'interaction-stable' } : {};
+  return actionUsesTargetReveal(action) ? { ...wait, reveal: true } : wait;
 }
 
 function actionUsesActionWait(action: BrowserActionName): boolean {
-  return !['reveal', 'scrollTo', 'scrollBy', 'waitFor'].includes(action)
+  return !['reveal', 'scrollTo', 'scrollBy', 'waitFor'].includes(action);
 }
 
 function actionUsesTargetReveal(action: BrowserActionName): boolean {
-  return ['moveTo', 'click', 'doubleClick', 'focus', 'typeInto', 'fill', 'drag', 'selectText'].includes(
-    action,
-  )
+  return [
+    'moveTo',
+    'click',
+    'doubleClick',
+    'focus',
+    'typeInto',
+    'fill',
+    'drag',
+    'selectText',
+  ].includes(action);
 }
 
 function actionDefaultsFor(
@@ -428,37 +432,37 @@ function actionDefaultsFor(
 ): Readonly<Record<string, unknown>> | undefined {
   switch (action) {
     case 'moveTo':
-      return defaults.moveTo
+      return defaults.moveTo;
     case 'click':
-      return defaults.click
+      return defaults.click;
     case 'clickCurrent':
-      return defaults.clickCurrent
+      return defaults.clickCurrent;
     case 'doubleClick':
-      return defaults.doubleClick
+      return defaults.doubleClick;
     case 'focus':
-      return defaults.focus
+      return defaults.focus;
     case 'type':
-      return defaults.type
+      return defaults.type;
     case 'typeInto':
-      return defaults.typeInto
+      return defaults.typeInto;
     case 'fill':
-      return defaults.fill
+      return defaults.fill;
     case 'press':
-      return defaults.press
+      return defaults.press;
     case 'reveal':
-      return defaults.reveal
+      return defaults.reveal;
     case 'scrollTo':
-      return defaults.scrollTo
+      return defaults.scrollTo;
     case 'scrollBy':
-      return defaults.scrollBy
+      return defaults.scrollBy;
     case 'drag':
-      return defaults.drag
+      return defaults.drag;
     case 'selectText':
-      return defaults.selectText
+      return defaults.selectText;
     case 'pointerSequence':
-      return defaults.pointerSequence
+      return defaults.pointerSequence;
     case 'waitFor':
-      return defaults.waitFor
+      return defaults.waitFor;
   }
 }
 
@@ -468,18 +472,18 @@ function mergeActionLayer(
   layer: Readonly<Record<string, unknown>> | undefined,
 ): Record<string, unknown> {
   if (layer === undefined) {
-    return current
+    return current;
   }
 
-  const definedLayer = definedOptions(layer)
-  const next = { ...current }
+  const definedLayer = definedOptions(layer);
+  const next = { ...current };
 
   if (isPointerAction(action) && hasMovementOption(definedLayer)) {
-    delete next.duration
-    delete next.motion
+    delete next.duration;
+    delete next.motion;
   }
 
-  return { ...next, ...definedLayer }
+  return { ...next, ...definedLayer };
 }
 
 function normalizeResolvedActionOptions(
@@ -489,13 +493,13 @@ function normalizeResolvedActionOptions(
   const normalized = normalizeActionWaitPolicy(
     action,
     normalizeActionRevealPolicy(action, options),
-  )
+  );
 
   if (!isPointerAction(action)) {
-    return normalized
+    return normalized;
   }
 
-  const motion = normalized.motion
+  const motion = normalized.motion;
 
   if (isInertiaMotionProfile(motion)) {
     return {
@@ -506,7 +510,7 @@ function normalizeResolvedActionOptions(
           motion.initialVelocity ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.initialVelocity,
         deceleration: motion.deceleration ?? BROWSER_OPTION_DEFAULTS.inertiaMotion.deceleration,
       },
-    }
+    };
   }
 
   if (isSpringMotionProfile(motion)) {
@@ -518,10 +522,10 @@ function normalizeResolvedActionOptions(
         damping: motion.damping ?? BROWSER_OPTION_DEFAULTS.springMotion.damping,
         mass: motion.mass ?? BROWSER_OPTION_DEFAULTS.springMotion.mass,
       },
-    }
+    };
   }
 
-  return normalized
+  return normalized;
 }
 
 function normalizeActionWaitPolicy(
@@ -529,13 +533,13 @@ function normalizeActionWaitPolicy(
   options: Record<string, unknown>,
 ): Record<string, unknown> {
   if (!actionUsesActionWait(action) || typeof options.wait !== 'string') {
-    return options
+    return options;
   }
 
   return {
     ...options,
     wait: normalizeStabilityPolicy(options.wait as StabilityPolicy),
-  }
+  };
 }
 
 function normalizeActionRevealPolicy(
@@ -543,17 +547,17 @@ function normalizeActionRevealPolicy(
   options: Record<string, unknown>,
 ): Record<string, unknown> {
   if (!actionUsesTargetReveal(action) || options.reveal === false) {
-    return options
+    return options;
   }
 
-  const reveal = options.reveal
+  const reveal = options.reveal;
   return {
     ...options,
     reveal: {
       ...BROWSER_OPTION_DEFAULTS.reveal,
       ...(typeof reveal === 'object' && reveal !== null ? reveal : {}),
     },
-  }
+  };
 }
 
 function isInertiaMotionProfile(
@@ -563,7 +567,7 @@ function isInertiaMotionProfile(
     typeof motion === 'object' &&
     motion !== null &&
     (motion as { kind?: unknown }).kind === 'inertia'
-  )
+  );
 }
 
 function isSpringMotionProfile(
@@ -573,23 +577,23 @@ function isSpringMotionProfile(
     typeof motion === 'object' &&
     motion !== null &&
     (motion as { kind?: unknown }).kind === 'spring'
-  )
+  );
 }
 
 function definedOptions(options: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
+  const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(options)) {
     if (value !== undefined) {
-      result[key] = value
+      result[key] = value;
     }
   }
 
-  return result
+  return result;
 }
 
 function hasMovementOption(options: Readonly<Record<string, unknown>>): boolean {
-  return 'duration' in options || 'motion' in options
+  return 'duration' in options || 'motion' in options;
 }
 
 function isPointerAction(action: BrowserActionName): boolean {
@@ -601,7 +605,7 @@ function isPointerAction(action: BrowserActionName): boolean {
     action === 'drag' ||
     action === 'selectText' ||
     action === 'pointerSequence'
-  )
+  );
 }
 
 function shouldDisableMotion(
@@ -609,10 +613,10 @@ function shouldDisableMotion(
   resolved: Readonly<Record<string, unknown>>,
 ): boolean {
   if (!isPointerAction(action)) {
-    return false
+    return false;
   }
 
-  return action !== 'selectText' || hasMovementOption(resolved)
+  return action !== 'selectText' || hasMovementOption(resolved);
 }
 
 const quietVisualFeedbackDefaults = {
@@ -622,7 +626,7 @@ const quietVisualFeedbackDefaults = {
   focusOverlay: false,
   typingIndicator: false,
   keystrokeOverlay: false,
-} as const
+} as const;
 
 const debugVisualFeedbackDefaults = {
   cursor: true,
@@ -631,4 +635,4 @@ const debugVisualFeedbackDefaults = {
   focusOverlay: true,
   typingIndicator: true,
   keystrokeOverlay: true,
-} as const
+} as const;

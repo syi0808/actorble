@@ -16,20 +16,19 @@ pnpm add @actorble/browser
 ## Quick start
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble({ feedback: 'cursor' })
+const actorble = createActorble({ feedback: 'cursor' });
 
-await actorble.click(css('#create-project'))
-await actorble.typeInto(css('#project-name'), 'Orbit')
+await actorble.click(css('#create-project'));
+await actorble.typeInto(css('#project-name'), 'Orbit');
 await actorble.waitFor({
   kind: 'custom',
-  predicate: () =>
-    document.body.textContent?.includes('Project created') ?? false,
-})
+  predicate: () => document.body.textContent?.includes('Project created') ?? false,
+});
 
-console.log(actorble.getTrace())
-actorble.destroy()
+console.log(actorble.getTrace());
+actorble.destroy();
 ```
 
 Actorble resolves targets, checks geometry and interactability, performs input,

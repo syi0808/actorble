@@ -12,9 +12,9 @@ text-like `input`, `textarea`, and simple `contenteditable` content:
 
 ```ts
 type TextSelectionEndpointCandidate = {
-  target: Node | HTMLInputElement | HTMLTextAreaElement
-  offset: number
-}
+  target: Node | HTMLInputElement | HTMLTextAreaElement;
+  offset: number;
+};
 ```
 
 The same high-level `anchor` / `focus` intent can be applied by different
@@ -29,18 +29,18 @@ because their selection model may not match the DOM text-node model.
 
 ## Compatibility Matrix
 
-| Surface | Endpoint class | Strategy | Result |
-| --- | --- | --- | --- |
-| Ordinary document text | offset-based | Selection API | Supported candidate. Selected text is read with `Selection.toString()`. Collapsed selection is equal anchor/focus offsets. |
-| `input` text | offset-based | Input range API | Supported candidate for inputs that expose `setSelectionRange`. Selected text is `value.slice(selectionStart, selectionEnd)`. |
-| `textarea` text | offset-based | Input range API | Supported candidate. Newlines are counted as offsets in the textarea value. |
-| Simple `contenteditable` | offset-based | Selection API | Supported candidate for DOM text nodes. Rich editor abstractions still need adapters. |
-| Point-based endpoint | point-based | Pointer gesture | Capability-gated. Needs geometry and caret-position policy before becoming stable. |
-| Editor-like surface | adapter-required | Editor adapter | Capability-gated. Requires editor-specific read/apply/clear adapter. |
-| Same-origin iframe | adapter-required | Unsupported in TSPS-01 | Capability-gated until frame routing and frame-local selection ownership exist. |
-| Cross-origin iframe | adapter-required | Unsupported | Not readable or applicable across browser origin boundaries without extension/frame cooperation. |
-| Open shadow root | adapter-required | Unsupported in TSPS-01 | Needs shadow-root selection policy and adapter routing. |
-| Closed shadow root | adapter-required | Unsupported | Not readable or applicable from outside the closed shadow boundary. |
+| Surface                  | Endpoint class   | Strategy               | Result                                                                                                                        |
+| ------------------------ | ---------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Ordinary document text   | offset-based     | Selection API          | Supported candidate. Selected text is read with `Selection.toString()`. Collapsed selection is equal anchor/focus offsets.    |
+| `input` text             | offset-based     | Input range API        | Supported candidate for inputs that expose `setSelectionRange`. Selected text is `value.slice(selectionStart, selectionEnd)`. |
+| `textarea` text          | offset-based     | Input range API        | Supported candidate. Newlines are counted as offsets in the textarea value.                                                   |
+| Simple `contenteditable` | offset-based     | Selection API          | Supported candidate for DOM text nodes. Rich editor abstractions still need adapters.                                         |
+| Point-based endpoint     | point-based      | Pointer gesture        | Capability-gated. Needs geometry and caret-position policy before becoming stable.                                            |
+| Editor-like surface      | adapter-required | Editor adapter         | Capability-gated. Requires editor-specific read/apply/clear adapter.                                                          |
+| Same-origin iframe       | adapter-required | Unsupported in TSPS-01 | Capability-gated until frame routing and frame-local selection ownership exist.                                               |
+| Cross-origin iframe      | adapter-required | Unsupported            | Not readable or applicable across browser origin boundaries without extension/frame cooperation.                              |
+| Open shadow root         | adapter-required | Unsupported in TSPS-01 | Needs shadow-root selection policy and adapter routing.                                                                       |
+| Closed shadow root       | adapter-required | Unsupported            | Not readable or applicable from outside the closed shadow boundary.                                                           |
 
 ## Read And Collapse Semantics
 

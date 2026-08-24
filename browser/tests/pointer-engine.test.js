@@ -1,63 +1,63 @@
-import { describe, expect, it, vi } from 'vitest'
-import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
-import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
+import { describe, expect, it, vi } from 'vitest';
+import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js';
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js';
 
 function createTimeline(frameInterval = 16) {
-  let now = 0
+  let now = 0;
 
   return {
     now: vi.fn(() => now),
     delay: vi.fn(async (duration) => {
-      now += duration
+      now += duration;
     }),
     nextFrame: vi.fn(async () => {
-      now += frameInterval
-      return now
+      now += frameInterval;
+      return now;
     }),
     settle: vi.fn(async () => {}),
     withTimeout: vi.fn(async (operation) => operation),
-  }
+  };
 }
 
 function createControlledTimeline() {
-  let now = 0
-  const pendingFrames = []
+  let now = 0;
+  const pendingFrames = [];
 
   return {
     timeline: {
       now: vi.fn(() => now),
       delay: vi.fn(async (duration) => {
-        now += duration
+        now += duration;
       }),
       nextFrame: vi.fn(
         () =>
           new Promise((resolve) => {
-            pendingFrames.push(resolve)
+            pendingFrames.push(resolve);
           }),
       ),
       settle: vi.fn(async () => {}),
       withTimeout: vi.fn(async (operation) => operation),
     },
     get pendingFrameCount() {
-      return pendingFrames.length
+      return pendingFrames.length;
     },
     step(frameInterval = 16) {
-      const resolve = pendingFrames.shift()
+      const resolve = pendingFrames.shift();
 
       if (!resolve) {
-        throw new Error('No pending frame to resolve.')
+        throw new Error('No pending frame to resolve.');
       }
 
-      now += frameInterval
-      resolve(now)
+      now += frameInterval;
+      resolve(now);
     },
-  }
+  };
 }
 
 function createAbortableControlledTimeline() {
-  let now = 0
-  let activeAbortListenerCount = 0
-  const pendingFrames = new Set()
+  let now = 0;
+  let activeAbortListenerCount = 0;
+  const pendingFrames = new Set();
 
   return {
     timeline: {
@@ -68,54 +68,54 @@ function createAbortableControlledTimeline() {
           new Promise((resolve, reject) => {
             const pending = {
               resolve: (frameInterval = 25) => {
-                options.signal?.removeEventListener('abort', onAbort)
-                if (options.signal) activeAbortListenerCount -= 1
-                pendingFrames.delete(pending)
-                now += frameInterval
-                resolve(now)
+                options.signal?.removeEventListener('abort', onAbort);
+                if (options.signal) activeAbortListenerCount -= 1;
+                pendingFrames.delete(pending);
+                now += frameInterval;
+                resolve(now);
               },
-            }
+            };
             const onAbort = () => {
-              options.signal?.removeEventListener('abort', onAbort)
-              activeAbortListenerCount -= 1
-              pendingFrames.delete(pending)
-              reject(new Error('frame aborted'))
-            }
+              options.signal?.removeEventListener('abort', onAbort);
+              activeAbortListenerCount -= 1;
+              pendingFrames.delete(pending);
+              reject(new Error('frame aborted'));
+            };
 
-            if (options.signal) activeAbortListenerCount += 1
-            options.signal?.addEventListener('abort', onAbort, { once: true })
-            pendingFrames.add(pending)
+            if (options.signal) activeAbortListenerCount += 1;
+            options.signal?.addEventListener('abort', onAbort, { once: true });
+            pendingFrames.add(pending);
           }),
       ),
       settle: vi.fn(async () => {}),
       withTimeout: vi.fn(async (operation) => operation),
     },
     get pendingFrameCount() {
-      return pendingFrames.size
+      return pendingFrames.size;
     },
     get activeAbortListenerCount() {
-      return activeAbortListenerCount
+      return activeAbortListenerCount;
     },
     step(frameInterval = 25) {
-      const pending = pendingFrames.values().next().value
+      const pending = pendingFrames.values().next().value;
 
-      if (!pending) throw new Error('No pending frame to resolve.')
-      pending.resolve(frameInterval)
+      if (!pending) throw new Error('No pending frame to resolve.');
+      pending.resolve(frameInterval);
     },
-  }
+  };
 }
 
 async function flushResolvedFrame(controlledTimeline, frameInterval = 16) {
-  controlledTimeline.step(frameInterval)
-  await Promise.resolve()
+  controlledTimeline.step(frameInterval);
+  await Promise.resolve();
 }
 
 function createEngine(options = {}) {
-  const signals = options.signals ?? new BrowserPointerSignalBus()
-  const timeline = options.timeline ?? createTimeline()
-  const events = []
+  const signals = options.signals ?? new BrowserPointerSignalBus();
+  const timeline = options.timeline ?? createTimeline();
+  const events = [];
 
-  signals.subscribe((signal) => events.push(signal))
+  signals.subscribe((signal) => events.push(signal));
 
   return {
     engine: new BrowserPointerEngine({
@@ -125,37 +125,37 @@ function createEngine(options = {}) {
     }),
     events,
     timeline,
-  }
+  };
 }
 
 function trackPointArrayIterations() {
-  const originalIterator = Array.prototype[Symbol.iterator]
-  let pointArrayIterations = 0
+  const originalIterator = Array.prototype[Symbol.iterator];
+  let pointArrayIterations = 0;
 
   Object.defineProperty(Array.prototype, Symbol.iterator, {
     configurable: true,
     writable: true,
     value: function trackedIterator() {
       if (this.length > 0 && this.every(isPointLike)) {
-        pointArrayIterations += 1
+        pointArrayIterations += 1;
       }
 
-      return originalIterator.call(this)
+      return originalIterator.call(this);
     },
-  })
+  });
 
   return {
     get pointArrayIterations() {
-      return pointArrayIterations
+      return pointArrayIterations;
     },
     restore() {
       Object.defineProperty(Array.prototype, Symbol.iterator, {
         configurable: true,
         writable: true,
         value: originalIterator,
-      })
+      });
     },
-  }
+  };
 }
 
 function isPointLike(value) {
@@ -164,13 +164,13 @@ function isPointLike(value) {
     typeof value === 'object' &&
     typeof value.x === 'number' &&
     typeof value.y === 'number'
-  )
+  );
 }
 
 describe('BrowserPointerEngine', () => {
   it('starts with deterministic immutable pointer state', () => {
-    const { engine } = createEngine()
-    const state = engine.getState()
+    const { engine } = createEngine();
+    const state = engine.getState();
 
     expect(state).toMatchObject({
       id: 'pointer-1',
@@ -179,34 +179,34 @@ describe('BrowserPointerEngine', () => {
       motion: { status: 'idle' },
       buttons: { pressed: [], primary: null },
       surface: { id: null, coordinateSpace: 'viewport' },
-    })
+    });
 
-    state.buttons.pressed.push('primary')
-    state.motion.path?.push({ x: 10, y: 10 })
+    state.buttons.pressed.push('primary');
+    state.motion.path?.push({ x: 10, y: 10 });
 
-    expect(engine.getState().buttons.pressed).toEqual([])
-    expect(engine.getState().motion.path).toBeUndefined()
-  })
+    expect(engine.getState().buttons.pressed).toEqual([]);
+    expect(engine.getState().motion.path).toBeUndefined();
+  });
 
   it('returns immutable snapshots of recorded movement paths', async () => {
-    const timeline = createTimeline(25)
-    const { engine } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine } = createEngine({ timeline });
 
-    const result = await engine.moveTo({ x: 100, y: 0 }, { duration: 100 })
+    const result = await engine.moveTo({ x: 100, y: 0 }, { duration: 100 });
 
-    result.motion.path.push({ x: 999, y: 999 })
-    result.motion.path[0].x = -1
+    result.motion.path.push({ x: 999, y: 999 });
+    result.motion.path[0].x = -1;
 
     expect(engine.getState().motion.path).toEqual([
       { x: 25, y: 0 },
       { x: 50, y: 0 },
       { x: 75, y: 0 },
       { x: 100, y: 0 },
-    ])
-  })
+    ]);
+  });
 
   it('moves immediately and emits one moved signal', async () => {
-    const { engine, events } = createEngine()
+    const { engine, events } = createEngine();
 
     await expect(engine.moveTo({ x: 100, y: 50 })).resolves.toMatchObject({
       position: { x: 100, y: 50 },
@@ -217,7 +217,7 @@ describe('BrowserPointerEngine', () => {
         to: { x: 100, y: 50 },
         path: [{ x: 100, y: 50 }],
       },
-    })
+    });
 
     expect(events).toEqual([
       {
@@ -225,11 +225,11 @@ describe('BrowserPointerEngine', () => {
         point: { x: 100, y: 50 },
         previousPoint: { x: 0, y: 0 },
       },
-    ])
-  })
+    ]);
+  });
 
   it('syncs position without emitting pointer movement signals', () => {
-    const { engine, events } = createEngine()
+    const { engine, events } = createEngine();
 
     expect(engine.syncPosition({ x: 64, y: 32 })).toMatchObject({
       position: { x: 64, y: 32 },
@@ -240,17 +240,17 @@ describe('BrowserPointerEngine', () => {
         to: { x: 64, y: 32 },
         path: [],
       },
-    })
-    expect(events).toEqual([])
-  })
+    });
+    expect(events).toEqual([]);
+  });
 
   it('moves over duration with ordered intermediate and final moved signals', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
 
-    await engine.moveTo({ x: 100, y: 0 }, { duration: 100 })
+    await engine.moveTo({ x: 100, y: 0 }, { duration: 100 });
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4);
     expect(events).toEqual([
       {
         type: 'pointer:moved',
@@ -272,7 +272,7 @@ describe('BrowserPointerEngine', () => {
         point: { x: 100, y: 0 },
         previousPoint: { x: 75, y: 0 },
       },
-    ])
+    ]);
     expect(engine.getState()).toMatchObject({
       position: { x: 100, y: 0 },
       previousPosition: { x: 75, y: 0 },
@@ -287,24 +287,21 @@ describe('BrowserPointerEngine', () => {
           { x: 100, y: 0 },
         ],
       },
-    })
-  })
+    });
+  });
 
   it('retargets in-flight motion to a dynamic endpoint without extending duration', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
-    const resolveEndpoint = vi.fn(async () => ({ x: 200, y: 0 }))
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
+    const resolveEndpoint = vi.fn(async () => ({ x: 200, y: 0 }));
 
-    await engine.moveTo({ x: 100, y: 0 }, { duration: 100, resolveEndpoint })
+    await engine.moveTo({ x: 100, y: 0 }, { duration: 100, resolveEndpoint });
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
-    expect(resolveEndpoint).toHaveBeenCalledTimes(3)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4);
+    expect(resolveEndpoint).toHaveBeenCalledTimes(3);
     expect(events.map((event) => event.point.x)).toEqual([
-      25,
-      83.33333333333333,
-      141.66666666666666,
-      200,
-    ])
+      25, 83.33333333333333, 141.66666666666666, 200,
+    ]);
     expect(engine.getState()).toMatchObject({
       position: { x: 200, y: 0 },
       motion: {
@@ -312,88 +309,88 @@ describe('BrowserPointerEngine', () => {
         from: { x: 0, y: 0 },
         to: { x: 200, y: 0 },
       },
-    })
-  })
+    });
+  });
 
   it('appends movement path frames without iterating the accumulated path', async () => {
-    const frameCount = 64
-    const timeline = createTimeline(1)
-    const { engine } = createEngine({ timeline })
-    const tracker = trackPointArrayIterations()
+    const frameCount = 64;
+    const timeline = createTimeline(1);
+    const { engine } = createEngine({ timeline });
+    const tracker = trackPointArrayIterations();
 
     try {
       await engine.moveTo(
         { x: frameCount, y: 0 },
         { motion: { kind: 'ease', timing: 'linear', duration: frameCount } },
-      )
+      );
     } finally {
-      tracker.restore()
+      tracker.restore();
     }
 
-    expect(engine.getState().motion.path).toHaveLength(frameCount)
-    expect(tracker.pointArrayIterations).toBe(0)
-  })
+    expect(engine.getState().motion.path).toHaveLength(frameCount);
+    expect(tracker.pointArrayIterations).toBe(0);
+  });
 
   it('emits deterministic frame positions for an explicit linear timing profile', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
 
     await engine.moveTo(
       { x: 100, y: 0 },
       { motion: { kind: 'ease', timing: 'linear', duration: 100 } },
-    )
+    );
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4);
     expect(events.map((event) => event.point)).toEqual([
       { x: 25, y: 0 },
       { x: 50, y: 0 },
       { x: 75, y: 0 },
       { x: 100, y: 0 },
-    ])
+    ]);
     expect(engine.getState().motion).toMatchObject({
       status: 'idle',
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
-    })
-  })
+    });
+  });
 
   it('emits deterministic eased frame positions for an explicit timing profile', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
 
     await engine.moveTo(
       { x: 100, y: 0 },
       { motion: { kind: 'ease', timing: 'ease-in-out', duration: 100 } },
-    )
+    );
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(4)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(4);
     expect(events.map((event) => event.point)).toEqual([
       { x: 12.5, y: 0 },
       { x: 50, y: 0 },
       { x: 87.5, y: 0 },
       { x: 100, y: 0 },
-    ])
+    ]);
     expect(engine.getState().motion).toMatchObject({
       status: 'idle',
       from: { x: 0, y: 0 },
       to: { x: 100, y: 0 },
-    })
-  })
+    });
+  });
 
   it('emits deterministic ease-in and ease-out frame positions', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
 
     await engine.moveTo(
       { x: 100, y: 0 },
       { motion: { kind: 'ease', timing: 'ease-in', duration: 100 } },
-    )
+    );
     await engine.moveTo(
       { x: 200, y: 0 },
       { motion: { kind: 'ease', timing: 'ease-out', duration: 100 } },
-    )
+    );
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(8)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(8);
     expect(events.map((event) => event.point)).toEqual([
       { x: 6.25, y: 0 },
       { x: 25, y: 0 },
@@ -403,12 +400,12 @@ describe('BrowserPointerEngine', () => {
       { x: 175, y: 0 },
       { x: 193.75, y: 0 },
       { x: 200, y: 0 },
-    ])
-  })
+    ]);
+  });
 
   it('rejects the removed linear motion profile kind', async () => {
-    const timeline = createTimeline(25)
-    const { engine } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine } = createEngine({ timeline });
 
     await expect(
       engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'linear', duration: 100 } }),
@@ -419,14 +416,14 @@ describe('BrowserPointerEngine', () => {
         profileKind: 'linear',
         supportedKinds: ['ease', 'inertia', 'spring'],
       },
-    })
+    });
 
-    expect(timeline.nextFrame).not.toHaveBeenCalled()
-  })
+    expect(timeline.nextFrame).not.toHaveBeenCalled();
+  });
 
   it('emits deterministic inertia frame positions and settles at the endpoint', async () => {
-    const timeline = createTimeline(25)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(25);
+    const { engine, events } = createEngine({ timeline });
 
     await expect(
       engine.moveTo(
@@ -453,9 +450,9 @@ describe('BrowserPointerEngine', () => {
           { x: 100, y: 0 },
         ],
       },
-    })
+    });
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(10)
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(10);
     expect(events.map((event) => event.point)).toEqual([
       { x: 19, y: 0 },
       { x: 36, y: 0 },
@@ -467,47 +464,47 @@ describe('BrowserPointerEngine', () => {
       { x: 96, y: 0 },
       { x: 99, y: 0 },
       { x: 100, y: 0 },
-    ])
-  })
+    ]);
+  });
 
   it('cancels inertia motion and emits no later movement frames', async () => {
-    const controlledTimeline = createControlledTimeline()
-    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+    const controlledTimeline = createControlledTimeline();
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline });
 
-    await engine.down('primary')
+    await engine.down('primary');
     const movement = engine.moveTo(
       { x: 100, y: 0 },
       { motion: { kind: 'inertia', initialVelocity: 1200, deceleration: 4800 } },
-    )
+    );
 
-    await Promise.resolve()
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await Promise.resolve();
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await flushResolvedFrame(controlledTimeline, 25)
-    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await flushResolvedFrame(controlledTimeline, 25);
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1);
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await engine.cancel()
-    const eventsAtCancellation = [...events]
+    await engine.cancel();
+    const eventsAtCancellation = [...events];
 
     expect(engine.getState()).toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+    });
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' });
 
-    await flushResolvedFrame(controlledTimeline, 25)
+    await flushResolvedFrame(controlledTimeline, 25);
 
     await expect(movement).resolves.toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events).toEqual(eventsAtCancellation)
-  })
+    });
+    expect(events).toEqual(eventsAtCancellation);
+  });
 
   it('emits deterministic spring overshoot frames and settles at the endpoint', async () => {
-    const timeline = createTimeline(16)
-    const { engine, events } = createEngine({ timeline })
+    const timeline = createTimeline(16);
+    const { engine, events } = createEngine({ timeline });
 
     await expect(
       engine.moveTo(
@@ -521,65 +518,65 @@ describe('BrowserPointerEngine', () => {
         from: { x: 0, y: 0 },
         to: { x: 100, y: 0 },
       },
-    })
+    });
 
-    const path = engine.getState().motion.path
+    const path = engine.getState().motion.path;
 
-    expect(path.at(-1)).toEqual({ x: 100, y: 0 })
-    expect(path.some((point) => point.x > 100)).toBe(true)
-    expect(path).toHaveLength(events.filter((event) => event.type === 'pointer:moved').length)
-    expect(events.map((event) => event.point)).toEqual(path)
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(path.length - 1)
-    expect(path.length).toBeLessThan(120)
-  })
+    expect(path.at(-1)).toEqual({ x: 100, y: 0 });
+    expect(path.some((point) => point.x > 100)).toBe(true);
+    expect(path).toHaveLength(events.filter((event) => event.type === 'pointer:moved').length);
+    expect(events.map((event) => event.point)).toEqual(path);
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(path.length - 1);
+    expect(path.length).toBeLessThan(120);
+  });
 
   it('cancels spring motion and emits no later movement frames', async () => {
-    const controlledTimeline = createControlledTimeline()
-    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+    const controlledTimeline = createControlledTimeline();
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline });
 
-    await engine.down('primary')
+    await engine.down('primary');
     const movement = engine.moveTo(
       { x: 100, y: 0 },
       { motion: { kind: 'spring', stiffness: 170, damping: 8, mass: 1 } },
-    )
+    );
 
-    await Promise.resolve()
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await Promise.resolve();
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await flushResolvedFrame(controlledTimeline, 16)
-    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await flushResolvedFrame(controlledTimeline, 16);
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1);
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await engine.cancel()
-    const eventsAtCancellation = [...events]
+    await engine.cancel();
+    const eventsAtCancellation = [...events];
 
     expect(engine.getState()).toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+    });
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' });
 
-    await flushResolvedFrame(controlledTimeline, 16)
+    await flushResolvedFrame(controlledTimeline, 16);
 
     await expect(movement).resolves.toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events).toEqual(eventsAtCancellation)
-  })
+    });
+    expect(events).toEqual(eventsAtCancellation);
+  });
 
   it('updates pressed buttons and primary button while emitting down and up signals', async () => {
-    const { engine, events } = createEngine()
+    const { engine, events } = createEngine();
 
-    await engine.down('primary')
-    await engine.down('secondary')
-    await engine.down('primary')
-    await engine.up('primary')
+    await engine.down('primary');
+    await engine.down('secondary');
+    await engine.down('primary');
+    await engine.up('primary');
 
     expect(engine.getState().buttons).toEqual({
       pressed: ['secondary'],
       primary: 'secondary',
-    })
+    });
     expect(events).toEqual([
       {
         type: 'pointer:down',
@@ -601,105 +598,102 @@ describe('BrowserPointerEngine', () => {
         point: { x: 0, y: 0 },
         button: 'primary',
       },
-    ])
-  })
+    ]);
+  });
 
   it('cancels movement, clears buttons, and emits cancellation', async () => {
-    const { engine, events } = createEngine()
+    const { engine, events } = createEngine();
 
-    await engine.down('primary')
-    await engine.cancel()
+    await engine.down('primary');
+    await engine.cancel();
 
     expect(engine.getState()).toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' })
-  })
+    });
+    expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' });
+  });
 
   it('makes repeated cancellation idempotent and allows the next move without reset', async () => {
-    const { engine, events } = createEngine()
+    const { engine, events } = createEngine();
 
-    await engine.down('primary')
-    await engine.cancel()
-    const eventsAfterFirstCancellation = [...events]
+    await engine.down('primary');
+    await engine.cancel();
+    const eventsAfterFirstCancellation = [...events];
 
-    await engine.cancel()
+    await engine.cancel();
 
-    expect(events).toEqual(eventsAfterFirstCancellation)
+    expect(events).toEqual(eventsAfterFirstCancellation);
     expect(engine.getState()).toMatchObject({
       position: { x: 0, y: 0 },
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
+    });
 
     await expect(engine.moveTo({ x: 25, y: 30 })).resolves.toMatchObject({
       position: { x: 25, y: 30 },
       motion: { status: 'idle' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events.filter((event) => event.type === 'pointer:cancelled')).toHaveLength(1)
-  })
+    });
+    expect(events.filter((event) => event.type === 'pointer:cancelled')).toHaveLength(1);
+  });
 
   it('cancels in-flight motion, clears buttons, and emits no later movement frames', async () => {
-    const controlledTimeline = createControlledTimeline()
-    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline })
+    const controlledTimeline = createControlledTimeline();
+    const { engine, events } = createEngine({ timeline: controlledTimeline.timeline });
 
-    await engine.down('primary')
-    const movement = engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'ease', duration: 100 } })
+    await engine.down('primary');
+    const movement = engine.moveTo({ x: 100, y: 0 }, { motion: { kind: 'ease', duration: 100 } });
 
-    await Promise.resolve()
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await Promise.resolve();
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await flushResolvedFrame(controlledTimeline, 25)
-    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1)
-    expect(controlledTimeline.pendingFrameCount).toBe(1)
+    await flushResolvedFrame(controlledTimeline, 25);
+    expect(events.filter((event) => event.type === 'pointer:moved')).toHaveLength(1);
+    expect(controlledTimeline.pendingFrameCount).toBe(1);
 
-    await engine.cancel()
-    const eventsAtCancellation = [...events]
+    await engine.cancel();
+    const eventsAtCancellation = [...events];
 
     expect(engine.getState()).toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' })
+    });
+    expect(eventsAtCancellation.at(-1)).toEqual({ type: 'pointer:cancelled' });
 
-    await flushResolvedFrame(controlledTimeline, 25)
+    await flushResolvedFrame(controlledTimeline, 25);
 
     await expect(movement).resolves.toMatchObject({
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events).toEqual(eventsAtCancellation)
-  })
+    });
+    expect(events).toEqual(eventsAtCancellation);
+  });
 
   it('stops a halfway move immediately when its AbortSignal fires', async () => {
-    const controlled = createAbortableControlledTimeline()
-    const controller = new AbortController()
-    const { engine, events } = createEngine({ timeline: controlled.timeline })
-    const movement = engine.moveTo(
-      { x: 100, y: 0 },
-      { duration: 100, signal: controller.signal },
-    )
+    const controlled = createAbortableControlledTimeline();
+    const controller = new AbortController();
+    const { engine, events } = createEngine({ timeline: controlled.timeline });
+    const movement = engine.moveTo({ x: 100, y: 0 }, { duration: 100, signal: controller.signal });
 
-    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
-    controlled.step(25)
-    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
-    controller.abort('move stopped')
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1));
+    controlled.step(25);
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1));
+    controller.abort('move stopped');
 
-    await expect(movement).rejects.toThrow('frame aborted')
-    expect(controlled.pendingFrameCount).toBe(0)
-    expect(controlled.activeAbortListenerCount).toBe(0)
+    await expect(movement).rejects.toThrow('frame aborted');
+    expect(controlled.pendingFrameCount).toBe(0);
+    expect(controlled.activeAbortListenerCount).toBe(0);
     expect(engine.getState()).toMatchObject({
       position: { x: 25, y: 0 },
       motion: { status: 'cancelled' },
       buttons: { pressed: [], primary: null },
-    })
-    expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' })
+    });
+    expect(events.at(-1)).toEqual({ type: 'pointer:cancelled' });
 
     await expect(engine.moveTo({ x: 30, y: 5 })).resolves.toMatchObject({
       position: { x: 30, y: 5 },
       motion: { status: 'idle' },
-    })
-  })
-})
+    });
+  });
+});

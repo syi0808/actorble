@@ -1,103 +1,106 @@
-import { actorbleError, element as elementLocator } from '../../shared/index.js'
-import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
-import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
+import { actorbleError, element as elementLocator } from '../../shared/index.js';
+import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js';
+import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js';
 import type {
   DomPort,
   FocusOptions,
   Locator,
   TargetHandle,
   TargetLike,
-} from '../../shared/index.js'
-import type { InteractionStateStore } from '../../state/interaction-state-store/index.js'
+} from '../../shared/index.js';
+import type { InteractionStateStore } from '../../state/interaction-state-store/index.js';
 
 export type FocusSnapshot = Readonly<{
-  active: TargetHandle | null
-  previous: TargetHandle | null
-  focusVisible: boolean
-}>
+  active: TargetHandle | null;
+  previous: TargetHandle | null;
+  focusVisible: boolean;
+}>;
 
 export type FocusEngineOptions = Readonly<{
-  dom?: DomPort
-  store?: InteractionStateStore
-  idPrefix?: string
-}>
+  dom?: DomPort;
+  store?: InteractionStateStore;
+  idPrefix?: string;
+}>;
 
 export interface FocusEngine {
-  focus(target: TargetLike, options?: FocusOptions): Promise<FocusSnapshot>
-  blur(target?: TargetLike): Promise<FocusSnapshot>
-  getFocused(): Promise<FocusSnapshot>
-  tab(options?: FocusOptions): Promise<FocusSnapshot>
+  focus(target: TargetLike, options?: FocusOptions): Promise<FocusSnapshot>;
+  blur(target?: TargetLike): Promise<FocusSnapshot>;
+  getFocused(): Promise<FocusSnapshot>;
+  tab(options?: FocusOptions): Promise<FocusSnapshot>;
 }
 
 export class BrowserFocusEngine implements FocusEngine {
-  readonly #dom: DomPort
-  readonly #store: InteractionStateStore
-  readonly #idPrefix: string
-  #nextTargetId = 1
-  #active: TargetHandle | null = null
-  #previous: TargetHandle | null = null
+  readonly #dom: DomPort;
+  readonly #store: InteractionStateStore;
+  readonly #idPrefix: string;
+  #nextTargetId = 1;
+  #active: TargetHandle | null = null;
+  #previous: TargetHandle | null = null;
 
   constructor(options: FocusEngineOptions = {}) {
-    this.#dom = options.dom ?? new BrowserDomAdapter()
-    this.#store = options.store ?? new BrowserInteractionStateStore()
-    this.#idPrefix = options.idPrefix ?? 'focus-target'
+    this.#dom = options.dom ?? new BrowserDomAdapter();
+    this.#store = options.store ?? new BrowserInteractionStateStore();
+    this.#idPrefix = options.idPrefix ?? 'focus-target';
   }
 
   async focus(target: TargetLike, options: FocusOptions = {}): Promise<FocusSnapshot> {
-    const requested = this.#toHandle(target)
+    const requested = this.#toHandle(target);
 
-    this.#dom.focus(requested.element as HTMLElement | SVGElement, options)
+    this.#dom.focus(requested.element as HTMLElement | SVGElement, options);
 
-    return this.#syncFromPlatform(requested, options.focusVisible === true)
+    return this.#syncFromPlatform(requested, options.focusVisible === true);
   }
 
   async blur(target?: TargetLike): Promise<FocusSnapshot> {
-    const requested = target === undefined ? this.#active : this.#toHandle(target)
+    const requested = target === undefined ? this.#active : this.#toHandle(target);
 
     if (requested) {
-      this.#dom.blur(requested.element as HTMLElement | SVGElement)
+      this.#dom.blur(requested.element as HTMLElement | SVGElement);
     }
 
-    return this.#syncFromPlatform(undefined, false)
+    return this.#syncFromPlatform(undefined, false);
   }
 
   async getFocused(): Promise<FocusSnapshot> {
-    return this.#syncFromPlatform(undefined, this.#active !== null && this.#store.snapshot().focusVisible)
+    return this.#syncFromPlatform(
+      undefined,
+      this.#active !== null && this.#store.snapshot().focusVisible,
+    );
   }
 
   async tab(options: FocusOptions = {}): Promise<FocusSnapshot> {
-    const candidates = this.#focusableCandidates()
+    const candidates = this.#focusableCandidates();
 
     if (candidates.length === 0) {
-      return this.getFocused()
+      return this.getFocused();
     }
 
-    const activeElement = this.#dom.getActiveElement()
-    const activeIndex = activeElement === null ? -1 : candidates.indexOf(activeElement)
-    const next = candidates[(activeIndex + 1) % candidates.length]
+    const activeElement = this.#dom.getActiveElement();
+    const activeIndex = activeElement === null ? -1 : candidates.indexOf(activeElement);
+    const next = candidates[(activeIndex + 1) % candidates.length];
 
-    return this.focus(next, { ...options, focusVisible: options.focusVisible ?? true })
+    return this.focus(next, { ...options, focusVisible: options.focusVisible ?? true });
   }
 
   #syncFromPlatform(
     preferredTarget: TargetHandle | undefined,
     focusVisible: boolean,
   ): FocusSnapshot {
-    const activeElement = this.#dom.getActiveElement()
-    const active = this.#handleForActiveElement(activeElement, preferredTarget)
-    const changed = !sameTarget(active, this.#active)
-    const previous = changed ? this.#active : this.#previous
-    const nextFocusVisible = Boolean(active && focusVisible)
+    const activeElement = this.#dom.getActiveElement();
+    const active = this.#handleForActiveElement(activeElement, preferredTarget);
+    const changed = !sameTarget(active, this.#active);
+    const previous = changed ? this.#active : this.#previous;
+    const nextFocusVisible = Boolean(active && focusVisible);
 
-    this.#previous = previous
-    this.#active = active
-    this.#store.setFocused(active, nextFocusVisible)
+    this.#previous = previous;
+    this.#active = active;
+    this.#store.setFocused(active, nextFocusVisible);
 
     return {
       active,
       previous,
       focusVisible: nextFocusVisible,
-    }
+    };
   }
 
   #handleForActiveElement(
@@ -105,11 +108,11 @@ export class BrowserFocusEngine implements FocusEngine {
     preferredTarget: TargetHandle | undefined,
   ): TargetHandle | null {
     if (!activeElement) {
-      return null
+      return null;
     }
 
     if (preferredTarget?.element === activeElement) {
-      return preferredTarget
+      return preferredTarget;
     }
 
     return {
@@ -119,17 +122,17 @@ export class BrowserFocusEngine implements FocusEngine {
       root: this.#dom.getRoot(),
       validity: this.#dom.isConnected(activeElement) ? 'live' : 'detached',
       debug: this.#dom.describeElement(activeElement),
-    }
+    };
   }
 
   #toHandle(target: TargetLike): TargetHandle {
     if (isTargetHandle(target)) {
-      return target
+      return target;
     }
 
     if (isLocator(target)) {
       if (target.kind === 'element') {
-        return this.#createHandle(target.element, target)
+        return this.#createHandle(target.element, target);
       }
 
       throw actorbleError(
@@ -141,10 +144,10 @@ export class BrowserFocusEngine implements FocusEngine {
             targetKind: target.kind,
           },
         },
-      )
+      );
     }
 
-    return this.#createHandle(target, elementLocator(target))
+    return this.#createHandle(target, elementLocator(target));
   }
 
   #createHandle(element: Element, locator?: Locator): TargetHandle {
@@ -156,7 +159,7 @@ export class BrowserFocusEngine implements FocusEngine {
       root: this.#dom.getRoot(),
       validity: this.#dom.isConnected(element) ? 'live' : 'detached',
       debug: this.#dom.describeElement(element),
-    }
+    };
   }
 
   #focusableCandidates(): readonly Element[] {
@@ -172,12 +175,12 @@ export class BrowserFocusEngine implements FocusEngine {
           '[contenteditable="true"]',
         ].join(','),
       )
-      .filter((element) => this.#dom.isConnected(element) && !hasNegativeTabIndex(element))
+      .filter((element) => this.#dom.isConnected(element) && !hasNegativeTabIndex(element));
   }
 }
 
 export function createFocusEngine(options: FocusEngineOptions = {}): FocusEngine {
-  return new BrowserFocusEngine(options)
+  return new BrowserFocusEngine(options);
 }
 
 function isTargetHandle(target: TargetLike): target is TargetHandle {
@@ -188,32 +191,32 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
     'element' in target &&
     'resolvedAt' in target &&
     'debug' in target
-  )
+  );
 }
 
 function isLocator(target: TargetLike): target is Locator {
-  return typeof target === 'object' && target !== null && 'kind' in target
+  return typeof target === 'object' && target !== null && 'kind' in target;
 }
 
 function sameTarget(left: TargetHandle | null, right: TargetHandle | null): boolean {
   if (left === right) {
-    return true
+    return true;
   }
 
   if (!left || !right) {
-    return false
+    return false;
   }
 
-  return left.element === right.element
+  return left.element === right.element;
 }
 
 function hasNegativeTabIndex(element: Element): boolean {
-  const value = element.getAttribute('tabindex')
+  const value = element.getAttribute('tabindex');
 
   if (value === null) {
-    return false
+    return false;
   }
 
-  const tabIndex = Number.parseInt(value, 10)
-  return !Number.isNaN(tabIndex) && tabIndex < 0
+  const tabIndex = Number.parseInt(value, 10);
+  return !Number.isNaN(tabIndex) && tabIndex < 0;
 }

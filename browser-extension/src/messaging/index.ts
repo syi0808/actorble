@@ -1,11 +1,7 @@
-import type { BrowserRuntimeCompilation } from '../scenario/compile-to-browser-runtime.js'
-import type { ScenarioDocument, ScenarioLocator } from '../scenario/types.js'
-import type { RawRecordedEvent } from '../recorder/event-capture.js'
-import type {
-  RuntimeDebugSnapshot,
-  TraceDisplayEvent,
-  RuntimeRunStatus,
-} from '../trace/index.js'
+import type { BrowserRuntimeCompilation } from '../scenario/compile-to-browser-runtime.js';
+import type { ScenarioDocument, ScenarioLocator } from '../scenario/types.js';
+import type { RawRecordedEvent } from '../recorder/event-capture.js';
+import type { RuntimeDebugSnapshot, TraceDisplayEvent, RuntimeRunStatus } from '../trace/index.js';
 
 export const extensionMessageKinds = [
   'scenario:validate',
@@ -27,43 +23,43 @@ export const extensionMessageKinds = [
   'runtime:status',
   'content:ready',
   'popup:get-state',
-] as const
+] as const;
 
-export type ExtensionMessageKind = (typeof extensionMessageKinds)[number]
+export type ExtensionMessageKind = (typeof extensionMessageKinds)[number];
 
 export type CorrelationMetadata = Readonly<{
-  tabId?: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-}>
+  tabId?: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+}>;
 
 export type RequiredTabCorrelation = Readonly<{
-  tabId: number
-  frameId?: number
-}>
+  tabId: number;
+  frameId?: number;
+}>;
 
 export type RequiredRunCorrelation = RequiredTabCorrelation &
   Readonly<{
-    scenarioId: string
-    runId: string
-  }>
+    scenarioId: string;
+    runId: string;
+  }>;
 
 export type ContentReadyCapabilities = Readonly<{
-  runtime: boolean
-  recorder: boolean
-  inspector: boolean
-  locatorPreview: boolean
-  frameCorrelation: boolean
-}>
+  runtime: boolean;
+  recorder: boolean;
+  inspector: boolean;
+  locatorPreview: boolean;
+  frameCorrelation: boolean;
+}>;
 
 export type InspectorSessionCorrelation = RequiredTabCorrelation &
   Readonly<{
-    sessionId: string
-    scenarioId?: string
-    runId?: string
-    targetSlot?: InspectorTargetSlotCorrelation
-  }>
+    sessionId: string;
+    scenarioId?: string;
+    runId?: string;
+    targetSlot?: InspectorTargetSlotCorrelation;
+  }>;
 
 export type InspectorTargetSlotKind =
   | 'step-target'
@@ -72,199 +68,192 @@ export type InspectorTargetSlotKind =
   | 'selection-anchor'
   | 'selection-focus'
   | 'waitFor-target'
-  | 'reveal-target'
+  | 'reveal-target';
 
 export type InspectorTargetSlotCorrelation = Readonly<{
-  kind: InspectorTargetSlotKind
-  stepId: string
-}>
+  kind: InspectorTargetSlotKind;
+  stepId: string;
+}>;
 
 export type InspectorTargetRect = Readonly<{
-  x: number
-  y: number
-  width: number
-  height: number
-}>
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}>;
 
 export type InspectorTargetMetadata = Readonly<{
-  tagName: string
-  rect: InspectorTargetRect
-  documentOrderIndex?: number
-  frameUrl?: string
-  id?: string
-  classes?: readonly string[]
-  role?: string
-  ariaLabel?: string
-  labelText?: string
-  testId?: string
-  inputType?: string
-  href?: string
-  text?: string
-}>
+  tagName: string;
+  rect: InspectorTargetRect;
+  documentOrderIndex?: number;
+  frameUrl?: string;
+  id?: string;
+  classes?: readonly string[];
+  role?: string;
+  ariaLabel?: string;
+  labelText?: string;
+  testId?: string;
+  inputType?: string;
+  href?: string;
+  text?: string;
+}>;
 
-export type InspectorCancellationReason =
-  | 'user'
-  | 'stopped'
-  | 'navigation'
-  | 'content_lost'
+export type InspectorCancellationReason = 'user' | 'stopped' | 'navigation' | 'content_lost';
 
 export type ExtensionMessage<
   TKind extends ExtensionMessageKind,
   TPayload extends Readonly<Record<string, unknown>>,
 > = Readonly<{
-  kind: TKind
-  payload: TPayload
-}>
+  kind: TKind;
+  payload: TPayload;
+}>;
 
 export type ScenarioValidateMessage = ExtensionMessage<
   'scenario:validate',
   Readonly<{ document: unknown }>
->
+>;
 
 export type ScenarioCompileMessage = ExtensionMessage<
   'scenario:compile',
   Readonly<{ document: ScenarioDocument }>
->
+>;
 
 export type ScenarioRunMessage = ExtensionMessage<
   'scenario:run',
   RequiredRunCorrelation &
     Readonly<{
-      compilation: BrowserRuntimeCompilation
+      compilation: BrowserRuntimeCompilation;
     }>
->
+>;
 
 export type ScenarioControlMessage = ExtensionMessage<
   'scenario:pause' | 'scenario:resume' | 'scenario:stop',
   RequiredRunCorrelation
->
+>;
 
 export type RecordStartMessage = ExtensionMessage<
   'record:start',
   RequiredTabCorrelation &
     Readonly<{
-      scenarioId?: string
-      runId?: string
+      scenarioId?: string;
+      runId?: string;
     }>
->
+>;
 
-export type RecordEventFlushReason = 'incremental' | 'pagehide' | 'stop'
+export type RecordEventFlushReason = 'incremental' | 'pagehide' | 'stop';
 
 export type RecordEventMessage = ExtensionMessage<
   'record:event',
   RequiredTabCorrelation &
     Readonly<{
-      sessionId: string
-      scenarioId?: string
-      runId?: string
-      reason: RecordEventFlushReason
-      events: readonly RawRecordedEvent[]
+      sessionId: string;
+      scenarioId?: string;
+      runId?: string;
+      reason: RecordEventFlushReason;
+      events: readonly RawRecordedEvent[];
     }>
->
+>;
 
 export type RecordStopMessage = ExtensionMessage<
   'record:stop',
   RequiredTabCorrelation &
     Readonly<{
-      scenarioId?: string
-      runId?: string
+      scenarioId?: string;
+      runId?: string;
     }>
->
+>;
 
 export type RecordDraftGetMessage = ExtensionMessage<
   'record:draft:get',
   Readonly<{
-    draftId?: string
-    tabId?: number
-    frameId?: number
-    scenarioId?: string
-    runId?: string
+    draftId?: string;
+    tabId?: number;
+    frameId?: number;
+    scenarioId?: string;
+    runId?: string;
   }>
->
+>;
 
 export type InspectorStartMessage = ExtensionMessage<
   'inspector:start',
   InspectorSessionCorrelation
->
+>;
 
-export type InspectorStopMessage = ExtensionMessage<
-  'inspector:stop',
-  InspectorSessionCorrelation
->
+export type InspectorStopMessage = ExtensionMessage<'inspector:stop', InspectorSessionCorrelation>;
 
 export type InspectorSelectedMessage = ExtensionMessage<
   'inspector:selected',
   InspectorSessionCorrelation &
     Readonly<{
-      target: InspectorTargetMetadata
+      target: InspectorTargetMetadata;
     }>
->
+>;
 
 export type InspectorCancelledMessage = ExtensionMessage<
   'inspector:cancelled',
   InspectorSessionCorrelation &
     Readonly<{
-      reason: InspectorCancellationReason
-      message?: string
+      reason: InspectorCancellationReason;
+      message?: string;
     }>
->
+>;
 
 export type LocatorPreviewCandidateMessage = Readonly<{
-  id: string
-  rank: number
-  strategy: ScenarioLocator['strategy']
-  label: string
-  locator: ScenarioLocator
-}>
+  id: string;
+  rank: number;
+  strategy: ScenarioLocator['strategy'];
+  label: string;
+  locator: ScenarioLocator;
+}>;
 
 export type LocatorPreviewMessage = ExtensionMessage<
   'locator:preview',
   RequiredTabCorrelation &
     Readonly<{
-      scenarioId?: string
-      targetSlot?: InspectorTargetSlotCorrelation
-      target: InspectorTargetMetadata
-      candidates: readonly LocatorPreviewCandidateMessage[]
+      scenarioId?: string;
+      targetSlot?: InspectorTargetSlotCorrelation;
+      target: InspectorTargetMetadata;
+      candidates: readonly LocatorPreviewCandidateMessage[];
     }>
->
+>;
 
 export type TraceEventMessage = ExtensionMessage<
   'trace:event',
   RequiredRunCorrelation &
     Readonly<{
-      event: TraceDisplayEvent
+      event: TraceDisplayEvent;
     }>
->
+>;
 
 export type RuntimeStatusMessage = ExtensionMessage<
   'runtime:status',
   RequiredRunCorrelation &
     Readonly<{
-      status: RuntimeRunStatus
-      message?: string
-      debugSnapshot?: RuntimeDebugSnapshot
+      status: RuntimeRunStatus;
+      message?: string;
+      debugSnapshot?: RuntimeDebugSnapshot;
     }>
->
+>;
 
 export type ContentReadyMessage = ExtensionMessage<
   'content:ready',
   Readonly<{
-    tabId?: number
-    frameId?: number
-    url?: string
-    topFrame?: boolean
-    capabilities?: ContentReadyCapabilities
+    tabId?: number;
+    frameId?: number;
+    url?: string;
+    topFrame?: boolean;
+    capabilities?: ContentReadyCapabilities;
   }>
->
+>;
 
 export type PopupGetStateMessage = ExtensionMessage<
   'popup:get-state',
   Readonly<{
-    tabId?: number
-    frameId?: number
-    scenarioId?: string
+    tabId?: number;
+    frameId?: number;
+    scenarioId?: string;
   }>
->
+>;
 
 export type ActorbleExtensionMessage =
   | ScenarioValidateMessage
@@ -283,45 +272,43 @@ export type ActorbleExtensionMessage =
   | TraceEventMessage
   | RuntimeStatusMessage
   | ContentReadyMessage
-  | PopupGetStateMessage
+  | PopupGetStateMessage;
 
-export type ActorbleExtensionMessageByKind<TKind extends ExtensionMessageKind> =
-  Extract<ActorbleExtensionMessage, Readonly<{ kind: TKind }>>
+export type ActorbleExtensionMessageByKind<TKind extends ExtensionMessageKind> = Extract<
+  ActorbleExtensionMessage,
+  Readonly<{ kind: TKind }>
+>;
 
 export function createExtensionMessage<TMessage extends ActorbleExtensionMessage>(
   message: TMessage,
 ): TMessage {
-  return message
+  return message;
 }
 
 export function isExtensionMessageKind(value: unknown): value is ExtensionMessageKind {
-  return (
-    typeof value === 'string' &&
-    extensionMessageKinds.includes(value as ExtensionMessageKind)
-  )
+  return typeof value === 'string' && extensionMessageKinds.includes(value as ExtensionMessageKind);
 }
 
 export function isActorbleExtensionMessage(value: unknown): value is ActorbleExtensionMessage {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
-  const candidate = value as Readonly<{ kind?: unknown; payload?: unknown }>
+  const candidate = value as Readonly<{ kind?: unknown; payload?: unknown }>;
 
   return (
-    isExtensionMessageKind(candidate.kind) &&
-    isPayloadForKind(candidate.kind, candidate.payload)
-  )
+    isExtensionMessageKind(candidate.kind) && isPayloadForKind(candidate.kind, candidate.payload)
+  );
 }
 
 export function isExtensionMessageOfKind<TKind extends ExtensionMessageKind>(
   value: unknown,
   kind: TKind,
 ): value is ActorbleExtensionMessageByKind<TKind> {
-  return isActorbleExtensionMessage(value) && value.kind === kind
+  return isActorbleExtensionMessage(value) && value.kind === kind;
 }
 
-type UnknownRecord = Readonly<Record<string, unknown>>
+type UnknownRecord = Readonly<Record<string, unknown>>;
 
 const runtimeRunStatuses = [
   'idle',
@@ -330,51 +317,46 @@ const runtimeRunStatuses = [
   'stopped',
   'completed',
   'failed',
-] as const satisfies readonly RuntimeRunStatus[]
+] as const satisfies readonly RuntimeRunStatus[];
 
 const traceEventLevels = [
   'debug',
   'info',
   'warning',
   'error',
-] as const satisfies readonly NonNullable<TraceDisplayEvent['level']>[]
+] as const satisfies readonly NonNullable<TraceDisplayEvent['level']>[];
 
-const runtimeTraceSpanStatuses = [
-  'running',
-  'ok',
-  'error',
-  'cancelled',
-] as const
+const runtimeTraceSpanStatuses = ['running', 'ok', 'error', 'cancelled'] as const;
 
 const inspectorCancellationReasons = [
   'user',
   'stopped',
   'navigation',
   'content_lost',
-] as const satisfies readonly InspectorCancellationReason[]
+] as const satisfies readonly InspectorCancellationReason[];
 
 function isPayloadForKind(
   kind: ExtensionMessageKind,
   payload: unknown,
 ): payload is ActorbleExtensionMessage['payload'] {
   if (!isRecord(payload)) {
-    return false
+    return false;
   }
 
   switch (kind) {
     case 'scenario:validate':
-      return hasOwn(payload, 'document')
+      return hasOwn(payload, 'document');
     case 'scenario:compile':
-      return isRecord(payload.document)
+      return isRecord(payload.document);
     case 'scenario:run':
-      return hasRequiredRunCorrelation(payload) && isCompilation(payload.compilation)
+      return hasRequiredRunCorrelation(payload) && isCompilation(payload.compilation);
     case 'scenario:pause':
     case 'scenario:resume':
     case 'scenario:stop':
-      return hasRequiredRunCorrelation(payload)
+      return hasRequiredRunCorrelation(payload);
     case 'record:start':
     case 'record:stop':
-      return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload)
+      return hasRequiredTabCorrelation(payload) && hasOptionalSessionCorrelation(payload);
     case 'record:event':
       return (
         hasRequiredTabCorrelation(payload) &&
@@ -385,25 +367,25 @@ function isPayloadForKind(
         Array.isArray(payload.events) &&
         payload.events.length > 0 &&
         payload.events.every(isRawRecordedEvent)
-      )
+      );
     case 'record:draft:get':
       return (
         isOptionalString(payload.draftId) &&
         isOptionalFiniteNumber(payload.tabId) &&
         isOptionalFiniteNumber(payload.frameId) &&
         hasOptionalSessionCorrelation(payload)
-      )
+      );
     case 'inspector:start':
     case 'inspector:stop':
-      return hasInspectorSessionCorrelation(payload)
+      return hasInspectorSessionCorrelation(payload);
     case 'inspector:selected':
-      return hasInspectorSessionCorrelation(payload) && isInspectorTargetMetadata(payload.target)
+      return hasInspectorSessionCorrelation(payload) && isInspectorTargetMetadata(payload.target);
     case 'inspector:cancelled':
       return (
         hasInspectorSessionCorrelation(payload) &&
         isInspectorCancellationReason(payload.reason) &&
         isOptionalString(payload.message)
-      )
+      );
     case 'locator:preview':
       return (
         hasRequiredTabCorrelation(payload) &&
@@ -413,16 +395,16 @@ function isPayloadForKind(
         Array.isArray(payload.candidates) &&
         payload.candidates.length > 0 &&
         payload.candidates.every(isLocatorPreviewCandidate)
-      )
+      );
     case 'trace:event':
-      return hasRequiredRunCorrelation(payload) && isTraceDisplayEvent(payload.event)
+      return hasRequiredRunCorrelation(payload) && isTraceDisplayEvent(payload.event);
     case 'runtime:status':
       return (
         hasRequiredRunCorrelation(payload) &&
         isRuntimeRunStatus(payload.status) &&
         isOptionalString(payload.message) &&
         isOptionalRuntimeDebugSnapshot(payload.debugSnapshot)
-      )
+      );
     case 'content:ready':
       return (
         isOptionalFiniteNumber(payload.tabId) &&
@@ -430,28 +412,28 @@ function isPayloadForKind(
         isOptionalString(payload.url) &&
         isOptionalBoolean(payload.topFrame) &&
         isOptionalContentReadyCapabilities(payload.capabilities)
-      )
+      );
     case 'popup:get-state':
       return (
         isOptionalFiniteNumber(payload.tabId) &&
         isOptionalFiniteNumber(payload.frameId) &&
         isOptionalString(payload.scenarioId)
-      )
+      );
   }
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function hasOwn(record: UnknownRecord, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.prototype.hasOwnProperty.call(record, key);
 }
 
 function hasRequiredTabCorrelation(
   payload: UnknownRecord,
 ): payload is UnknownRecord & RequiredTabCorrelation {
-  return isFiniteNumber(payload.tabId) && isOptionalFiniteNumber(payload.frameId)
+  return isFiniteNumber(payload.tabId) && isOptionalFiniteNumber(payload.frameId);
 }
 
 function hasRequiredRunCorrelation(
@@ -461,11 +443,11 @@ function hasRequiredRunCorrelation(
     hasRequiredTabCorrelation(payload) &&
     typeof payload.scenarioId === 'string' &&
     typeof payload.runId === 'string'
-  )
+  );
 }
 
 function hasOptionalSessionCorrelation(payload: UnknownRecord): boolean {
-  return isOptionalString(payload.scenarioId) && isOptionalString(payload.runId)
+  return isOptionalString(payload.scenarioId) && isOptionalString(payload.runId);
 }
 
 function hasInspectorSessionCorrelation(
@@ -477,7 +459,7 @@ function hasInspectorSessionCorrelation(
     payload.sessionId.length > 0 &&
     hasOptionalSessionCorrelation(payload) &&
     isOptionalInspectorTargetSlotCorrelation(payload.targetSlot)
-  )
+  );
 }
 
 export function isInspectorTargetSlotCorrelation(
@@ -488,59 +470,57 @@ export function isInspectorTargetSlotCorrelation(
     isInspectorTargetSlotKind(value.kind) &&
     typeof value.stepId === 'string' &&
     value.stepId.length > 0
-  )
+  );
 }
 
 function isOptionalInspectorTargetSlotCorrelation(
   value: unknown,
 ): value is InspectorTargetSlotCorrelation | undefined {
-  return value === undefined || isInspectorTargetSlotCorrelation(value)
+  return value === undefined || isInspectorTargetSlotCorrelation(value);
 }
 
 function isInspectorTargetSlotKind(value: unknown): value is InspectorTargetSlotKind {
   return (
     typeof value === 'string' &&
-    (
-      value === 'step-target' ||
+    (value === 'step-target' ||
       value === 'drag-from' ||
       value === 'drag-to' ||
       value === 'selection-anchor' ||
       value === 'selection-focus' ||
       value === 'waitFor-target' ||
-      value === 'reveal-target'
-    )
-  )
+      value === 'reveal-target')
+  );
 }
 
 function isOptionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string'
+  return value === undefined || typeof value === 'string';
 }
 
 function isOptionalRecord(value: unknown): boolean {
-  return value === undefined || isRecord(value)
+  return value === undefined || isRecord(value);
 }
 
 function isOptionalFiniteNumber(value: unknown): boolean {
-  return value === undefined || isFiniteNumber(value)
+  return value === undefined || isFiniteNumber(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function isCompilation(value: unknown): value is BrowserRuntimeCompilation {
-  return isRecord(value) && isRecord(value.scenario)
+  return isRecord(value) && isRecord(value.scenario);
 }
 
 function isOptionalContentReadyCapabilities(
   value: unknown,
 ): value is ContentReadyCapabilities | undefined {
   if (value === undefined) {
-    return true
+    return true;
   }
 
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -549,23 +529,20 @@ function isOptionalContentReadyCapabilities(
     typeof value.inspector === 'boolean' &&
     typeof value.locatorPreview === 'boolean' &&
     typeof value.frameCorrelation === 'boolean'
-  )
+  );
 }
 
 function isRuntimeRunStatus(value: unknown): value is RuntimeRunStatus {
-  return (
-    typeof value === 'string' &&
-    runtimeRunStatuses.includes(value as RuntimeRunStatus)
-  )
+  return typeof value === 'string' && runtimeRunStatuses.includes(value as RuntimeRunStatus);
 }
 
 function isRecordEventFlushReason(value: unknown): value is RecordEventFlushReason {
-  return value === 'incremental' || value === 'pagehide' || value === 'stop'
+  return value === 'incremental' || value === 'pagehide' || value === 'stop';
 }
 
 function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
   if (!isRecord(value) || !isFiniteNumber(value.timestamp)) {
-    return false
+    return false;
   }
 
   if (value.kind === 'click') {
@@ -576,7 +553,7 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
       isOptionalFiniteNumber(value.pageX) &&
       isOptionalFiniteNumber(value.pageY) &&
       isFiniteNumber(value.button)
-    )
+    );
   }
 
   if (value.kind === 'text') {
@@ -585,12 +562,10 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
       (value.source === 'input' || value.source === 'change') &&
       typeof value.value === 'string' &&
       typeof value.sensitive === 'boolean' &&
-      (
-        value.sensitiveReason === undefined ||
+      (value.sensitiveReason === undefined ||
         value.sensitiveReason === 'password_type' ||
-        value.sensitiveReason === 'secret_like_field'
-      )
-    )
+        value.sensitiveReason === 'secret_like_field')
+    );
   }
 
   if (value.kind === 'pointer') {
@@ -605,7 +580,7 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
       isFiniteNumber(value.buttons) &&
       isFiniteNumber(value.pointerId) &&
       typeof value.pointerType === 'string'
-    )
+    );
   }
 
   if (value.kind === 'selection') {
@@ -614,7 +589,7 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
       isOptionalRecorderTargetSnapshot(value.activeTarget) &&
       isOptionalRecorderTargetSnapshot(value.anchorTarget) &&
       isOptionalRecorderTargetSnapshot(value.focusTarget)
-    )
+    );
   }
 
   if (value.kind === 'drag') {
@@ -625,28 +600,27 @@ function isRawRecordedEvent(value: unknown): value is RawRecordedEvent {
       isFiniteNumber(value.clientY) &&
       isOptionalFiniteNumber(value.pageX) &&
       isOptionalFiniteNumber(value.pageY)
-    )
+    );
   }
 
-  return false
+  return false;
 }
 
 function isOptionalRecorderTargetSnapshot(value: unknown): boolean {
-  return value === undefined || isRecorderTargetSnapshot(value)
+  return value === undefined || isRecorderTargetSnapshot(value);
 }
 
 function isRecorderTargetSnapshot(value: unknown): boolean {
   if (!isRecord(value) || typeof value.tagName !== 'string' || !isRecorderTargetRect(value.rect)) {
-    return false
+    return false;
   }
 
   return (
     isOptionalString(value.frameUrl) &&
     isOptionalString(value.id) &&
-    (
-      value.classes === undefined ||
-      (Array.isArray(value.classes) && value.classes.every((className) => typeof className === 'string'))
-    ) &&
+    (value.classes === undefined ||
+      (Array.isArray(value.classes) &&
+        value.classes.every((className) => typeof className === 'string'))) &&
     isOptionalString(value.role) &&
     isOptionalString(value.ariaLabel) &&
     isOptionalString(value.labelText) &&
@@ -656,7 +630,7 @@ function isRecorderTargetSnapshot(value: unknown): boolean {
     isOptionalString(value.placeholder) &&
     isOptionalString(value.href) &&
     isOptionalString(value.text)
-  )
+  );
 }
 
 function isRecorderTargetRect(value: unknown): boolean {
@@ -666,16 +640,16 @@ function isRecorderTargetRect(value: unknown): boolean {
     isNumber(value.y) &&
     isNumber(value.width) &&
     isNumber(value.height)
-  )
+  );
 }
 
 function isNumber(value: unknown): value is number {
-  return typeof value === 'number'
+  return typeof value === 'number';
 }
 
 function isTraceDisplayEvent(value: unknown): value is TraceDisplayEvent {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -687,16 +661,16 @@ function isTraceDisplayEvent(value: unknown): value is TraceDisplayEvent {
     isOptionalTraceEventLevel(value.level) &&
     isOptionalString(value.message) &&
     (value.details === undefined || isRecord(value.details))
-  )
+  );
 }
 
 function isOptionalRuntimeDebugSnapshot(value: unknown): value is RuntimeDebugSnapshot | undefined {
-  return value === undefined || isRuntimeDebugSnapshot(value)
+  return value === undefined || isRuntimeDebugSnapshot(value);
 }
 
 function isRuntimeDebugSnapshot(value: unknown): value is RuntimeDebugSnapshot {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -704,7 +678,7 @@ function isRuntimeDebugSnapshot(value: unknown): value is RuntimeDebugSnapshot {
     isOptionalRecord(value.capabilities) &&
     isOptionalRecord(value.fidelity) &&
     isRuntimeTraceSnapshot(value.trace)
-  )
+  );
 }
 
 function isRuntimeTraceSnapshot(value: unknown): boolean {
@@ -718,12 +692,12 @@ function isRuntimeTraceSnapshot(value: unknown): boolean {
     value.snapshots.every(isRuntimeTraceDataSnapshot) &&
     Array.isArray(value.warnings) &&
     value.warnings.every(isRuntimeTraceWarningSnapshot)
-  )
+  );
 }
 
 function isRuntimeTraceSpanSnapshot(value: unknown): boolean {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -735,19 +709,17 @@ function isRuntimeTraceSpanSnapshot(value: unknown): boolean {
     isOptionalFiniteNumber(value.endedAt) &&
     isOptionalRecord(value.attributes) &&
     isOptionalRuntimeTraceErrorSnapshot(value.error)
-  )
+  );
 }
 
 function isRuntimeTraceEventSnapshot(value: unknown): boolean {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
-    typeof value.name === 'string' &&
-    isFiniteNumber(value.at) &&
-    isOptionalString(value.spanId)
-  )
+    typeof value.name === 'string' && isFiniteNumber(value.at) && isOptionalString(value.spanId)
+  );
 }
 
 function isRuntimeTraceDataSnapshot(value: unknown): boolean {
@@ -756,52 +728,47 @@ function isRuntimeTraceDataSnapshot(value: unknown): boolean {
     typeof value.name === 'string' &&
     isFiniteNumber(value.at) &&
     hasOwn(value, 'data')
-  )
+  );
 }
 
 function isRuntimeTraceWarningSnapshot(value: unknown): boolean {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
-    typeof value.message === 'string' &&
-    isFiniteNumber(value.at) &&
-    isOptionalRecord(value.details)
-  )
+    typeof value.message === 'string' && isFiniteNumber(value.at) && isOptionalRecord(value.details)
+  );
 }
 
 function isOptionalRuntimeTraceErrorSnapshot(value: unknown): boolean {
-  return value === undefined || (
-    isRecord(value) &&
-    typeof value.name === 'string' &&
-    typeof value.message === 'string' &&
-    isOptionalString(value.code) &&
-    isOptionalRecord(value.details)
-  )
+  return (
+    value === undefined ||
+    (isRecord(value) &&
+      typeof value.name === 'string' &&
+      typeof value.message === 'string' &&
+      isOptionalString(value.code) &&
+      isOptionalRecord(value.details))
+  );
 }
 
 function isRuntimeTraceSpanStatus(value: unknown): boolean {
   return (
     typeof value === 'string' &&
-    runtimeTraceSpanStatuses.includes(
-      value as (typeof runtimeTraceSpanStatuses)[number],
-    )
-  )
+    runtimeTraceSpanStatuses.includes(value as (typeof runtimeTraceSpanStatuses)[number])
+  );
 }
 
-function isInspectorCancellationReason(
-  value: unknown,
-): value is InspectorCancellationReason {
+function isInspectorCancellationReason(value: unknown): value is InspectorCancellationReason {
   return (
     typeof value === 'string' &&
     inspectorCancellationReasons.includes(value as InspectorCancellationReason)
-  )
+  );
 }
 
 function isInspectorTargetMetadata(value: unknown): value is InspectorTargetMetadata {
   if (!isRecord(value) || !isRecord(value.rect)) {
-    return false
+    return false;
   }
 
   return (
@@ -821,12 +788,12 @@ function isInspectorTargetMetadata(value: unknown): value is InspectorTargetMeta
     isOptionalString(value.inputType) &&
     isOptionalString(value.href) &&
     isOptionalString(value.text)
-  )
+  );
 }
 
 function isLocatorPreviewCandidate(value: unknown): value is LocatorPreviewCandidateMessage {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -839,12 +806,12 @@ function isLocatorPreviewCandidate(value: unknown): value is LocatorPreviewCandi
     value.label.length > 0 &&
     isScenarioLocator(value.locator) &&
     value.locator.strategy === value.strategy
-  )
+  );
 }
 
 function isScenarioLocator(value: unknown): value is ScenarioLocator {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   switch (value.strategy) {
@@ -853,7 +820,7 @@ function isScenarioLocator(value: unknown): value is ScenarioLocator {
         typeof value.selector === 'string' &&
         value.selector.length > 0 &&
         isOptionalInteger(value.matchIndex, 0)
-      )
+      );
     case 'role':
       return (
         typeof value.role === 'string' &&
@@ -861,11 +828,11 @@ function isScenarioLocator(value: unknown): value is ScenarioLocator {
         isOptionalScenarioTextMatcher(value.name) &&
         isOptionalBoolean(value.includeHidden) &&
         isOptionalInteger(value.matchIndex, 0)
-      )
+      );
     case 'text':
-      return isScenarioTextMatcher(value.text) && isOptionalInteger(value.matchIndex, 0)
+      return isScenarioTextMatcher(value.text) && isOptionalInteger(value.matchIndex, 0);
     case 'label':
-      return isScenarioTextMatcher(value.label) && isOptionalInteger(value.matchIndex, 0)
+      return isScenarioTextMatcher(value.label) && isOptionalInteger(value.matchIndex, 0);
     case 'testId':
       return (
         typeof value.value === 'string' &&
@@ -873,34 +840,36 @@ function isScenarioLocator(value: unknown): value is ScenarioLocator {
         (value.attribute === undefined ||
           (typeof value.attribute === 'string' && value.attribute.length > 0)) &&
         isOptionalInteger(value.matchIndex, 0)
-      )
+      );
     case 'point':
-      return isScenarioPoint(value.point)
+      return isScenarioPoint(value.point);
     default:
-      return false
+      return false;
   }
 }
 
 function isScenarioLocatorStrategy(value: string): value is ScenarioLocator['strategy'] {
-  return value === 'css' ||
+  return (
+    value === 'css' ||
     value === 'role' ||
     value === 'text' ||
     value === 'label' ||
     value === 'testId' ||
     value === 'point'
+  );
 }
 
 function isOptionalScenarioTextMatcher(value: unknown): boolean {
-  return value === undefined || isScenarioTextMatcher(value)
+  return value === undefined || isScenarioTextMatcher(value);
 }
 
 function isScenarioTextMatcher(value: unknown): boolean {
   if (typeof value === 'string') {
-    return value.length > 0
+    return value.length > 0;
   }
 
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -911,12 +880,12 @@ function isScenarioTextMatcher(value: unknown): boolean {
       value.match === 'contains' ||
       value.match === 'regex') &&
     isOptionalBoolean(value.caseSensitive)
-  )
+  );
 }
 
 function isScenarioPoint(value: unknown): boolean {
   if (!isRecord(value)) {
-    return false
+    return false;
   }
 
   return (
@@ -928,23 +897,24 @@ function isScenarioPoint(value: unknown): boolean {
       value.coordinateSpace === 'screen' ||
       value.coordinateSpace === 'surface' ||
       value.coordinateSpace === 'element')
-  )
+  );
 }
 
 function isOptionalBoolean(value: unknown): boolean {
-  return value === undefined || typeof value === 'boolean'
+  return value === undefined || typeof value === 'boolean';
 }
 
 function isOptionalInteger(value: unknown, minimum: number): boolean {
-  return value === undefined ||
+  return (
+    value === undefined ||
     (typeof value === 'number' && Number.isInteger(value) && value >= minimum)
+  );
 }
 
 function isOptionalStringArray(value: unknown): boolean {
   return (
-    value === undefined ||
-    (Array.isArray(value) && value.every((item) => typeof item === 'string'))
-  )
+    value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+  );
 }
 
 function isOptionalTraceEventLevel(value: unknown): boolean {
@@ -952,5 +922,5 @@ function isOptionalTraceEventLevel(value: unknown): boolean {
     value === undefined ||
     (typeof value === 'string' &&
       traceEventLevels.includes(value as NonNullable<TraceDisplayEvent['level']>))
-  )
+  );
 }

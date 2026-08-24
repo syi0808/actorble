@@ -1,18 +1,15 @@
-import '../../shared/styles.css'
-import { testId } from '../../../src/index.js'
-import { byId } from '../../shared/example-utils.js'
-import {
-  mountTaskExample,
-  type TaskExampleContext,
-} from '../../shared/task-example.js'
+import '../../shared/styles.css';
+import { testId } from '../../../src/index.js';
+import { byId } from '../../shared/example-utils.js';
+import { mountTaskExample, type TaskExampleContext } from '../../shared/task-example.js';
 
-const documentCopy = 'Document selection text stays stable for replay.'
-const textareaCopy = 'Review textarea range before saving.'
-const editorCopy = 'Draft editable note for review.'
+const documentCopy = 'Document selection text stays stable for replay.';
+const textareaCopy = 'Review textarea range before saving.';
+const editorCopy = 'Draft editable note for review.';
 const pointerSequencePath = {
   down: { xRatio: 0.24, yRatio: 0.46 },
   up: { xRatio: 0.76, yRatio: 0.62 },
-} as const
+} as const;
 
 const stageHtml = `
   <div class="browser-frame selection-surface" data-testid="selection-surface">
@@ -111,12 +108,13 @@ const stageHtml = `
       </aside>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'Selection and pointer sequence',
   eyebrow: 'Recorder verification',
-  summary: 'Select text across surfaces, distinguish click and drag intent, and replay one cleanup-safe pointer sequence.',
+  summary:
+    'Select text across surfaces, distinguish click and drag intent, and replay one cleanup-safe pointer sequence.',
   stageLabel: 'Selection and pointer sequence example',
   stageHtml,
   successMessage: 'Selection scenario complete',
@@ -124,103 +122,103 @@ mountTaskExample({
   run: runSelectionScenario,
   typeFirstField: selectDocumentText,
   clickPrimary: clickSelectionPrimary,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  const clickTarget = byId<HTMLButtonElement>('selection-click-target')
-  const dragSource = byId<HTMLButtonElement>('selection-drag-source')
-  const dropTarget = byId<HTMLElement>('selection-drop-target')
-  const pointerPad = byId<HTMLElement>('pointer-pad')
+  const clickTarget = byId<HTMLButtonElement>('selection-click-target');
+  const dragSource = byId<HTMLButtonElement>('selection-drag-source');
+  const dropTarget = byId<HTMLElement>('selection-drop-target');
+  const pointerPad = byId<HTMLElement>('pointer-pad');
 
   clickTarget.addEventListener('click', () => {
-    clickTarget.dataset.state = 'clicked'
-  })
+    clickTarget.dataset.state = 'clicked';
+  });
   dragSource.addEventListener('pointerdown', () => {
-    document.body.dataset.activeSelectionDrag = dragSource.id
-  })
-  dragSource.addEventListener('pointerup', clearActiveDrag)
-  dragSource.addEventListener('pointercancel', clearActiveDrag)
+    document.body.dataset.activeSelectionDrag = dragSource.id;
+  });
+  dragSource.addEventListener('pointerup', clearActiveDrag);
+  dragSource.addEventListener('pointercancel', clearActiveDrag);
   dropTarget.addEventListener('pointerup', () => {
     if (document.body.dataset.activeSelectionDrag !== dragSource.id) {
-      return
+      return;
     }
 
-    dropTarget.dataset.state = 'dropped'
-    dropTarget.textContent = 'Dropped'
-    clearActiveDrag()
-  })
+    dropTarget.dataset.state = 'dropped';
+    dropTarget.textContent = 'Dropped';
+    clearActiveDrag();
+  });
   pointerPad.addEventListener('pointerdown', () => {
-    pointerPad.dataset.state = 'pressed'
-  })
+    pointerPad.dataset.state = 'pressed';
+  });
   pointerPad.addEventListener('pointerup', () => {
-    pointerPad.dataset.state = 'complete'
-    byId<HTMLElement>('pointer-sequence-output').textContent = 'closed transaction'
-  })
+    pointerPad.dataset.state = 'complete';
+    byId<HTMLElement>('pointer-sequence-output').textContent = 'closed transaction';
+  });
   pointerPad.addEventListener('pointercancel', () => {
-    pointerPad.dataset.state = 'cancelled'
-  })
+    pointerPad.dataset.state = 'cancelled';
+  });
 
-  context.bindDomEvents('documentCopy', byId<HTMLElement>('document-copy'))
-  context.bindDomEvents('textareaCopy', byId<HTMLTextAreaElement>('selection-textarea'))
-  context.bindDomEvents('editorCopy', byId<HTMLElement>('selection-editor'))
-  context.bindDomEvents('clickTarget', clickTarget)
-  context.bindDomEvents('dragSource', dragSource)
-  context.bindDomEvents('dropTarget', dropTarget)
-  context.bindDomEvents('pointerPad', pointerPad)
+  context.bindDomEvents('documentCopy', byId<HTMLElement>('document-copy'));
+  context.bindDomEvents('textareaCopy', byId<HTMLTextAreaElement>('selection-textarea'));
+  context.bindDomEvents('editorCopy', byId<HTMLElement>('selection-editor'));
+  context.bindDomEvents('clickTarget', clickTarget);
+  context.bindDomEvents('dragSource', dragSource);
+  context.bindDomEvents('dropTarget', dropTarget);
+  context.bindDomEvents('pointerPad', pointerPad);
 }
 
 async function runSelectionScenario(context: TaskExampleContext): Promise<void> {
-  await selectDocumentText(context)
-  await selectTextareaText(context)
-  await selectEditorText(context)
-  await clickSelectionPrimary(context)
-  await dragSelectionToken(context)
-  await runPointerSequence(context)
+  await selectDocumentText(context);
+  await selectTextareaText(context);
+  await selectEditorText(context);
+  await clickSelectionPrimary(context);
+  await dragSelectionToken(context);
+  await runPointerSequence(context);
   await context.actorble().waitFor({
     kind: 'custom',
     predicate: () =>
       document.getElementById('pointer-pad')?.dataset.state === 'complete' &&
       document.getElementById('selection-drop-target')?.dataset.state === 'dropped' &&
       document.getElementById('selection-click-target')?.dataset.state === 'clicked',
-  })
-  completeSelectionStatus()
+  });
+  completeSelectionStatus();
 }
 
 async function selectDocumentText(context: TaskExampleContext): Promise<void> {
-  const target = testId('document-copy')
+  const target = testId('document-copy');
 
   await context.actorble().selectText({
     anchor: { target, offset: 9 },
     focus: { target, offset: 23 },
-  })
-  byId<HTMLElement>('document-selection-output').textContent = selectedDocumentText()
+  });
+  byId<HTMLElement>('document-selection-output').textContent = selectedDocumentText();
 }
 
 async function selectTextareaText(context: TaskExampleContext): Promise<void> {
-  const target = testId('selection-textarea')
+  const target = testId('selection-textarea');
 
   await context.actorble().selectText({
     anchor: { target, offset: 7 },
     focus: { target, offset: 21 },
-  })
-  byId<HTMLElement>('textarea-selection-output').textContent = selectedTextareaText()
+  });
+  byId<HTMLElement>('textarea-selection-output').textContent = selectedTextareaText();
 }
 
 async function selectEditorText(context: TaskExampleContext): Promise<void> {
-  const target = testId('selection-editor')
+  const target = testId('selection-editor');
 
   await context.actorble().selectText({
     anchor: { target, offset: 6 },
     focus: { target, offset: 19 },
-  })
-  byId<HTMLElement>('editor-selection-output').textContent = selectedDocumentText()
+  });
+  byId<HTMLElement>('editor-selection-output').textContent = selectedDocumentText();
 }
 
 async function clickSelectionPrimary(context: TaskExampleContext): Promise<void> {
   await context.actorble().click(testId('selection-click-target'), {
     pressDwell: 160,
     timeout: 2000,
-  })
+  });
 }
 
 async function dragSelectionToken(context: TaskExampleContext): Promise<void> {
@@ -228,11 +226,11 @@ async function dragSelectionToken(context: TaskExampleContext): Promise<void> {
     duration: 640,
     motion: { kind: 'ease', timing: 'ease-in-out', duration: 640 },
     timeout: 3000,
-  })
+  });
 }
 
 async function runPointerSequence(context: TaskExampleContext): Promise<void> {
-  const points = pointerPadPoints()
+  const points = pointerPadPoints();
 
   await context.actorble().pointerSequence(
     [
@@ -243,42 +241,45 @@ async function runPointerSequence(context: TaskExampleContext): Promise<void> {
       { type: 'up', button: 'primary' },
     ],
     { timeout: 3000 },
-  )
+  );
 }
 
-function pointerPadPoints(): Readonly<{ down: { x: number; y: number }; up: { x: number; y: number } }> {
-  const rect = byId<HTMLElement>('pointer-pad').getBoundingClientRect()
+function pointerPadPoints(): Readonly<{
+  down: { x: number; y: number };
+  up: { x: number; y: number };
+}> {
+  const rect = byId<HTMLElement>('pointer-pad').getBoundingClientRect();
 
   return {
     down: pointInRect(rect, pointerSequencePath.down.xRatio, pointerSequencePath.down.yRatio),
     up: pointInRect(rect, pointerSequencePath.up.xRatio, pointerSequencePath.up.yRatio),
-  }
+  };
 }
 
 function pointInRect(rect: DOMRect, xRatio: number, yRatio: number): { x: number; y: number } {
   return {
     x: Math.round(rect.left + rect.width * xRatio),
     y: Math.round(rect.top + rect.height * yRatio),
-  }
+  };
 }
 
 function selectedDocumentText(): string {
-  return document.getSelection()?.toString() ?? ''
+  return document.getSelection()?.toString() ?? '';
 }
 
 function selectedTextareaText(): string {
-  const textarea = byId<HTMLTextAreaElement>('selection-textarea')
+  const textarea = byId<HTMLTextAreaElement>('selection-textarea');
 
-  return textarea.value.slice(textarea.selectionStart, textarea.selectionEnd)
+  return textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
 }
 
 function completeSelectionStatus(): void {
-  const status = byId<HTMLElement>('selection-status')
+  const status = byId<HTMLElement>('selection-status');
 
-  status.dataset.state = 'complete'
-  status.textContent = 'Selection and pointer replay complete'
+  status.dataset.state = 'complete';
+  status.textContent = 'Selection and pointer replay complete';
 }
 
 function clearActiveDrag(): void {
-  delete document.body.dataset.activeSelectionDrag
+  delete document.body.dataset.activeSelectionDrag;
 }

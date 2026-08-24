@@ -23,19 +23,19 @@ The package is ESM and exports from `browser/src/index.ts` in development and `b
 ## Basic browser control
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble({ feedback: 'cursor' })
+const actorble = createActorble({ feedback: 'cursor' });
 
-await actorble.click(css('#create-project'))
-await actorble.typeInto(css('#project-name'), 'Orbit')
+await actorble.click(css('#create-project'));
+await actorble.typeInto(css('#project-name'), 'Orbit');
 await actorble.waitFor({
   kind: 'custom',
   predicate: () => document.body.textContent?.includes('Project created') ?? false,
-})
+});
 
-console.log(actorble.getTrace())
-actorble.destroy()
+console.log(actorble.getTrace());
+actorble.destroy();
 ```
 
 ## What is ready today

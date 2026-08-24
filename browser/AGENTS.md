@@ -8,7 +8,7 @@ Browser code should map to the documented components: Actorble Facade, Scenario 
 
 ## Build, Test, and Development Commands
 
-Use pnpm for browser package work. `browser/package.json` pins pnpm `11.5.3` in `devEngines`.
+Use the pnpm version pinned in `browser/package.json` for browser package work.
 
 - `cd browser && pnpm install`: install browser package dependencies.
 - `cd browser && pnpm pkg get scripts`: inspect available package scripts.
@@ -16,7 +16,7 @@ Use pnpm for browser package work. `browser/package.json` pins pnpm `11.5.3` in 
 - `cd browser && pnpm test:watch`: run Vitest in watch mode.
 - `cd browser && pnpm exec <tool>`: run locally installed tools after they are added.
 
-`browser/package.json` currently defines test scripts only. Add build, lint, or dev scripts before relying on commands such as `pnpm build`, `pnpm lint`, or `pnpm dev`.
+Use `pnpm build`, `pnpm lint`, and `pnpm format:check` for package validation.
 
 ## Coding Style & Naming Conventions
 

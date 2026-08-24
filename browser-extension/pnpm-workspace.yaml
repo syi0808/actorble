@@ -1,3 +1,5 @@
 allowBuilds:
   esbuild: true
   spawn-sync: true
+minimumReleaseAgeExclude:
+  - scroller2@0.0.1

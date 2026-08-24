@@ -1,109 +1,109 @@
-import { actorbleError } from '../../../shared/index.js'
-import type { Disposable, StyleInjection, StylePort } from '../../../shared/index.js'
-export type { StyleInjection } from '../../../shared/index.js'
+import { actorbleError } from '../../../shared/index.js';
+import type { Disposable, StyleInjection, StylePort } from '../../../shared/index.js';
+export type { StyleInjection } from '../../../shared/index.js';
 
 export type StyleSheetStyleRuleSnapshot = Readonly<{
-  kind: 'style'
-  selectorText: string
-  styleText: string
-}>
+  kind: 'style';
+  selectorText: string;
+  styleText: string;
+}>;
 
 export type StyleSheetGroupRuleSnapshot = Readonly<{
-  kind: 'group'
-  prelude: string
-  rules: readonly StyleSheetRuleSnapshot[]
-}>
+  kind: 'group';
+  prelude: string;
+  rules: readonly StyleSheetRuleSnapshot[];
+}>;
 
-export type StyleSheetRuleSnapshot =
-  | StyleSheetStyleRuleSnapshot
-  | StyleSheetGroupRuleSnapshot
+export type StyleSheetRuleSnapshot = StyleSheetStyleRuleSnapshot | StyleSheetGroupRuleSnapshot;
 
 export type StyleSheetScanWarning = Readonly<{
-  phase: 'scan'
-  message: string
-  details?: Readonly<Record<string, unknown>>
-}>
+  phase: 'scan';
+  message: string;
+  details?: Readonly<Record<string, unknown>>;
+}>;
 
 export type StyleSheetScanResult = Readonly<{
-  rules: readonly StyleSheetRuleSnapshot[]
-  warnings: readonly StyleSheetScanWarning[]
-}>
+  rules: readonly StyleSheetRuleSnapshot[];
+  warnings: readonly StyleSheetScanWarning[];
+}>;
 
 export type StyleSheetVersionSnapshot = Readonly<{
-  root: Document | ShadowRoot
-  version: string
-}>
+  root: Document | ShadowRoot;
+  version: string;
+}>;
 
 export interface StyleSheetScanner {
-  scanStyleSheets(): StyleSheetScanResult
+  scanStyleSheets(): StyleSheetScanResult;
 }
 
 export interface StyleSheetVersionProvider {
-  getStyleSheetVersion(): StyleSheetVersionSnapshot
+  getStyleSheetVersion(): StyleSheetVersionSnapshot;
 }
 
 export interface StyleAdapter extends StylePort, StyleSheetScanner, StyleSheetVersionProvider {}
 
 export class BrowserStyleAdapter implements StyleAdapter {
-  private readonly stylesById = new Map<string, HTMLStyleElement>()
-  private readonly styleNodeVersionCache = new WeakMap<Element, StyleNodeVersionCache>()
+  private readonly stylesById = new Map<string, HTMLStyleElement>();
+  private readonly styleNodeVersionCache = new WeakMap<Element, StyleNodeVersionCache>();
 
   constructor(readonly root: Document | ShadowRoot = getGlobalDocument()) {}
 
   injectStyle(injection: StyleInjection): Disposable {
-    this.removeStyle(injection.id)
+    this.removeStyle(injection.id);
 
-    const style = getOwnerDocument(this.root).createElement('style')
-    style.setAttribute('data-actorble-style-id', injection.id)
-    style.textContent = injection.cssText
-    getStyleContainer(this.root).append(style)
-    this.stylesById.set(injection.id, style)
+    const style = getOwnerDocument(this.root).createElement('style');
+    style.setAttribute('data-actorble-style-id', injection.id);
+    style.textContent = injection.cssText;
+    getStyleContainer(this.root).append(style);
+    this.stylesById.set(injection.id, style);
 
     return {
       dispose: () => {
         if (this.stylesById.get(injection.id) === style) {
-          this.removeStyle(injection.id)
-          return
+          this.removeStyle(injection.id);
+          return;
         }
 
-        style.remove()
+        style.remove();
       },
-    }
+    };
   }
 
   removeStyle(id: string): void {
-    const trackedStyle = this.stylesById.get(id)
+    const trackedStyle = this.stylesById.get(id);
 
     if (trackedStyle) {
-      trackedStyle.remove()
-      this.stylesById.delete(id)
-      return
+      trackedStyle.remove();
+      this.stylesById.delete(id);
+      return;
     }
 
-    const selector = `style[data-actorble-style-id="${escapeAttributeValue(id)}"]`
-    getStyleContainer(this.root).querySelectorAll(selector).forEach((style) => style.remove())
+    const selector = `style[data-actorble-style-id="${escapeAttributeValue(id)}"]`;
+    getStyleContainer(this.root)
+      .querySelectorAll(selector)
+      .forEach((style) => style.remove());
   }
 
   getStyleSheetVersion(): StyleSheetVersionSnapshot {
     return {
       root: this.root,
       version: buildStyleSheetVersion(this.root, this.styleNodeVersionCache),
-    }
+    };
   }
 
   scanStyleSheets(): StyleSheetScanResult {
-    const rules: StyleSheetRuleSnapshot[] = []
-    const warnings: StyleSheetScanWarning[] = []
+    const rules: StyleSheetRuleSnapshot[] = [];
+    const warnings: StyleSheetScanWarning[] = [];
 
     for (const sheet of Array.from(getStyleSheets(this.root))) {
       if (isActorbleRuntimeStyleSheet(sheet)) {
-        continue
+        continue;
       }
 
-      let cssRules: CSSRuleList
+      let cssRules: CSSRuleList;
 
       try {
-        cssRules = sheet.cssRules
+        cssRules = sheet.cssRules;
       } catch (error) {
         warnings.push({
           phase: 'scan',
@@ -112,121 +112,112 @@ export class BrowserStyleAdapter implements StyleAdapter {
             href: sheet.href,
             error: describeUnknownError(error),
           },
-        })
-        continue
+        });
+        continue;
       }
 
-      rules.push(...snapshotRules(cssRules, warnings))
+      rules.push(...snapshotRules(cssRules, warnings));
     }
 
-    return { rules, warnings }
+    return { rules, warnings };
   }
 }
 
 export function createStyleAdapter(root?: Document | ShadowRoot): StyleAdapter {
-  return new BrowserStyleAdapter(root)
+  return new BrowserStyleAdapter(root);
 }
 
 function getGlobalDocument(): Document {
   if (globalThis.document) {
-    return globalThis.document
+    return globalThis.document;
   }
 
-  throw actorbleError('PLATFORM_UNSUPPORTED', 'No global document is available.')
+  throw actorbleError('PLATFORM_UNSUPPORTED', 'No global document is available.');
 }
 
 function isDocument(root: Document | ShadowRoot): root is Document {
-  return root.nodeType === 9
+  return root.nodeType === 9;
 }
 
 function getOwnerDocument(root: Document | ShadowRoot): Document {
-  return isDocument(root) ? root : root.ownerDocument
+  return isDocument(root) ? root : root.ownerDocument;
 }
 
 function getStyleContainer(root: Document | ShadowRoot): ParentNode & Node {
   if (!isDocument(root)) {
-    return root
+    return root;
   }
 
-  return root.head ?? root.documentElement
+  return root.head ?? root.documentElement;
 }
 
 function escapeAttributeValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function getStyleSheets(root: Document | ShadowRoot): StyleSheetList {
   return (
-    (root as { styleSheets?: StyleSheetList }).styleSheets ??
-    getOwnerDocument(root).styleSheets
-  )
+    (root as { styleSheets?: StyleSheetList }).styleSheets ?? getOwnerDocument(root).styleSheets
+  );
 }
 
 function isActorbleRuntimeStyleSheet(sheet: CSSStyleSheet): boolean {
-  const ownerNode = (sheet as CSSStyleSheet & { ownerNode?: Node | null }).ownerNode
+  const ownerNode = (sheet as CSSStyleSheet & { ownerNode?: Node | null }).ownerNode;
 
-  return (
-    isElementNode(ownerNode) &&
-    ownerNode.hasAttribute('data-actorble-style-id')
-  )
+  return isElementNode(ownerNode) && ownerNode.hasAttribute('data-actorble-style-id');
 }
 
 function isElementNode(node: Node | null | undefined): node is Element {
-  return node?.nodeType === 1 && typeof (node as Element).hasAttribute === 'function'
+  return node?.nodeType === 1 && typeof (node as Element).hasAttribute === 'function';
 }
 
 type StyleNodeVersionCache = Readonly<{
-  index: number
-  media: string
-  text: string
-  versionPart: string
-}>
+  index: number;
+  media: string;
+  text: string;
+  versionPart: string;
+}>;
 
 function buildStyleSheetVersion(
   root: Document | ShadowRoot,
   styleNodeCache: WeakMap<Element, StyleNodeVersionCache>,
 ): string {
-  const parts: string[] = []
-  const styleRoot = isDocument(root) ? getStyleContainer(root) : root
+  const parts: string[] = [];
+  const styleRoot = isDocument(root) ? getStyleContainer(root) : root;
 
-  for (const [index, node] of Array.from(
-    styleRoot.querySelectorAll('style, link'),
-  ).entries()) {
+  for (const [index, node] of Array.from(styleRoot.querySelectorAll('style, link')).entries()) {
     if (!isAppStylesheetNode(node)) {
-      continue
+      continue;
     }
 
-    parts.push(styleNodeVersionPart(index, node, styleNodeCache))
+    parts.push(styleNodeVersionPart(index, node, styleNodeCache));
   }
 
   for (const [index, sheet] of Array.from(getStyleSheets(root)).entries()) {
     if (isActorbleRuntimeStyleSheet(sheet)) {
-      continue
+      continue;
     }
 
-    parts.push(styleSheetStatusVersionPart(index, sheet))
+    parts.push(styleSheetStatusVersionPart(index, sheet));
   }
 
-  return parts.join('\n')
+  return parts.join('\n');
 }
 
 function isAppStylesheetNode(node: Element): boolean {
   if (node.hasAttribute('data-actorble-style-id')) {
-    return false
+    return false;
   }
 
   if (node.localName === 'style') {
-    return true
+    return true;
   }
 
   if (node.localName !== 'link') {
-    return false
+    return false;
   }
 
-  return (node.getAttribute('rel') ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .includes('stylesheet')
+  return (node.getAttribute('rel') ?? '').toLowerCase().split(/\s+/).includes('stylesheet');
 }
 
 function styleNodeVersionPart(
@@ -235,9 +226,9 @@ function styleNodeVersionPart(
   styleNodeCache: WeakMap<Element, StyleNodeVersionCache>,
 ): string {
   if (node.localName === 'style') {
-    const media = node.getAttribute('media') ?? ''
-    const text = node.textContent ?? ''
-    const cached = styleNodeCache.get(node)
+    const media = node.getAttribute('media') ?? '';
+    const text = node.textContent ?? '';
+    const cached = styleNodeCache.get(node);
 
     if (
       cached !== undefined &&
@@ -245,24 +236,19 @@ function styleNodeVersionPart(
       cached.media === media &&
       cached.text === text
     ) {
-      return cached.versionPart
+      return cached.versionPart;
     }
 
-    const versionPart = [
-      'style',
-      index,
-      media,
-      textFingerprint(text),
-    ].join(':')
+    const versionPart = ['style', index, media, textFingerprint(text)].join(':');
 
     styleNodeCache.set(node, {
       index,
       media,
       text,
       versionPart,
-    })
+    });
 
-    return versionPart
+    return versionPart;
   }
 
   return [
@@ -274,31 +260,27 @@ function styleNodeVersionPart(
     node.getAttribute('disabled') ?? '',
     (node as HTMLLinkElement).disabled ? 'disabled' : 'enabled',
     (node as HTMLLinkElement).href ?? '',
-  ].join(':')
+  ].join(':');
 }
 
 function textFingerprint(text: string): string {
-  let hash = 2166136261
+  let hash = 2166136261;
 
   for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
 
-  return `${text.length}:${(hash >>> 0).toString(36)}`
+  return `${text.length}:${(hash >>> 0).toString(36)}`;
 }
 
 function styleSheetStatusVersionPart(index: number, sheet: CSSStyleSheet): string {
   try {
-    return ['sheet', index, 'accessible', sheet.href ?? '', sheet.cssRules.length].join(':')
+    return ['sheet', index, 'accessible', sheet.href ?? '', sheet.cssRules.length].join(':');
   } catch (error) {
-    return [
-      'sheet',
-      index,
-      'inaccessible',
-      sheet.href ?? '',
-      describeUnknownError(error),
-    ].join(':')
+    return ['sheet', index, 'inaccessible', sheet.href ?? '', describeUnknownError(error)].join(
+      ':',
+    );
   }
 }
 
@@ -306,17 +288,17 @@ function snapshotRules(
   cssRules: CSSRuleList,
   warnings: StyleSheetScanWarning[],
 ): StyleSheetRuleSnapshot[] {
-  const rules: StyleSheetRuleSnapshot[] = []
+  const rules: StyleSheetRuleSnapshot[] = [];
 
   for (const rule of Array.from(cssRules)) {
-    const snapshot = snapshotRule(rule, warnings)
+    const snapshot = snapshotRule(rule, warnings);
 
     if (snapshot) {
-      rules.push(snapshot)
+      rules.push(snapshot);
     }
   }
 
-  return rules
+  return rules;
 }
 
 function snapshotRule(
@@ -324,28 +306,28 @@ function snapshotRule(
   warnings: StyleSheetScanWarning[],
 ): StyleSheetRuleSnapshot | null {
   if (rule.type === styleRuleType) {
-    const styleRule = rule as CSSStyleRule
+    const styleRule = rule as CSSStyleRule;
 
     return {
       kind: 'style',
       selectorText: styleRule.selectorText,
       styleText: styleRule.style.cssText,
-    }
+    };
   }
 
   if (rule.type === mediaRuleType || rule.type === supportsRuleType) {
-    const groupRule = rule as CSSGroupingRule
-    const rules = snapshotRules(groupRule.cssRules, warnings)
+    const groupRule = rule as CSSGroupingRule;
+    const rules = snapshotRules(groupRule.cssRules, warnings);
 
     if (rules.length === 0) {
-      return null
+      return null;
     }
 
     return {
       kind: 'group',
       prelude: rulePrelude(rule),
       rules,
-    }
+    };
   }
 
   if (containsPseudoStateSyntax(rule.cssText)) {
@@ -356,38 +338,36 @@ function snapshotRule(
         ruleType: rule.type,
         cssText: rule.cssText,
       },
-    })
+    });
   }
 
-  return null
+  return null;
 }
 
 function rulePrelude(rule: CSSRule): string {
-  const blockStart = rule.cssText.indexOf('{')
+  const blockStart = rule.cssText.indexOf('{');
 
   if (blockStart === -1) {
-    return rule.cssText.trim()
+    return rule.cssText.trim();
   }
 
-  return rule.cssText.slice(0, blockStart).trim()
+  return rule.cssText.slice(0, blockStart).trim();
 }
 
 function containsPseudoStateSyntax(cssText: string): boolean {
   return (
-    cssText.includes(':hover') ||
-    cssText.includes(':active') ||
-    cssText.includes(':focus-visible')
-  )
+    cssText.includes(':hover') || cssText.includes(':active') || cssText.includes(':focus-visible')
+  );
 }
 
 function describeUnknownError(error: unknown): string {
   if (error instanceof Error) {
-    return error.message
+    return error.message;
   }
 
-  return String(error)
+  return String(error);
 }
 
-const styleRuleType = 1
-const mediaRuleType = 4
-const supportsRuleType = 12
+const styleRuleType = 1;
+const mediaRuleType = 4;
+const supportsRuleType = 12;

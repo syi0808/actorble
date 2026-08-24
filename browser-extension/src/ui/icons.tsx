@@ -1,4 +1,4 @@
-import type { ComponentType, ReactElement, SVGProps } from 'react'
+import type { ComponentType, ReactElement, SVGProps } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -27,7 +27,7 @@ import {
   Type,
   MousePointerClick,
   Move,
-} from 'lucide-react'
+} from 'lucide-react';
 
 export type CommandIconName =
   | 'arrow-down'
@@ -56,9 +56,9 @@ export type CommandIconName =
   | 'trash'
   | 'type'
   | 'mouse-pointer-click'
-  | 'move'
+  | 'move';
 
-type IconComponent = ComponentType<SVGProps<SVGSVGElement>>
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 const icons = {
   'arrow-down': ArrowDown,
@@ -88,24 +88,18 @@ const icons = {
   type: Type,
   'mouse-pointer-click': MousePointerClick,
   move: Move,
-} satisfies Readonly<Record<CommandIconName, IconComponent>>
+} satisfies Readonly<Record<CommandIconName, IconComponent>>;
 
 export function CommandIcon({
   name,
   className = 'ui-icon',
 }: Readonly<{
-  name: CommandIconName
-  className?: string
+  name: CommandIconName;
+  className?: string;
 }>): ReactElement {
-  const Icon = icons[name]
+  const Icon = icons[name];
 
   return (
-    <Icon
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      focusable="false"
-      strokeWidth={2}
-    />
-  )
+    <Icon aria-hidden="true" className={className} fill="none" focusable="false" strokeWidth={2} />
+  );
 }

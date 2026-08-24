@@ -6,41 +6,39 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
-} from 'react'
-import { DropdownMenu, Tooltip } from 'radix-ui'
-import { CommandIcon, type CommandIconName } from './icons.js'
+} from 'react';
+import { DropdownMenu, Tooltip } from 'radix-ui';
+import { CommandIcon, type CommandIconName } from './icons.js';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger'
-export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
-export type ControlSize = 'sm' | 'md' | 'lg'
-export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent'
-export type BadgeSize = 'sm' | 'md'
+export type ButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
+export type ControlSize = 'sm' | 'md' | 'lg';
+export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+export type BadgeSize = 'sm' | 'md';
 
 export type OverflowMenuItem = Readonly<{
-  label: string
-  icon?: CommandIconName
-  disabled?: boolean
-  danger?: boolean
-  onSelect(): void
-}>
+  label: string;
+  icon?: CommandIconName;
+  disabled?: boolean;
+  danger?: boolean;
+  onSelect(): void;
+}>;
 
-const actorbleLogoUrl = new URL('./assets/actorble-logo.svg', import.meta.url).href
-const actorbleWordmarkUrl = new URL('./assets/actorble-wordmark.svg', import.meta.url).href
-const actorbleWordmarkLightUrl = new URL(
-  './assets/actorble-wordmark-light.svg',
-  import.meta.url,
-).href
+const actorbleLogoUrl = new URL('./assets/actorble-logo.svg', import.meta.url).href;
+const actorbleWordmarkUrl = new URL('./assets/actorble-wordmark.svg', import.meta.url).href;
+const actorbleWordmarkLightUrl = new URL('./assets/actorble-wordmark-light.svg', import.meta.url)
+  .href;
 
 export function UiProvider({
   children,
 }: Readonly<{
-  children: ReactNode
+  children: ReactNode;
 }>): ReactElement {
   return (
     <Tooltip.Provider delayDuration={350} skipDelayDuration={100}>
       {children}
     </Tooltip.Provider>
-  )
+  );
 }
 
 export function Button({
@@ -56,17 +54,15 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> &
   Readonly<{
-    icon?: CommandIconName
-    iconOnly?: boolean
-    pending?: boolean
-    size?: ButtonSize
-    tooltip?: string
-    variant?: ButtonVariant
+    icon?: CommandIconName;
+    iconOnly?: boolean;
+    pending?: boolean;
+    size?: ButtonSize;
+    tooltip?: string;
+    variant?: ButtonVariant;
   }>): ReactElement {
-  const label = typeof children === 'string'
-    ? children
-    : props['aria-label'] ?? tooltip
-  const ariaLabel = typeof label === 'string' ? label : undefined
+  const label = typeof children === 'string' ? children : (props['aria-label'] ?? tooltip);
+  const ariaLabel = typeof label === 'string' ? label : undefined;
   const button = (
     <button
       {...props}
@@ -82,14 +78,16 @@ export function Button({
       type={props.type ?? 'button'}
     >
       {icon === undefined ? null : <CommandIcon name={icon} />}
-      {iconOnly
-        ? <span className="sr-only">{children}</span>
-        : <span className="button-label">{children}</span>}
+      {iconOnly ? (
+        <span className="sr-only">{children}</span>
+      ) : (
+        <span className="button-label">{children}</span>
+      )}
     </button>
-  )
+  );
 
   if (tooltip === undefined) {
-    return button
+    return button;
   }
 
   return (
@@ -102,53 +100,44 @@ export function Button({
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
-  )
+  );
 }
 
-export function IconButton(
-  {
-    label,
-    tooltip,
-    ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> &
-    Readonly<{
-      icon: CommandIconName
-      label: string
-      pending?: boolean
-      size?: ButtonSize
-      tooltip?: string
-      variant?: ButtonVariant
-    }>,
-): ReactElement {
+export function IconButton({
+  label,
+  tooltip,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> &
+  Readonly<{
+    icon: CommandIconName;
+    label: string;
+    pending?: boolean;
+    size?: ButtonSize;
+    tooltip?: string;
+    variant?: ButtonVariant;
+  }>): ReactElement {
   return (
-    <Button
-      {...props}
-      aria-label={label}
-      iconOnly
-      tooltip={tooltip ?? label}
-    >
+    <Button {...props} aria-label={label} iconOnly tooltip={tooltip ?? label}>
       {label}
     </Button>
-  )
+  );
 }
 
 export function BrandMark(): ReactElement {
-  return (
-    <img className="brand-symbol" src={actorbleLogoUrl} alt="" aria-hidden="true" />
-  )
+  return <img className="brand-symbol" src={actorbleLogoUrl} alt="" aria-hidden="true" />;
 }
 
 export function BrandWordmark({
   className = 'brand-wordmark',
 }: Readonly<{
-  className?: string
+  className?: string;
 }>): ReactElement {
   return (
     <picture>
       <source srcSet={actorbleWordmarkLightUrl} media="(prefers-color-scheme: dark)" />
       <img className={className} src={actorbleWordmarkUrl} alt="Actorble" />
     </picture>
-  )
+  );
 }
 
 export function Field({
@@ -159,9 +148,9 @@ export function Field({
   ...props
 }: LabelHTMLAttributes<HTMLLabelElement> &
   Readonly<{
-    label: string
-    children: ReactNode
-    hint?: string
+    label: string;
+    children: ReactNode;
+    hint?: string;
   }>): ReactElement {
   return (
     <label {...props} className={classNames('field', 'ui-field', className)}>
@@ -169,64 +158,40 @@ export function Field({
       {children}
       {hint === undefined ? null : <small className="field-hint">{hint}</small>}
     </label>
-  )
+  );
 }
 
-export function TextInput(
-  {
-    className,
-    size = 'sm',
-    ...props
-  }: Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
-    Readonly<{
-      size?: ControlSize
-    }>,
-): ReactElement {
-  return (
-    <input
-      {...props}
-      className={classNames('ui-input', className)}
-      data-size={size}
-    />
-  )
+export function TextInput({
+  className,
+  size = 'sm',
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
+  Readonly<{
+    size?: ControlSize;
+  }>): ReactElement {
+  return <input {...props} className={classNames('ui-input', className)} data-size={size} />;
 }
 
-export function Textarea(
-  {
-    className,
-    size = 'sm',
-    ...props
-  }: TextareaHTMLAttributes<HTMLTextAreaElement> &
-    Readonly<{
-      size?: ControlSize
-    }>,
-): ReactElement {
-  return (
-    <textarea
-      {...props}
-      className={classNames('ui-textarea', className)}
-      data-size={size}
-    />
-  )
+export function Textarea({
+  className,
+  size = 'sm',
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> &
+  Readonly<{
+    size?: ControlSize;
+  }>): ReactElement {
+  return <textarea {...props} className={classNames('ui-textarea', className)} data-size={size} />;
 }
 
-export function Select(
-  {
-    className,
-    size = 'sm',
-    ...props
-  }: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> &
-    Readonly<{
-      size?: ControlSize
-    }>,
-): ReactElement {
-  return (
-    <select
-      {...props}
-      className={classNames('ui-select', className)}
-      data-size={size}
-    />
-  )
+export function Select({
+  className,
+  size = 'sm',
+  ...props
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> &
+  Readonly<{
+    size?: ControlSize;
+  }>): ReactElement {
+  return <select {...props} className={classNames('ui-select', className)} data-size={size} />;
 }
 
 export function StatusPill({
@@ -236,11 +201,11 @@ export function StatusPill({
   tone,
   className,
 }: Readonly<{
-  children: ReactNode
-  size?: BadgeSize
-  status: string
-  tone?: BadgeTone
-  className?: string
+  children: ReactNode;
+  size?: BadgeSize;
+  status: string;
+  tone?: BadgeTone;
+  className?: string;
 }>): ReactElement {
   return (
     <span
@@ -251,15 +216,15 @@ export function StatusPill({
     >
       {children}
     </span>
-  )
+  );
 }
 
 export function OverflowMenu({
   items,
   label = 'More actions',
 }: Readonly<{
-  items: readonly OverflowMenuItem[]
-  label?: string
+  items: readonly OverflowMenuItem[];
+  label?: string;
 }>): ReactElement {
   return (
     <DropdownMenu.Root>
@@ -283,7 +248,7 @@ export function OverflowMenu({
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-  )
+  );
 }
 
 function toneFromStatus(status: string): BadgeTone {
@@ -293,23 +258,23 @@ function toneFromStatus(status: string): BadgeTone {
     status === 'completed' ||
     status === 'ready'
   ) {
-    return 'success'
+    return 'success';
   }
 
   if (status === 'paused' || status === 'stopped' || status === 'blocked') {
-    return 'warning'
+    return 'warning';
   }
 
   if (status === 'failed' || status === 'error' || status === 'invalid') {
-    return 'danger'
+    return 'danger';
   }
 
-  return 'neutral'
+  return 'neutral';
 }
 
 export function classNames(
   ...values: readonly (string | false | null | undefined)[]
 ): string | undefined {
-  const className = values.filter(Boolean).join(' ')
-  return className.length === 0 ? undefined : className
+  const className = values.filter(Boolean).join(' ');
+  return className.length === 0 ? undefined : className;
 }

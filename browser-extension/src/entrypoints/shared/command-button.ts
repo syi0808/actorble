@@ -27,7 +27,7 @@ import {
   Move,
   createElement,
   type IconNode,
-} from 'lucide'
+} from 'lucide';
 
 export type CommandIconName =
   | 'arrow-down'
@@ -55,23 +55,23 @@ export type CommandIconName =
   | 'trash'
   | 'type'
   | 'mouse-pointer-click'
-  | 'move'
+  | 'move';
 
-export type CommandButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger'
+export type CommandButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger';
 
 export type CommandButtonChrome = Readonly<{
-  icon?: CommandIconName
-  iconOnly?: boolean
-  label?: string
-  tooltip?: string
-  variant?: CommandButtonVariant
-}>
+  icon?: CommandIconName;
+  iconOnly?: boolean;
+  label?: string;
+  tooltip?: string;
+  variant?: CommandButtonVariant;
+}>;
 
 export type CommandButtonView = Readonly<{
-  label: string
-  disabled: boolean
-  pending: boolean
-}>
+  label: string;
+  disabled: boolean;
+  pending: boolean;
+}>;
 
 const iconNodes = {
   'arrow-down': ArrowDown,
@@ -100,7 +100,7 @@ const iconNodes = {
   type: Type,
   'mouse-pointer-click': MousePointerClick,
   move: Move,
-} satisfies Readonly<Record<CommandIconName, IconNode>>
+} satisfies Readonly<Record<CommandIconName, IconNode>>;
 
 export function applyCommandButtonView(
   button: HTMLButtonElement,
@@ -113,35 +113,34 @@ export function applyCommandButtonView(
     iconOnly: chrome.iconOnly ?? false,
     tooltip: chrome.tooltip,
     variant: chrome.variant,
-  })
-  button.disabled = view.disabled
-  button.dataset.pending = view.pending ? 'true' : 'false'
+  });
+  button.disabled = view.disabled;
+  button.dataset.pending = view.pending ? 'true' : 'false';
 }
 
 export function renderCommandButtonContent(
   button: HTMLButtonElement,
-  chrome: Required<Pick<CommandButtonChrome, 'iconOnly'>> &
-    Omit<CommandButtonChrome, 'iconOnly'>,
+  chrome: Required<Pick<CommandButtonChrome, 'iconOnly'>> & Omit<CommandButtonChrome, 'iconOnly'>,
 ): void {
-  const label = chrome.label ?? button.textContent?.trim() ?? ''
-  const tooltip = chrome.tooltip ?? label
+  const label = chrome.label ?? button.textContent?.trim() ?? '';
+  const tooltip = chrome.tooltip ?? label;
 
-  button.replaceChildren()
+  button.replaceChildren();
   if (chrome.icon !== undefined) {
-    button.append(createCommandIcon(chrome.icon))
+    button.append(createCommandIcon(chrome.icon));
   }
 
-  const labelElement = document.createElement('span')
-  labelElement.className = chrome.iconOnly ? 'sr-only' : 'button-label'
-  labelElement.textContent = label
-  button.append(labelElement)
+  const labelElement = document.createElement('span');
+  labelElement.className = chrome.iconOnly ? 'sr-only' : 'button-label';
+  labelElement.textContent = label;
+  button.append(labelElement);
 
-  button.dataset.iconOnly = chrome.iconOnly ? 'true' : 'false'
+  button.dataset.iconOnly = chrome.iconOnly ? 'true' : 'false';
   if (chrome.variant !== undefined) {
-    button.dataset.variant = chrome.variant
+    button.dataset.variant = chrome.variant;
   }
-  button.setAttribute('aria-label', tooltip)
-  button.title = tooltip
+  button.setAttribute('aria-label', tooltip);
+  button.title = tooltip;
 }
 
 export function createCommandIcon(icon: CommandIconName): SVGSVGElement {
@@ -153,7 +152,7 @@ export function createCommandIcon(icon: CommandIconName): SVGSVGElement {
     'stroke-linejoin': 'round',
     'stroke-width': '2',
     viewBox: '0 0 24 24',
-  }) as SVGSVGElement
-  svg.classList.add('ui-icon')
-  return svg
+  }) as SVGSVGElement;
+  svg.classList.add('ui-icon');
+  return svg;
 }

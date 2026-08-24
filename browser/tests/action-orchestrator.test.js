@@ -1,17 +1,24 @@
-import { describe, expect, it, vi } from 'vitest'
-import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
-import { BROWSER_OPTION_DEFAULTS, resolveActionOptions } from '../src/options/index.js'
-import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js'
-import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
-import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js'
-import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
-import { actorbleError, any, attached, cancellationError, css, stable } from '../src/shared/index.js'
+import { describe, expect, it, vi } from 'vitest';
+import { BrowserActionOrchestrator } from '../src/runtime/action-orchestrator/index.js';
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js';
+import { BROWSER_OPTION_DEFAULTS, resolveActionOptions } from '../src/options/index.js';
+import { BrowserInteractionStateStore } from '../src/state/interaction-state-store/index.js';
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js';
+import { BrowserDomAdapter } from '../src/platform/platform-adapter/index.js';
+import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js';
+import {
+  actorbleError,
+  any,
+  attached,
+  cancellationError,
+  css,
+  stable,
+} from '../src/shared/index.js';
 
 function targetHandle(id = 'target-1') {
-  const target = document.createElement('button')
-  target.id = id
-  document.body.append(target)
+  const target = document.createElement('button');
+  target.id = id;
+  document.body.append(target);
 
   return {
     id,
@@ -20,13 +27,13 @@ function targetHandle(id = 'target-1') {
     resolvedAt: 1000,
     validity: 'live',
     debug: { selector: `#${id}`, description: `button#${id}` },
-  }
+  };
 }
 
 function inputTargetHandle(id = 'target-1') {
-  const target = document.createElement('input')
-  target.id = id
-  document.body.append(target)
+  const target = document.createElement('input');
+  target.id = id;
+  document.body.append(target);
 
   return {
     id,
@@ -35,7 +42,7 @@ function inputTargetHandle(id = 'target-1') {
     resolvedAt: 1000,
     validity: 'live',
     debug: { selector: `#${id}`, description: `input#${id}` },
-  }
+  };
 }
 
 function geometryFor(target, point = { x: 20, y: 30 }) {
@@ -51,7 +58,7 @@ function geometryFor(target, point = { x: 20, y: 30 }) {
     },
     coordinateSpace: 'viewport',
     computedAt: 2000,
-  }
+  };
 }
 
 function clickReportFor(target, overrides = {}) {
@@ -67,42 +74,42 @@ function clickReportFor(target, overrides = {}) {
     forceBypassedReasons: [],
     unforceableReasons: [],
     ...overrides,
-  }
+  };
 }
 
 function createTrace() {
-  let now = 5000
+  let now = 5000;
 
   return new BrowserDiagnosticsTrace({
     idPrefix: 'action',
     clock: {
       now() {
-        return now++
+        return now++;
       },
     },
-  })
+  });
 }
 
 function createFrameTimeline(frameInterval = 125) {
-  let now = 0
+  let now = 0;
 
   return {
     now: vi.fn(() => now),
     delay: vi.fn(async (duration) => {
-      now += duration
+      now += duration;
     }),
     nextFrame: vi.fn(async () => {
-      now += frameInterval
-      return now
+      now += frameInterval;
+      return now;
     }),
     settle: vi.fn(async () => {}),
     withTimeout: vi.fn(async (operation) => operation),
-  }
+  };
 }
 
 function createBlockingTimeline() {
-  let now = 0
-  const pendingDelays = new Set()
+  let now = 0;
+  const pendingDelays = new Set();
 
   return {
     timeline: {
@@ -111,27 +118,27 @@ function createBlockingTimeline() {
         (duration, options = {}) =>
           new Promise((resolve, reject) => {
             if (options.signal?.aborted) {
-              reject(cancellationError('timeline.delay', options.signal.reason))
-              return
+              reject(cancellationError('timeline.delay', options.signal.reason));
+              return;
             }
 
             const pending = {
               duration,
               resolve: () => {
-                options.signal?.removeEventListener('abort', onAbort)
-                pendingDelays.delete(pending)
-                now += duration
-                resolve()
+                options.signal?.removeEventListener('abort', onAbort);
+                pendingDelays.delete(pending);
+                now += duration;
+                resolve();
               },
-            }
+            };
             const onAbort = () => {
-              options.signal?.removeEventListener('abort', onAbort)
-              pendingDelays.delete(pending)
-              reject(cancellationError('timeline.delay', options.signal?.reason))
-            }
+              options.signal?.removeEventListener('abort', onAbort);
+              pendingDelays.delete(pending);
+              reject(cancellationError('timeline.delay', options.signal?.reason));
+            };
 
-            options.signal?.addEventListener('abort', onAbort, { once: true })
-            pendingDelays.add(pending)
+            options.signal?.addEventListener('abort', onAbort, { once: true });
+            pendingDelays.add(pending);
           }),
       ),
       nextFrame: vi.fn(async () => now),
@@ -139,24 +146,24 @@ function createBlockingTimeline() {
       withTimeout: vi.fn(async (operation) => operation),
     },
     get pendingDelayCount() {
-      return pendingDelays.size
+      return pendingDelays.size;
     },
     resolveNextDelay() {
-      const pending = pendingDelays.values().next().value
+      const pending = pendingDelays.values().next().value;
 
       if (!pending) {
-        throw new Error('No pending delay to resolve.')
+        throw new Error('No pending delay to resolve.');
       }
 
-      pending.resolve()
+      pending.resolve();
     },
-  }
+  };
 }
 
 function createBlockingFrameTimeline() {
-  let now = 0
-  let activeAbortListenerCount = 0
-  const pendingFrames = new Set()
+  let now = 0;
+  let activeAbortListenerCount = 0;
+  const pendingFrames = new Set();
 
   return {
     timeline: {
@@ -167,74 +174,74 @@ function createBlockingFrameTimeline() {
           new Promise((resolve, reject) => {
             const pending = {
               resolve: (frameInterval = 50) => {
-                options.signal?.removeEventListener('abort', onAbort)
-                if (options.signal) activeAbortListenerCount -= 1
-                pendingFrames.delete(pending)
-                now += frameInterval
-                resolve(now)
+                options.signal?.removeEventListener('abort', onAbort);
+                if (options.signal) activeAbortListenerCount -= 1;
+                pendingFrames.delete(pending);
+                now += frameInterval;
+                resolve(now);
               },
-            }
+            };
             const onAbort = () => {
-              options.signal?.removeEventListener('abort', onAbort)
-              activeAbortListenerCount -= 1
-              pendingFrames.delete(pending)
-              reject(cancellationError('timeline.nextFrame', options.signal?.reason))
-            }
+              options.signal?.removeEventListener('abort', onAbort);
+              activeAbortListenerCount -= 1;
+              pendingFrames.delete(pending);
+              reject(cancellationError('timeline.nextFrame', options.signal?.reason));
+            };
 
             if (options.signal?.aborted) {
-              reject(cancellationError('timeline.nextFrame', options.signal.reason))
-              return
+              reject(cancellationError('timeline.nextFrame', options.signal.reason));
+              return;
             }
 
-            if (options.signal) activeAbortListenerCount += 1
-            options.signal?.addEventListener('abort', onAbort, { once: true })
-            pendingFrames.add(pending)
+            if (options.signal) activeAbortListenerCount += 1;
+            options.signal?.addEventListener('abort', onAbort, { once: true });
+            pendingFrames.add(pending);
           }),
       ),
       settle: vi.fn(async () => {}),
       withTimeout: vi.fn(async (operation) => operation),
     },
     get pendingFrameCount() {
-      return pendingFrames.size
+      return pendingFrames.size;
     },
     get activeAbortListenerCount() {
-      return activeAbortListenerCount
+      return activeAbortListenerCount;
     },
     step(frameInterval = 50) {
-      const pending = pendingFrames.values().next().value
+      const pending = pendingFrames.values().next().value;
 
-      if (!pending) throw new Error('No pending frame to resolve.')
-      pending.resolve(frameInterval)
+      if (!pending) throw new Error('No pending frame to resolve.');
+      pending.resolve(frameInterval);
     },
-  }
+  };
 }
 
 function createManualLayoutInvalidationTracker(options = {}) {
-  const listeners = []
-  let running = options.running ?? false
+  const listeners = [];
+  let running = options.running ?? false;
 
   return {
     tracker: {
       start: vi.fn(() => {
-        running = true
+        running = true;
       }),
       stop: vi.fn(() => {
-        running = false
+        running = false;
       }),
       isRunning: vi.fn(() => running),
       markDirty: vi.fn(),
       subscribe: vi.fn((listener) => {
-        listeners.push(listener)
+        listeners.push(listener);
 
         return {
           dispose() {
-            const index = listeners.indexOf(listener)
+            const index = listeners.indexOf(listener);
 
             if (index >= 0) {
-              listeners.splice(index, 1)
+              listeners.splice(index, 1);
             }
           },
-        }
+        };
       }),
       dispose: vi.fn(),
     },
@@ -245,40 +252,40 @@ function createManualLayoutInvalidationTracker(options = {}) {
           reasons: [reason],
           at: 123,
           coalesced: 1,
-        })
+        });
       }
     },
-  }
+  };
 }
 
 function createLayoutEmittingTimeline(layoutInvalidation, options = {}) {
-  let now = 0
-  let frame = 0
-  const frameInterval = options.frameInterval ?? 25
+  let now = 0;
+  let frame = 0;
+  const frameInterval = options.frameInterval ?? 25;
 
   return {
     now: vi.fn(() => now),
     delay: vi.fn(async (duration) => {
-      now += duration
+      now += duration;
     }),
     nextFrame: vi.fn(async () => {
-      frame += 1
-      now += frameInterval
+      frame += 1;
+      now += frameInterval;
 
       if (frame === (options.emitFrame ?? 1)) {
-        layoutInvalidation.emit(options.reason ?? 'scroll')
+        layoutInvalidation.emit(options.reason ?? 'scroll');
       }
 
-      return now
+      return now;
     }),
     settle: vi.fn(async () => {}),
     withTimeout: vi.fn(async (operation) => operation),
-  }
+  };
 }
 
 async function flushMicrotasks(count = 10) {
   for (let index = 0; index < count; index += 1) {
-    await Promise.resolve()
+    await Promise.resolve();
   }
 }
 
@@ -289,11 +296,11 @@ function expectCancellationSignal(signal) {
       addEventListener: expect.any(Function),
       removeEventListener: expect.any(Function),
     }),
-  )
+  );
 }
 
 function cursorFromStyle(style) {
-  return { cursor: style }
+  return { cursor: style };
 }
 
 function createPointerVisualTrackerDouble() {
@@ -303,7 +310,7 @@ function createPointerVisualTrackerDouble() {
     clear: vi.fn(),
     getSnapshot: vi.fn(() => ({ mode: null })),
     dispose: vi.fn(),
-  }
+  };
 }
 
 function createSelectionDouble(snapshot = {}) {
@@ -322,38 +329,38 @@ function createSelectionDouble(snapshot = {}) {
     })),
     clearSelection: vi.fn(),
     measureEndpoint: vi.fn((endpoint) => ({ x: endpoint.offset, y: 0 })),
-  }
+  };
 }
 
 function createHarness(options = {}) {
-  const calls = []
-  const target = options.target ?? targetHandle()
-  const resolveTargets = [...(options.resolveTargets ?? [])]
-  const hitTestResults = [...(options.hitTestResults ?? [])]
-  const geometrySnapshots = [...(options.geometrySnapshots ?? [])]
-  const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target)
-  let currentGeometry = geometry
-  const clickReports = [...(options.clickReports ?? [])]
-  const signals = new BrowserPointerSignalBus()
-  const trace = options.trace ?? createTrace()
-  const store = new BrowserInteractionStateStore()
+  const calls = [];
+  const target = options.target ?? targetHandle();
+  const resolveTargets = [...(options.resolveTargets ?? [])];
+  const hitTestResults = [...(options.hitTestResults ?? [])];
+  const geometrySnapshots = [...(options.geometrySnapshots ?? [])];
+  const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target);
+  let currentGeometry = geometry;
+  const clickReports = [...(options.clickReports ?? [])];
+  const signals = new BrowserPointerSignalBus();
+  const trace = options.trace ?? createTrace();
+  const store = new BrowserInteractionStateStore();
   const resolver = {
     resolve: vi.fn(async () => {
-      calls.push('resolver.resolve')
-      return resolveTargets.shift() ?? target
+      calls.push('resolver.resolve');
+      return resolveTargets.shift() ?? target;
     }),
     resolveAll: vi.fn(async () => [target]),
     exists: vi.fn(async () => true),
     inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
     validate: vi.fn(async (candidate = target) => {
-      calls.push('resolver.validate')
+      calls.push('resolver.validate');
       if (options.validateFailure) {
-        throw options.validateFailure
+        throw options.validateFailure;
       }
 
-      return candidate
+      return candidate;
     }),
-  }
+  };
   const surface = {
     getSurfaceFor: vi.fn(() => ({
       id: 'viewport',
@@ -364,10 +371,10 @@ function createHarness(options = {}) {
     })),
     getScrollableAncestors: vi.fn(() => []),
     ensureVisible: vi.fn(async () => {
-      calls.push('surface.reveal')
+      calls.push('surface.reveal');
     }),
     reveal: vi.fn(async (resolvedTarget) => {
-      calls.push('surface.reveal')
+      calls.push('surface.reveal');
       return {
         target: resolvedTarget,
         changed: false,
@@ -376,33 +383,33 @@ function createHarness(options = {}) {
         fullyVisible: true,
         visibilityRatio: 1,
         steps: [],
-      }
+      };
     }),
     scrollTo: vi.fn(async (position) => {
-      calls.push('surface.scrollTo')
-      return { changed: true, before: { x: 0, y: 0 }, after: position }
+      calls.push('surface.scrollTo');
+      return { changed: true, before: { x: 0, y: 0 }, after: position };
     }),
     scrollBy: vi.fn(async (delta) => {
-      calls.push('surface.scrollBy')
-      return { changed: true, before: { x: 0, y: 0 }, after: delta }
+      calls.push('surface.scrollBy');
+      return { changed: true, before: { x: 0, y: 0 }, after: delta };
     }),
     mapPoint: vi.fn((point) => point),
-  }
+  };
   const geometryEngine = {
     snapshot: vi.fn(async () => {
-      calls.push('geometry.snapshot')
-      currentGeometry = geometrySnapshots.shift() ?? currentGeometry
-      return currentGeometry
+      calls.push('geometry.snapshot');
+      currentGeometry = geometrySnapshots.shift() ?? currentGeometry;
+      return currentGeometry;
     }),
     getBoundingRect: vi.fn(() => currentGeometry.rect),
     getVisibleRect: vi.fn(() => currentGeometry.visibleRect),
     getCenter: vi.fn(() => currentGeometry.center),
     getClickablePoint: vi.fn(() => currentGeometry.clickablePoint),
-  }
+  };
   const interactability = {
     inspect: vi.fn(async () => ({ target, canClick: true, blockingReasons: [] })),
     canClick: vi.fn(async () => {
-      calls.push('interactability.canClick')
+      calls.push('interactability.canClick');
       return (
         clickReports.shift() ??
         options.clickReport ?? {
@@ -417,10 +424,10 @@ function createHarness(options = {}) {
           forceBypassedReasons: [],
           unforceableReasons: [],
         }
-      )
+      );
     }),
     canFocus: vi.fn(async () => {
-      calls.push('interactability.canFocus')
+      calls.push('interactability.canFocus');
       return (
         options.focusReport ?? {
           target,
@@ -434,10 +441,10 @@ function createHarness(options = {}) {
           forceBypassedReasons: [],
           unforceableReasons: [],
         }
-      )
+      );
     }),
     canType: vi.fn(async () => {
-      calls.push('interactability.canType')
+      calls.push('interactability.canType');
       return (
         options.typeReport ?? {
           target,
@@ -451,234 +458,235 @@ function createHarness(options = {}) {
           forceBypassedReasons: [],
           unforceableReasons: [],
         }
-      )
+      );
     }),
-  }
+  };
   const fakeGesture = {
     click: vi.fn(async () => {
-      calls.push('gesture.click')
+      calls.push('gesture.click');
       signals.emit({
         type: 'pointer:moved',
         point: currentGeometry.clickablePoint.point,
         previousPoint: null,
-      })
+      });
       signals.emit({
         type: 'pointer:down',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
+      });
 
       if (options.clickFailure) {
-        throw options.clickFailure
+        throw options.clickFailure;
       }
 
       signals.emit({
         type: 'pointer:up',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
-      return { completed: true }
+      });
+      return { completed: true };
     }),
     hover: vi.fn(async (point) => {
-      calls.push('gesture.hover')
-      signals.emit({ type: 'pointer:moved', point, previousPoint: null })
+      calls.push('gesture.hover');
+      signals.emit({ type: 'pointer:moved', point, previousPoint: null });
       if (options.hoverFailure) {
-        throw options.hoverFailure
+        throw options.hoverFailure;
       }
-      return { completed: true }
+      return { completed: true };
     }),
     doubleClick: vi.fn(async () => {
-      calls.push('gesture.doubleClick')
+      calls.push('gesture.doubleClick');
       signals.emit({
         type: 'pointer:moved',
         point: currentGeometry.clickablePoint.point,
         previousPoint: null,
-      })
+      });
       signals.emit({
         type: 'pointer:down',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
+      });
 
       if (options.doubleClickFailure) {
-        throw options.doubleClickFailure
+        throw options.doubleClickFailure;
       }
 
       signals.emit({
         type: 'pointer:up',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
+      });
       signals.emit({
         type: 'pointer:down',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
+      });
       signals.emit({
         type: 'pointer:up',
         point: currentGeometry.clickablePoint.point,
         button: 'primary',
-      })
-      return { completed: true }
+      });
+      return { completed: true };
     }),
     drag: vi.fn(async (from, to) => {
-      calls.push('gesture.drag')
-      signals.emit({ type: 'pointer:moved', point: from, previousPoint: null })
+      calls.push('gesture.drag');
+      signals.emit({ type: 'pointer:moved', point: from, previousPoint: null });
       signals.emit({
         type: 'pointer:down',
         point: from,
         button: 'primary',
-      })
+      });
 
       if (options.dragFailure) {
-        throw options.dragFailure
+        throw options.dragFailure;
       }
 
-      signals.emit({ type: 'pointer:moved', point: to, previousPoint: from })
+      signals.emit({ type: 'pointer:moved', point: to, previousPoint: from });
       signals.emit({
         type: 'pointer:up',
         point: to,
         button: 'primary',
-      })
-      return { completed: true }
+      });
+      return { completed: true };
     }),
     pointerSequence: vi.fn(async (sequence) => {
-      calls.push('gesture.pointerSequence')
+      calls.push('gesture.pointerSequence');
 
       for (const step of sequence) {
         if (step.type === 'move') {
-          signals.emit({ type: 'pointer:moved', point: step.to, previousPoint: null })
+          signals.emit({ type: 'pointer:moved', point: step.to, previousPoint: null });
         } else if (step.type === 'down') {
           signals.emit({
             type: 'pointer:down',
             point: currentGeometry.clickablePoint.point,
             button: step.button ?? 'primary',
-          })
+          });
         } else if (step.type === 'up') {
           signals.emit({
             type: 'pointer:up',
             point: currentGeometry.clickablePoint.point,
             button: step.button ?? 'primary',
-          })
+          });
         }
       }
 
       if (options.pointerSequenceFailure) {
-        throw options.pointerSequenceFailure
+        throw options.pointerSequenceFailure;
       }
 
-      return { completed: true }
+      return { completed: true };
     }),
     cancel: vi.fn(async () => {
-      calls.push('gesture.cancel')
+      calls.push('gesture.cancel');
       if (options.cancelFailure) {
-        throw options.cancelFailure
+        throw options.cancelFailure;
       }
 
-      signals.emit({ type: 'pointer:cancelled' })
-      return { completed: false }
+      signals.emit({ type: 'pointer:cancelled' });
+      return { completed: false };
     }),
-  }
-  const gesture = options.gesture ?? (options.useRealGesture ? undefined : fakeGesture)
+  };
+  const gesture = options.gesture ?? (options.useRealGesture ? undefined : fakeGesture);
   const focus = options.focus ?? {
     focus: vi.fn(async (focusTarget, focusOptions = {}) => {
-      calls.push('focus.focus')
-      store.setFocused(focusTarget, focusOptions.focusVisible === true)
+      calls.push('focus.focus');
+      store.setFocused(focusTarget, focusOptions.focusVisible === true);
 
       return {
         active: focusTarget,
         previous: null,
         focusVisible: focusOptions.focusVisible === true,
-      }
+      };
     }),
     blur: vi.fn(),
-    getFocused: vi.fn(async () => (
-      options.focusedSnapshot ?? {
-        active: target,
-        previous: null,
-        focusVisible: false,
-      }
-    )),
+    getFocused: vi.fn(
+      async () =>
+        options.focusedSnapshot ?? {
+          active: target,
+          previous: null,
+          focusVisible: false,
+        },
+    ),
     tab: vi.fn(),
-  }
+  };
   const text = {
     type: vi.fn(async () => {
-      calls.push('text.type')
-      return { strategy: 'type', text: 'hello' }
+      calls.push('text.type');
+      return { strategy: 'type', text: 'hello' };
     }),
     typeInto: vi.fn(async () => {
-      calls.push('text.typeInto')
-      return { strategy: 'typeInto', text: 'hello' }
+      calls.push('text.typeInto');
+      return { strategy: 'typeInto', text: 'hello' };
     }),
     fill: vi.fn(async () => {
-      calls.push('text.fill')
-      return { strategy: 'fill', text: 'filled' }
+      calls.push('text.fill');
+      return { strategy: 'fill', text: 'filled' };
     }),
-  }
+  };
   const keyboard = options.keyboard ?? {
     getState: vi.fn(() => ({ pressedKeys: [], modifiers: [] })),
     keyDown: vi.fn(async () => ({ pressedKeys: [], modifiers: [] })),
     keyUp: vi.fn(async () => ({ pressedKeys: [], modifiers: [] })),
     press: vi.fn(async () => {
-      calls.push('keyboard.press')
-      return options.keyboardResult ?? { pressedKeys: [], modifiers: [] }
+      calls.push('keyboard.press');
+      return options.keyboardResult ?? { pressedKeys: [], modifiers: [] };
     }),
-  }
+  };
   const wait = options.wait ?? {
     waitFor: vi.fn(),
     settle: vi.fn(async () => {
-      calls.push('wait.settle')
-      return null
+      calls.push('wait.settle');
+      return null;
     }),
     invalidateGeometry: vi.fn(),
-  }
+  };
   const events = {
     dispatchPointerEvent: vi.fn((event) => {
-      calls.push(`event.${event.type}`)
-      return options.pointerDispatchResult?.[event.type] ?? true
+      calls.push(`event.${event.type}`);
+      return options.pointerDispatchResult?.[event.type] ?? true;
     }),
     dispatchMouseEvent: vi.fn((event) => {
-      calls.push(`event.${event.type}`)
-      return options.mouseDispatchResult?.[event.type] ?? true
+      calls.push(`event.${event.type}`);
+      return options.mouseDispatchResult?.[event.type] ?? true;
     }),
     dispatchKeyboardEvent: vi.fn(() => true),
     dispatchTextInputEvent: vi.fn(() => true),
-  }
+  };
   const state = options.state ?? {
     applyStateEffects: vi.fn((effects) => {
       if (effects.length > 0) {
-        calls.push(`state.${effects.map((effect) => `${effect.kind}:${effect.active}`).join(',')}`)
+        calls.push(`state.${effects.map((effect) => `${effect.kind}:${effect.active}`).join(',')}`);
       }
     }),
     cleanup: vi.fn(() => {
-      calls.push('state.cleanup')
+      calls.push('state.cleanup');
     }),
-  }
-  const selection = options.selection ?? createSelectionDouble(options.selectionSnapshot)
+  };
+  const selection = options.selection ?? createSelectionDouble(options.selectionSnapshot);
   const dom = options.dom ?? {
     getRoot: vi.fn(() => options.root ?? document),
     elementFromPoint: vi.fn((point, hitOptions) => {
       if (options.trackHitTests) {
-        calls.push(`dom.hit:${point.x},${point.y}:${hitOptions?.ignoreActorbleInternal}`)
+        calls.push(`dom.hit:${point.x},${point.y}:${hitOptions?.ignoreActorbleInternal}`);
       }
 
       if (typeof options.elementFromPoint === 'function') {
-        return options.elementFromPoint(point, hitOptions)
+        return options.elementFromPoint(point, hitOptions);
       }
 
-      return hitTestResults.shift() ?? target.element
+      return hitTestResults.shift() ?? target.element;
     }),
     getComputedStyle: vi.fn((element) => {
       if (options.trackCursorReads) {
-        calls.push(`dom.cursor:${element.id}`)
+        calls.push(`dom.cursor:${element.id}`);
       }
 
       const cursor =
         typeof options.cursorStyle === 'function'
           ? options.cursorStyle(element)
-          : (options.cursorStyles?.get(element) ?? 'default')
+          : (options.cursorStyles?.get(element) ?? 'default');
 
-      return cursorFromStyle(cursor)
+      return cursorFromStyle(cursor);
     }),
     getParentElement: vi.fn((element) => element.parentElement),
     contains: vi.fn((root, node) => root.contains(node)),
@@ -690,39 +698,39 @@ function createHarness(options = {}) {
         Array.from(element.attributes, (attribute) => [attribute.name, attribute.value]),
       ),
     })),
-  }
+  };
   const visual =
     options.visual ??
     (options.enableVisual
       ? {
           showCursor: vi.fn((request) => {
-            const point = 'point' in request ? request.point : request
-            const cursor = 'point' in request ? (request.cursor ?? 'default') : 'default'
+            const point = 'point' in request ? request.point : request;
+            const cursor = 'point' in request ? (request.cursor ?? 'default') : 'default';
 
-            calls.push(`visual.cursor:${point.x},${point.y}:${cursor}`)
+            calls.push(`visual.cursor:${point.x},${point.y}:${cursor}`);
           }),
           highlightTarget: vi.fn(() => {
-            calls.push('visual.highlight')
+            calls.push('visual.highlight');
           }),
           showClick: vi.fn(() => {
-            calls.push('visual.click')
+            calls.push('visual.click');
           }),
           showFocus: vi.fn((request) => {
-            calls.push(`visual.focus:${request.active}`)
+            calls.push(`visual.focus:${request.active}`);
           }),
           showTyping: vi.fn((request) => {
-            calls.push(`visual.typing:${request.active}`)
+            calls.push(`visual.typing:${request.active}`);
           }),
           showKeystroke: vi.fn((request) => {
-            calls.push(`visual.keystroke:${request.text}`)
+            calls.push(`visual.keystroke:${request.text}`);
           }),
           clearFeedback: vi.fn(() => {
-            calls.push('visual.clearFeedback')
+            calls.push('visual.clearFeedback');
           }),
           hide: vi.fn(),
           destroy: vi.fn(),
         }
-      : undefined)
+      : undefined);
   const orchestrator = new BrowserActionOrchestrator({
     resolver,
     surface,
@@ -746,7 +754,7 @@ function createHarness(options = {}) {
     pointer: options.pointer,
     pointerVisual: options.pointerVisual,
     layoutInvalidation: options.layoutInvalidation,
-  })
+  });
 
   return {
     calls,
@@ -768,29 +776,29 @@ function createHarness(options = {}) {
     trace,
     visual,
     wait,
-  }
+  };
 }
 
 function createRealTextHarness(options = {}) {
-  const target = options.target ?? inputTargetHandle()
-  const geometry = options.geometry ?? geometryFor(target)
-  const trace = options.trace ?? createTrace()
-  const timeline = options.timeline ?? createFrameTimeline()
-  const store = options.store ?? new BrowserInteractionStateStore()
-  const calls = []
+  const target = options.target ?? inputTargetHandle();
+  const geometry = options.geometry ?? geometryFor(target);
+  const trace = options.trace ?? createTrace();
+  const timeline = options.timeline ?? createFrameTimeline();
+  const store = options.store ?? new BrowserInteractionStateStore();
+  const calls = [];
   const resolver = {
     resolve: vi.fn(async () => {
-      calls.push('resolver.resolve')
-      return target
+      calls.push('resolver.resolve');
+      return target;
     }),
     resolveAll: vi.fn(async () => [target]),
     exists: vi.fn(async () => true),
     inspect: vi.fn(async () => ({ target, debug: target.debug, validity: 'live' })),
     validate: vi.fn(async () => {
-      calls.push('resolver.validate')
-      return target
+      calls.push('resolver.validate');
+      return target;
     }),
-  }
+  };
   const surface = {
     getSurfaceFor: vi.fn(() => ({
       id: 'viewport',
@@ -801,7 +809,7 @@ function createRealTextHarness(options = {}) {
     })),
     getScrollableAncestors: vi.fn(() => []),
     ensureVisible: vi.fn(async () => {
-      calls.push('surface.reveal')
+      calls.push('surface.reveal');
     }),
     reveal: vi.fn(async (resolvedTarget) => ({
       target: resolvedTarget,
@@ -815,17 +823,17 @@ function createRealTextHarness(options = {}) {
     scrollTo: vi.fn(),
     scrollBy: vi.fn(),
     mapPoint: vi.fn((point) => point),
-  }
+  };
   const geometryEngine = {
     snapshot: vi.fn(async () => {
-      calls.push('geometry.snapshot')
-      return geometry
+      calls.push('geometry.snapshot');
+      return geometry;
     }),
     getBoundingRect: vi.fn(() => geometry.rect),
     getVisibleRect: vi.fn(() => geometry.visibleRect),
     getCenter: vi.fn(() => geometry.center),
     getClickablePoint: vi.fn(() => geometry.clickablePoint),
-  }
+  };
   const interactability = {
     inspect: vi.fn(async () => ({ target, canClick: true, blockingReasons: [] })),
     canClick: vi.fn(async () => ({
@@ -842,7 +850,7 @@ function createRealTextHarness(options = {}) {
     })),
     canFocus: vi.fn(async () => ({ target, canFocus: true, blockingReasons: [] })),
     canType: vi.fn(async () => {
-      calls.push('interactability.canType')
+      calls.push('interactability.canType');
       return {
         target,
         visible: true,
@@ -854,21 +862,21 @@ function createRealTextHarness(options = {}) {
         blockingReasons: [],
         forceBypassedReasons: [],
         unforceableReasons: [],
-      }
+      };
     }),
-  }
+  };
   const wait = {
     waitFor: vi.fn(),
     settle: vi.fn(async () => {
-      calls.push('wait.settle')
-      return null
+      calls.push('wait.settle');
+      return null;
     }),
     invalidateGeometry: vi.fn(),
-  }
+  };
   const state = {
     applyStateEffects: vi.fn(),
     cleanup: vi.fn(),
-  }
+  };
   const visual =
     options.visual ??
     (options.enableVisual
@@ -878,16 +886,16 @@ function createRealTextHarness(options = {}) {
           showClick: vi.fn(),
           showFocus: vi.fn(),
           showTyping: vi.fn((request) => {
-            calls.push(`visual.typing:${request.active}`)
+            calls.push(`visual.typing:${request.active}`);
           }),
           showKeystroke: vi.fn(),
           clearFeedback: vi.fn(() => {
-            calls.push('visual.clearFeedback')
+            calls.push('visual.clearFeedback');
           }),
           hide: vi.fn(),
           destroy: vi.fn(),
         }
-      : undefined)
+      : undefined);
   const orchestrator = new BrowserActionOrchestrator({
     resolver,
     surface,
@@ -901,7 +909,7 @@ function createRealTextHarness(options = {}) {
     dom: new BrowserDomAdapter(document),
     visual,
     visualFeedback: options.visualFeedback,
-  })
+  });
 
   return {
     calls,
@@ -913,23 +921,23 @@ function createRealTextHarness(options = {}) {
     trace,
     visual,
     wait,
-  }
+  };
 }
 
 describe('BrowserActionOrchestrator', () => {
   it('delegates geometry snapshots to the injected geometry engine', async () => {
-    const { calls, geometry, orchestrator, target } = createHarness()
+    const { calls, geometry, orchestrator, target } = createHarness();
 
-    await expect(orchestrator.geometry(target)).resolves.toBe(geometry)
+    await expect(orchestrator.geometry(target)).resolves.toBe(geometry);
 
-    expect(calls).toEqual(['geometry.snapshot'])
-  })
+    expect(calls).toEqual(['geometry.snapshot']);
+  });
 
   it('selectText applies input range selection, syncs state, traces metadata, and waits', async () => {
-    const input = document.createElement('input')
-    input.id = 'message'
-    input.value = 'Hello selection'
-    document.body.append(input)
+    const input = document.createElement('input');
+    input.id = 'message';
+    input.value = 'Hello selection';
+    document.body.append(input);
     const target = {
       id: 'input-target',
       element: input,
@@ -937,7 +945,7 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#message', description: 'input#message' },
-    }
+    };
     const selection = createSelectionDouble({
       surface: 'input',
       strategy: 'input-range-api',
@@ -947,29 +955,29 @@ describe('BrowserActionOrchestrator', () => {
       anchorOffset: 6,
       focusOffset: 15,
       collapsed: false,
-    })
+    });
     const { calls, orchestrator, store, trace, wait } = createHarness({
       target,
       selection,
-    })
+    });
 
     await expect(
       orchestrator.selectText({
         anchor: { target, offset: 6 },
         focus: { target, offset: 15 },
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.validate',
       'resolver.validate',
       'surface.reveal',
       'wait.settle',
-    ])
+    ]);
     expect(selection.applySelection).toHaveBeenCalledWith({
       anchor: { target: input, offset: 6 },
       focus: { target: input, offset: 15 },
-    })
+    });
     expect(store.snapshot().selection).toMatchObject({
       active: true,
       target,
@@ -977,8 +985,8 @@ describe('BrowserActionOrchestrator', () => {
       surface: 'input',
       strategy: 'input-range-api',
       collapsed: false,
-    })
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    });
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans).toEqual([
       expect.objectContaining({
         name: 'action.selectText',
@@ -995,16 +1003,16 @@ describe('BrowserActionOrchestrator', () => {
           },
         }),
       }),
-    ])
-    expect(JSON.stringify(trace.getTrace())).not.toContain('PRIVATE_TOKEN')
-  })
+    ]);
+    expect(JSON.stringify(trace.getTrace())).not.toContain('PRIVATE_TOKEN');
+  });
 
   it('selectText maps document element offsets to text node ranges', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'Readable document text'
-    document.body.append(paragraph)
-    const textNode = paragraph.firstChild
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'Readable document text';
+    document.body.append(paragraph);
+    const textNode = paragraph.firstChild;
     const target = {
       id: 'copy-target',
       element: paragraph,
@@ -1012,7 +1020,7 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
+    };
     const selection = createSelectionDouble({
       surface: 'document-text',
       strategy: 'selection-api',
@@ -1022,27 +1030,27 @@ describe('BrowserActionOrchestrator', () => {
       anchorOffset: 9,
       focusOffset: 17,
       collapsed: false,
-    })
-    const { orchestrator } = createHarness({ target, selection })
+    });
+    const { orchestrator } = createHarness({ target, selection });
 
     await expect(
       orchestrator.selectText({
         anchor: { target, offset: 9 },
         focus: { target, offset: 17 },
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(selection.applySelection).toHaveBeenCalledWith({
       anchor: { target: textNode, offset: 9 },
       focus: { target: textNode, offset: 17 },
-    })
-  })
+    });
+  });
 
   it('selectText selects all text for a direct target', async () => {
-    const input = document.createElement('input')
-    input.id = 'message'
-    input.value = 'Hello selection'
-    document.body.append(input)
+    const input = document.createElement('input');
+    input.id = 'message';
+    input.value = 'Hello selection';
+    document.body.append(input);
     const target = {
       id: 'input-target',
       element: input,
@@ -1050,24 +1058,24 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#message', description: 'input#message' },
-    }
-    const selection = createSelectionDouble()
-    const { orchestrator } = createHarness({ target, selection })
+    };
+    const selection = createSelectionDouble();
+    const { orchestrator } = createHarness({ target, selection });
 
-    await expect(orchestrator.selectText(target)).resolves.toBeUndefined()
+    await expect(orchestrator.selectText(target)).resolves.toBeUndefined();
 
     expect(selection.applySelection).toHaveBeenCalledWith({
       anchor: { target: input, offset: 0 },
       focus: { target: input, offset: input.value.length },
-    })
-  })
+    });
+  });
 
   it('selectText selects all document text for a direct target', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'Readable document text'
-    document.body.append(paragraph)
-    const textNode = paragraph.firstChild
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'Readable document text';
+    document.body.append(paragraph);
+    const textNode = paragraph.firstChild;
     const target = {
       id: 'copy-target',
       element: paragraph,
@@ -1075,24 +1083,24 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
-    const selection = createSelectionDouble()
-    const { orchestrator } = createHarness({ target, selection })
+    };
+    const selection = createSelectionDouble();
+    const { orchestrator } = createHarness({ target, selection });
 
-    await expect(orchestrator.selectText(target)).resolves.toBeUndefined()
+    await expect(orchestrator.selectText(target)).resolves.toBeUndefined();
 
     expect(selection.applySelection).toHaveBeenCalledWith({
       anchor: { target: textNode, offset: 0 },
       focus: { target: textNode, offset: paragraph.textContent.length },
-    })
-  })
+    });
+  });
 
   it('selectText animates a human-like selection gesture when movement options are provided', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'Readable document text'
-    document.body.append(paragraph)
-    const textNode = paragraph.firstChild
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'Readable document text';
+    document.body.append(paragraph);
+    const textNode = paragraph.firstChild;
     const target = {
       id: 'copy-target',
       element: paragraph,
@@ -1100,7 +1108,7 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
+    };
     const selection = createSelectionDouble({
       surface: 'document-text',
       strategy: 'selection-api',
@@ -1110,13 +1118,13 @@ describe('BrowserActionOrchestrator', () => {
       anchorOffset: 9,
       focusOffset: 17,
       collapsed: false,
-    })
-    const timeline = createFrameTimeline(50)
-    const pointerVisual = createPointerVisualTrackerDouble()
-    const visualEvents = []
+    });
+    const timeline = createFrameTimeline(50);
+    const pointerVisual = createPointerVisualTrackerDouble();
+    const visualEvents = [];
     const visual = {
       showCursor: vi.fn((request) => {
-        visualEvents.push(request)
+        visualEvents.push(request);
       }),
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
@@ -1126,7 +1134,7 @@ describe('BrowserActionOrchestrator', () => {
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
+    };
     const { events, orchestrator } = createHarness({
       target,
       selection,
@@ -1134,7 +1142,7 @@ describe('BrowserActionOrchestrator', () => {
       visual,
       pointerVisual,
       visualFeedback: 'debug',
-    })
+    });
 
     await expect(
       orchestrator.selectText(
@@ -1144,7 +1152,7 @@ describe('BrowserActionOrchestrator', () => {
         },
         { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
       'pointermove',
@@ -1152,33 +1160,33 @@ describe('BrowserActionOrchestrator', () => {
       'pointermove',
       'pointermove',
       'pointerup',
-    ])
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    ]);
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(selection.applySelection.mock.calls.map(([range]) => range.focus.offset)).toEqual(
       expect.arrayContaining([13, 17]),
-    )
+    );
     expect(selection.applySelection).toHaveBeenLastCalledWith({
       anchor: { target: textNode, offset: 9 },
       focus: { target: textNode, offset: 17 },
-    })
+    });
     expect(visualEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ cursor: 'text', pressed: true }),
         expect.objectContaining({ cursor: 'text', pressed: false }),
       ]),
-    )
+    );
     expect(pointerVisual.setMode).toHaveBeenCalledWith({
       kind: 'freePoint',
       point: { x: 17, y: 0 },
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('cancels an animated selection halfway and disposes frame listeners before the next action', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.textContent = 'abcdefghij'
-    document.body.append(paragraph)
-    const textNode = paragraph.firstChild
+    const paragraph = document.createElement('p');
+    paragraph.textContent = 'abcdefghij';
+    document.body.append(paragraph);
+    const textNode = paragraph.firstChild;
     const target = {
       id: 'selection-target',
       element: paragraph,
@@ -1186,23 +1194,23 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: 'p', description: 'p' },
-    }
-    const controlled = createBlockingFrameTimeline()
-    const controller = new AbortController()
+    };
+    const controlled = createBlockingFrameTimeline();
+    const controller = new AbortController();
     const selection = createSelectionDouble({
       surface: 'document-text',
       strategy: 'selection-api',
       anchorNode: textNode,
       focusNode: textNode,
-    })
+    });
     const { events, orchestrator, store, visual } = createHarness({
       target,
       selection,
       timeline: controlled.timeline,
       enableVisual: true,
       visualFeedback: 'debug',
-    })
-    selection.measureEndpoint.mockImplementation((endpoint) => ({ x: endpoint.offset, y: 0 }))
+    });
+    selection.measureEndpoint.mockImplementation((endpoint) => ({ x: endpoint.offset, y: 0 }));
 
     const result = orchestrator.selectText(
       {
@@ -1210,32 +1218,32 @@ describe('BrowserActionOrchestrator', () => {
         focus: { target, offset: 10 },
       },
       { duration: 100, signal: controller.signal },
-    )
+    );
 
-    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
-    controlled.step(50)
-    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1))
-    controller.abort('selection stopped')
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1));
+    controlled.step(50);
+    await vi.waitFor(() => expect(controlled.pendingFrameCount).toBe(1));
+    controller.abort('selection stopped');
 
-    await expect(result).rejects.toMatchObject({ code: 'ACTION_CANCELLED' })
-    expect(controlled.pendingFrameCount).toBe(0)
-    expect(controlled.activeAbortListenerCount).toBe(0)
+    await expect(result).rejects.toMatchObject({ code: 'ACTION_CANCELLED' });
+    expect(controlled.pendingFrameCount).toBe(0);
+    expect(controlled.activeAbortListenerCount).toBe(0);
     expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toContain(
       'pointercancel',
-    )
-    expect(store.snapshot().selection.active).toBe(false)
+    );
+    expect(store.snapshot().selection.active).toBe(false);
     expect(visual.showCursor).toHaveBeenLastCalledWith(
       expect.objectContaining({ point: { x: 5, y: 0 }, pressed: false }),
-    )
+    );
 
-    await expect(orchestrator.moveTo(target, { duration: 0 })).resolves.toBeUndefined()
-  })
+    await expect(orchestrator.moveTo(target, { duration: 0 })).resolves.toBeUndefined();
+  });
 
   it('selectText keeps the visual cursor on the progressively selected focus caret', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'abcdefghij'
-    document.body.append(paragraph)
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'abcdefghij';
+    document.body.append(paragraph);
     const target = {
       id: 'copy-target',
       element: paragraph,
@@ -1243,13 +1251,13 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
-    const selection = createSelectionDouble()
-    const timeline = createFrameTimeline(50)
-    const visualEvents = []
+    };
+    const selection = createSelectionDouble();
+    const timeline = createFrameTimeline(50);
+    const visualEvents = [];
     const visual = {
       showCursor: vi.fn((request) => {
-        visualEvents.push(request)
+        visualEvents.push(request);
       }),
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
@@ -1259,18 +1267,18 @@ describe('BrowserActionOrchestrator', () => {
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
+    };
     selection.measureEndpoint.mockImplementation((endpoint) => ({
       x: endpoint.offset,
       y: 0,
-    }))
+    }));
     const { orchestrator } = createHarness({
       target,
       selection,
       timeline,
       visual,
       visualFeedback: 'debug',
-    })
+    });
 
     await expect(
       orchestrator.selectText(
@@ -1280,11 +1288,11 @@ describe('BrowserActionOrchestrator', () => {
         },
         { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(selection.applySelection.mock.calls.map(([range]) => range.focus.offset)).toEqual(
       expect.arrayContaining([5, 10]),
-    )
+    );
     expect(visualEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1303,20 +1311,20 @@ describe('BrowserActionOrchestrator', () => {
           pressed: false,
         }),
       ]),
-    )
+    );
     expect(
       visualEvents
         .filter((event) => event.cursor === 'text' && event.pressed)
         .every((event) => event.point.y === 0),
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it('selectText keeps following pointer actions continuous from the selection focus', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'abcdefghij'
-    document.body.append(paragraph)
-    const textNode = paragraph.firstChild
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'abcdefghij';
+    document.body.append(paragraph);
+    const textNode = paragraph.firstChild;
     const selectionTarget = {
       id: 'copy-target',
       element: paragraph,
@@ -1324,14 +1332,14 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
-    const clickTarget = targetHandle('save')
-    const selection = createSelectionDouble()
-    const timeline = createFrameTimeline(50)
-    const visualEvents = []
+    };
+    const clickTarget = targetHandle('save');
+    const selection = createSelectionDouble();
+    const timeline = createFrameTimeline(50);
+    const visualEvents = [];
     const visual = {
       showCursor: vi.fn((request) => {
-        visualEvents.push(request)
+        visualEvents.push(request);
       }),
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
@@ -1341,11 +1349,11 @@ describe('BrowserActionOrchestrator', () => {
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
+    };
     selection.measureEndpoint.mockImplementation((endpoint) => ({
       x: endpoint.offset * 30,
       y: 0,
-    }))
+    }));
     const { orchestrator } = createHarness({
       target: selectionTarget,
       selection,
@@ -1354,7 +1362,7 @@ describe('BrowserActionOrchestrator', () => {
       visualFeedback: 'debug',
       useRealGesture: true,
       geometrySnapshots: [geometryFor(clickTarget, { x: 400, y: 0 })],
-    })
+    });
 
     await expect(
       orchestrator.selectText(
@@ -1364,7 +1372,7 @@ describe('BrowserActionOrchestrator', () => {
         },
         { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(visualEvents).toEqual(
       expect.arrayContaining([
@@ -1374,9 +1382,9 @@ describe('BrowserActionOrchestrator', () => {
           pressed: false,
         }),
       ]),
-    )
+    );
 
-    visualEvents.splice(0)
+    visualEvents.splice(0);
 
     await expect(
       orchestrator.click(clickTarget, {
@@ -1384,31 +1392,31 @@ describe('BrowserActionOrchestrator', () => {
         motion: { kind: 'ease', timing: 'linear', duration: 100 },
         pressDwell: 0,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(visualEvents[0]).toEqual(
       expect.objectContaining({
         point: { x: 350, y: 0 },
       }),
-    )
+    );
     expect(visualEvents).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           point: { x: 200, y: 0 },
         }),
       ]),
-    )
+    );
     expect(selection.applySelection).toHaveBeenLastCalledWith({
       anchor: { target: textNode, offset: 0 },
       focus: { target: textNode, offset: 10 },
-    })
-  })
+    });
+  });
 
   it('selectText moves the visual cursor through wrapped line transitions', async () => {
-    const paragraph = document.createElement('p')
-    paragraph.id = 'copy'
-    paragraph.textContent = 'abcdefghij'
-    document.body.append(paragraph)
+    const paragraph = document.createElement('p');
+    paragraph.id = 'copy';
+    paragraph.textContent = 'abcdefghij';
+    document.body.append(paragraph);
     const target = {
       id: 'copy-target',
       element: paragraph,
@@ -1416,13 +1424,13 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy', description: 'p#copy' },
-    }
-    const selection = createSelectionDouble()
-    const timeline = createFrameTimeline(25)
-    const visualEvents = []
+    };
+    const selection = createSelectionDouble();
+    const timeline = createFrameTimeline(25);
+    const visualEvents = [];
     const visual = {
       showCursor: vi.fn((request) => {
-        visualEvents.push(request)
+        visualEvents.push(request);
       }),
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
@@ -1432,21 +1440,21 @@ describe('BrowserActionOrchestrator', () => {
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
+    };
     selection.measureEndpoint.mockImplementation((endpoint) => {
       if (endpoint.offset <= 5) {
-        return { x: endpoint.offset * 20, y: 0 }
+        return { x: endpoint.offset * 20, y: 0 };
       }
 
-      return { x: (endpoint.offset - 6) * 10, y: 20 }
-    })
+      return { x: (endpoint.offset - 6) * 10, y: 20 };
+    });
     const { orchestrator } = createHarness({
       target,
       selection,
       timeline,
       visual,
       visualFeedback: 'debug',
-    })
+    });
 
     await expect(
       orchestrator.selectText(
@@ -1456,31 +1464,33 @@ describe('BrowserActionOrchestrator', () => {
         },
         { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     const pressedTextPoints = visualEvents
       .filter((event) => event.cursor === 'text' && event.pressed)
-      .map((event) => event.point)
+      .map((event) => event.point);
 
-    expect(pressedTextPoints.some((point) => point.y === 0)).toBe(true)
-    expect(pressedTextPoints.some((point) => point.y === 20)).toBe(true)
+    expect(pressedTextPoints.some((point) => point.y === 0)).toBe(true);
+    expect(pressedTextPoints.some((point) => point.y === 20)).toBe(true);
     expect(
-      pressedTextPoints.some((point) => point.x > 0 && point.x < 100 && point.y > 0 && point.y < 20),
-    ).toBe(true)
-  })
+      pressedTextPoints.some(
+        (point) => point.x > 0 && point.x < 100 && point.y > 0 && point.y < 20,
+      ),
+    ).toBe(true);
+  });
 
   it('selectText progressively expands visual gestures across text nodes', async () => {
-    const paragraph = document.createElement('p')
-    const start = document.createElement('span')
-    const end = document.createElement('span')
-    start.id = 'copy-start'
-    end.id = 'copy-end'
-    start.textContent = 'Hello '
-    end.textContent = 'world text'
-    paragraph.append(start, end)
-    document.body.append(paragraph)
-    const startText = start.firstChild
-    const endText = end.firstChild
+    const paragraph = document.createElement('p');
+    const start = document.createElement('span');
+    const end = document.createElement('span');
+    start.id = 'copy-start';
+    end.id = 'copy-end';
+    start.textContent = 'Hello ';
+    end.textContent = 'world text';
+    paragraph.append(start, end);
+    document.body.append(paragraph);
+    const startText = start.firstChild;
+    const endText = end.firstChild;
     const startTarget = {
       id: 'copy-start',
       element: start,
@@ -1488,7 +1498,7 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy-start', description: 'span#copy-start' },
-    }
+    };
     const endTarget = {
       id: 'copy-end',
       element: end,
@@ -1496,22 +1506,22 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#copy-end', description: 'span#copy-end' },
-    }
-    const selection = createSelectionDouble()
-    const timeline = createFrameTimeline(50)
+    };
+    const selection = createSelectionDouble();
+    const timeline = createFrameTimeline(50);
     selection.measureEndpoint.mockImplementation((endpoint) => {
       if (endpoint.target === endText) {
-        return { x: 6 + endpoint.offset, y: 0 }
+        return { x: 6 + endpoint.offset, y: 0 };
       }
 
-      return { x: endpoint.offset, y: 0 }
-    })
+      return { x: endpoint.offset, y: 0 };
+    });
     const { orchestrator } = createHarness({
       target: startTarget,
       resolveTargets: [startTarget, endTarget],
       selection,
       timeline,
-    })
+    });
 
     await expect(
       orchestrator.selectText(
@@ -1521,15 +1531,15 @@ describe('BrowserActionOrchestrator', () => {
         },
         { duration: 100, motion: { kind: 'ease', timing: 'linear', duration: 100 } },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(selection.applySelection.mock.calls.map(([range]) => range.focus)).toEqual(
       expect.arrayContaining([
         { target: startText, offset: 6 },
         { target: endText, offset: 4 },
       ]),
-    )
-  })
+    );
+  });
 
   it('selectText propagates unsupported surface failures from the selection adapter', async () => {
     const unsupported = actorbleError(
@@ -1541,16 +1551,16 @@ describe('BrowserActionOrchestrator', () => {
           reason: 'unsupported-input-type',
         },
       },
-    )
-    const selection = createSelectionDouble()
+    );
+    const selection = createSelectionDouble();
     selection.applySelection.mockImplementation(() => {
-      throw unsupported
-    })
-    const input = document.createElement('input')
-    input.id = 'quantity'
-    input.type = 'number'
-    input.value = '42'
-    document.body.append(input)
+      throw unsupported;
+    });
+    const input = document.createElement('input');
+    input.id = 'quantity';
+    input.type = 'number';
+    input.value = '42';
+    document.body.append(input);
     const target = {
       id: 'number-target',
       element: input,
@@ -1558,8 +1568,8 @@ describe('BrowserActionOrchestrator', () => {
       resolvedAt: 1000,
       validity: 'live',
       debug: { selector: '#quantity', description: 'input#quantity' },
-    }
-    const { orchestrator } = createHarness({ target, selection })
+    };
+    const { orchestrator } = createHarness({ target, selection });
 
     await expect(orchestrator.selectText(target)).rejects.toThrowError(
       expect.objectContaining({
@@ -1568,11 +1578,11 @@ describe('BrowserActionOrchestrator', () => {
           reason: 'unsupported-input-type',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('selectText rejects point endpoints with actionable text selection errors', async () => {
-    const { orchestrator, target } = createHarness()
+    const { orchestrator, target } = createHarness();
 
     await expect(
       orchestrator.selectText({
@@ -1587,24 +1597,24 @@ describe('BrowserActionOrchestrator', () => {
           reason: 'point-endpoints-not-yet-supported',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('selectText fails stale target validation before applying selection', async () => {
-    const stale = actorbleError('TARGET_STALE', 'Target is stale.')
-    const selection = createSelectionDouble()
-    const { orchestrator, target } = createHarness({ validateFailure: stale, selection })
+    const stale = actorbleError('TARGET_STALE', 'Target is stale.');
+    const selection = createSelectionDouble();
+    const { orchestrator, target } = createHarness({ validateFailure: stale, selection });
 
     await expect(orchestrator.selectText(target)).rejects.toThrowError(
       expect.objectContaining({ code: 'TARGET_STALE' }),
-    )
-    expect(selection.applySelection).not.toHaveBeenCalled()
-  })
+    );
+    expect(selection.applySelection).not.toHaveBeenCalled();
+  });
 
   it('click resolves and validates the target before dispatching pointer and activation events', async () => {
-    const { calls, events, orchestrator, target, trace, wait } = createHarness()
+    const { calls, events, orchestrator, target, trace, wait } = createHarness();
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -1621,7 +1631,7 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointerup',
       'event.click',
       'wait.settle',
-    ])
+    ]);
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -1629,8 +1639,8 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    });
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans).toEqual([
       expect.objectContaining({
         name: 'action.click',
@@ -1644,15 +1654,15 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    ])
-  })
+    ]);
+  });
 
   it('doubleClick resolves, preflights, dispatches two click activations, and waits', async () => {
-    const { calls, events, gesture, orchestrator, target, trace, wait } = createHarness()
+    const { calls, events, gesture, orchestrator, target, trace, wait } = createHarness();
 
     await expect(
       orchestrator.doubleClick(css('#target-1'), resolveActionOptions('doubleClick')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -1674,7 +1684,7 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointerup',
       'event.click',
       'wait.settle',
-    ])
+    ]);
     expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(1, {
       type: 'click',
       target: target.element,
@@ -1682,7 +1692,7 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
+    });
     expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(2, {
       type: 'click',
       target: target.element,
@@ -1690,8 +1700,8 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 2,
-    })
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    });
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.doubleClick',
@@ -1705,19 +1715,19 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
+    );
     expect(gesture.doubleClick).toHaveBeenCalledWith(
       target,
       { x: 20, y: 30 },
       expect.objectContaining({
         motion: { kind: 'ease', timing: 'ease-in-out', duration: 250 },
       }),
-    )
-  })
+    );
+  });
 
   it('doubleClick forwards explicit public pointer timing options without force', async () => {
-    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 420 }
-    const { gesture, orchestrator } = createHarness()
+    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 420 };
+    const { gesture, orchestrator } = createHarness();
 
     await expect(
       orchestrator.doubleClick(css('#target-1'), {
@@ -1728,9 +1738,9 @@ describe('BrowserActionOrchestrator', () => {
         timeout: 3000,
         force: true,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    const gestureOptions = gesture.doubleClick.mock.calls[0][2]
+    const gestureOptions = gesture.doubleClick.mock.calls[0][2];
 
     expect(gestureOptions).toEqual(
       expect.objectContaining({
@@ -1740,16 +1750,16 @@ describe('BrowserActionOrchestrator', () => {
         pressDwell: 160,
         timeout: 3000,
       }),
-    )
-    expect(gestureOptions).not.toHaveProperty('force')
-  })
+    );
+    expect(gestureOptions).not.toHaveProperty('force');
+  });
 
   it('click with clickCount dispatches a public multi-click sequence', async () => {
-    const { calls, events, orchestrator } = createHarness({ useRealGesture: true })
+    const { calls, events, orchestrator } = createHarness({ useRealGesture: true });
 
     await expect(
       orchestrator.click(css('#target-1'), { clickCount: 2, duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls.filter((call) => call.startsWith('event.'))).toEqual([
       'event.pointermove',
@@ -1759,26 +1769,26 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointerdown',
       'event.pointerup',
       'event.click',
-    ])
+    ]);
     expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ type: 'click', detail: 1 }),
-    )
+    );
     expect(events.dispatchMouseEvent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ type: 'click', detail: 2 }),
-    )
-  })
+    );
+  });
 
   it('skips activation but still settles when pointer down or up is canceled by the page', async () => {
     const { events, orchestrator, trace, wait } = createHarness({
       pointerDispatchResult: { pointerdown: false },
-    })
+    });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         status: 'ok',
@@ -1788,73 +1798,73 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('cancels pointer state and cleans up active effects when doubleClick fails after pointer down', async () => {
     const { events, gesture, orchestrator, state, trace } = createHarness({
       doubleClickFailure: cancellationError('doubleClick', 'scenario stopped'),
-    })
+    });
 
     await expect(orchestrator.doubleClick(css('#target-1'))).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'scenario stopped' },
-    })
+    });
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(gesture.cancel).toHaveBeenCalledOnce();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.doubleClick',
         status: 'cancelled',
       }),
-    )
-  })
+    );
+  });
 
   it('cancels pointer state and cleans up active effects when click fails after pointer down', async () => {
     const { events, gesture, orchestrator, state, trace } = createHarness({
       clickFailure: cancellationError('click', 'scenario stopped'),
-    })
+    });
 
     await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'scenario stopped' },
-    })
+    });
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(gesture.cancel).toHaveBeenCalledOnce();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.click',
         status: 'cancelled',
       }),
-    )
-  })
+    );
+  });
 
   it('does not fail click when pseudo state mirror application only records a warning', async () => {
-    const trace = createTrace()
+    const trace = createTrace();
     const failingMirrorState = {
       applyStateEffects: vi.fn(() => {
-        throw new Error('mirror blocked by runtime style policy')
+        throw new Error('mirror blocked by runtime style policy');
       }),
       cleanup: vi.fn(),
-    }
+    };
     const mirror = new BrowserPseudoStateMirror({
       state: failingMirrorState,
       trace,
-    })
-    const { orchestrator } = createHarness({ state: mirror, trace })
+    });
+    const { orchestrator } = createHarness({ state: mirror, trace });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.click',
         status: 'ok',
       }),
-    )
+    );
     expect(trace.getTrace().warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1864,13 +1874,13 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('records visual hook failures as warnings without failing the action', async () => {
     const visual = {
       showCursor: vi.fn(() => {
-        throw new Error('overlay blocked')
+        throw new Error('overlay blocked');
       }),
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
@@ -1880,10 +1890,10 @@ describe('BrowserActionOrchestrator', () => {
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
-    const { orchestrator, trace } = createHarness({ visual })
+    };
+    const { orchestrator, trace } = createHarness({ visual });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(trace.getTrace().warnings).toEqual(
       expect.arrayContaining([
@@ -1895,8 +1905,8 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('fails preflight without performing a gesture when click is not interactable', async () => {
     const { events, gesture, orchestrator, trace } = createHarness({
@@ -1912,7 +1922,7 @@ describe('BrowserActionOrchestrator', () => {
         forceBypassedReasons: [],
         unforceableReasons: ['disabled'],
       },
-    })
+    });
 
     await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
@@ -1920,59 +1930,59 @@ describe('BrowserActionOrchestrator', () => {
         action: 'click',
         blockingReasons: ['disabled'],
       }),
-    })
+    });
 
-    expect(gesture.click).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled();
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         status: 'error',
         attributes: expect.objectContaining({ phase: 'preflight' }),
       }),
-    )
-  })
+    );
+  });
 
   it('refreshes click geometry before pointer down and dispatches at the fresh point', async () => {
-    const target = targetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const target = targetHandle();
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 });
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 });
     const { events, orchestrator, trace } = createHarness({
       target,
       geometry: initialGeometry,
       geometrySnapshots: [initialGeometry, freshGeometry],
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
       target: target.element,
       point: { x: 20, y: 30 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
       type: 'pointermove',
       target: target.element,
       point: { x: 80, y: 90 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
       type: 'pointerdown',
       target: target.element,
       point: { x: 80, y: 90 },
       button: 'primary',
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
       type: 'pointerup',
       target: target.element,
       point: { x: 80, y: 90 },
       button: 'primary',
       buttons: [],
-    })
+    });
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -1980,7 +1990,7 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
+    });
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1994,15 +2004,15 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('retargets click movement when layout invalidation moves the target before pointer down', async () => {
-    const target = targetHandle()
-    const initialGeometry = geometryFor(target, { x: 100, y: 0 })
-    const movedGeometry = geometryFor(target, { x: 200, y: 0 })
-    const layoutInvalidation = createManualLayoutInvalidationTracker()
-    const timeline = createLayoutEmittingTimeline(layoutInvalidation, { frameInterval: 25 })
+    const target = targetHandle();
+    const initialGeometry = geometryFor(target, { x: 100, y: 0 });
+    const movedGeometry = geometryFor(target, { x: 200, y: 0 });
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    const timeline = createLayoutEmittingTimeline(layoutInvalidation, { frameInterval: 25 });
     const { events, orchestrator, trace } = createHarness({
       target,
       geometry: initialGeometry,
@@ -2010,31 +2020,28 @@ describe('BrowserActionOrchestrator', () => {
       layoutInvalidation: layoutInvalidation.tracker,
       timeline,
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), { duration: 100, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     const pointerMoves = events.dispatchPointerEvent.mock.calls
       .map(([event]) => event)
-      .filter((event) => event.type === 'pointermove')
+      .filter((event) => event.type === 'pointermove');
 
-    expect(layoutInvalidation.tracker.start).toHaveBeenCalledOnce()
-    expect(layoutInvalidation.tracker.stop).toHaveBeenCalledOnce()
+    expect(layoutInvalidation.tracker.start).toHaveBeenCalledOnce();
+    expect(layoutInvalidation.tracker.stop).toHaveBeenCalledOnce();
     expect(pointerMoves.map((event) => event.point.x)).toEqual([
-      25,
-      83.33333333333333,
-      141.66666666666666,
-      200,
-    ])
+      25, 83.33333333333333, 141.66666666666666, 200,
+    ]);
     expect(events.dispatchPointerEvent).toHaveBeenCalledWith({
       type: 'pointerdown',
       target: target.element,
       point: { x: 200, y: 0 },
       button: 'primary',
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -2042,7 +2049,7 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
+    });
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2057,25 +2064,25 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('preserves an already running layout invalidation tracker during pointer actions', async () => {
-    const layoutInvalidation = createManualLayoutInvalidationTracker({ running: true })
-    const { orchestrator } = createHarness({ layoutInvalidation: layoutInvalidation.tracker })
+    const layoutInvalidation = createManualLayoutInvalidationTracker({ running: true });
+    const { orchestrator } = createHarness({ layoutInvalidation: layoutInvalidation.tracker });
 
     await expect(
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(layoutInvalidation.tracker.start).not.toHaveBeenCalled()
-    expect(layoutInvalidation.tracker.stop).not.toHaveBeenCalled()
-  })
+    expect(layoutInvalidation.tracker.start).not.toHaveBeenCalled();
+    expect(layoutInvalidation.tracker.stop).not.toHaveBeenCalled();
+  });
 
   it('fails fresh click preflight before pointer down and cleans up perform state', async () => {
-    const target = targetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const target = targetHandle();
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 });
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 });
     const { events, orchestrator, state, trace } = createHarness({
       target,
       geometry: initialGeometry,
@@ -2092,7 +2099,7 @@ describe('BrowserActionOrchestrator', () => {
         }),
       ],
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
@@ -2103,26 +2110,26 @@ describe('BrowserActionOrchestrator', () => {
         blockingReasons: ['disabled'],
         targetId: 'target-1',
       }),
-    })
+    });
 
     expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
       'pointermove',
-    ])
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    ]);
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(trace.getTrace().spans[0]).toEqual(
       expect.objectContaining({
         name: 'action.click',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'perform' }),
       }),
-    )
-  })
+    );
+  });
 
   it('moveTo resolves, reveals, moves to the clickable point, and waits for settlement', async () => {
-    const { calls, orchestrator } = createHarness()
+    const { calls, orchestrator } = createHarness();
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -2133,41 +2140,41 @@ describe('BrowserActionOrchestrator', () => {
       'state.hover:true',
       'event.pointermove',
       'wait.settle',
-    ])
-  })
+    ]);
+  });
 
   it('cleans failed move state and visual feedback before a subsequent move', async () => {
-    const pointerVisual = createPointerVisualTrackerDouble()
+    const pointerVisual = createPointerVisualTrackerDouble();
     const { gesture, orchestrator, state, visual } = createHarness({
       enableVisual: true,
       hoverFailure: cancellationError('gesture.hover', 'move stopped'),
       pointerVisual,
-    })
+    });
 
     await expect(orchestrator.moveTo(css('#target-1'))).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
+    });
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
-    expect(state.cleanup).toHaveBeenCalledOnce()
-    expect(pointerVisual.clear).toHaveBeenCalled()
-    expect(visual.clearFeedback).toHaveBeenCalled()
-  })
+    expect(gesture.cancel).toHaveBeenCalledOnce();
+    expect(state.cleanup).toHaveBeenCalledOnce();
+    expect(pointerVisual.clear).toHaveBeenCalled();
+    expect(visual.clearFeedback).toHaveBeenCalled();
+  });
 
   it('moveTo skips reveal when the action reveal policy is false', async () => {
-    const { calls, orchestrator, surface } = createHarness()
+    const { calls, orchestrator, surface } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), { reveal: false, duration: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(surface.reveal).not.toHaveBeenCalled()
-    expect(calls).not.toContain('surface.reveal')
-    expect(calls).toContain('geometry.snapshot')
-  })
+    expect(surface.reveal).not.toHaveBeenCalled();
+    expect(calls).not.toContain('surface.reveal');
+    expect(calls).toContain('geometry.snapshot');
+  });
 
   it('resolves custom reveal options before geometry and honors an explicit action wait', async () => {
-    const { orchestrator, surface, target, wait } = createHarness()
+    const { orchestrator, surface, target, wait } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), {
@@ -2175,36 +2182,36 @@ describe('BrowserActionOrchestrator', () => {
         wait: 'none',
         duration: 0,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(surface.reveal).toHaveBeenCalledWith(target, {
       ...BROWSER_OPTION_DEFAULTS.reveal,
       block: 'center',
       settle: 'none',
-    })
-    expect(wait.settle).toHaveBeenCalledWith('none', {})
-  })
+    });
+    expect(wait.settle).toHaveBeenCalledWith('none', {});
+  });
 
   it('routes declarative action waits through the wait engine', async () => {
-    const condition = { kind: 'custom', predicate: () => true }
-    const { orchestrator, wait } = createHarness()
+    const condition = { kind: 'custom', predicate: () => true };
+    const { orchestrator, wait } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), { reveal: false, wait: condition, duration: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(wait.waitFor).toHaveBeenCalledWith(condition, {})
-    expect(wait.settle).not.toHaveBeenCalled()
-  })
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, {});
+    expect(wait.settle).not.toHaveBeenCalled();
+  });
 
   it('normalizes legacy settled action waits before delegation and tracing', async () => {
-    const { orchestrator, trace, wait } = createHarness()
+    const { orchestrator, trace, wait } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), { reveal: false, wait: 'settled', duration: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans.find((span) => span.name === 'action.moveTo')).toEqual(
       expect.objectContaining({
         attributes: expect.objectContaining({
@@ -2213,11 +2220,11 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('routes visual-stable action waits with the resolved primary target', async () => {
-    const { orchestrator, wait } = createHarness()
+    const { orchestrator, wait } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), {
@@ -2225,35 +2232,35 @@ describe('BrowserActionOrchestrator', () => {
         wait: 'visual-stable',
         duration: 0,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(wait.settle).toHaveBeenCalledWith(
       'visual-stable',
       {},
       expect.objectContaining({ id: 'target-1' }),
-    )
-  })
+    );
+  });
 
   it('routes targetless visual-stable action waits to root observation', async () => {
-    const { orchestrator, wait } = createHarness()
+    const { orchestrator, wait } = createHarness();
 
-    await expect(orchestrator.type('Saved', { wait: 'visual-stable' })).resolves.toBeUndefined()
+    await expect(orchestrator.type('Saved', { wait: 'visual-stable' })).resolves.toBeUndefined();
 
-    expect(wait.settle).toHaveBeenCalledWith('visual-stable', {}, undefined)
-  })
+    expect(wait.settle).toHaveBeenCalledWith('visual-stable', {}, undefined);
+  });
 
   it('pointerSequence executes a cleanup-safe transaction and records trace output', async () => {
-    const { calls, gesture, orchestrator, trace, wait } = createHarness()
+    const { calls, gesture, orchestrator, trace, wait } = createHarness();
     const sequence = [
       { type: 'move', to: { x: 1, y: 2 }, duration: 10 },
       { type: 'down', button: 'primary' },
       { type: 'pause', duration: 20 },
       { type: 'move', to: { x: 5, y: 6 } },
       { type: 'up', button: 'primary' },
-    ]
-    const options = { timeout: 100 }
+    ];
+    const options = { timeout: 100 };
 
-    await expect(orchestrator.pointerSequence(sequence, options)).resolves.toBeUndefined()
+    await expect(orchestrator.pointerSequence(sequence, options)).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'gesture.pointerSequence',
@@ -2265,15 +2272,15 @@ describe('BrowserActionOrchestrator', () => {
       'state.active:false',
       'event.pointerup',
       'wait.settle',
-    ])
+    ]);
     expect(gesture.pointerSequence).toHaveBeenCalledWith(
       sequence,
       expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
-    )
+    );
     expect(wait.settle).toHaveBeenCalledWith(
       'interaction-stable',
       expect.objectContaining({ timeout: 100, signal: expect.any(AbortSignal) }),
-    )
+    );
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2288,7 +2295,7 @@ describe('BrowserActionOrchestrator', () => {
           data: expect.objectContaining({ stepCount: 5 }),
         }),
       ]),
-    )
+    );
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.pointerSequence',
@@ -2299,8 +2306,8 @@ describe('BrowserActionOrchestrator', () => {
           output: expect.objectContaining({ stepCount: 5 }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('pointerSequence cleans up gesture and interaction state after failed perform', async () => {
     const failure = actorbleError(
@@ -2309,10 +2316,10 @@ describe('BrowserActionOrchestrator', () => {
       {
         details: { boundary: 'gesture-engine', pressedButtons: ['primary'] },
       },
-    )
+    );
     const { events, gesture, orchestrator, state, trace } = createHarness({
       pointerSequenceFailure: failure,
-    })
+    });
 
     await expect(
       orchestrator.pointerSequence([{ type: 'down', button: 'primary' }]),
@@ -2322,13 +2329,13 @@ describe('BrowserActionOrchestrator', () => {
         boundary: 'gesture-engine',
         pressedButtons: ['primary'],
       },
-    })
+    });
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(gesture.cancel).toHaveBeenCalledOnce();
     expect(events.dispatchPointerEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'pointercancel', buttons: [] }),
-    )
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    );
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.pointerSequence',
@@ -2338,15 +2345,15 @@ describe('BrowserActionOrchestrator', () => {
           phase: 'perform',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('reveal resolves and validates its target before delegating without raw target trace data', async () => {
     const staleTarget = {
       ...targetHandle('stale-scroll'),
       locator: css('#stale-scroll'),
       validity: 'stale',
-    }
+    };
     const { orchestrator, surface, trace } = createHarness({
       target: staleTarget,
       validateFailure: actorbleError('TARGET_STALE', 'Target stale-scroll is stale.', {
@@ -2355,16 +2362,16 @@ describe('BrowserActionOrchestrator', () => {
           locator: { kind: 'css', selector: '#stale-scroll' },
         },
       }),
-    })
+    });
 
     await expect(orchestrator.reveal(css('#stale-scroll'))).rejects.toMatchObject({
       code: 'TARGET_STALE',
       details: expect.objectContaining({
         targetId: 'stale-scroll',
       }),
-    })
+    });
 
-    expect(surface.reveal).not.toHaveBeenCalled()
+    expect(surface.reveal).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.reveal',
@@ -2374,11 +2381,11 @@ describe('BrowserActionOrchestrator', () => {
           targetId: 'stale-scroll',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('reveal delegates the validated handle and propagates structured visibility results', async () => {
-    const { calls, orchestrator, surface, target, trace, wait } = createHarness()
+    const { calls, orchestrator, surface, target, trace, wait } = createHarness();
     const result = {
       target,
       changed: true,
@@ -2395,16 +2402,16 @@ describe('BrowserActionOrchestrator', () => {
           axes: ['y'],
         },
       ],
-    }
-    surface.reveal.mockResolvedValueOnce(result)
+    };
+    surface.reveal.mockResolvedValueOnce(result);
 
     await expect(
       orchestrator.reveal(css('#target-1'), { block: 'center', settle: 'none' }),
-    ).resolves.toBe(result)
+    ).resolves.toBe(result);
 
-    expect(calls).toEqual(['resolver.resolve', 'resolver.validate'])
-    expect(surface.reveal).toHaveBeenCalledWith(target, { block: 'center', settle: 'none' })
-    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll')
+    expect(calls).toEqual(['resolver.resolve', 'resolver.validate']);
+    expect(surface.reveal).toHaveBeenCalledWith(target, { block: 'center', settle: 'none' });
+    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll');
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2416,31 +2423,31 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('scrollTo and scrollBy delegate explicit vectors and return structured results', async () => {
-    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness()
-    const position = { x: 10, y: 20 }
-    const delta = { x: -5, y: 15 }
+    const { calls, orchestrator, resolver, surface, trace, wait } = createHarness();
+    const position = { x: 10, y: 20 };
+    const delta = { x: -5, y: 15 };
 
     await expect(
       orchestrator.scrollTo(position, { motion: { kind: 'native-smooth' } }),
-    ).resolves.toEqual({ changed: true, before: { x: 0, y: 0 }, after: position })
+    ).resolves.toEqual({ changed: true, before: { x: 0, y: 0 }, after: position });
     await expect(orchestrator.scrollBy(delta)).resolves.toEqual({
       changed: true,
       before: { x: 0, y: 0 },
       after: delta,
-    })
+    });
 
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(calls).toEqual(['surface.scrollTo', 'surface.scrollBy'])
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
+    expect(calls).toEqual(['surface.scrollTo', 'surface.scrollBy']);
     expect(surface.scrollTo).toHaveBeenCalledWith(position, {
       motion: { kind: 'native-smooth' },
-    })
-    expect(surface.scrollBy).toHaveBeenCalledWith(delta, {})
-    expect(wait.invalidateGeometry).toHaveBeenCalledTimes(2)
+    });
+    expect(surface.scrollBy).toHaveBeenCalledWith(delta, {});
+    expect(wait.invalidateGeometry).toHaveBeenCalledTimes(2);
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2452,16 +2459,16 @@ describe('BrowserActionOrchestrator', () => {
           data: expect.objectContaining({ action: 'scrollBy', input: delta }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('drag resolves both endpoints, refreshes geometry before dispatch, preflights, settles, and traces synthetic pointer drag', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
-    const sourceInitial = geometryFor(source, { x: 10, y: 20 })
-    const destinationInitial = geometryFor(destination, { x: 100, y: 110 })
-    const sourceFresh = geometryFor(source, { x: 12, y: 22 })
-    const destinationFresh = geometryFor(destination, { x: 112, y: 122 })
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
+    const sourceInitial = geometryFor(source, { x: 10, y: 20 });
+    const destinationInitial = geometryFor(destination, { x: 100, y: 110 });
+    const sourceFresh = geometryFor(source, { x: 12, y: 22 });
+    const destinationFresh = geometryFor(destination, { x: 112, y: 122 });
     const { calls, events, gesture, orchestrator, trace, wait } = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -2473,11 +2480,11 @@ describe('BrowserActionOrchestrator', () => {
         clickReportFor(destination),
       ],
       hitTestResults: [source.element, source.element, destination.element, destination.element],
-    })
+    });
 
     await expect(
       orchestrator.drag(css('#drag-source'), css('#drop-target'), resolveActionOptions('drag')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls.slice(0, 15)).toEqual([
       'resolver.resolve',
@@ -2495,7 +2502,7 @@ describe('BrowserActionOrchestrator', () => {
       'interactability.canClick',
       'interactability.canClick',
       'gesture.drag',
-    ])
+    ]);
     expect(gesture.drag).toHaveBeenCalledWith(
       { x: 12, y: 22 },
       { x: 112, y: 122 },
@@ -2504,35 +2511,35 @@ describe('BrowserActionOrchestrator', () => {
         resolveFromEndpoint: expect.any(Function),
         resolveToEndpoint: expect.any(Function),
       }),
-    )
+    );
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
       target: source.element,
       point: { x: 12, y: 22 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
       type: 'pointerdown',
       target: source.element,
       point: { x: 12, y: 22 },
       button: 'primary',
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
       type: 'pointermove',
       target: destination.element,
       point: { x: 112, y: 122 },
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
       type: 'pointerup',
       target: destination.element,
       point: { x: 112, y: 122 },
       button: 'primary',
       buttons: [],
-    })
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    });
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2548,7 +2555,7 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
+    );
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.drag',
@@ -2566,13 +2573,13 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('drag forwards public pointer movement timing options to the gesture engine', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
-    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 520 }
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
+    const motion = { kind: 'ease', timing: 'ease-in-out', duration: 520 };
     const { gesture, orchestrator } = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -2589,7 +2596,7 @@ describe('BrowserActionOrchestrator', () => {
         clickReportFor(destination),
       ],
       hitTestResults: [source.element, source.element, destination.element, destination.element],
-    })
+    });
 
     await expect(
       orchestrator.drag(css('#drag-source'), css('#drop-target'), {
@@ -2598,7 +2605,7 @@ describe('BrowserActionOrchestrator', () => {
         timeout: 3500,
         force: true,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(gesture.drag).toHaveBeenCalledWith(
       { x: 12, y: 22 },
@@ -2608,12 +2615,12 @@ describe('BrowserActionOrchestrator', () => {
         motion,
         timeout: 3500,
       }),
-    )
-  })
+    );
+  });
 
   it('keeps drag pointer moves pressed for visual cursor and pointer event buttons', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
     const { events, orchestrator, visual } = createHarness({
       target: source,
       enableVisual: true,
@@ -2631,9 +2638,11 @@ describe('BrowserActionOrchestrator', () => {
         clickReportFor(destination),
       ],
       hitTestResults: [source.element, source.element, destination.element, destination.element],
-    })
+    });
 
-    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).resolves.toBeUndefined()
+    await expect(
+      orchestrator.drag(css('#drag-source'), css('#drop-target')),
+    ).resolves.toBeUndefined();
 
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(
       3,
@@ -2643,32 +2652,32 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 112, y: 122 },
         buttons: ['primary'],
       }),
-    )
+    );
     expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
       point: { x: 12, y: 22 },
       cursor: 'default',
       pressed: false,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 12, y: 22 },
       cursor: 'default',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
       point: { x: 112, y: 122 },
       cursor: 'default',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(4, {
       point: { x: 112, y: 122 },
       cursor: 'default',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('drag fails endpoint preflight without dispatching gesture events', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
     const { events, gesture, orchestrator, trace } = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -2687,32 +2696,34 @@ describe('BrowserActionOrchestrator', () => {
           unforceableReasons: ['disabled'],
         }),
       ],
-    })
+    });
 
-    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject({
-      code: 'INTERACTABILITY_FAILED',
-      details: expect.objectContaining({
-        action: 'drag',
-        targetId: 'drop-target',
-        blockingReasons: ['disabled'],
-      }),
-    })
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject(
+      {
+        code: 'INTERACTABILITY_FAILED',
+        details: expect.objectContaining({
+          action: 'drag',
+          targetId: 'drop-target',
+          blockingReasons: ['disabled'],
+        }),
+      },
+    );
 
-    expect(gesture.drag).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(gesture.drag).not.toHaveBeenCalled();
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.drag',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'preflight' }),
       }),
-    )
-  })
+    );
+  });
 
   it('drag cancellation after pointer down cleans up pressed and dragging state', async () => {
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
     const { events, gesture, orchestrator, state, trace, visual } = createHarness({
       target: source,
       enableVisual: true,
@@ -2732,52 +2743,56 @@ describe('BrowserActionOrchestrator', () => {
       hitTestResults: [source.element, source.element],
       dragFailure: cancellationError('drag', 'scenario stopped'),
       cursorStyle: () => 'grab',
-    })
+    });
 
-    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject({
-      code: 'ACTION_CANCELLED',
-      details: { reason: 'scenario stopped' },
-    })
+    await expect(orchestrator.drag(css('#drag-source'), css('#drop-target'))).rejects.toMatchObject(
+      {
+        code: 'ACTION_CANCELLED',
+        details: { reason: 'scenario stopped' },
+      },
+    );
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
+    expect(gesture.cancel).toHaveBeenCalledOnce();
     expect(events.dispatchPointerEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'pointercancel', buttons: [] }),
-    )
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    );
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 10, y: 20 },
       cursor: 'grab',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 10, y: 20 },
       cursor: 'grab',
       pressed: false,
-    })
+    });
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.drag',
         status: 'cancelled',
       }),
-    )
-  })
+    );
+  });
 
   it('clickCurrent clicks the current hover target and point without resolving a target', async () => {
-    const { calls, events, gesture, orchestrator, resolver, target, trace, wait } = createHarness()
+    const { calls, events, gesture, orchestrator, resolver, target, trace, wait } = createHarness();
 
-    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined();
 
-    calls.length = 0
-    events.dispatchPointerEvent.mockClear()
-    events.dispatchMouseEvent.mockClear()
-    gesture.click.mockClear()
-    resolver.resolve.mockClear()
-    resolver.validate.mockClear()
+    calls.length = 0;
+    events.dispatchPointerEvent.mockClear();
+    events.dispatchMouseEvent.mockClear();
+    gesture.click.mockClear();
+    resolver.resolve.mockClear();
+    resolver.validate.mockClear();
 
-    await expect(orchestrator.clickCurrent({ duration: 0, pressDwell: 0 })).resolves.toBeUndefined()
+    await expect(
+      orchestrator.clickCurrent({ duration: 0, pressDwell: 0 }),
+    ).resolves.toBeUndefined();
 
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
     expect(calls).toEqual([
       'geometry.snapshot',
       'interactability.canClick',
@@ -2789,7 +2804,7 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointerup',
       'event.click',
       'wait.settle',
-    ])
+    ]);
     expect(gesture.click).toHaveBeenCalledWith(
       target,
       { x: 20, y: 30 },
@@ -2798,7 +2813,7 @@ describe('BrowserActionOrchestrator', () => {
         pressDwell: 0,
         refreshPointBeforeDown: expect.any(Function),
       },
-    )
+    );
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -2806,8 +2821,8 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
+    });
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.clickCurrent',
@@ -2822,11 +2837,11 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('clickCurrent reports an actionable error when no current pointer target exists', async () => {
-    const { events, gesture, orchestrator, trace } = createHarness()
+    const { events, gesture, orchestrator, trace } = createHarness();
 
     await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
       code: 'TARGET_NOT_FOUND',
@@ -2836,45 +2851,45 @@ describe('BrowserActionOrchestrator', () => {
         hasCurrentPoint: false,
         hoveredCount: 0,
       }),
-    })
+    });
 
-    expect(gesture.click).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled();
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.clickCurrent',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'resolve' }),
       }),
-    )
-  })
+    );
+  });
 
   it('clickCurrent falls back to hit-testing the last pointer point when hover is empty', async () => {
     const { calls, dom, events, gesture, orchestrator, resolver, store, target } = createHarness({
       trackHitTests: true,
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined()
-    store.reset()
-    calls.length = 0
-    events.dispatchPointerEvent.mockClear()
-    events.dispatchMouseEvent.mockClear()
-    gesture.click.mockClear()
-    resolver.resolve.mockClear()
-    resolver.validate.mockClear()
-    dom.elementFromPoint.mockClear()
+    await expect(orchestrator.moveTo(css('#target-1'), { duration: 0 })).resolves.toBeUndefined();
+    store.reset();
+    calls.length = 0;
+    events.dispatchPointerEvent.mockClear();
+    events.dispatchMouseEvent.mockClear();
+    gesture.click.mockClear();
+    resolver.resolve.mockClear();
+    resolver.validate.mockClear();
+    dom.elementFromPoint.mockClear();
 
     await expect(
       orchestrator.clickCurrent({ duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
     expect(dom.elementFromPoint).toHaveBeenCalledWith(
       { x: 20, y: 30 },
       { ignoreActorbleInternal: true },
-    )
+    );
     expect(gesture.click).toHaveBeenCalledWith(
       expect.objectContaining({
         id: expect.stringMatching(/^pointer-hit-/),
@@ -2886,35 +2901,35 @@ describe('BrowserActionOrchestrator', () => {
         pressDwell: 0,
         refreshPointBeforeDown: expect.any(Function),
       },
-    )
+    );
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'click',
         target: target.element,
         point: { x: 20, y: 30 },
       }),
-    )
-  })
+    );
+  });
 
   it('clickCurrent fails stale current targets without re-resolving them', async () => {
     const staleTarget = {
       ...targetHandle('stale-current'),
       locator: css('#stale-current'),
       validity: 'stale',
-    }
+    };
     const { events, gesture, orchestrator, resolver, trace } = createHarness({
       target: staleTarget,
-    })
+    });
 
     await expect(
       orchestrator.moveTo(css('#stale-current'), { duration: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    resolver.resolve.mockClear()
-    resolver.validate.mockClear()
-    gesture.click.mockClear()
-    events.dispatchPointerEvent.mockClear()
-    events.dispatchMouseEvent.mockClear()
+    resolver.resolve.mockClear();
+    resolver.validate.mockClear();
+    gesture.click.mockClear();
+    events.dispatchPointerEvent.mockClear();
+    events.dispatchMouseEvent.mockClear();
 
     await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
       code: 'TARGET_STALE',
@@ -2923,20 +2938,20 @@ describe('BrowserActionOrchestrator', () => {
         targetId: 'stale-current',
         validity: 'stale',
       }),
-    })
+    });
 
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(gesture.click).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
+    expect(gesture.click).not.toHaveBeenCalled();
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.clickCurrent',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'validate' }),
       }),
-    )
+    );
     expect(trace.getTrace().events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2948,11 +2963,11 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('clickCurrent fails preflight without dispatching gesture events', async () => {
-    const blockedTarget = targetHandle('blocked-current')
+    const blockedTarget = targetHandle('blocked-current');
     const { events, gesture, orchestrator, trace } = createHarness({
       target: blockedTarget,
       clickReport: clickReportFor(blockedTarget, {
@@ -2963,15 +2978,15 @@ describe('BrowserActionOrchestrator', () => {
         blockingReasons: ['disabled'],
         unforceableReasons: ['disabled'],
       }),
-    })
+    });
 
     await expect(
       orchestrator.moveTo(css('#blocked-current'), { duration: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    gesture.click.mockClear()
-    events.dispatchPointerEvent.mockClear()
-    events.dispatchMouseEvent.mockClear()
+    gesture.click.mockClear();
+    events.dispatchPointerEvent.mockClear();
+    events.dispatchMouseEvent.mockClear();
 
     await expect(orchestrator.clickCurrent()).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
@@ -2980,23 +2995,23 @@ describe('BrowserActionOrchestrator', () => {
         blockingReasons: ['disabled'],
         targetId: 'blocked-current',
       }),
-    })
+    });
 
-    expect(gesture.click).not.toHaveBeenCalled()
-    expect(events.dispatchPointerEvent).not.toHaveBeenCalled()
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled();
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.clickCurrent',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'preflight' }),
       }),
-    )
-  })
+    );
+  });
 
   it('focus resolves, reveals, checks focusability, focuses, and waits for settlement', async () => {
-    const { calls, focus, orchestrator, target, trace, wait } = createHarness()
-    const controller = new AbortController()
+    const { calls, focus, orchestrator, target, trace, wait } = createHarness();
+    const controller = new AbortController();
 
     await expect(
       orchestrator.focus(css('#target-1'), {
@@ -3004,7 +3019,7 @@ describe('BrowserActionOrchestrator', () => {
         focusVisible: true,
         signal: controller.signal,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3014,16 +3029,16 @@ describe('BrowserActionOrchestrator', () => {
       'focus.focus',
       'state.focus:true,focus-visible:true',
       'wait.settle',
-    ])
+    ]);
     expect(focus.focus).toHaveBeenCalledWith(target, {
       timeout: 100,
       focusVisible: true,
       signal: expect.any(AbortSignal),
-    })
+    });
     expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
+    });
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.focus',
@@ -3038,8 +3053,8 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('fails focus preflight without requesting focus when the target is not focusable', async () => {
     const { focus, orchestrator, trace } = createHarness({
@@ -3055,7 +3070,7 @@ describe('BrowserActionOrchestrator', () => {
         forceBypassedReasons: [],
         unforceableReasons: ['not-focusable'],
       },
-    })
+    });
 
     await expect(orchestrator.focus(css('#target-1'))).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
@@ -3063,93 +3078,93 @@ describe('BrowserActionOrchestrator', () => {
         action: 'focus',
         blockingReasons: ['not-focusable'],
       }),
-    })
+    });
 
-    expect(focus.focus).not.toHaveBeenCalled()
+    expect(focus.focus).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.focus',
         status: 'error',
         attributes: expect.objectContaining({ phase: 'preflight' }),
       }),
-    )
-  })
+    );
+  });
 
   it('cleans transient focus visual feedback after successful focus settlement', async () => {
     const { orchestrator, store, target, visual, wait } = createHarness({
       enableVisual: true,
       visualFeedback: { focusOverlay: true },
-    })
+    });
 
     await expect(
       orchestrator.focus(css('#target-1'), { focusVisible: true }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {})
-    expect(store.snapshot().focused).toMatchObject({ id: target.id })
+    expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {});
+    expect(store.snapshot().focused).toMatchObject({ id: target.id });
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: true,
-    })
-    expect(visual.clearFeedback).toHaveBeenCalledOnce()
-  })
+    });
+    expect(visual.clearFeedback).toHaveBeenCalledOnce();
+  });
 
   it('cleans focus visual state when focus wait is cancelled after platform focus', async () => {
     const wait = {
       waitFor: vi.fn(),
       settle: vi.fn(async () => {
-        throw cancellationError('wait.settle', 'scenario stopped')
+        throw cancellationError('wait.settle', 'scenario stopped');
       }),
       invalidateGeometry: vi.fn(),
-    }
+    };
     const { orchestrator, state, store, visual } = createHarness({
       enableVisual: true,
       visualFeedback: { focusOverlay: true },
       wait,
-    })
+    });
 
     await expect(
       orchestrator.focus(css('#target-1'), { focusVisible: true }),
     ).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'scenario stopped' },
-    })
+    });
 
-    expect(store.snapshot().focused).toBeNull()
-    expect(state.cleanup).toHaveBeenCalledOnce()
+    expect(store.snapshot().focused).toBeNull();
+    expect(state.cleanup).toHaveBeenCalledOnce();
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: 'target-1' }),
       active: false,
-    })
-    expect(visual.clearFeedback).toHaveBeenCalledOnce()
-  })
+    });
+    expect(visual.clearFeedback).toHaveBeenCalledOnce();
+  });
 
   it('applies hover effects to hit-tested elements during timed pointer movement', async () => {
-    const target = targetHandle()
-    const intermediate = targetHandle('intermediate')
-    const timeline = createFrameTimeline()
+    const target = targetHandle();
+    const intermediate = targetHandle('intermediate');
+    const timeline = createFrameTimeline();
     const { dom, orchestrator, state } = createHarness({
       target,
       timeline,
       useRealGesture: true,
       elementFromPoint: (point) => (point.x < 20 ? intermediate.element : target.element),
-    })
+    });
 
     await expect(
       orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(dom.elementFromPoint).toHaveBeenCalledWith(
       { x: 10, y: 15 },
       { ignoreActorbleInternal: true },
-    )
+    );
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
       {
         kind: 'hover',
         target: expect.objectContaining({ element: intermediate.element }),
         active: true,
       },
-    ])
+    ]);
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
       {
         kind: 'hover',
@@ -3161,15 +3176,15 @@ describe('BrowserActionOrchestrator', () => {
         target: expect.objectContaining({ element: target.element }),
         active: true,
       },
-    ])
-  })
+    ]);
+  });
 
   it('consumes resolved public ease movement options for moveTo', async () => {
-    const { gesture, orchestrator } = createHarness()
+    const { gesture, orchestrator } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
@@ -3177,123 +3192,127 @@ describe('BrowserActionOrchestrator', () => {
         motion: { kind: 'ease', timing: 'ease-in-out', duration: 250 },
         resolveEndpoint: expect.any(Function),
       }),
-    )
-  })
+    );
+  });
 
   it('does not synthesize public movement defaults for unresolved moveTo options', async () => {
-    const { gesture, orchestrator } = createHarness()
+    const { gesture, orchestrator } = createHarness();
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
       {
         resolveEndpoint: expect.any(Function),
       },
-    )
-  })
+    );
+  });
 
   it('preserves explicit zero-duration public movement', async () => {
-    const { gesture, orchestrator } = createHarness()
+    const { gesture, orchestrator } = createHarness();
 
     await expect(
       orchestrator.moveTo(css('#target-1'), { duration: 0, timeout: 100 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(gesture.hover).toHaveBeenCalledWith(
       { x: 20, y: 30 },
       expect.objectContaining({ duration: 0, timeout: 100 }),
-    )
-  })
+    );
+  });
 
   it('routes resolved public click movement options before pointer down', async () => {
-    const timeline = createFrameTimeline()
+    const timeline = createFrameTimeline();
     const { calls, events, orchestrator } = createHarness({
       timeline,
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), resolveActionOptions('click')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
-    expect(timeline.delay).toHaveBeenCalledWith(80, {})
+    expect(timeline.nextFrame).toHaveBeenCalledTimes(2);
+    expect(timeline.delay).toHaveBeenCalledWith(80, {});
     expect(calls.filter((call) => call.startsWith('event.'))).toEqual([
       'event.pointermove',
       'event.pointermove',
       'event.pointerdown',
       'event.pointerup',
       'event.click',
-    ])
+    ]);
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
       target: expect.any(HTMLButtonElement),
       point: { x: 10, y: 15 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
       type: 'pointermove',
       target: expect.any(HTMLButtonElement),
       point: { x: 20, y: 30 },
       buttons: [],
-    })
-  })
+    });
+  });
 
   it('does not synthesize public click motion or dwell defaults for unresolved click options', async () => {
-    const { gesture, orchestrator, target } = createHarness()
+    const { gesture, orchestrator, target } = createHarness();
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
-    expect(gesture.click).toHaveBeenCalledWith(target, { x: 20, y: 30 }, {
-      refreshPointBeforeDown: expect.any(Function),
-      resolveEndpoint: expect.any(Function),
-    })
-  })
+    expect(gesture.click).toHaveBeenCalledWith(
+      target,
+      { x: 20, y: 30 },
+      {
+        refreshPointBeforeDown: expect.any(Function),
+        resolveEndpoint: expect.any(Function),
+      },
+    );
+  });
 
   it('starts real pointer movement from the configured initial position', async () => {
-    const timeline = createFrameTimeline()
+    const timeline = createFrameTimeline();
     const { events, orchestrator } = createHarness({
       pointer: { initialPosition: { x: 80, y: 90 } },
       timeline,
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), resolveActionOptions('click')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(1, {
       type: 'pointermove',
       target: expect.any(HTMLButtonElement),
       point: { x: 50, y: 60 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
       type: 'pointermove',
       target: expect.any(HTMLButtonElement),
       point: { x: 20, y: 30 },
       buttons: [],
-    })
-  })
+    });
+  });
 
   it('keeps click dispatch on the command target while hover follows pointer hit-testing', async () => {
-    const target = targetHandle()
-    const intermediate = targetHandle('intermediate-click-hover')
-    const timeline = createFrameTimeline()
+    const target = targetHandle();
+    const intermediate = targetHandle('intermediate-click-hover');
+    const timeline = createFrameTimeline();
     const { events, orchestrator, state } = createHarness({
       target,
       timeline,
       useRealGesture: true,
       elementFromPoint: (point) => (point.x < 20 ? intermediate.element : target.element),
-    })
+    });
 
     await expect(
       orchestrator.click(css('#target-1'), {
         ...resolveActionOptions('click'),
         pressDwell: 0,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
       {
@@ -3301,7 +3320,7 @@ describe('BrowserActionOrchestrator', () => {
         target: expect.objectContaining({ element: intermediate.element }),
         active: true,
       },
-    ])
+    ]);
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
       {
         kind: 'hover',
@@ -3313,21 +3332,21 @@ describe('BrowserActionOrchestrator', () => {
         target: expect.objectContaining({ element: target.element }),
         active: true,
       },
-    ])
+    ]);
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
       type: 'pointerdown',
       target: target.element,
       point: { x: 20, y: 30 },
       button: 'primary',
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
       type: 'pointerup',
       target: target.element,
       point: { x: 20, y: 30 },
       button: 'primary',
       buttons: [],
-    })
+    });
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -3335,16 +3354,16 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
-  })
+    });
+  });
 
   it('preserves explicit inertia movement as unsupported pointer opt-in behavior', async () => {
-    const { gesture, orchestrator, target } = createHarness()
-    const motion = { kind: 'inertia', initialVelocity: 1200 }
+    const { gesture, orchestrator, target } = createHarness();
+    const motion = { kind: 'inertia', initialVelocity: 1200 };
 
     await expect(
       orchestrator.click(css('#target-1'), { motion, timeout: 1500 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(gesture.click).toHaveBeenCalledWith(
       target,
@@ -3354,16 +3373,16 @@ describe('BrowserActionOrchestrator', () => {
         timeout: 1500,
         refreshPointBeforeDown: expect.any(Function),
       }),
-    )
-  })
+    );
+  });
 
   it('routes pointer and click visual hooks without changing core dispatch order', async () => {
     const { calls, orchestrator, visual } = createHarness({
       enableVisual: true,
       visualFeedback: 'debug',
-    })
+    });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3385,40 +3404,40 @@ describe('BrowserActionOrchestrator', () => {
       'event.click',
       'visual.click',
       'wait.settle',
-    ])
+    ]);
     expect(visual.highlightTarget).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: 'target-1' }),
       rect: { x: 10, y: 20, width: 20, height: 20 },
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
       point: { x: 20, y: 30 },
       cursor: 'default',
       pressed: false,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'default',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
       point: { x: 20, y: 30 },
       cursor: 'default',
       pressed: false,
-    })
-    expect(visual.showClick).toHaveBeenCalledTimes(1)
-  })
+    });
+    expect(visual.showClick).toHaveBeenCalledTimes(1);
+  });
 
   it('anchors moveTo visuals after success so hover tracking can follow layout changes', async () => {
-    const pointerVisual = createPointerVisualTrackerDouble()
-    const { orchestrator, target } = createHarness({ pointerVisual })
+    const pointerVisual = createPointerVisualTrackerDouble();
+    const { orchestrator, target } = createHarness({ pointerVisual });
 
     await expect(
       orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
-    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
-    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor')
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode);
+    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint');
+    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor');
 
     expect(freePointModes).toEqual([
       {
@@ -3426,8 +3445,8 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 20, y: 30 },
         pressed: false,
       },
-    ])
-    expect(targetAnchorModes).toHaveLength(1)
+    ]);
+    expect(targetAnchorModes).toHaveLength(1);
     expect(targetAnchorModes[0]).toMatchObject({
       kind: 'targetAnchor',
       target,
@@ -3435,18 +3454,18 @@ describe('BrowserActionOrchestrator', () => {
       commandId: 1,
       pressed: false,
       lastPoint: { x: 20, y: 30 },
-    })
-  })
+    });
+  });
 
   it('keeps click visuals at the final pointer coordinate after success', async () => {
-    const pointerVisual = createPointerVisualTrackerDouble()
-    const { orchestrator } = createHarness({ pointerVisual })
+    const pointerVisual = createPointerVisualTrackerDouble();
+    const { orchestrator } = createHarness({ pointerVisual });
 
     await expect(
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode);
 
     expect(modes).toEqual([
       {
@@ -3464,25 +3483,25 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 20, y: 30 },
         pressed: false,
       },
-    ])
-  })
+    ]);
+  });
 
   it('keeps timed pointer movement modes on free point coordinates until success', async () => {
-    const pointerVisual = createPointerVisualTrackerDouble()
-    const timeline = createFrameTimeline()
+    const pointerVisual = createPointerVisualTrackerDouble();
+    const timeline = createFrameTimeline();
     const { orchestrator } = createHarness({
       pointerVisual,
       timeline,
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode)
-    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint')
-    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor')
+    const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode);
+    const freePointModes = modes.filter((mode) => mode.kind === 'freePoint');
+    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor');
 
     expect(freePointModes).toEqual([
       {
@@ -3495,7 +3514,7 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 20, y: 30 },
         pressed: false,
       },
-    ])
+    ]);
     expect(targetAnchorModes).toEqual([
       expect.objectContaining({
         kind: 'targetAnchor',
@@ -3503,19 +3522,19 @@ describe('BrowserActionOrchestrator', () => {
         pressed: false,
         lastPoint: { x: 20, y: 30 },
       }),
-    ])
-  })
+    ]);
+  });
 
   it('clears free-point cursor follow state when pointer perform is cancelled', async () => {
-    const pointerVisual = createPointerVisualTrackerDouble()
+    const pointerVisual = createPointerVisualTrackerDouble();
     const { orchestrator } = createHarness({
       pointerVisual,
       clickFailure: cancellationError('click', 'scenario stopped'),
-    })
+    });
 
     await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
+    });
 
     expect(pointerVisual.setMode).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3523,12 +3542,12 @@ describe('BrowserActionOrchestrator', () => {
         point: { x: 20, y: 30 },
         pressed: true,
       }),
-    )
+    );
     expect(pointerVisual.setMode.mock.calls.map(([mode]) => mode.kind)).not.toContain(
       'targetAnchor',
-    )
-    expect(pointerVisual.clear).toHaveBeenCalled()
-  })
+    );
+    expect(pointerVisual.clear).toHaveBeenCalled();
+  });
 
   it('honors granular visual feedback options at the orchestrator boundary', async () => {
     const { calls, orchestrator, visual } = createHarness({
@@ -3538,9 +3557,9 @@ describe('BrowserActionOrchestrator', () => {
         targetHighlight: true,
         clickFeedback: false,
       },
-    })
+    });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3558,53 +3577,53 @@ describe('BrowserActionOrchestrator', () => {
       'event.pointerup',
       'event.click',
       'wait.settle',
-    ])
-    expect(visual.highlightTarget).toHaveBeenCalledTimes(1)
-    expect(visual.showCursor).not.toHaveBeenCalled()
-    expect(visual.showClick).not.toHaveBeenCalled()
-  })
+    ]);
+    expect(visual.highlightTarget).toHaveBeenCalledTimes(1);
+    expect(visual.showCursor).not.toHaveBeenCalled();
+    expect(visual.showClick).not.toHaveBeenCalled();
+  });
 
   it('uses quiet-based defaults when orchestrator visual feedback options are explicit', () => {
     const { store, target, visual } = createHarness({
       enableVisual: true,
       visualFeedback: { focusOverlay: true },
-    })
+    });
 
-    store.setFocused(target, true)
-    store.setTyping(target)
+    store.setFocused(target, true);
+    store.setTyping(target);
 
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: true,
-    })
-    expect(visual.showTyping).not.toHaveBeenCalled()
-  })
+    });
+    expect(visual.showTyping).not.toHaveBeenCalled();
+  });
 
   it('shows focus overlay for ordinary focus effects when focus feedback is enabled', () => {
     const { store, target, visual } = createHarness({
       enableVisual: true,
       visualFeedback: { focusOverlay: true },
-    })
+    });
 
-    store.setFocused(target, false)
+    store.setFocused(target, false);
 
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: true,
-    })
-  })
+    });
+  });
 
   it('routes computed cursor after hover state effects on pointer move', async () => {
-    const target = targetHandle()
-    const cursorStyles = new Map([[target.element, 'pointer']])
+    const target = targetHandle();
+    const cursorStyles = new Map([[target.element, 'pointer']]);
     const { calls, orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyles,
       trackCursorReads: true,
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3618,30 +3637,30 @@ describe('BrowserActionOrchestrator', () => {
       'visual.cursor:20,30:pointer',
       'event.pointermove',
       'wait.settle',
-    ])
+    ]);
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('reads pointer cursor style from the current hit-tested hover target', async () => {
-    const target = targetHandle()
-    const hoverTarget = targetHandle('cursor-hover-target')
+    const target = targetHandle();
+    const hoverTarget = targetHandle('cursor-hover-target');
     const cursorStyles = new Map([
       [target.element, 'pointer'],
       [hoverTarget.element, 'crosshair'],
-    ])
+    ]);
     const { calls, orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyles,
       trackCursorReads: true,
       hitTestResults: [hoverTarget.element],
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3655,25 +3674,25 @@ describe('BrowserActionOrchestrator', () => {
       'visual.cursor:20,30:crosshair',
       'event.pointermove',
       'wait.settle',
-    ])
+    ]);
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'crosshair',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('refreshes cursor visuals after active state effects on pointer down and up', async () => {
-    const target = targetHandle()
-    const cursors = ['pointer', 'grabbing', 'pointer']
+    const target = targetHandle();
+    const cursors = ['pointer', 'grabbing', 'pointer'];
     const { calls, orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyle: () => cursors.shift() ?? 'pointer',
       trackCursorReads: true,
-    })
+    });
 
-    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.click(css('#target-1'))).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -3698,93 +3717,93 @@ describe('BrowserActionOrchestrator', () => {
       'event.click',
       'visual.click',
       'wait.settle',
-    ])
+    ]);
     expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'grabbing',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(3, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('restores pressed cursor visual when click is cancelled during press dwell', async () => {
-    const controlled = createBlockingTimeline()
-    const controller = new AbortController()
+    const controlled = createBlockingTimeline();
+    const controller = new AbortController();
     const { events, orchestrator, store, visual } = createHarness({
       enableVisual: true,
       useRealGesture: true,
       timeline: controlled.timeline,
       cursorStyle: () => 'pointer',
-    })
+    });
 
     const click = orchestrator.click(css('#target-1'), {
       duration: 0,
       pressDwell: 80,
       signal: controller.signal,
-    })
+    });
 
     await vi.waitFor(() => {
-      expect(controlled.pendingDelayCount).toBe(1)
-    })
+      expect(controlled.pendingDelayCount).toBe(1);
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: true,
-    })
+    });
 
-    controller.abort('scenario stopped')
+    controller.abort('scenario stopped');
 
     await expect(click).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
-    expect(controlled.pendingDelayCount).toBe(0)
+    });
+    expect(controlled.pendingDelayCount).toBe(0);
     expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
       'pointermove',
       'pointerdown',
       'pointercancel',
-    ])
-    expect(events.dispatchMouseEvent).not.toHaveBeenCalled()
+    ]);
+    expect(events.dispatchMouseEvent).not.toHaveBeenCalled();
     expect(store.snapshot()).toMatchObject({
       active: null,
       dragging: { source: null, target: null },
-    })
+    });
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
+    });
 
-    events.dispatchPointerEvent.mockClear()
+    events.dispatchPointerEvent.mockClear();
     await expect(
       orchestrator.click(css('#target-1'), { duration: 0, pressDwell: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
     expect(events.dispatchPointerEvent.mock.calls.map(([event]) => event.type)).toEqual([
       'pointermove',
       'pointerdown',
       'pointerup',
-    ])
-  })
+    ]);
+  });
 
   it('times out click perform during press dwell with action timeout cleanup', async () => {
-    vi.useFakeTimers()
-    const controlled = createBlockingTimeline()
-    const controller = new AbortController()
+    vi.useFakeTimers();
+    const controlled = createBlockingTimeline();
+    const controller = new AbortController();
     const { orchestrator, state, trace, visual } = createHarness({
       enableVisual: true,
       useRealGesture: true,
       timeline: controlled.timeline,
       cursorStyle: () => 'pointer',
-    })
-    let click
+    });
+    let click;
 
     try {
       click = orchestrator.click(css('#target-1'), {
@@ -3792,27 +3811,27 @@ describe('BrowserActionOrchestrator', () => {
         pressDwell: 80,
         timeout: 25,
         signal: controller.signal,
-      })
+      });
       const clickResult = click.then(
         () => 'resolved',
         (error) => error,
-      )
+      );
 
-      await vi.advanceTimersByTimeAsync(0)
-      expect(controlled.pendingDelayCount).toBe(1)
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controlled.pendingDelayCount).toBe(1);
       expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
         point: { x: 20, y: 30 },
         cursor: 'pointer',
         pressed: true,
-      })
+      });
 
-      const missedDeadline = Symbol('missedDeadline')
+      const missedDeadline = Symbol('missedDeadline');
       const deadline = new Promise((resolve) => {
-        setTimeout(() => resolve(missedDeadline), 25)
-      })
+        setTimeout(() => resolve(missedDeadline), 25);
+      });
 
-      await vi.advanceTimersByTimeAsync(25)
-      const result = await Promise.race([clickResult, deadline])
+      await vi.advanceTimersByTimeAsync(25);
+      const result = await Promise.race([clickResult, deadline]);
 
       expect(result).toMatchObject({
         code: 'ACTION_TIMEOUT',
@@ -3820,13 +3839,13 @@ describe('BrowserActionOrchestrator', () => {
           operation: 'action.click',
           timeout: 25,
         },
-      })
-      expect(state.cleanup).toHaveBeenCalledOnce()
+      });
+      expect(state.cleanup).toHaveBeenCalledOnce();
       expect(visual.showCursor).toHaveBeenLastCalledWith({
         point: { x: 20, y: 30 },
         cursor: 'pointer',
         pressed: false,
-      })
+      });
       expect(trace.getTrace().spans.at(-1)).toEqual(
         expect.objectContaining({
           name: 'action.click',
@@ -3836,54 +3855,52 @@ describe('BrowserActionOrchestrator', () => {
             phase: 'perform',
           }),
         }),
-      )
+      );
     } finally {
-      controller.abort('test cleanup')
-      await click?.catch(() => {})
-      vi.useRealTimers()
+      controller.abort('test cleanup');
+      await click?.catch(() => {});
+      vi.useRealTimers();
     }
-  })
+  });
 
   it('passes one perform signal to pointer actions with public timeouts', async () => {
-    const move = createHarness()
+    const move = createHarness();
 
     await expect(
       move.orchestrator.moveTo(css('#target-1'), { timeout: 100 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expectCancellationSignal(move.gesture.hover.mock.calls[0][1].signal)
+    expectCancellationSignal(move.gesture.hover.mock.calls[0][1].signal);
 
-    const click = createHarness()
+    const click = createHarness();
 
     await expect(
       click.orchestrator.click(css('#target-1'), { timeout: 100 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expectCancellationSignal(click.gesture.click.mock.calls[0][2].signal)
+    expectCancellationSignal(click.gesture.click.mock.calls[0][2].signal);
 
-    const doubleClick = createHarness()
+    const doubleClick = createHarness();
 
     await expect(
       doubleClick.orchestrator.doubleClick(css('#target-1'), { timeout: 100 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expectCancellationSignal(doubleClick.gesture.doubleClick.mock.calls[0][2].signal)
+    expectCancellationSignal(doubleClick.gesture.doubleClick.mock.calls[0][2].signal);
 
-    const current = createHarness()
+    const current = createHarness();
 
     await expect(
       current.orchestrator.moveTo(css('#target-1'), { duration: 0 }),
-    ).resolves.toBeUndefined()
-    current.gesture.click.mockClear()
+    ).resolves.toBeUndefined();
+    current.gesture.click.mockClear();
 
-    await expect(
-      current.orchestrator.clickCurrent({ timeout: 100 }),
-    ).resolves.toBeUndefined()
+    await expect(current.orchestrator.clickCurrent({ timeout: 100 })).resolves.toBeUndefined();
 
-    expectCancellationSignal(current.gesture.click.mock.calls[0][2].signal)
+    expectCancellationSignal(current.gesture.click.mock.calls[0][2].signal);
 
-    const typeTarget = inputTargetHandle()
-    const typeInto = createHarness({ target: typeTarget })
+    const typeTarget = inputTargetHandle();
+    const typeInto = createHarness({ target: typeTarget });
 
     await expect(
       typeInto.orchestrator.typeInto(css('#target-1'), 'H', {
@@ -3892,12 +3909,12 @@ describe('BrowserActionOrchestrator', () => {
         timeout: 100,
         focusClick: { duration: 0, pressDwell: 0 },
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expectCancellationSignal(typeInto.gesture.click.mock.calls[0][2].signal)
+    expectCancellationSignal(typeInto.gesture.click.mock.calls[0][2].signal);
 
-    const source = targetHandle('drag-source')
-    const destination = targetHandle('drop-target')
+    const source = targetHandle('drag-source');
+    const destination = targetHandle('drop-target');
     const drag = createHarness({
       target: source,
       resolveTargets: [source, destination],
@@ -3913,42 +3930,42 @@ describe('BrowserActionOrchestrator', () => {
         clickReportFor(source),
         clickReportFor(destination),
       ],
-    })
+    });
 
     await expect(
       drag.orchestrator.drag(css('#drag-source'), css('#drop-target'), { timeout: 100 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expectCancellationSignal(drag.gesture.drag.mock.calls[0][2].signal)
-  })
+    expectCancellationSignal(drag.gesture.drag.mock.calls[0][2].signal);
+  });
 
   it('restores pressed cursor visual when click cancellation emits pointer cancelled', async () => {
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       clickFailure: cancellationError('click', 'scenario stopped'),
       cursorStyle: () => 'pointer',
-    })
+    });
 
     await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
+    });
 
     expect(visual.showCursor).toHaveBeenNthCalledWith(1, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
+    });
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('restores pressed cursor visual during failed perform cleanup without a cancellation signal', async () => {
     const { orchestrator, visual } = createHarness({
@@ -3956,143 +3973,143 @@ describe('BrowserActionOrchestrator', () => {
       clickFailure: new Error('perform failed after pointer down'),
       cancelFailure: new Error('cancel failed before signal'),
       cursorStyle: () => 'pointer',
-    })
+    });
 
     await expect(orchestrator.click(css('#target-1'))).rejects.toMatchObject({
       code: 'PLATFORM_UNSUPPORTED',
-    })
+    });
 
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('falls back through indirect cursor values and lets unsupported cursors reach the visual layer', async () => {
-    const parent = document.createElement('section')
-    parent.id = 'parent'
-    const target = targetHandle()
-    parent.append(target.element)
-    document.body.append(parent)
+    const parent = document.createElement('section');
+    parent.id = 'parent';
+    const target = targetHandle();
+    parent.append(target.element);
+    document.body.append(parent);
     const cursorStyles = new Map([
       [target.element, 'inherit'],
       [parent, 'url(cursor.svg), copy'],
-    ])
+    ]);
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyles,
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'url(cursor.svg), copy',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('uses a text cursor visual for editable text targets when resolved cursor is indirect', async () => {
-    const target = inputTargetHandle()
+    const target = inputTargetHandle();
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyle: () => 'auto',
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'text',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('keeps explicit cursor values ahead of editable semantic fallback', async () => {
-    const target = inputTargetHandle()
+    const target = inputTargetHandle();
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyle: () => 'pointer',
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'pointer',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('keeps ancestor-resolved cursor values ahead of editable semantic fallback', async () => {
-    const parent = document.createElement('section')
-    parent.id = 'parent'
-    const target = inputTargetHandle()
-    parent.append(target.element)
-    document.body.append(parent)
+    const parent = document.createElement('section');
+    parent.id = 'parent';
+    const target = inputTargetHandle();
+    parent.append(target.element);
+    document.body.append(parent);
     const cursorStyles = new Map([
       [target.element, 'inherit'],
       [parent, 'wait'],
-    ])
+    ]);
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyles,
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'wait',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('does not use editable semantic cursor fallback for disabled text targets', async () => {
-    const target = inputTargetHandle()
-    target.element.setAttribute('disabled', '')
+    const target = inputTargetHandle();
+    target.element.setAttribute('disabled', '');
     const { orchestrator, visual } = createHarness({
       enableVisual: true,
       target,
       cursorStyle: () => 'auto',
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('records cursor resolution failures as warnings without failing the action', async () => {
     const dom = {
       getComputedStyle: vi.fn(() => {
-        throw new Error('style read blocked')
+        throw new Error('style read blocked');
       }),
       getParentElement: vi.fn((element) => element.parentElement),
-    }
+    };
     const { orchestrator, trace, visual } = createHarness({
       enableVisual: true,
       dom,
-    })
+    });
 
-    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined()
+    await expect(orchestrator.moveTo(css('#target-1'))).resolves.toBeUndefined();
 
     expect(visual.showCursor).toHaveBeenCalledWith({
       point: { x: 20, y: 30 },
       pressed: false,
-    })
+    });
     expect(trace.getTrace().warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -4103,12 +4120,12 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('typeInto resolves and checks type interactability before delegating text input', async () => {
-    const { calls, orchestrator, target, text } = createHarness()
-    const controller = new AbortController()
+    const { calls, orchestrator, target, text } = createHarness();
+    const controller = new AbortController();
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'hello', {
@@ -4116,7 +4133,7 @@ describe('BrowserActionOrchestrator', () => {
         timeout: 100,
         signal: controller.signal,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -4126,16 +4143,16 @@ describe('BrowserActionOrchestrator', () => {
       'interactability.canType',
       'text.typeInto',
       'wait.settle',
-    ])
+    ]);
     expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {
       delay: 8,
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
-  })
+    });
+  });
 
   it('keeps explicit programmatic typeInto focus from performing a pointer click', async () => {
-    const { gesture, orchestrator, target, text } = createHarness()
+    const { gesture, orchestrator, target, text } = createHarness();
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'hello', {
@@ -4143,17 +4160,17 @@ describe('BrowserActionOrchestrator', () => {
         focusStrategy: 'programmatic',
         focusClick: { duration: 0, pressDwell: 0 },
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(gesture.click).not.toHaveBeenCalled()
+    expect(gesture.click).not.toHaveBeenCalled();
     expect(text.typeInto).toHaveBeenCalledWith(target, 'hello', {
       delay: 0,
-    })
-  })
+    });
+  });
 
   it('clicks to acquire focus before dispatching typeInto input events', async () => {
-    const { input, orchestrator, timeline } = createRealTextHarness()
-    const seen = []
+    const { input, orchestrator, timeline } = createRealTextHarness();
+    const seen = [];
 
     for (const eventName of [
       'pointermove',
@@ -4164,13 +4181,13 @@ describe('BrowserActionOrchestrator', () => {
       'change',
     ]) {
       input.addEventListener(eventName, (event) => {
-        seen.push(event.type)
-      })
+        seen.push(event.type);
+      });
     }
     input.addEventListener('click', (event) => {
-      seen.push(event.type)
-      input.focus()
-    })
+      seen.push(event.type);
+      input.focus();
+    });
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'H', {
@@ -4179,7 +4196,7 @@ describe('BrowserActionOrchestrator', () => {
         focusClick: { duration: 0, pressDwell: 0 },
         afterFocusDelay: 5,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(seen).toEqual([
       'pointermove',
@@ -4189,21 +4206,21 @@ describe('BrowserActionOrchestrator', () => {
       'beforeinput',
       'input',
       'change',
-    ])
-    expect(input.value).toBe('H')
-    expect(timeline.delay).toHaveBeenCalledWith(5, {})
-  })
+    ]);
+    expect(input.value).toBe('H');
+    expect(timeline.delay).toHaveBeenCalledWith(5, {});
+  });
 
   it('uses fresh geometry for click-focused typeInto focus clicks', async () => {
-    const target = inputTargetHandle()
-    const initialGeometry = geometryFor(target, { x: 20, y: 30 })
-    const freshGeometry = geometryFor(target, { x: 80, y: 90 })
+    const target = inputTargetHandle();
+    const initialGeometry = geometryFor(target, { x: 20, y: 30 });
+    const freshGeometry = geometryFor(target, { x: 80, y: 90 });
     const { events, orchestrator, text } = createHarness({
       target,
       geometry: initialGeometry,
       geometrySnapshots: [initialGeometry, freshGeometry],
       useRealGesture: true,
-    })
+    });
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'H', {
@@ -4211,28 +4228,28 @@ describe('BrowserActionOrchestrator', () => {
         focusStrategy: 'click',
         focusClick: { duration: 0, pressDwell: 0 },
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(2, {
       type: 'pointermove',
       target: target.element,
       point: { x: 80, y: 90 },
       buttons: [],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(3, {
       type: 'pointerdown',
       target: target.element,
       point: { x: 80, y: 90 },
       button: 'primary',
       buttons: ['primary'],
-    })
+    });
     expect(events.dispatchPointerEvent).toHaveBeenNthCalledWith(4, {
       type: 'pointerup',
       target: target.element,
       point: { x: 80, y: 90 },
       button: 'primary',
       buttons: [],
-    })
+    });
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith({
       type: 'click',
       target: target.element,
@@ -4240,15 +4257,15 @@ describe('BrowserActionOrchestrator', () => {
       button: 'primary',
       buttons: [],
       detail: 1,
-    })
+    });
     expect(text.typeInto).toHaveBeenCalledWith(target, 'H', {
       delay: 0,
       focusStrategy: 'none',
-    })
-  })
+    });
+  });
 
   it('fails click-focused typeInto when the click does not focus the target', async () => {
-    const other = inputTargetHandle('other-target')
+    const other = inputTargetHandle('other-target');
     const { events, orchestrator, text } = createHarness({
       target: inputTargetHandle(),
       focusedSnapshot: {
@@ -4256,7 +4273,7 @@ describe('BrowserActionOrchestrator', () => {
         previous: null,
         focusVisible: false,
       },
-    })
+    });
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'hello', {
@@ -4271,13 +4288,13 @@ describe('BrowserActionOrchestrator', () => {
         targetId: 'target-1',
         focusedTargetId: 'other-target',
       }),
-    })
+    });
 
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'click' }),
-    )
-    expect(text.typeInto).not.toHaveBeenCalled()
-  })
+    );
+    expect(text.typeInto).not.toHaveBeenCalled();
+  });
 
   it('cleans up pointer state when click-focused typeInto is cancelled during press', async () => {
     const { gesture, orchestrator, state, text, visual } = createHarness({
@@ -4285,7 +4302,7 @@ describe('BrowserActionOrchestrator', () => {
       target: inputTargetHandle(),
       clickFailure: cancellationError('typeInto click focus', 'scenario stopped'),
       cursorStyle: () => 'text',
-    })
+    });
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'hello', {
@@ -4295,26 +4312,26 @@ describe('BrowserActionOrchestrator', () => {
     ).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'scenario stopped' },
-    })
+    });
 
-    expect(gesture.cancel).toHaveBeenCalledOnce()
-    expect(state.cleanup).toHaveBeenCalledOnce()
-    expect(text.typeInto).not.toHaveBeenCalled()
+    expect(gesture.cancel).toHaveBeenCalledOnce();
+    expect(state.cleanup).toHaveBeenCalledOnce();
+    expect(text.typeInto).not.toHaveBeenCalled();
     expect(visual.showCursor).toHaveBeenNthCalledWith(2, {
       point: { x: 20, y: 30 },
       cursor: 'text',
       pressed: true,
-    })
+    });
     expect(visual.showCursor).toHaveBeenLastCalledWith({
       point: { x: 20, y: 30 },
       cursor: 'text',
       pressed: false,
-    })
-  })
+    });
+  });
 
   it('fill resolves and checks type interactability before replacing target text', async () => {
-    const controller = new AbortController()
-    const { calls, orchestrator, target, text, wait } = createHarness()
+    const controller = new AbortController();
+    const { calls, orchestrator, target, text, wait } = createHarness();
 
     await expect(
       orchestrator.fill(css('#target-1'), 'filled', {
@@ -4322,7 +4339,7 @@ describe('BrowserActionOrchestrator', () => {
         signal: controller.signal,
         clear: false,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -4332,42 +4349,42 @@ describe('BrowserActionOrchestrator', () => {
       'interactability.canType',
       'text.fill',
       'wait.settle',
-    ])
+    ]);
     expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
       timeout: 100,
       signal: expect.any(AbortSignal),
       clear: false,
-    })
+    });
     expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
-  })
+    });
+  });
 
   it('does not apply typing cadence options to public fill', async () => {
-    const { orchestrator, target, text } = createHarness()
+    const { orchestrator, target, text } = createHarness();
 
     await expect(
       orchestrator.fill(css('#target-1'), 'filled', {
         delay: 25,
         timeout: 100,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(text.fill).toHaveBeenCalledWith(target, 'filled', {
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
-  })
+    });
+  });
 
   it('fills a target through the public action path without typing cadence', async () => {
-    const { input, orchestrator, timeline, trace } = createRealTextHarness()
-    input.value = 'old value'
+    const { input, orchestrator, timeline, trace } = createRealTextHarness();
+    input.value = 'old value';
 
-    await expect(orchestrator.fill(css('#target-1'), 'new value')).resolves.toBeUndefined()
+    await expect(orchestrator.fill(css('#target-1'), 'new value')).resolves.toBeUndefined();
 
-    expect(input.value).toBe('new value')
-    expect(timeline.delay).not.toHaveBeenCalled()
+    expect(input.value).toBe('new value');
+    expect(timeline.delay).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.fill',
@@ -4379,26 +4396,26 @@ describe('BrowserActionOrchestrator', () => {
           output: { textLength: 9 },
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('clears typing state and visual feedback when public fill is cancelled', async () => {
     const { calls, orchestrator, store, target, text, visual } = createHarness({
       enableVisual: true,
       visualFeedback: { typingIndicator: true },
-    })
+    });
     text.fill.mockImplementationOnce(async () => {
-      calls.push('text.fill')
-      store.setTyping(target)
-      throw cancellationError('text.fill', 'user stopped')
-    })
+      calls.push('text.fill');
+      store.setTyping(target);
+      throw cancellationError('text.fill', 'user stopped');
+    });
 
     await expect(orchestrator.fill(css('#target-1'), 'filled')).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'user stopped' },
-    })
+    });
 
-    expect(store.snapshot().typing).toBeNull()
+    expect(store.snapshot().typing).toBeNull();
     expect(calls).toEqual(
       expect.arrayContaining([
         'visual.typing:true',
@@ -4406,12 +4423,12 @@ describe('BrowserActionOrchestrator', () => {
         'visual.typing:false',
         'visual.clearFeedback',
       ]),
-    )
+    );
     expect(visual.showTyping).toHaveBeenLastCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: false,
-    })
-  })
+    });
+  });
 
   it('reports fill preflight failures with fill action context', async () => {
     const { orchestrator, text, trace } = createHarness({
@@ -4427,7 +4444,7 @@ describe('BrowserActionOrchestrator', () => {
         forceBypassedReasons: [],
         unforceableReasons: ['disabled'],
       },
-    })
+    });
 
     await expect(orchestrator.fill(css('#target-1'), 'filled')).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
@@ -4436,9 +4453,9 @@ describe('BrowserActionOrchestrator', () => {
         blockingReasons: ['disabled'],
         unforceableReasons: ['disabled'],
       }),
-    })
+    });
 
-    expect(text.fill).not.toHaveBeenCalled()
+    expect(text.fill).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.fill',
@@ -4448,13 +4465,13 @@ describe('BrowserActionOrchestrator', () => {
           phase: 'preflight',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('types through the current focus path without resolving a target', async () => {
-    const controller = new AbortController()
+    const controller = new AbortController();
     const { calls, focus, gesture, interactability, orchestrator, resolver, text, wait } =
-      createHarness()
+      createHarness();
 
     await expect(
       orchestrator.type('abc', {
@@ -4465,63 +4482,63 @@ describe('BrowserActionOrchestrator', () => {
         focusClick: { duration: 10, pressDwell: 5 },
         afterFocusDelay: 12,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(calls).toEqual(['text.type', 'wait.settle'])
+    expect(calls).toEqual(['text.type', 'wait.settle']);
     expect(text.type).toHaveBeenCalledWith('abc', {
       timeout: 100,
       signal: expect.any(AbortSignal),
       delay: 0,
-    })
+    });
     expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(interactability.canType).not.toHaveBeenCalled()
-    expect(focus.focus).not.toHaveBeenCalled()
-    expect(gesture.click).not.toHaveBeenCalled()
-  })
+    });
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
+    expect(interactability.canType).not.toHaveBeenCalled();
+    expect(focus.focus).not.toHaveBeenCalled();
+    expect(gesture.click).not.toHaveBeenCalled();
+  });
 
   it('consumes resolved public type cadence options', async () => {
-    const { orchestrator, text } = createHarness()
+    const { orchestrator, text } = createHarness();
 
-    await expect(orchestrator.type('abc', resolveActionOptions('type'))).resolves.toBeUndefined()
+    await expect(orchestrator.type('abc', resolveActionOptions('type'))).resolves.toBeUndefined();
 
     expect(text.type).toHaveBeenCalledWith('abc', {
       delay: 60,
-    })
-  })
+    });
+  });
 
   it('preserves explicit zero delay as public type cadence opt-out', async () => {
-    const { orchestrator, text } = createHarness()
+    const { orchestrator, text } = createHarness();
 
-    await expect(orchestrator.type('abc', { delay: 0 })).resolves.toBeUndefined()
+    await expect(orchestrator.type('abc', { delay: 0 })).resolves.toBeUndefined();
 
     expect(text.type).toHaveBeenCalledWith('abc', {
       delay: 0,
-    })
-  })
+    });
+  });
 
   it('does not synthesize public type cadence for unresolved type options', async () => {
-    const { orchestrator, text } = createHarness()
+    const { orchestrator, text } = createHarness();
 
-    await expect(orchestrator.type('abc')).resolves.toBeUndefined()
+    await expect(orchestrator.type('abc')).resolves.toBeUndefined();
 
-    expect(text.type).toHaveBeenCalledWith('abc', {})
-  })
+    expect(text.type).toHaveBeenCalledWith('abc', {});
+  });
 
   it('types into the currently focused editable target through the public action path', async () => {
-    const { input, orchestrator, timeline, trace } = createRealTextHarness()
-    input.value = 'A'
-    input.focus()
-    input.setSelectionRange(input.value.length, input.value.length)
+    const { input, orchestrator, timeline, trace } = createRealTextHarness();
+    input.value = 'A';
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
 
-    await expect(orchestrator.type('BC', { delay: 0 })).resolves.toBeUndefined()
+    await expect(orchestrator.type('BC', { delay: 0 })).resolves.toBeUndefined();
 
-    expect(input.value).toBe('ABC')
-    expect(timeline.delay).not.toHaveBeenCalled()
+    expect(input.value).toBe('ABC');
+    expect(timeline.delay).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.type',
@@ -4532,21 +4549,21 @@ describe('BrowserActionOrchestrator', () => {
           output: { textLength: 2 },
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('reports an actionable error when type has no focused editable target', async () => {
-    const button = document.createElement('button')
-    document.body.append(button)
-    button.focus()
-    const { orchestrator, trace } = createRealTextHarness()
+    const button = document.createElement('button');
+    document.body.append(button);
+    button.focus();
+    const { orchestrator, trace } = createRealTextHarness();
 
     await expect(orchestrator.type('A', { delay: 0 })).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
       details: expect.objectContaining({
         boundary: 'text-input-engine',
       }),
-    })
+    });
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.type',
@@ -4556,84 +4573,80 @@ describe('BrowserActionOrchestrator', () => {
           phase: 'perform',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('clears typing state and visual feedback when public type is cancelled during cadence', async () => {
-    const controlledTimeline = createBlockingTimeline()
-    const controller = new AbortController()
+    const controlledTimeline = createBlockingTimeline();
+    const controller = new AbortController();
     const { calls, input, orchestrator, store, visual } = createRealTextHarness({
       timeline: controlledTimeline.timeline,
       enableVisual: true,
       visualFeedback: { typingIndicator: true },
-    })
-    input.focus()
+    });
+    input.focus();
 
     const result = orchestrator.type('ab', {
       ...resolveActionOptions('type'),
       signal: controller.signal,
-    })
+    });
 
     await vi.waitFor(() => {
-      expect(controlledTimeline.pendingDelayCount).toBe(1)
-    })
-    expect(input.value).toBe('a')
-    expect(store.snapshot().typing).toMatchObject({ element: input })
+      expect(controlledTimeline.pendingDelayCount).toBe(1);
+    });
+    expect(input.value).toBe('a');
+    expect(store.snapshot().typing).toMatchObject({ element: input });
 
-    controller.abort('user stopped')
+    controller.abort('user stopped');
 
     await expect(result).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
-    expect(store.snapshot().typing).toBeNull()
+    });
+    expect(store.snapshot().typing).toBeNull();
     expect(calls).toEqual(
-      expect.arrayContaining([
-        'visual.typing:true',
-        'visual.typing:false',
-        'visual.clearFeedback',
-      ]),
-    )
+      expect.arrayContaining(['visual.typing:true', 'visual.typing:false', 'visual.clearFeedback']),
+    );
     expect(visual.showTyping).toHaveBeenLastCalledWith({
       target: expect.objectContaining({ element: input }),
       active: false,
-    })
-  })
+    });
+  });
 
   it('clears typing state when public type times out during cadence', async () => {
-    vi.useFakeTimers()
-    const controlledTimeline = createBlockingTimeline()
+    vi.useFakeTimers();
+    const controlledTimeline = createBlockingTimeline();
     const { input, orchestrator, store } = createRealTextHarness({
       timeline: controlledTimeline.timeline,
-    })
-    input.focus()
+    });
+    input.focus();
 
     try {
       const result = orchestrator.type('ab', {
         ...resolveActionOptions('type'),
         timeout: 25,
-      })
+      });
       const expectation = expect(result).rejects.toMatchObject({
         code: 'ACTION_TIMEOUT',
         details: { operation: 'action.type', timeout: 25 },
-      })
+      });
 
       for (let index = 0; index < 12; index += 1) {
-        await Promise.resolve()
+        await Promise.resolve();
       }
-      expect(controlledTimeline.pendingDelayCount).toBe(1)
-      expect(input.value).toBe('a')
-      expect(store.snapshot().typing).toMatchObject({ element: input })
+      expect(controlledTimeline.pendingDelayCount).toBe(1);
+      expect(input.value).toBe('a');
+      expect(store.snapshot().typing).toMatchObject({ element: input });
 
-      await vi.advanceTimersByTimeAsync(25)
-      await expectation
-      expect(store.snapshot().typing).toBeNull()
+      await vi.advanceTimersByTimeAsync(25);
+      await expectation;
+      expect(store.snapshot().typing).toBeNull();
     } finally {
-      vi.useRealTimers()
+      vi.useRealTimers();
     }
-  })
+  });
 
   it('presses through the keyboard engine without resolving a target', async () => {
-    const controller = new AbortController()
+    const controller = new AbortController();
     const {
       calls,
       focus,
@@ -4644,7 +4657,7 @@ describe('BrowserActionOrchestrator', () => {
       resolver,
       trace,
       wait,
-    } = createHarness()
+    } = createHarness();
 
     await expect(
       orchestrator.press('Shift+K', {
@@ -4652,23 +4665,23 @@ describe('BrowserActionOrchestrator', () => {
         signal: controller.signal,
         delay: 7,
       }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(calls).toEqual(['keyboard.press', 'wait.settle'])
+    expect(calls).toEqual(['keyboard.press', 'wait.settle']);
     expect(keyboard.press).toHaveBeenCalledWith('Shift+K', {
       timeout: 100,
       signal: expect.any(AbortSignal),
       delay: 7,
-    })
+    });
     expect(wait.settle).toHaveBeenCalledWith('interaction-stable', {
       timeout: 100,
       signal: expect.any(AbortSignal),
-    })
-    expect(resolver.resolve).not.toHaveBeenCalled()
-    expect(resolver.validate).not.toHaveBeenCalled()
-    expect(interactability.canType).not.toHaveBeenCalled()
-    expect(focus.focus).not.toHaveBeenCalled()
-    expect(gesture.click).not.toHaveBeenCalled()
+    });
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(resolver.validate).not.toHaveBeenCalled();
+    expect(interactability.canType).not.toHaveBeenCalled();
+    expect(focus.focus).not.toHaveBeenCalled();
+    expect(gesture.click).not.toHaveBeenCalled();
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.press',
@@ -4683,8 +4696,8 @@ describe('BrowserActionOrchestrator', () => {
           },
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('reports focused-target keyboard failures with the perform phase', async () => {
     const keyboard = {
@@ -4698,15 +4711,15 @@ describe('BrowserActionOrchestrator', () => {
           {
             details: { boundary: 'keyboard-engine', key: 'Enter' },
           },
-        )
+        );
       }),
-    }
-    const { orchestrator, trace } = createHarness({ keyboard })
+    };
+    const { orchestrator, trace } = createHarness({ keyboard });
 
     await expect(orchestrator.press('Enter')).rejects.toMatchObject({
       code: 'INTERACTABILITY_FAILED',
       details: { boundary: 'keyboard-engine', key: 'Enter' },
-    })
+    });
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.press',
@@ -4716,11 +4729,11 @@ describe('BrowserActionOrchestrator', () => {
           phase: 'perform',
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('releases keys left pressed when public press is cancelled', async () => {
-    const pressedKeys = []
+    const pressedKeys = [];
     const keyboard = {
       getState: vi.fn(() => ({
         pressedKeys: [...pressedKeys],
@@ -4728,141 +4741,141 @@ describe('BrowserActionOrchestrator', () => {
       })),
       keyDown: vi.fn(),
       keyUp: vi.fn(async (key) => {
-        pressedKeys.splice(pressedKeys.indexOf(key), 1)
+        pressedKeys.splice(pressedKeys.indexOf(key), 1);
         return {
           pressedKeys: [...pressedKeys],
           modifiers: pressedKeys.filter((pressedKey) => pressedKey === 'Shift'),
-        }
+        };
       }),
       press: vi.fn(async () => {
-        pressedKeys.push('Shift', 'K')
-        throw cancellationError('keyboard.press', 'scenario stopped')
+        pressedKeys.push('Shift', 'K');
+        throw cancellationError('keyboard.press', 'scenario stopped');
       }),
-    }
-    const { orchestrator, trace } = createHarness({ keyboard })
+    };
+    const { orchestrator, trace } = createHarness({ keyboard });
 
     await expect(orchestrator.press('Shift+K')).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
       details: { reason: 'scenario stopped' },
-    })
+    });
 
-    expect(pressedKeys).toEqual([])
-    expect(keyboard.keyUp.mock.calls.map(([key]) => key)).toEqual(['K', 'Shift'])
+    expect(pressedKeys).toEqual([]);
+    expect(keyboard.keyUp.mock.calls.map(([key]) => key)).toEqual(['K', 'Shift']);
     expect(trace.getTrace().spans.at(-1)).toEqual(
       expect.objectContaining({
         name: 'action.press',
         status: 'cancelled',
       }),
-    )
-  })
+    );
+  });
 
   it('consumes resolved public typeInto cadence options', async () => {
-    const { orchestrator, target, text } = createHarness()
+    const { orchestrator, target, text } = createHarness();
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'abc', resolveActionOptions('typeInto')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {
       delay: 60,
-    })
-  })
+    });
+  });
 
   it('preserves explicit zero delay as public typeInto cadence opt-out', async () => {
-    const { orchestrator, target, text } = createHarness()
+    const { orchestrator, target, text } = createHarness();
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'abc', { delay: 0 }),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
     expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {
       delay: 0,
-    })
-  })
+    });
+  });
 
   it('does not synthesize public typeInto cadence for unresolved typeInto options', async () => {
-    const { orchestrator, target, text } = createHarness()
+    const { orchestrator, target, text } = createHarness();
 
-    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined()
+    await expect(orchestrator.typeInto(css('#target-1'), 'abc')).resolves.toBeUndefined();
 
-    expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {})
-  })
+    expect(text.typeInto).toHaveBeenCalledWith(target, 'abc', {});
+  });
 
   it('uses the default public typeInto cadence between grapheme inputs', async () => {
-    const { input, orchestrator, timeline } = createRealTextHarness()
+    const { input, orchestrator, timeline } = createRealTextHarness();
 
     await expect(
       orchestrator.typeInto(css('#target-1'), 'abc', resolveActionOptions('typeInto')),
-    ).resolves.toBeUndefined()
+    ).resolves.toBeUndefined();
 
-    expect(timeline.delay).toHaveBeenCalledTimes(2)
-    expect(timeline.delay).toHaveBeenNthCalledWith(1, 60, {})
-    expect(timeline.delay).toHaveBeenNthCalledWith(2, 60, {})
-    expect(input.value).toBe('abc')
-  })
+    expect(timeline.delay).toHaveBeenCalledTimes(2);
+    expect(timeline.delay).toHaveBeenNthCalledWith(1, 60, {});
+    expect(timeline.delay).toHaveBeenNthCalledWith(2, 60, {});
+    expect(input.value).toBe('abc');
+  });
 
   it('clears typing state when public typeInto is cancelled during default cadence', async () => {
-    const controlledTimeline = createBlockingTimeline()
-    const controller = new AbortController()
+    const controlledTimeline = createBlockingTimeline();
+    const controller = new AbortController();
     const { input, orchestrator, store } = createRealTextHarness({
       timeline: controlledTimeline.timeline,
-    })
+    });
 
     const result = orchestrator.typeInto(css('#target-1'), 'ab', {
       ...resolveActionOptions('typeInto'),
       signal: controller.signal,
-    })
+    });
 
     await vi.waitFor(() => {
-      expect(controlledTimeline.pendingDelayCount).toBe(1)
-    })
-    expect(input.value).toBe('a')
-    expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
+      expect(controlledTimeline.pendingDelayCount).toBe(1);
+    });
+    expect(input.value).toBe('a');
+    expect(store.snapshot().typing).toMatchObject({ id: 'target-1' });
 
-    controller.abort('user stopped')
+    controller.abort('user stopped');
 
     await expect(result).rejects.toMatchObject({
       code: 'ACTION_CANCELLED',
-    })
-    expect(store.snapshot().typing).toBeNull()
-  })
+    });
+    expect(store.snapshot().typing).toBeNull();
+  });
 
   it('clears typing state when public typeInto times out during default cadence', async () => {
-    vi.useFakeTimers()
-    const controlledTimeline = createBlockingTimeline()
+    vi.useFakeTimers();
+    const controlledTimeline = createBlockingTimeline();
     const { input, orchestrator, store } = createRealTextHarness({
       timeline: controlledTimeline.timeline,
-    })
+    });
 
     try {
       const result = orchestrator.typeInto(css('#target-1'), 'ab', {
         ...resolveActionOptions('typeInto'),
         timeout: 25,
-      })
+      });
       const expectation = expect(result).rejects.toMatchObject({
         code: 'ACTION_TIMEOUT',
         details: { operation: 'action.typeInto', timeout: 25 },
-      })
+      });
 
       for (let index = 0; index < 12; index += 1) {
-        await Promise.resolve()
+        await Promise.resolve();
       }
-      expect(controlledTimeline.pendingDelayCount).toBe(1)
-      expect(input.value).toBe('a')
-      expect(store.snapshot().typing).toMatchObject({ id: 'target-1' })
+      expect(controlledTimeline.pendingDelayCount).toBe(1);
+      expect(input.value).toBe('a');
+      expect(store.snapshot().typing).toMatchObject({ id: 'target-1' });
 
-      await vi.advanceTimersByTimeAsync(25)
-      await expectation
-      expect(store.snapshot().typing).toBeNull()
+      await vi.advanceTimersByTimeAsync(25);
+      await expectation;
+      expect(store.snapshot().typing).toBeNull();
     } finally {
-      vi.useRealTimers()
+      vi.useRealTimers();
     }
-  })
+  });
 
   it('surrounds typeInto with visual highlight and typing hooks', async () => {
-    const { calls, orchestrator } = createHarness({ enableVisual: true })
+    const { calls, orchestrator } = createHarness({ enableVisual: true });
 
-    await expect(orchestrator.typeInto(css('#target-1'), 'hello')).resolves.toBeUndefined()
+    await expect(orchestrator.typeInto(css('#target-1'), 'hello')).resolves.toBeUndefined();
 
     expect(calls).toEqual([
       'resolver.resolve',
@@ -4875,15 +4888,15 @@ describe('BrowserActionOrchestrator', () => {
       'text.typeInto',
       'visual.typing:false',
       'wait.settle',
-    ])
-  })
+    ]);
+  });
 
   it('routes focus and typing state effects to DOM state and visual feedback independently', () => {
-    const { state, store, target, visual } = createHarness({ enableVisual: true })
+    const { state, store, target, visual } = createHarness({ enableVisual: true });
 
-    store.setFocused(target, true)
-    store.setTyping(target)
-    store.setTyping(null)
+    store.setFocused(target, true);
+    store.setTyping(target);
+    store.setTyping(null);
 
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(1, [
       { kind: 'focus', target: expect.objectContaining({ id: target.id }), active: true },
@@ -4892,26 +4905,26 @@ describe('BrowserActionOrchestrator', () => {
         target: expect.objectContaining({ id: target.id }),
         active: true,
       },
-    ])
+    ]);
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(2, [
       { kind: 'typing', target: expect.objectContaining({ id: target.id }), active: true },
-    ])
+    ]);
     expect(state.applyStateEffects).toHaveBeenNthCalledWith(3, [
       { kind: 'typing', target: expect.objectContaining({ id: target.id }), active: false },
-    ])
+    ]);
     expect(visual.showFocus).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: true,
-    })
+    });
     expect(visual.showTyping).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: true,
-    })
+    });
     expect(visual.showTyping).toHaveBeenCalledWith({
       target: expect.objectContaining({ id: target.id }),
       active: false,
-    })
-  })
+    });
+  });
 
   it('records focus visual failures as warnings without failing state updates', () => {
     const visual = {
@@ -4919,17 +4932,17 @@ describe('BrowserActionOrchestrator', () => {
       highlightTarget: vi.fn(),
       showClick: vi.fn(),
       showFocus: vi.fn(() => {
-        throw new Error('focus overlay blocked')
+        throw new Error('focus overlay blocked');
       }),
       showTyping: vi.fn(),
       showKeystroke: vi.fn(),
       clearFeedback: vi.fn(),
       hide: vi.fn(),
       destroy: vi.fn(),
-    }
-    const { store, target, trace } = createHarness({ visual })
+    };
+    const { store, target, trace } = createHarness({ visual });
 
-    expect(() => store.setFocused(target, true)).not.toThrow()
+    expect(() => store.setFocused(target, true)).not.toThrow();
 
     expect(trace.getTrace().warnings).toEqual(
       expect.arrayContaining([
@@ -4941,18 +4954,18 @@ describe('BrowserActionOrchestrator', () => {
           }),
         }),
       ]),
-    )
-  })
+    );
+  });
 
   it('waitFor delegates to the wait observation engine and records an action span', async () => {
-    const { orchestrator, trace, wait } = createHarness()
-    const condition = { kind: 'custom', predicate: () => true }
-    const result = { condition, satisfied: true, strategy: 'interaction-stable' }
-    wait.waitFor.mockResolvedValue(result)
+    const { orchestrator, trace, wait } = createHarness();
+    const condition = { kind: 'custom', predicate: () => true };
+    const result = { condition, satisfied: true, strategy: 'interaction-stable' };
+    wait.waitFor.mockResolvedValue(result);
 
-    await expect(orchestrator.waitFor(condition, { timeout: 10 })).resolves.toBe(result)
+    await expect(orchestrator.waitFor(condition, { timeout: 10 })).resolves.toBe(result);
 
-    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 10 })
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 10 });
     expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
       expect.objectContaining({
         name: 'action.waitFor',
@@ -4967,67 +4980,67 @@ describe('BrowserActionOrchestrator', () => {
           },
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('traces public target-state wait helpers without exposing the raw target', async () => {
-    const { orchestrator, trace, wait } = createHarness()
-    const condition = attached(css('#save'))
-    wait.waitFor.mockResolvedValue({ condition, satisfied: true, strategy: 'interaction-stable' })
+    const { orchestrator, trace, wait } = createHarness();
+    const condition = attached(css('#save'));
+    wait.waitFor.mockResolvedValue({ condition, satisfied: true, strategy: 'interaction-stable' });
 
-    await orchestrator.waitFor(condition, { timeout: 20 })
+    await orchestrator.waitFor(condition, { timeout: 20 });
 
-    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 })
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 });
     expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
       expect.objectContaining({
         attributes: expect.objectContaining({
           output: expect.objectContaining({ conditionKind: 'attached', satisfied: true }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('delegates and traces composite wait helpers through the public waitFor path', async () => {
-    const { orchestrator, trace, wait } = createHarness()
-    const condition = any(attached(css('#save')), stable(css('#panel')))
-    wait.waitFor.mockResolvedValue({ condition, satisfied: true, strategy: 'interaction-stable' })
+    const { orchestrator, trace, wait } = createHarness();
+    const condition = any(attached(css('#save')), stable(css('#panel')));
+    wait.waitFor.mockResolvedValue({ condition, satisfied: true, strategy: 'interaction-stable' });
 
-    await orchestrator.waitFor(condition, { timeout: 20 })
+    await orchestrator.waitFor(condition, { timeout: 20 });
 
-    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 })
+    expect(wait.waitFor).toHaveBeenCalledWith(condition, { timeout: 20 });
     expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
       expect.objectContaining({
         attributes: expect.objectContaining({
           output: expect.objectContaining({ conditionKind: 'any', satisfied: true }),
         }),
       }),
-    )
-  })
+    );
+  });
 
   it('default waitFor path supports visible conditions through target observation engines', async () => {
-    document.body.innerHTML = '<button id="save">Save</button>'
-    const save = document.querySelector('#save')
-    const dom = new BrowserDomAdapter(document)
+    document.body.innerHTML = '<button id="save">Save</button>';
+    const save = document.querySelector('#save');
+    const dom = new BrowserDomAdapter(document);
     vi.spyOn(dom, 'getBoundingClientRect').mockImplementation((element) =>
       element === save
         ? { x: 10, y: 20, width: 100, height: 40 }
         : { x: 0, y: 0, width: 0, height: 0 },
-    )
-    vi.spyOn(dom, 'elementFromPoint').mockReturnValue(save)
-    const trace = createTrace()
-    const condition = { kind: 'visible', target: css('#save') }
+    );
+    vi.spyOn(dom, 'elementFromPoint').mockReturnValue(save);
+    const trace = createTrace();
+    const condition = { kind: 'visible', target: css('#save') };
     const orchestrator = new BrowserActionOrchestrator({
       dom,
       timeline: createFrameTimeline(),
       trace,
       visualFeedback: 'off',
-    })
+    });
 
     await expect(orchestrator.waitFor(condition)).resolves.toEqual({
       condition,
       satisfied: true,
       strategy: 'interaction-stable',
-    })
+    });
 
     expect(trace.getTrace().spans.find((span) => span.name === 'action.waitFor')).toEqual(
       expect.objectContaining({
@@ -5043,6 +5056,6 @@ describe('BrowserActionOrchestrator', () => {
           },
         }),
       }),
-    )
-  })
-})
+    );
+  });
+});

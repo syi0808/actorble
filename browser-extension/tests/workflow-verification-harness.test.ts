@@ -1,44 +1,42 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActorbleFacadeOptions, TraceCollector } from '@actorble/browser'
-import { fakeBrowser } from 'wxt/testing/fake-browser'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActorbleFacadeOptions, TraceCollector } from '@actorble/browser';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
   createBackgroundOrchestrator,
   createWxtBackgroundBrowserHost,
-} from '../src/entrypoints/background/orchestration.js'
+} from '../src/entrypoints/background/orchestration.js';
 import {
   createContentInspectorHost,
   type ContentInspectorAdapter,
   type ContentInspectorPointerEvent,
-} from '../src/entrypoints/content/inspector-host.js'
+} from '../src/entrypoints/content/inspector-host.js';
 import {
   createContentLocatorPreviewHost,
   type ContentLocatorPreviewActorble,
-} from '../src/entrypoints/content/locator-preview-host.js'
+} from '../src/entrypoints/content/locator-preview-host.js';
 import {
   createContentRecorderHost,
   createRecordEventFlushSender,
-} from '../src/entrypoints/content/recorder-host.js'
+} from '../src/entrypoints/content/recorder-host.js';
 import {
   createContentRuntimeHost,
   type ContentActorbleFacade,
-} from '../src/entrypoints/content/runtime-host.js'
+} from '../src/entrypoints/content/runtime-host.js';
 import {
   createSidepanelScenarioEditor,
   createSidepanelScenarioEditorView,
   type SidepanelScenarioEditorClient,
-} from '../src/entrypoints/sidepanel/scenario-editor.js'
-import {
-  createSidepanelRecompositionViewModel,
-} from '../src/entrypoints/sidepanel/recomposition-view-model.js'
+} from '../src/entrypoints/sidepanel/scenario-editor.js';
+import { createSidepanelRecompositionViewModel } from '../src/entrypoints/sidepanel/recomposition-view-model.js';
 import {
   createLocatorPreviewCandidateViews,
   createLocatorPreviewer,
-} from '../src/inspector/locator-preview.js'
-import { createTargetPicker } from '../src/inspector/target-picker.js'
+} from '../src/inspector/locator-preview.js';
+import { createTargetPicker } from '../src/inspector/target-picker.js';
 import {
   type ActorbleExtensionMessage,
   type InspectorTargetMetadata,
-} from '../src/messaging/index.js'
+} from '../src/messaging/index.js';
 import {
   createRecorderEventCapturePort,
   type RecorderClickEvent,
@@ -46,51 +44,48 @@ import {
   type RecorderPointerEvent,
   type RecorderSelectionSnapshot,
   type RecorderTextEvent,
-} from '../src/recorder/event-capture.js'
-import {
-  DRAFT_SCENARIO_SCHEMA_VERSION,
-  type ScenarioDocument,
-} from '../src/scenario/types.js'
-import { ok } from '../src/shared/result.js'
+} from '../src/recorder/event-capture.js';
+import { DRAFT_SCENARIO_SCHEMA_VERSION, type ScenarioDocument } from '../src/scenario/types.js';
+import { ok } from '../src/shared/result.js';
 import type {
   ScenarioJsonExport,
   ScenarioRecord,
   ScenarioRecordInput,
-} from '../src/storage/index.js'
+} from '../src/storage/index.js';
 
-const FIXTURE_URL = 'http://localhost:3000/actorble-workflow-fixture.html'
+const FIXTURE_URL = 'http://localhost:3000/actorble-workflow-fixture.html';
 
 beforeEach(() => {
-  vi.restoreAllMocks()
-  fakeBrowser.reset()
-})
+  vi.restoreAllMocks();
+  fakeBrowser.reset();
+});
 
 describe('workflow verification harness', () => {
   it('verifies recomposed authoring, target picking, dry-run, recording review, save, and run feedback', async () => {
-    const harness = await createWorkflowHarness()
+    const harness = await createWorkflowHarness();
 
-    await harness.editor.refresh()
+    await harness.editor.refresh();
     const created = harness.editor.createScenario({
       id: 'workflow-scenario',
       name: 'Workflow verification',
       initialStepFamily: 'delay',
-    })
+    });
     harness.editor.updateDocumentFields({
       name: 'Workflow verification edited',
       description: 'End-to-end recomposed flow',
-    })
-    const added = harness.editor.addStep('click')
+    });
+    const added = harness.editor.addStep('click');
 
-    expect(created).toMatchObject({ ok: true })
-    expect(added).toMatchObject({ ok: true })
+    expect(created).toMatchObject({ ok: true });
+    expect(added).toMatchObject({ ok: true });
     expect(createSidepanelScenarioEditorView(harness.editor.getSnapshot())).toMatchObject({
       workflow: {
         status: 'draft',
         selectedStepId: 'workflow-click',
         selectedTargetSlotId: 'step-target:workflow-click',
       },
-    })
-    expectRecomposedPrimarySurfaces(recomposedViewFor(harness))
+    });
+    expectRecomposedPrimarySurfaces(recomposedViewFor(harness));
     expect(recomposedViewFor(harness)).toMatchObject({
       scenarioShell: {
         status: 'draft',
@@ -129,18 +124,18 @@ describe('workflow verification harness', () => {
         activeView: 'validation',
         attention: true,
       },
-    })
+    });
 
     const pickerStart = await harness.targetPicker.start({
       scenarioId: 'workflow-scenario',
       targetSlot: harness.editor.getSnapshot().selectedTargetSlot,
-    })
-    harness.inspectorAdapter.dispatchPointerMove(220, 122)
-    harness.inspectorAdapter.dispatchClick(220, 122)
-    await flushAsyncWork()
+    });
+    harness.inspectorAdapter.dispatchPointerMove(220, 122);
+    harness.inspectorAdapter.dispatchClick(220, 122);
+    await flushAsyncWork();
 
-    const selected = harness.targetPicker.getSnapshot().selected
-    expect(pickerStart).toMatchObject({ ok: true })
+    const selected = harness.targetPicker.getSnapshot().selected;
+    expect(pickerStart).toMatchObject({ ok: true });
     expect(selected).toMatchObject({
       scenarioId: 'workflow-scenario',
       targetSlot: {
@@ -150,16 +145,16 @@ describe('workflow verification harness', () => {
       target: {
         testId: 'submit-button',
       },
-    })
+    });
 
     if (selected === undefined) {
-      throw new Error('Expected a selected target.')
+      throw new Error('Expected a selected target.');
     }
 
     const preview = await harness.locatorPreviewer.previewTarget(selected.target, {
       scenarioId: selected.scenarioId,
       targetSlot: selected.targetSlot,
-    })
+    });
     expect(preview).toMatchObject({
       ok: true,
       value: {
@@ -168,11 +163,11 @@ describe('workflow verification harness', () => {
           stepId: 'workflow-click',
         },
       },
-    })
+    });
 
-    const testIdCandidate = harness.locatorPreviewer.getSnapshot().candidates.find(
-      (candidate) => candidate.strategy === 'testId',
-    )
+    const testIdCandidate = harness.locatorPreviewer
+      .getSnapshot()
+      .candidates.find((candidate) => candidate.strategy === 'testId');
     expect(testIdCandidate).toMatchObject({
       status: 'unique',
       matchCount: 1,
@@ -180,15 +175,17 @@ describe('workflow verification harness', () => {
         strategy: 'testId',
         value: 'submit-button',
       },
-    })
-    expect(createLocatorPreviewCandidateViews(harness.locatorPreviewer.getSnapshot().candidates)).toEqual(
+    });
+    expect(
+      createLocatorPreviewCandidateViews(harness.locatorPreviewer.getSnapshot().candidates),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           strategy: 'testId',
           selectable: true,
         }),
       ]),
-    )
+    );
     expect(recomposedViewFor(harness).targetAssignment).toMatchObject({
       status: 'selected',
       selectedTargetSlotId: 'step-target:workflow-click',
@@ -202,17 +199,17 @@ describe('workflow verification harness', () => {
           }),
         ]),
       },
-    })
+    });
 
     if (testIdCandidate === undefined || selected.targetSlot === undefined) {
-      throw new Error('Expected a selectable testId candidate.')
+      throw new Error('Expected a selectable testId candidate.');
     }
 
     const applied = harness.editor.applyLocatorToTargetSlot(
       selected.targetSlot,
       testIdCandidate.locator,
-    )
-    expect(applied).toMatchObject({ ok: true })
+    );
+    expect(applied).toMatchObject({ ok: true });
     expect(harness.editor.getSnapshot().draftDocument?.steps[1]).toMatchObject({
       id: 'workflow-click',
       action: 'click',
@@ -224,10 +221,10 @@ describe('workflow verification harness', () => {
           },
         ],
       },
-    })
+    });
 
-    const dryRun = await harness.editor.dryRunSelectedStep()
-    await flushAsyncWork()
+    const dryRun = await harness.editor.dryRunSelectedStep();
+    await flushAsyncWork();
     expect(dryRun).toMatchObject({
       ok: true,
       value: {
@@ -236,10 +233,10 @@ describe('workflow verification harness', () => {
         scenarioId: 'workflow-scenario',
         runId: 'dry-run-workflow',
       },
-    })
+    });
     const dryRunMessage = harness.routedMessages.find(
       (message) => message.kind === 'scenario:run' && message.payload.runId === 'dry-run-workflow',
-    )
+    );
     expect(dryRunMessage).toMatchObject({
       kind: 'scenario:run',
       payload: {
@@ -253,15 +250,15 @@ describe('workflow verification harness', () => {
           },
         },
       },
-    })
+    });
     if (dryRunMessage?.kind !== 'scenario:run') {
-      throw new Error('Expected routed dry-run message.')
+      throw new Error('Expected routed dry-run message.');
     }
-    expect(dryRunMessage.payload.compilation.scenario.steps).toHaveLength(1)
+    expect(dryRunMessage.payload.compilation.scenario.steps).toHaveLength(1);
     expect(harness.editor.getSnapshot().currentRun).toMatchObject({
       runId: 'dry-run-workflow',
       status: 'completed',
-    })
+    });
     expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'run-trace',
@@ -273,12 +270,12 @@ describe('workflow verification harness', () => {
           latestEventName: 'workflow:run',
         },
       },
-    })
+    });
 
-    const recordStart = await harness.editor.startRecording()
-    harness.recorderAdapter.dispatchInput('user@example.com')
-    await flushAsyncWork()
-    const recordStop = await harness.editor.stopRecording()
+    const recordStart = await harness.editor.startRecording();
+    harness.recorderAdapter.dispatchInput('user@example.com');
+    await flushAsyncWork();
+    const recordStop = await harness.editor.stopRecording();
 
     expect(recordStart).toMatchObject({
       ok: true,
@@ -288,7 +285,7 @@ describe('workflow verification harness', () => {
           status: 'recording',
         },
       },
-    })
+    });
     expect(recordStop).toMatchObject({
       ok: true,
       value: {
@@ -304,16 +301,18 @@ describe('workflow verification harness', () => {
           },
         },
       },
-    })
-    expect(createSidepanelScenarioEditorView(harness.editor.getSnapshot()).recordedDraftReview).toMatchObject({
+    });
+    expect(
+      createSidepanelScenarioEditorView(harness.editor.getSnapshot()).recordedDraftReview,
+    ).toMatchObject({
       summary: '1 source event · valid',
       buttons: {
         append: {
           disabled: false,
         },
       },
-    })
-    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2)
+    });
+    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2);
     expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
       summary: '1 source event · valid',
       buttons: {
@@ -324,24 +323,24 @@ describe('workflow verification harness', () => {
           disabled: false,
         },
       },
-    })
+    });
 
-    const appended = harness.editor.appendRecordedDraftSteps()
-    const saved = await harness.editor.saveDraft()
+    const appended = harness.editor.appendRecordedDraftSteps();
+    const saved = await harness.editor.saveDraft();
 
-    expect(appended).toMatchObject({ ok: true })
+    expect(appended).toMatchObject({ ok: true });
     expect(saved).toMatchObject({
       ok: true,
       value: {
         id: 'workflow-scenario',
       },
-    })
-    expect(harness.saves).toHaveLength(1)
-    expect(harness.saves[0].document.steps).toHaveLength(3)
+    });
+    expect(harness.saves).toHaveLength(1);
+    expect(harness.saves[0].document.steps).toHaveLength(3);
     expect(harness.saves[0].document.steps.at(-1)).toMatchObject({
       action: 'fill',
       input: 'user@example.com',
-    })
+    });
     expect(recomposedViewFor(harness)).toMatchObject({
       scenarioShell: {
         status: 'saved',
@@ -355,10 +354,10 @@ describe('workflow verification harness', () => {
         ],
       },
       recordedDraftReview: undefined,
-    })
+    });
 
-    const run = await harness.editor.runSelectedScenario()
-    await flushAsyncWork()
+    const run = await harness.editor.runSelectedScenario();
+    await flushAsyncWork();
 
     expect(run).toMatchObject({
       ok: true,
@@ -366,15 +365,11 @@ describe('workflow verification harness', () => {
         runId: 'run-workflow',
         status: 'running',
       },
-    })
+    });
     expect(harness.runtimeRuns.at(-1)).toMatchObject({
       id: 'workflow-scenario',
-      steps: [
-        { action: 'delay' },
-        { action: 'click' },
-        { action: 'fill' },
-      ],
-    })
+      steps: [{ action: 'delay' }, { action: 'click' }, { action: 'fill' }],
+    });
     expect(harness.editor.getSnapshot()).toMatchObject({
       currentRun: {
         runId: 'run-workflow',
@@ -385,10 +380,10 @@ describe('workflow verification harness', () => {
           name: 'workflow:run',
         },
       },
-    })
+    });
     expect(createSidepanelScenarioEditorView(harness.editor.getSnapshot()).runSummary).toContain(
       'Completed run-workflow',
-    )
+    );
     expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
       expanded: false,
       activeView: 'run-trace',
@@ -400,21 +395,21 @@ describe('workflow verification harness', () => {
           latestEventName: 'workflow:run',
         },
       },
-    })
-  })
+    });
+  });
 
   it('verifies recorded draft replace and failed run details through the recomposed drawer', async () => {
-    const harness = await createWorkflowHarness({ runtimeMode: 'failure' })
+    const harness = await createWorkflowHarness({ runtimeMode: 'failure' });
 
-    await createTargetedWorkflowDraft(harness)
-    const recordStart = await harness.editor.startRecording()
-    harness.recorderAdapter.dispatchInput('replacement@example.com')
-    await flushAsyncWork()
-    const recordStop = await harness.editor.stopRecording()
+    await createTargetedWorkflowDraft(harness);
+    const recordStart = await harness.editor.startRecording();
+    harness.recorderAdapter.dispatchInput('replacement@example.com');
+    await flushAsyncWork();
+    const recordStop = await harness.editor.stopRecording();
 
-    expect(recordStart).toMatchObject({ ok: true })
-    expect(recordStop).toMatchObject({ ok: true })
-    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2)
+    expect(recordStart).toMatchObject({ ok: true });
+    expect(recordStop).toMatchObject({ ok: true });
+    expect(harness.editor.getSnapshot().draftDocument?.steps).toHaveLength(2);
     expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
       summary: '1 source event · valid',
       buttons: {
@@ -422,23 +417,23 @@ describe('workflow verification harness', () => {
           disabled: false,
         },
       },
-    })
+    });
 
-    const replaced = harness.editor.replaceWithRecordedDraft()
-    const saved = await harness.editor.saveDraft()
+    const replaced = harness.editor.replaceWithRecordedDraft();
+    const saved = await harness.editor.saveDraft();
 
-    expect(replaced).toMatchObject({ ok: true })
-    expect(saved).toMatchObject({ ok: true })
+    expect(replaced).toMatchObject({ ok: true });
+    expect(saved).toMatchObject({ ok: true });
     expect(harness.saves[0].document.steps).toEqual([
       expect.objectContaining({
         action: 'fill',
         input: 'replacement@example.com',
       }),
-    ])
-    expect(recomposedViewFor(harness).recordedDraftReview).toBeUndefined()
+    ]);
+    expect(recomposedViewFor(harness).recordedDraftReview).toBeUndefined();
 
-    const run = await harness.editor.runSelectedScenario()
-    await flushAsyncWork()
+    const run = await harness.editor.runSelectedScenario();
+    await flushAsyncWork();
 
     expect(run).toMatchObject({
       ok: true,
@@ -446,7 +441,7 @@ describe('workflow verification harness', () => {
         runId: 'run-workflow',
         status: 'running',
       },
-    })
+    });
     expect(recomposedViewFor(harness)).toMatchObject({
       scenarioShell: {
         runStatus: 'failed',
@@ -473,19 +468,19 @@ describe('workflow verification harness', () => {
           },
         },
       },
-    })
-  })
+    });
+  });
 
   it('verifies recorded text selection review, save, compile, and replay', async () => {
-    const harness = await createWorkflowHarness()
+    const harness = await createWorkflowHarness();
 
-    await createTargetedWorkflowDraft(harness)
-    const recordStart = await harness.editor.startRecording()
-    harness.recorderAdapter.dispatchSelectionGesture()
-    await flushAsyncWork()
-    const recordStop = await harness.editor.stopRecording()
+    await createTargetedWorkflowDraft(harness);
+    const recordStart = await harness.editor.startRecording();
+    harness.recorderAdapter.dispatchSelectionGesture();
+    await flushAsyncWork();
+    const recordStop = await harness.editor.stopRecording();
 
-    expect(recordStart).toMatchObject({ ok: true })
+    expect(recordStart).toMatchObject({ ok: true });
     expect(recordStop).toMatchObject({
       ok: true,
       value: {
@@ -500,13 +495,13 @@ describe('workflow verification harness', () => {
           },
         },
       },
-    })
+    });
     expect(recordStop.ok && JSON.stringify(recordStop.value.recordedDraft?.document)).not.toContain(
       'selectedText',
-    )
+    );
     expect(recordStop.ok && recordStop.value.recordedDraft?.document.steps).not.toEqual([
       expect.objectContaining({ action: 'click' }),
-    ])
+    ]);
     expect(recomposedViewFor(harness).recordedDraftReview).toMatchObject({
       summary: '4 source events · valid',
       buttons: {
@@ -517,11 +512,11 @@ describe('workflow verification harness', () => {
           disabled: false,
         },
       },
-    })
+    });
 
-    const exported = harness.editor.exportRecordedDraft()
-    const appended = harness.editor.appendRecordedDraftSteps()
-    const saved = await harness.editor.saveDraft()
+    const exported = harness.editor.exportRecordedDraft();
+    const appended = harness.editor.appendRecordedDraftSteps();
+    const saved = await harness.editor.saveDraft();
 
     expect(exported).toMatchObject({
       ok: true,
@@ -534,9 +529,9 @@ describe('workflow verification harness', () => {
           ],
         },
       },
-    })
-    expect(appended).toMatchObject({ ok: true })
-    expect(saved).toMatchObject({ ok: true })
+    });
+    expect(appended).toMatchObject({ ok: true });
+    expect(saved).toMatchObject({ ok: true });
     expect(harness.saves[0].document.steps.at(-1)).toMatchObject({
       action: 'selectText',
       target: {
@@ -547,20 +542,16 @@ describe('workflow verification harness', () => {
           },
         ]),
       },
-    })
+    });
 
-    const run = await harness.editor.runSelectedScenario()
-    await flushAsyncWork()
+    const run = await harness.editor.runSelectedScenario();
+    await flushAsyncWork();
 
-    expect(run).toMatchObject({ ok: true })
+    expect(run).toMatchObject({ ok: true });
     expect(harness.runtimeRuns.at(-1)).toMatchObject({
       id: 'workflow-scenario',
-      steps: [
-        { action: 'delay' },
-        { action: 'click' },
-        { action: 'selectText' },
-      ],
-    })
+      steps: [{ action: 'delay' }, { action: 'click' }, { action: 'selectText' }],
+    });
     expect(harness.contentMessages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -572,84 +563,83 @@ describe('workflow verification harness', () => {
           }),
         }),
       ]),
-    )
+    );
     expect(recomposedViewFor(harness).debugDrawer).toMatchObject({
       views: {
         runTrace: {
           status: 'completed',
         },
       },
-    })
-  })
-})
+    });
+  });
+});
 
 type WorkflowHarnessOptions = Readonly<{
-  runtimeMode?: 'success' | 'failure'
-}>
+  runtimeMode?: 'success' | 'failure';
+}>;
 
 async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
-  let now = 1_700_000_000_000
-  const routedMessages: ActorbleExtensionMessage[] = []
-  const contentMessages: ActorbleExtensionMessage[] = []
-  const saves: ScenarioRecordInput[] = []
-  const runtimeRuns: ScenarioDocument[] = []
-  const records: ScenarioRecord[] = []
-  const activeTab = await createActiveTab(FIXTURE_URL)
-  const orchestrator = createBackgroundOrchestrator(
-    createWxtBackgroundBrowserHost(fakeBrowser),
-    { now: () => now },
-  )
-  let editor: ReturnType<typeof createSidepanelScenarioEditor> | undefined
-  let targetPicker: ReturnType<typeof createTargetPicker> | undefined
+  let now = 1_700_000_000_000;
+  const routedMessages: ActorbleExtensionMessage[] = [];
+  const contentMessages: ActorbleExtensionMessage[] = [];
+  const saves: ScenarioRecordInput[] = [];
+  const runtimeRuns: ScenarioDocument[] = [];
+  const records: ScenarioRecord[] = [];
+  const activeTab = await createActiveTab(FIXTURE_URL);
+  const orchestrator = createBackgroundOrchestrator(createWxtBackgroundBrowserHost(fakeBrowser), {
+    now: () => now,
+  });
+  let editor: ReturnType<typeof createSidepanelScenarioEditor> | undefined;
+  let targetPicker: ReturnType<typeof createTargetPicker> | undefined;
 
   async function deliverContentMessage(message: ActorbleExtensionMessage): Promise<unknown> {
-    contentMessages.push(message)
+    contentMessages.push(message);
     const result = await orchestrator.handleMessage(message, {
       tab: activeTab,
       frameId: 0,
       url: activeTab.url,
-    })
+    });
 
     if (message.kind === 'runtime:status' || message.kind === 'trace:event') {
-      editor?.ingestMessage(message)
+      editor?.ingestMessage(message);
     }
 
     if (message.kind === 'inspector:selected' || message.kind === 'inspector:cancelled') {
-      targetPicker?.ingestMessage(message)
+      targetPicker?.ingestMessage(message);
     }
 
-    return result
+    return result;
   }
 
-  const inspectorAdapter = createFixtureInspectorAdapter()
+  const inspectorAdapter = createFixtureInspectorAdapter();
   const contentInspector = createContentInspectorHost({
     adapter: inspectorAdapter,
     sendMessage: deliverContentMessage,
-  })
+  });
   const contentLocatorPreview = createContentLocatorPreviewHost({
     createActorble: createLocatorPreviewActorble,
-  })
-  const recorderAdapter = createFixtureRecorderAdapter()
+  });
+  const recorderAdapter = createFixtureRecorderAdapter();
   const contentRecorder = createContentRecorderHost({
     capture: createRecorderEventCapturePort(recorderAdapter, {
       now: () => now + 50,
       flushEvents: createRecordEventFlushSender(deliverContentMessage),
     }),
     now: () => now,
-  })
+  });
   const contentRuntime = createContentRuntimeHost({
     createActorble(actorbleOptions) {
       return createRuntimeActorble(actorbleOptions, runtimeRuns, {
         mode: options.runtimeMode ?? 'success',
-      })
+      });
     },
     now: () => now++,
     sendMessage: deliverContentMessage,
-  })
+  });
 
   vi.spyOn(fakeBrowser.tabs, 'sendMessage').mockImplementation(async (tabId, message, options) => {
-    const extensionMessage = message as ActorbleExtensionMessage
-    routedMessages.push(extensionMessage)
+    const extensionMessage = message as ActorbleExtensionMessage;
+    routedMessages.push(extensionMessage);
 
     switch (extensionMessage.kind) {
       case 'content:ready':
@@ -665,20 +655,20 @@ async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
             locatorPreview: true,
             frameCorrelation: true,
           },
-        })
+        });
       case 'inspector:start':
       case 'inspector:stop':
-        return contentInspector.handleMessage(extensionMessage)
+        return contentInspector.handleMessage(extensionMessage);
       case 'locator:preview':
-        return contentLocatorPreview.handleMessage(extensionMessage)
+        return contentLocatorPreview.handleMessage(extensionMessage);
       case 'record:start':
       case 'record:stop':
-        return contentRecorder.handleMessage(extensionMessage)
+        return contentRecorder.handleMessage(extensionMessage);
       case 'scenario:run':
       case 'scenario:pause':
       case 'scenario:resume':
       case 'scenario:stop':
-        return contentRuntime.handleMessage(extensionMessage)
+        return contentRuntime.handleMessage(extensionMessage);
       case 'scenario:validate':
       case 'scenario:compile':
       case 'record:event':
@@ -688,47 +678,49 @@ async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
       case 'trace:event':
       case 'runtime:status':
       case 'popup:get-state':
-        throw new Error(`${extensionMessage.kind} should not be routed to content in this harness.`)
+        throw new Error(
+          `${extensionMessage.kind} should not be routed to content in this harness.`,
+        );
     }
-  })
+  });
 
   const client: SidepanelScenarioEditorClient = {
     async listScenarios() {
-      return ok(records)
+      return ok(records);
     },
     async saveScenario(input) {
-      saves.push(input)
+      saves.push(input);
       const record = scenarioRecord(
         input.id ?? input.document.id ?? 'workflow-scenario',
         input.name ?? input.document.name ?? 'Workflow verification',
         input.document,
-      )
-      records.unshift(record)
-      return ok(record)
+      );
+      records.unshift(record);
+      return ok(record);
     },
     async updateScenario(id, update) {
-      const index = records.findIndex((record) => record.id === id)
+      const index = records.findIndex((record) => record.id === id);
       if (index < 0) {
-        throw new Error(`Missing scenario record ${id}.`)
+        throw new Error(`Missing scenario record ${id}.`);
       }
 
-      const current = records[index]
+      const current = records[index];
       const record = {
         ...current,
         name: update.name ?? current.name,
         document: update.document ?? current.document,
         updatedAt: '2026-06-18T00:01:00.000Z',
-      } satisfies ScenarioRecord
-      records[index] = record
-      return ok(record)
+      } satisfies ScenarioRecord;
+      records[index] = record;
+      return ok(record);
     },
     async importScenarioJson() {
-      throw new Error('Import is not part of the workflow verification harness.')
+      throw new Error('Import is not part of the workflow verification harness.');
     },
     async exportScenarioJson(id) {
-      const record = records.find((candidate) => candidate.id === id)
+      const record = records.find((candidate) => candidate.id === id);
       if (record === undefined) {
-        throw new Error(`Missing scenario record ${id}.`)
+        throw new Error(`Missing scenario record ${id}.`);
       }
 
       return ok({
@@ -736,43 +728,43 @@ async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
         filename: `${record.id}.json`,
         jsonText: `${JSON.stringify(record.document, null, 2)}\n`,
         document: record.document,
-      } satisfies ScenarioJsonExport)
+      } satisfies ScenarioJsonExport);
     },
     async getActiveTab() {
-      return activeTab
+      return activeTab;
     },
     async getTab(tabId) {
-      return tabId === activeTab.id ? activeTab : null
+      return tabId === activeTab.id ? activeTab : null;
     },
     sendMessage(message) {
-      return orchestrator.handleMessage(message)
+      return orchestrator.handleMessage(message);
     },
-  }
+  };
   editor = createSidepanelScenarioEditor(client, {
     createRunId: () => 'run-workflow',
     createDryRunId: () => 'dry-run-workflow',
     createRecordId: () => 'record-workflow',
     createStepId: (family) => `workflow-${family}`,
     targetTabId: activeTab.id,
-  })
+  });
   const pickerClient = {
     async getActiveTab() {
-      return activeTab
+      return activeTab;
     },
     async getTab(tabId: number) {
-      return tabId === activeTab.id ? activeTab : null
+      return tabId === activeTab.id ? activeTab : null;
     },
     sendMessage(message: ActorbleExtensionMessage) {
-      return orchestrator.handleMessage(message)
+      return orchestrator.handleMessage(message);
     },
-  }
+  };
   targetPicker = createTargetPicker(pickerClient, {
     createSessionId: () => 'inspect-workflow',
     targetTabId: activeTab.id,
-  })
+  });
   const locatorPreviewer = createLocatorPreviewer(pickerClient, {
     targetTabId: activeTab.id,
-  })
+  });
 
   return {
     activeTab,
@@ -785,91 +777,91 @@ async function createWorkflowHarness(options: WorkflowHarnessOptions = {}) {
     contentMessages,
     saves,
     runtimeRuns,
-  }
+  };
 }
 
-type WorkflowHarness = Awaited<ReturnType<typeof createWorkflowHarness>>
+type WorkflowHarness = Awaited<ReturnType<typeof createWorkflowHarness>>;
 
 function recomposedViewFor(harness: WorkflowHarness) {
   return createSidepanelRecompositionViewModel({
     editor: harness.editor.getSnapshot(),
     targetPicker: harness.targetPicker.getSnapshot(),
     locatorPreview: harness.locatorPreviewer.getSnapshot(),
-  })
+  });
 }
 
-function expectRecomposedPrimarySurfaces(
-  view: ReturnType<typeof recomposedViewFor>,
-): void {
+function expectRecomposedPrimarySurfaces(view: ReturnType<typeof recomposedViewFor>): void {
   expect(Object.keys(view)).toEqual([
     'scenarioShell',
     'builderWorkbench',
     'targetAssignment',
     'recordedDraftReview',
     'debugDrawer',
-  ])
-  expect(view).not.toHaveProperty('document')
-  expect(view).not.toHaveProperty('recording')
-  expect(view).not.toHaveProperty('targetPicker')
-  expect(view).not.toHaveProperty('locatorPreview')
-  expect(view).not.toHaveProperty('validation')
-  expect(view).not.toHaveProperty('run')
+  ]);
+  expect(view).not.toHaveProperty('document');
+  expect(view).not.toHaveProperty('recording');
+  expect(view).not.toHaveProperty('targetPicker');
+  expect(view).not.toHaveProperty('locatorPreview');
+  expect(view).not.toHaveProperty('validation');
+  expect(view).not.toHaveProperty('run');
 }
 
 async function createTargetedWorkflowDraft(harness: WorkflowHarness): Promise<void> {
-  await harness.editor.refresh()
-  expect(harness.editor.createScenario({
-    id: 'workflow-scenario',
-    name: 'Workflow verification',
-    initialStepFamily: 'delay',
-  })).toMatchObject({ ok: true })
+  await harness.editor.refresh();
+  expect(
+    harness.editor.createScenario({
+      id: 'workflow-scenario',
+      name: 'Workflow verification',
+      initialStepFamily: 'delay',
+    }),
+  ).toMatchObject({ ok: true });
   harness.editor.updateDocumentFields({
     name: 'Workflow verification edited',
     description: 'End-to-end recomposed flow',
-  })
-  expect(harness.editor.addStep('click')).toMatchObject({ ok: true })
+  });
+  expect(harness.editor.addStep('click')).toMatchObject({ ok: true });
 
   await harness.targetPicker.start({
     scenarioId: 'workflow-scenario',
     targetSlot: harness.editor.getSnapshot().selectedTargetSlot,
-  })
-  harness.inspectorAdapter.dispatchPointerMove(220, 122)
-  harness.inspectorAdapter.dispatchClick(220, 122)
-  await flushAsyncWork()
+  });
+  harness.inspectorAdapter.dispatchPointerMove(220, 122);
+  harness.inspectorAdapter.dispatchClick(220, 122);
+  await flushAsyncWork();
 
-  const selected = harness.targetPicker.getSnapshot().selected
+  const selected = harness.targetPicker.getSnapshot().selected;
   if (selected === undefined) {
-    throw new Error('Expected a selected target.')
+    throw new Error('Expected a selected target.');
   }
 
   await harness.locatorPreviewer.previewTarget(selected.target, {
     scenarioId: selected.scenarioId,
     targetSlot: selected.targetSlot,
-  })
-  const candidate = harness.locatorPreviewer.getSnapshot().candidates.find(
-    (locatorCandidate) => locatorCandidate.strategy === 'testId',
-  )
+  });
+  const candidate = harness.locatorPreviewer
+    .getSnapshot()
+    .candidates.find((locatorCandidate) => locatorCandidate.strategy === 'testId');
 
   if (candidate === undefined || selected.targetSlot === undefined) {
-    throw new Error('Expected a selectable testId candidate.')
+    throw new Error('Expected a selectable testId candidate.');
   }
 
-  expect(harness.editor.applyLocatorToTargetSlot(
-    selected.targetSlot,
-    candidate.locator,
-  )).toMatchObject({ ok: true })
+  expect(
+    harness.editor.applyLocatorToTargetSlot(selected.targetSlot, candidate.locator),
+  ).toMatchObject({ ok: true });
 }
 
 type ActiveFixtureTab = Readonly<{
-  id: number
-  active: true
-  url: string
-}> & Awaited<ReturnType<typeof fakeBrowser.tabs.create>>
+  id: number;
+  active: true;
+  url: string;
+}> &
+  Awaited<ReturnType<typeof fakeBrowser.tabs.create>>;
 
 async function createActiveTab(url: string): Promise<ActiveFixtureTab> {
-  const created = await fakeBrowser.tabs.create({ url })
+  const created = await fakeBrowser.tabs.create({ url });
   if (created.id === undefined) {
-    throw new Error('Expected fake tab id.')
+    throw new Error('Expected fake tab id.');
   }
 
   const activeTab = {
@@ -877,24 +869,20 @@ async function createActiveTab(url: string): Promise<ActiveFixtureTab> {
     id: created.id,
     active: true,
     url,
-  } satisfies ActiveFixtureTab
+  } satisfies ActiveFixtureTab;
 
   vi.spyOn(fakeBrowser.tabs, 'query').mockImplementation(async (queryInfo) => {
     if (queryInfo.active === true && queryInfo.currentWindow === true) {
-      return [activeTab]
+      return [activeTab];
     }
 
-    return []
-  })
+    return [];
+  });
 
-  return activeTab
+  return activeTab;
 }
 
-function scenarioRecord(
-  id: string,
-  name: string,
-  document: ScenarioDocument,
-): ScenarioRecord {
+function scenarioRecord(id: string, name: string, document: ScenarioDocument): ScenarioRecord {
   return {
     id,
     name,
@@ -902,10 +890,10 @@ function scenarioRecord(
     document,
     createdAt: '2026-06-18T00:00:00.000Z',
     updatedAt: '2026-06-18T00:00:00.000Z',
-  }
+  };
 }
 
-type FixtureElement = 'submit' | 'email' | 'copy'
+type FixtureElement = 'submit' | 'email' | 'copy';
 
 const submitTarget = {
   tagName: 'button',
@@ -921,7 +909,7 @@ const submitTarget = {
     width: 120,
     height: 48,
   },
-} satisfies InspectorTargetMetadata
+} satisfies InspectorTargetMetadata;
 
 const emailTarget = {
   tagName: 'input',
@@ -938,7 +926,7 @@ const emailTarget = {
     width: 140,
     height: 32,
   },
-} as const
+} as const;
 
 const copyTarget = {
   tagName: 'p',
@@ -952,105 +940,105 @@ const copyTarget = {
     width: 320,
     height: 36,
   },
-} as const
+} as const;
 
 function createFixtureInspectorAdapter() {
-  const highlight = vi.fn((_rect: InspectorTargetMetadata['rect']) => {})
-  const clearHighlight = vi.fn(() => {})
-  let pointerMove: ((event: ContentInspectorPointerEvent) => void) | undefined
-  let click: ((event: ContentInspectorPointerEvent) => void) | undefined
+  const highlight = vi.fn((_rect: InspectorTargetMetadata['rect']) => {});
+  const clearHighlight = vi.fn(() => {});
+  let pointerMove: ((event: ContentInspectorPointerEvent) => void) | undefined;
+  let click: ((event: ContentInspectorPointerEvent) => void) | undefined;
 
   return {
     onPointerMove(listener) {
-      pointerMove = listener
-      return () => {}
+      pointerMove = listener;
+      return () => {};
     },
     onClick(listener) {
-      click = listener
-      return () => {}
+      click = listener;
+      return () => {};
     },
     onKeydown() {
-      return () => {}
+      return () => {};
     },
     onPagehide() {
-      return () => {}
+      return () => {};
     },
     elementFromPoint() {
-      return 'submit'
+      return 'submit';
     },
     describeElement() {
-      return submitTarget
+      return submitTarget;
     },
     highlight,
     clearHighlight,
     dispatchPointerMove(clientX: number, clientY: number) {
-      pointerMove?.(pointerEvent(clientX, clientY))
+      pointerMove?.(pointerEvent(clientX, clientY));
     },
     dispatchClick(clientX: number, clientY: number) {
-      const event = pointerEvent(clientX, clientY)
-      click?.(event)
-      return event
+      const event = pointerEvent(clientX, clientY);
+      click?.(event);
+      return event;
     },
   } satisfies ContentInspectorAdapter<FixtureElement> & {
-    highlight: typeof highlight
-    clearHighlight: typeof clearHighlight
-    dispatchPointerMove(clientX: number, clientY: number): void
-    dispatchClick(clientX: number, clientY: number): ContentInspectorPointerEvent
-  }
+    highlight: typeof highlight;
+    clearHighlight: typeof clearHighlight;
+    dispatchPointerMove(clientX: number, clientY: number): void;
+    dispatchClick(clientX: number, clientY: number): ContentInspectorPointerEvent;
+  };
 }
 
 function createFixtureRecorderAdapter() {
-  const element = 'email' satisfies FixtureElement
-  const selectionElement = 'copy' satisfies FixtureElement
-  let value = ''
-  let selectedText = ''
-  let click: ((event: RecorderClickEvent<FixtureElement>) => void) | undefined
-  let input: ((event: RecorderTextEvent<FixtureElement>) => void) | undefined
-  let pointerDown: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined
-  let pointerUp: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined
-  let selectionChange: (() => void) | undefined
+  const element = 'email' satisfies FixtureElement;
+  const selectionElement = 'copy' satisfies FixtureElement;
+  let value = '';
+  let selectedText = '';
+  let click: ((event: RecorderClickEvent<FixtureElement>) => void) | undefined;
+  let input: ((event: RecorderTextEvent<FixtureElement>) => void) | undefined;
+  let pointerDown: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined;
+  let pointerUp: ((event: RecorderPointerEvent<FixtureElement>) => void) | undefined;
+  let selectionChange: (() => void) | undefined;
 
   return {
     onClick(listener) {
-      click = listener
-      return () => {}
+      click = listener;
+      return () => {};
     },
     onInput(listener) {
-      input = listener
-      return () => {}
+      input = listener;
+      return () => {};
     },
     onChange() {
-      return () => {}
+      return () => {};
     },
     onPointerDown(listener) {
-      pointerDown = listener
-      return () => {}
+      pointerDown = listener;
+      return () => {};
     },
     onPointerMove() {
-      return () => {}
+      return () => {};
     },
     onPointerUp(listener) {
-      pointerUp = listener
-      return () => {}
+      pointerUp = listener;
+      return () => {};
     },
     onSelectionChange(listener) {
-      selectionChange = listener
-      return () => {}
+      selectionChange = listener;
+      return () => {};
     },
     onDragStart() {
-      return () => {}
+      return () => {};
     },
     onDrop() {
-      return () => {}
+      return () => {};
     },
     onPagehide() {
-      return () => {}
+      return () => {};
     },
     describeElement(nextElement) {
-      return recorderTargetFor(nextElement)
+      return recorderTargetFor(nextElement);
     },
     readElementValue() {
-      return value
+      return value;
     },
     readSelection() {
       return {
@@ -1058,49 +1046,53 @@ function createFixtureRecorderAdapter() {
         activeTarget: selectionElement,
         anchorTarget: selectionElement,
         focusTarget: selectionElement,
-      } satisfies RecorderSelectionSnapshot<FixtureElement>
+      } satisfies RecorderSelectionSnapshot<FixtureElement>;
     },
     sensitiveInputReason() {
-      return null
+      return null;
     },
     dispatchInput(nextValue: string) {
-      value = nextValue
-      input?.({ target: element })
+      value = nextValue;
+      input?.({ target: element });
     },
     dispatchSelectionGesture() {
-      selectedText = 'Controlled selection text'
-      pointerDown?.(recorderPointerEvent(selectionElement, {
-        clientX: 32,
-        clientY: 172,
-        buttons: 1,
-      }))
-      selectionChange?.()
-      pointerUp?.(recorderPointerEvent(selectionElement, {
-        clientX: 156,
-        clientY: 172,
-        buttons: 0,
-      }))
+      selectedText = 'Controlled selection text';
+      pointerDown?.(
+        recorderPointerEvent(selectionElement, {
+          clientX: 32,
+          clientY: 172,
+          buttons: 1,
+        }),
+      );
+      selectionChange?.();
+      pointerUp?.(
+        recorderPointerEvent(selectionElement, {
+          clientX: 156,
+          clientY: 172,
+          buttons: 0,
+        }),
+      );
       click?.({
         target: selectionElement,
         clientX: 156,
         clientY: 172,
         button: 0,
-      })
+      });
     },
   } satisfies RecorderEventCaptureAdapter<FixtureElement> & {
-    dispatchInput(nextValue: string): void
-    dispatchSelectionGesture(): void
-  }
+    dispatchInput(nextValue: string): void;
+    dispatchSelectionGesture(): void;
+  };
 }
 
 function recorderTargetFor(element: FixtureElement) {
   switch (element) {
     case 'submit':
-      return submitTarget
+      return submitTarget;
     case 'email':
-      return emailTarget
+      return emailTarget;
     case 'copy':
-      return copyTarget
+      return copyTarget;
   }
 }
 
@@ -1116,20 +1108,20 @@ function recorderPointerEvent(
     buttons: input.buttons,
     pointerId: 1,
     pointerType: 'mouse',
-  }
+  };
 }
 
 function createLocatorPreviewActorble(): ContentLocatorPreviewActorble {
   return {
     resolveAll: vi.fn(async (locator: Readonly<{ kind: string; value?: string }>) => {
       if (locator.kind === 'testId' && locator.value === 'submit-button') {
-        return [{ id: 'submit' }]
+        return [{ id: 'submit' }];
       }
 
-      return []
+      return [];
     }) as unknown as ContentLocatorPreviewActorble['resolveAll'],
     destroy: vi.fn(),
-  }
+  };
 }
 
 function createRuntimeActorble(
@@ -1137,31 +1129,31 @@ function createRuntimeActorble(
   runtimeRuns: ScenarioDocument[],
   runtimeOptions: Readonly<{ mode: 'success' | 'failure' }>,
 ): ContentActorbleFacade {
-  const trace = options.trace as TraceCollector | undefined
+  const trace = options.trace as TraceCollector | undefined;
 
   const actorble = {
     run: vi.fn(async (scenario: ScenarioDocument) => {
       await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0)
-      })
-      runtimeRuns.push(scenario)
+        setTimeout(resolve, 0);
+      });
+      runtimeRuns.push(scenario);
       if (runtimeOptions.mode === 'failure') {
         trace?.appendEvent('workflow:failure', {
           stepId: scenario.steps.at(0)?.id,
-        })
-        throw new Error('Workflow target missing.')
+        });
+        throw new Error('Workflow target missing.');
       }
 
       for (const step of scenario.steps) {
         if (step.action === 'selectText') {
           trace?.appendEvent(`action.${step.action}`, {
             stepId: step.id,
-          })
+          });
         }
       }
       trace?.appendEvent('workflow:run', {
         stepCount: scenario.steps.length,
-      })
+      });
     }) as unknown as ContentActorbleFacade['run'],
     pause: vi.fn(),
     resume: vi.fn(),
@@ -1181,27 +1173,24 @@ function createRuntimeActorble(
       snapshots: [],
       warnings: [],
     })),
-  }
+  };
 
-  return actorble as unknown as ContentActorbleFacade
+  return actorble as unknown as ContentActorbleFacade;
 }
 
-function pointerEvent(
-  clientX: number,
-  clientY: number,
-): ContentInspectorPointerEvent {
+function pointerEvent(clientX: number, clientY: number): ContentInspectorPointerEvent {
   return {
     clientX,
     clientY,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
-  }
+  };
 }
 
 async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve()
+  await Promise.resolve();
   await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0)
-  })
-  await Promise.resolve()
+    setTimeout(resolve, 0);
+  });
+  await Promise.resolve();
 }

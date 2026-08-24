@@ -4,55 +4,55 @@ import {
   type ActorbleExtensionMessage,
   type ExtensionMessageKind,
   type RequiredRunCorrelation,
-} from '../../messaging/index.js'
-import { compileToBrowserRuntime } from '../../scenario/compile-to-browser-runtime.js'
+} from '../../messaging/index.js';
+import { compileToBrowserRuntime } from '../../scenario/compile-to-browser-runtime.js';
 import type {
   RecordedEmptyRecordingState,
   RecordedScenarioDraftHandoff,
-} from '../../recorder/workflow.js'
-import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
-import type { ScenarioRecord } from '../../storage/index.js'
-import type { RuntimeRunStatus } from '../../trace/index.js'
+} from '../../recorder/workflow.js';
+import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js';
+import type { ScenarioRecord } from '../../storage/index.js';
+import type { RuntimeRunStatus } from '../../trace/index.js';
 
 export type PopupRunSession = RequiredRunCorrelation &
   Readonly<{
-    type: 'run'
-    status: RuntimeRunStatus
-    startedAt: number
-    updatedAt: number
-    message?: string
-  }>
+    type: 'run';
+    status: RuntimeRunStatus;
+    startedAt: number;
+    updatedAt: number;
+    message?: string;
+  }>;
 
 export type PopupRecordSession = Readonly<{
-  type: 'record'
-  sessionId: string
-  tabId: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-  status: 'recording' | 'stopped' | 'failed'
-  startedAt: number
-  updatedAt: number
-  draftId?: string
-  message?: string
-}>
+  type: 'record';
+  sessionId: string;
+  tabId: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+  status: 'recording' | 'stopped' | 'failed';
+  startedAt: number;
+  updatedAt: number;
+  draftId?: string;
+  message?: string;
+}>;
 
 export type PopupBackgroundState = Readonly<{
-  kind: 'popup:state'
+  kind: 'popup:state';
   activeTab:
     | Readonly<{
-        ready: true
-        tabId: number
-        frameId?: number
-        url: string
+        ready: true;
+        tabId: number;
+        frameId?: number;
+        url: string;
       }>
     | Readonly<{
-        ready: false
-        issue: ExtensionIssue
-      }>
-  runSession?: PopupRunSession
-  recordSession?: PopupRecordSession
-}>
+        ready: false;
+        issue: ExtensionIssue;
+      }>;
+  runSession?: PopupRunSession;
+  recordSession?: PopupRecordSession;
+}>;
 
 export type PopupPendingAction =
   | 'refresh'
@@ -61,111 +61,111 @@ export type PopupPendingAction =
   | 'record:stop'
   | 'pause'
   | 'resume'
-  | 'stop'
+  | 'stop';
 
 export type PopupTabState =
   | Readonly<{ status: 'checking' }>
   | Readonly<{
-      status: 'ready'
-      tabId: number
-      frameId?: number
-      url: string
+      status: 'ready';
+      tabId: number;
+      frameId?: number;
+      url: string;
     }>
   | Readonly<{
-      status: 'blocked'
-      issue: ExtensionIssue
-    }>
+      status: 'blocked';
+      issue: ExtensionIssue;
+    }>;
 
 export type PopupRunControlsSnapshot = Readonly<{
-  scenarios: readonly ScenarioRecord[]
-  selectedScenarioId?: string
-  activeTab: PopupTabState
-  currentRun?: PopupRunSession
-  currentRecord?: PopupRecordSession
-  pendingAction: PopupPendingAction | null
-  issues: readonly ExtensionIssue[]
-}>
+  scenarios: readonly ScenarioRecord[];
+  selectedScenarioId?: string;
+  activeTab: PopupTabState;
+  currentRun?: PopupRunSession;
+  currentRecord?: PopupRecordSession;
+  pendingAction: PopupPendingAction | null;
+  issues: readonly ExtensionIssue[];
+}>;
 
 export type PopupButtonView = Readonly<{
-  label: string
-  disabled: boolean
-  pending: boolean
-}>
+  label: string;
+  disabled: boolean;
+  pending: boolean;
+}>;
 
 export type PopupRunControlsView = Readonly<{
-  statusMessage: string
-  statusTone: 'checking' | 'ready' | 'blocked' | 'error'
-  scenarioOptions: readonly Readonly<{ value: string; label: string }>[]
-  selectedScenarioId?: string
-  scenarioSelectDisabled: boolean
-  lastRunText: string
-  currentRunText: string
-  recordText: string
+  statusMessage: string;
+  statusTone: 'checking' | 'ready' | 'blocked' | 'error';
+  scenarioOptions: readonly Readonly<{ value: string; label: string }>[];
+  selectedScenarioId?: string;
+  scenarioSelectDisabled: boolean;
+  lastRunText: string;
+  currentRunText: string;
+  recordText: string;
   buttons: Readonly<{
-    run: PopupButtonView
-    record: PopupButtonView
-    pauseResume: PopupButtonView
-    stop: PopupButtonView
-  }>
-}>
+    run: PopupButtonView;
+    record: PopupButtonView;
+    pauseResume: PopupButtonView;
+    stop: PopupButtonView;
+  }>;
+}>;
 
 export type PopupRunControlsClient = Readonly<{
-  listScenarios(): Promise<ExtensionResult<readonly ScenarioRecord[]>>
-  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>
-}>
+  listScenarios(): Promise<ExtensionResult<readonly ScenarioRecord[]>>;
+  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>;
+}>;
 
 export type PopupRunControlsOptions = Readonly<{
-  createRunId?: () => string
-  createRecordId?: () => string
-  frameId?: number
-}>
+  createRunId?: () => string;
+  createRecordId?: () => string;
+  frameId?: number;
+}>;
 
 export type PopupCommandReceipt = Readonly<{
-  kind: ExtensionMessageKind
-  tabId: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-  contentReady: boolean
-  session?: PopupRunSession | PopupRecordSession
-  status?: RuntimeRunStatus | PopupRecordSession['status']
-  recordedDraft?: RecordedScenarioDraftHandoff
-  emptyRecording?: RecordedEmptyRecordingState
-}>
+  kind: ExtensionMessageKind;
+  tabId: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+  contentReady: boolean;
+  session?: PopupRunSession | PopupRecordSession;
+  status?: RuntimeRunStatus | PopupRecordSession['status'];
+  recordedDraft?: RecordedScenarioDraftHandoff;
+  emptyRecording?: RecordedEmptyRecordingState;
+}>;
 
 export type PopupRunControls = Readonly<{
-  refresh(): Promise<ExtensionResult<PopupRunControlsSnapshot>>
-  selectScenario(id: string): void
-  runSelectedScenario(): Promise<ExtensionResult<PopupCommandReceipt>>
-  startRecording(): Promise<ExtensionResult<PopupCommandReceipt>>
-  stopRecording(): Promise<ExtensionResult<PopupCommandReceipt>>
-  pauseCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>
-  resumeCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>
-  stopCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>
-  ingestMessage(message: unknown): boolean
-  getSnapshot(): PopupRunControlsSnapshot
-}>
+  refresh(): Promise<ExtensionResult<PopupRunControlsSnapshot>>;
+  selectScenario(id: string): void;
+  runSelectedScenario(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  startRecording(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  stopRecording(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  pauseCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  resumeCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  stopCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>>;
+  ingestMessage(message: unknown): boolean;
+  getSnapshot(): PopupRunControlsSnapshot;
+}>;
 
-let nextRunSequence = 1
-let nextRecordSequence = 1
+let nextRunSequence = 1;
+let nextRecordSequence = 1;
 
 export function createPopupRunControls(
   client: PopupRunControlsClient,
   options: PopupRunControlsOptions = {},
 ): PopupRunControls {
-  const frameId = options.frameId
-  const createRunId = options.createRunId ?? defaultRunId
-  const createRecordId = options.createRecordId ?? defaultRecordId
-  let snapshot = emptySnapshot()
+  const frameId = options.frameId;
+  const createRunId = options.createRunId ?? defaultRunId;
+  const createRecordId = options.createRecordId ?? defaultRecordId;
+  let snapshot = emptySnapshot();
 
   async function refresh(): Promise<ExtensionResult<PopupRunControlsSnapshot>> {
     snapshot = {
       ...snapshot,
       pendingAction: 'refresh',
       issues: [],
-    }
+    };
 
-    const scenarios = await client.listScenarios()
+    const scenarios = await client.listScenarios();
     if (!scenarios.ok) {
       snapshot = {
         ...snapshot,
@@ -173,28 +173,28 @@ export function createPopupRunControls(
         selectedScenarioId: undefined,
         pendingAction: null,
         issues: scenarios.issues,
-      }
-      return failure(scenarios.issues)
+      };
+      return failure(scenarios.issues);
     }
 
     const selectedScenarioId = selectDefaultScenarioId(
       scenarios.value,
       snapshot.selectedScenarioId,
-    )
+    );
     snapshot = {
       ...snapshot,
       scenarios: scenarios.value,
       selectedScenarioId,
-    }
+    };
 
-    const state = await refreshBackgroundState()
+    const state = await refreshBackgroundState();
     snapshot = {
       ...snapshot,
       pendingAction: null,
       issues: state.ok ? [] : state.issues,
-    }
+    };
 
-    return state.ok ? ok(snapshot) : failure(state.issues)
+    return state.ok ? ok(snapshot) : failure(state.issues);
   }
 
   function selectScenario(id: string): void {
@@ -202,33 +202,33 @@ export function createPopupRunControls(
       ...snapshot,
       selectedScenarioId: id,
       issues: [],
-    }
+    };
   }
 
   async function runSelectedScenario(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const scenario = selectedScenario(snapshot)
+    const scenario = selectedScenario(snapshot);
     if (scenario === undefined) {
       return setIssue({
         code: 'runtime_error',
         message: 'Select a scenario before running.',
-      })
+      });
     }
 
-    const target = await ensureReadyTarget()
+    const target = await ensureReadyTarget();
     if (!target.ok) {
-      return target
+      return target;
     }
 
-    const compilation = compileToBrowserRuntime(scenario.document)
+    const compilation = compileToBrowserRuntime(scenario.document);
     if (!compilation.ok) {
       snapshot = {
         ...snapshot,
         issues: compilation.issues,
-      }
-      return failure(compilation.issues)
+      };
+      return failure(compilation.issues);
     }
 
-    const runId = createRunId()
+    const runId = createRunId();
     return dispatchCommand(
       createExtensionMessage({
         kind: 'scenario:run',
@@ -242,13 +242,13 @@ export function createPopupRunControls(
       }),
       'run',
       'Run command',
-    )
+    );
   }
 
   async function startRecording(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const target = await ensureReadyTarget()
+    const target = await ensureReadyTarget();
     if (!target.ok) {
-      return target
+      return target;
     }
 
     return dispatchCommand(
@@ -263,16 +263,16 @@ export function createPopupRunControls(
       }),
       'record:start',
       'Record start command',
-    )
+    );
   }
 
   async function stopRecording(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const record = snapshot.currentRecord
+    const record = snapshot.currentRecord;
     if (record === undefined || record.status !== 'recording') {
       return setIssue({
         code: 'runtime_error',
         message: 'No active recording is available to stop.',
-      })
+      });
     }
 
     return dispatchCommand(
@@ -287,50 +287,50 @@ export function createPopupRunControls(
       }),
       'record:stop',
       'Record stop command',
-    )
+    );
   }
 
   async function pauseCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const run = currentRunForControl('running', 'No running scenario is available to pause.')
+    const run = currentRunForControl('running', 'No running scenario is available to pause.');
     if (!run.ok) {
-      return run
+      return run;
     }
 
-    return dispatchRunControl('scenario:pause', run.value, 'pause', 'Pause command')
+    return dispatchRunControl('scenario:pause', run.value, 'pause', 'Pause command');
   }
 
   async function resumeCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const run = currentRunForControl('paused', 'No paused scenario is available to resume.')
+    const run = currentRunForControl('paused', 'No paused scenario is available to resume.');
     if (!run.ok) {
-      return run
+      return run;
     }
 
-    return dispatchRunControl('scenario:resume', run.value, 'resume', 'Resume command')
+    return dispatchRunControl('scenario:resume', run.value, 'resume', 'Resume command');
   }
 
   async function stopCurrentRun(): Promise<ExtensionResult<PopupCommandReceipt>> {
-    const run = snapshot.currentRun
+    const run = snapshot.currentRun;
     if (run === undefined || !isActiveRunStatus(run.status)) {
       return setIssue({
         code: 'runtime_error',
         message: 'No active scenario run is available to stop.',
-      })
+      });
     }
 
-    return dispatchRunControl('scenario:stop', run, 'stop', 'Stop command')
+    return dispatchRunControl('scenario:stop', run, 'stop', 'Stop command');
   }
 
   function ingestMessage(message: unknown): boolean {
     if (!isActorbleExtensionMessage(message)) {
-      return false
+      return false;
     }
 
     if (message.kind !== 'runtime:status' || snapshot.currentRun === undefined) {
-      return false
+      return false;
     }
 
     if (!matchesRun(snapshot.currentRun, message.payload)) {
-      return false
+      return false;
     }
 
     snapshot = {
@@ -346,16 +346,16 @@ export function createPopupRunControls(
         updatedAt: Date.now(),
         ...(message.payload.message === undefined ? {} : { message: message.payload.message }),
       },
-    }
-    return true
+    };
+    return true;
   }
 
   function getSnapshot(): PopupRunControlsSnapshot {
-    return snapshot
+    return snapshot;
   }
 
   async function refreshBackgroundState(): Promise<ExtensionResult<PopupBackgroundState>> {
-    let response: unknown
+    let response: unknown;
     try {
       response = await client.sendMessage(
         createExtensionMessage({
@@ -365,39 +365,41 @@ export function createPopupRunControls(
             ...optionalScenarioId(snapshot.selectedScenarioId),
           },
         }),
-      )
+      );
     } catch (error) {
       return failure({
         code: 'routing_error',
         message: `Popup state could not be loaded: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const result = readExtensionResult<PopupBackgroundState>(response)
+    const result = readExtensionResult<PopupBackgroundState>(response);
     if (result === null) {
       return failure({
         code: 'unsupported_message',
         message: 'Popup state response was not understood.',
-      })
+      });
     }
 
     if (!result.ok) {
-      return result
+      return result;
     }
 
-    applyBackgroundState(result.value)
-    return result
+    applyBackgroundState(result.value);
+    return result;
   }
 
-  async function ensureReadyTarget(): Promise<ExtensionResult<Readonly<{ tabId: number; frameId?: number }>>> {
+  async function ensureReadyTarget(): Promise<
+    ExtensionResult<Readonly<{ tabId: number; frameId?: number }>>
+  > {
     if (snapshot.activeTab.status !== 'ready') {
-      const state = await refreshBackgroundState()
+      const state = await refreshBackgroundState();
       if (!state.ok) {
         snapshot = {
           ...snapshot,
           issues: state.issues,
-        }
-        return failure(state.issues)
+        };
+        return failure(state.issues);
       }
     }
 
@@ -405,17 +407,17 @@ export function createPopupRunControls(
       return ok({
         tabId: snapshot.activeTab.tabId,
         ...optionalFrameId(snapshot.activeTab.frameId),
-      })
+      });
     }
 
     if (snapshot.activeTab.status === 'blocked') {
-      return setIssue<Readonly<{ tabId: number; frameId?: number }>>(snapshot.activeTab.issue)
+      return setIssue<Readonly<{ tabId: number; frameId?: number }>>(snapshot.activeTab.issue);
     }
 
     return setIssue<Readonly<{ tabId: number; frameId?: number }>>({
       code: 'routing_error',
       message: 'Active tab readiness could not be resolved.',
-    })
+    });
   }
 
   async function dispatchRunControl(
@@ -436,7 +438,7 @@ export function createPopupRunControls(
       }),
       pendingAction,
       label,
-    )
+    );
   }
 
   async function dispatchCommand(
@@ -448,24 +450,24 @@ export function createPopupRunControls(
       ...snapshot,
       pendingAction,
       issues: [],
-    }
+    };
 
-    let response: unknown
+    let response: unknown;
     try {
-      response = await client.sendMessage(message)
+      response = await client.sendMessage(message);
     } catch (error) {
       return setIssue({
         code: 'runtime_error',
         message: `${label} failed: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const result = readExtensionResult<PopupCommandReceipt>(response)
+    const result = readExtensionResult<PopupCommandReceipt>(response);
     if (result === null) {
       return setIssue({
         code: 'unsupported_message',
         message: `${label} returned an unsupported response.`,
-      })
+      });
     }
 
     if (!result.ok) {
@@ -473,18 +475,18 @@ export function createPopupRunControls(
         ...snapshot,
         pendingAction: null,
         issues: result.issues,
-      }
-      return result
+      };
+      return result;
     }
 
-    const receipt = normalizeCommandReceipt(result.value)
-    applyCommandReceipt(receipt)
+    const receipt = normalizeCommandReceipt(result.value);
+    applyCommandReceipt(receipt);
     snapshot = {
       ...snapshot,
       pendingAction: null,
       issues: [],
-    }
-    return ok(receipt)
+    };
+    return ok(receipt);
   }
 
   function applyBackgroundState(state: PopupBackgroundState): void {
@@ -503,7 +505,7 @@ export function createPopupRunControls(
           },
       currentRun: state.runSession,
       currentRecord: state.recordSession,
-    }
+    };
   }
 
   function applyCommandReceipt(receipt: PopupCommandReceipt): void {
@@ -511,15 +513,15 @@ export function createPopupRunControls(
       snapshot = {
         ...snapshot,
         currentRun: receipt.session,
-      }
-      return
+      };
+      return;
     }
 
     if (receipt.session?.type === 'record') {
       snapshot = {
         ...snapshot,
         currentRecord: receipt.session,
-      }
+      };
     }
   }
 
@@ -528,24 +530,22 @@ export function createPopupRunControls(
     missingMessage: string,
   ): ExtensionResult<PopupRunSession> {
     if (snapshot.currentRun?.status === status) {
-      return ok(snapshot.currentRun)
+      return ok(snapshot.currentRun);
     }
 
     return setIssue<PopupRunSession>({
       code: 'runtime_error',
       message: missingMessage,
-    })
+    });
   }
 
-  function setIssue<TValue = PopupCommandReceipt>(
-    issue: ExtensionIssue,
-  ): ExtensionResult<TValue> {
+  function setIssue<TValue = PopupCommandReceipt>(issue: ExtensionIssue): ExtensionResult<TValue> {
     snapshot = {
       ...snapshot,
       pendingAction: null,
       issues: [issue],
-    }
-    return failure(issue)
+    };
+    return failure(issue);
   }
 
   return {
@@ -559,20 +559,21 @@ export function createPopupRunControls(
     stopCurrentRun,
     ingestMessage,
     getSnapshot,
-  }
+  };
 }
 
 export function createPopupRunControlsView(
   snapshot: PopupRunControlsSnapshot,
 ): PopupRunControlsView {
-  const anyPending = snapshot.pendingAction !== null
-  const tabReady = snapshot.activeTab.status === 'ready'
-  const selected = selectedScenario(snapshot)
-  const recordActive = snapshot.currentRecord?.status === 'recording'
-  const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
-  const canPause = snapshot.currentRun?.status === 'running'
-  const canResume = snapshot.currentRun?.status === 'paused'
-  const canStop = runActive
+  const anyPending = snapshot.pendingAction !== null;
+  const tabReady = snapshot.activeTab.status === 'ready';
+  const selected = selectedScenario(snapshot);
+  const recordActive = snapshot.currentRecord?.status === 'recording';
+  const runActive =
+    snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status);
+  const canPause = snapshot.currentRun?.status === 'running';
+  const canResume = snapshot.currentRun?.status === 'paused';
+  const canStop = runActive;
 
   return {
     statusMessage: statusMessage(snapshot),
@@ -596,8 +597,7 @@ export function createPopupRunControlsView(
         label: recordActive ? 'Stop recording' : 'Record',
         disabled: anyPending || !tabReady || (!recordActive && runActive),
         pending:
-          snapshot.pendingAction === 'record:start' ||
-          snapshot.pendingAction === 'record:stop',
+          snapshot.pendingAction === 'record:start' || snapshot.pendingAction === 'record:stop',
       },
       pauseResume: {
         label: canResume ? 'Resume' : 'Pause',
@@ -610,7 +610,7 @@ export function createPopupRunControlsView(
         pending: snapshot.pendingAction === 'stop',
       },
     },
-  }
+  };
 }
 
 function emptySnapshot(): PopupRunControlsSnapshot {
@@ -619,7 +619,7 @@ function emptySnapshot(): PopupRunControlsSnapshot {
     activeTab: { status: 'checking' },
     pendingAction: null,
     issues: [],
-  }
+  };
 }
 
 function selectDefaultScenarioId(
@@ -630,110 +630,111 @@ function selectDefaultScenarioId(
     currentSelection !== undefined &&
     scenarios.some((scenario) => scenario.id === currentSelection)
   ) {
-    return currentSelection
+    return currentSelection;
   }
 
-  return scenarios[0]?.id
+  return scenarios[0]?.id;
 }
 
 function selectedScenario(snapshot: PopupRunControlsSnapshot): ScenarioRecord | undefined {
-  return snapshot.scenarios.find((scenario) => scenario.id === snapshot.selectedScenarioId)
+  return snapshot.scenarios.find((scenario) => scenario.id === snapshot.selectedScenarioId);
 }
 
 function normalizeCommandReceipt(receipt: PopupCommandReceipt): PopupCommandReceipt {
   return {
     ...receipt,
     ...(receipt.session === undefined ? {} : { status: receipt.session.status }),
-  }
+  };
 }
 
 function readExtensionResult<TValue>(value: unknown): ExtensionResult<TValue> | null {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
-    return null
+    return null;
   }
 
   if (value.ok === true && 'value' in value) {
-    return value as ExtensionResult<TValue>
+    return value as ExtensionResult<TValue>;
   }
 
   if (value.ok === false && Array.isArray(value.issues)) {
-    return value as ExtensionResult<TValue>
+    return value as ExtensionResult<TValue>;
   }
 
-  return null
+  return null;
 }
 
 function statusMessage(snapshot: PopupRunControlsSnapshot): string {
-  const [issue] = snapshot.issues
+  const [issue] = snapshot.issues;
   if (issue !== undefined) {
-    return issue.message
+    return issue.message;
   }
 
   if (snapshot.pendingAction === 'refresh' || snapshot.activeTab.status === 'checking') {
-    return 'Checking tab'
+    return 'Checking tab';
   }
 
   if (snapshot.activeTab.status === 'ready') {
-    return 'Tab ready'
+    return 'Tab ready';
   }
 
-  return snapshot.activeTab.issue.message
+  return snapshot.activeTab.issue.message;
 }
 
 function statusTone(snapshot: PopupRunControlsSnapshot): PopupRunControlsView['statusTone'] {
   if (snapshot.issues.length > 0) {
-    return 'error'
+    return 'error';
   }
 
   switch (snapshot.activeTab.status) {
     case 'checking':
-      return 'checking'
+      return 'checking';
     case 'ready':
-      return 'ready'
+      return 'ready';
     case 'blocked':
-      return 'blocked'
+      return 'blocked';
   }
 }
 
 function lastRunText(scenario: ScenarioRecord | undefined): string {
   if (scenario === undefined) {
-    return 'No scenario selected'
+    return 'No scenario selected';
   }
 
   if (scenario.lastRun === undefined) {
-    return 'No runs yet'
+    return 'No runs yet';
   }
 
-  const label = capitalize(scenario.lastRun.status)
-  const error =
-    scenario.lastRun.error === undefined ? '' : `: ${scenario.lastRun.error}`
-  return `${label} at ${scenario.lastRun.completedAt}${error}`
+  const label = capitalize(scenario.lastRun.status);
+  const error = scenario.lastRun.error === undefined ? '' : `: ${scenario.lastRun.error}`;
+  return `${label} at ${scenario.lastRun.completedAt}${error}`;
 }
 
 function currentRunText(run: PopupRunSession | undefined): string {
   if (run === undefined) {
-    return 'No active run'
+    return 'No active run';
   }
 
   return run.message === undefined
     ? capitalize(run.status)
-    : `${capitalize(run.status)}: ${run.message}`
+    : `${capitalize(run.status)}: ${run.message}`;
 }
 
 function recordText(record: PopupRecordSession | undefined): string {
   if (record === undefined) {
-    return 'Not recording'
+    return 'Not recording';
   }
 
   if (record.status === 'recording') {
-    return 'Recording'
+    return 'Recording';
   }
 
   if (record.status === 'failed') {
-    return record.message === undefined ? 'Recording failed' : `Recording failed: ${record.message}`
+    return record.message === undefined
+      ? 'Recording failed'
+      : `Recording failed: ${record.message}`;
   }
 
-  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
+  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready';
 }
 
 function matchesRun(currentRun: PopupRunSession, payload: RequiredRunCorrelation): boolean {
@@ -742,41 +743,41 @@ function matchesRun(currentRun: PopupRunSession, payload: RequiredRunCorrelation
     payload.frameId === currentRun.frameId &&
     payload.scenarioId === currentRun.scenarioId &&
     payload.runId === currentRun.runId
-  )
+  );
 }
 
 function isActiveRunStatus(status: RuntimeRunStatus): boolean {
-  return status === 'running' || status === 'paused'
+  return status === 'running' || status === 'paused';
 }
 
 function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
-  return frameId === undefined ? {} : { frameId }
+  return frameId === undefined ? {} : { frameId };
 }
 
 function optionalScenarioId(scenarioId: string | undefined): Readonly<{ scenarioId?: string }> {
-  return scenarioId === undefined ? {} : { scenarioId }
+  return scenarioId === undefined ? {} : { scenarioId };
 }
 
 function optionalRunId(runId: string | undefined): Readonly<{ runId?: string }> {
-  return runId === undefined ? {} : { runId }
+  return runId === undefined ? {} : { runId };
 }
 
 function defaultRunId(): string {
-  return `run-${Date.now()}-${nextRunSequence++}`
+  return `run-${Date.now()}-${nextRunSequence++}`;
 }
 
 function defaultRecordId(): string {
-  return `record-${Date.now()}-${nextRecordSequence++}`
+  return `record-${Date.now()}-${nextRecordSequence++}`;
 }
 
 function capitalize(value: string): string {
-  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
 function describeUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -3,11 +3,11 @@ import {
   actorbleError,
   cancellationError,
   timeoutError,
-} from '../../shared/index.js'
-import { BrowserEventDispatcher } from '../../platform/platform-adapter/event-dispatcher/index.js'
-import { BrowserFocusEngine } from '../focus-engine/index.js'
-import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../shared/index.js';
+import { BrowserEventDispatcher } from '../../platform/platform-adapter/event-dispatcher/index.js';
+import { BrowserFocusEngine } from '../focus-engine/index.js';
+import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js';
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js';
 import type {
   ActorbleListener,
   ActorbleErrorDetails,
@@ -18,76 +18,76 @@ import type {
   TargetHandle,
   TargetLike,
   TypeOptions,
-} from '../../shared/index.js'
-import type { FocusEngine } from '../focus-engine/index.js'
+} from '../../shared/index.js';
+import type { FocusEngine } from '../focus-engine/index.js';
 import type {
   EventDispatcher,
   TextInputMutationPort,
-} from '../../platform/platform-adapter/event-dispatcher/index.js'
-import type { DomPort, EventDispatchPort } from '../../shared/index.js'
-import type { InteractionStateStore } from '../../state/interaction-state-store/index.js'
-import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../platform/platform-adapter/event-dispatcher/index.js';
+import type { DomPort, EventDispatchPort } from '../../shared/index.js';
+import type { InteractionStateStore } from '../../state/interaction-state-store/index.js';
+import type { TimelineEngine } from '../../runtime/timeline-engine/index.js';
 
-export type TextInputStrategy = 'type' | 'typeInto' | 'fill'
+export type TextInputStrategy = 'type' | 'typeInto' | 'fill';
 
 export type TextInputResult = Readonly<{
-  strategy: TextInputStrategy
-  text: string
-}>
+  strategy: TextInputStrategy;
+  text: string;
+}>;
 
 export type TextInputKeystrokeEvent = Readonly<{
-  strategy: Extract<TextInputStrategy, 'type' | 'typeInto'>
-  target: TargetHandle
-  text: string
-}>
+  strategy: Extract<TextInputStrategy, 'type' | 'typeInto'>;
+  target: TargetHandle;
+  text: string;
+}>;
 
 export type TextInputEngineOptions = Readonly<{
-  focus?: FocusEngine
-  events?: EventDispatchPort & Partial<TextInputMutationPort>
-  store?: InteractionStateStore
-  dom?: DomPort
-  timeline?: TimelineEngine
-  onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>
-}>
+  focus?: FocusEngine;
+  events?: EventDispatchPort & Partial<TextInputMutationPort>;
+  store?: InteractionStateStore;
+  dom?: DomPort;
+  timeline?: TimelineEngine;
+  onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>;
+}>;
 
 export interface TextInputEngine {
-  type(text: string, options?: TypeOptions): Promise<TextInputResult>
-  typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<TextInputResult>
-  fill(target: TargetLike, text: string, options?: FillOptions): Promise<TextInputResult>
+  type(text: string, options?: TypeOptions): Promise<TextInputResult>;
+  typeInto(target: TargetLike, text: string, options?: TypeOptions): Promise<TextInputResult>;
+  fill(target: TargetLike, text: string, options?: FillOptions): Promise<TextInputResult>;
 }
 
 export class BrowserTextInputEngine implements TextInputEngine {
-  readonly #focus: FocusEngine
-  readonly #events: EventDispatchPort
-  readonly #mutations: TextInputMutationPort
-  readonly #store: InteractionStateStore
-  readonly #timeline: TimelineEngine
-  readonly #onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>
+  readonly #focus: FocusEngine;
+  readonly #events: EventDispatchPort;
+  readonly #mutations: TextInputMutationPort;
+  readonly #store: InteractionStateStore;
+  readonly #timeline: TimelineEngine;
+  readonly #onKeystroke?: ActorbleListener<TextInputKeystrokeEvent>;
 
   constructor(options: TextInputEngineOptions = {}) {
-    const store = options.store ?? new BrowserInteractionStateStore()
-    const eventDispatcher = options.events ?? new BrowserEventDispatcher()
+    const store = options.store ?? new BrowserInteractionStateStore();
+    const eventDispatcher = options.events ?? new BrowserEventDispatcher();
 
-    this.#focus = options.focus ?? new BrowserFocusEngine({ dom: options.dom, store })
-    this.#events = eventDispatcher
-    this.#mutations = textMutationPort(eventDispatcher)
-    this.#store = store
-    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
-    this.#onKeystroke = options.onKeystroke
+    this.#focus = options.focus ?? new BrowserFocusEngine({ dom: options.dom, store });
+    this.#events = eventDispatcher;
+    this.#mutations = textMutationPort(eventDispatcher);
+    this.#store = store;
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine();
+    this.#onKeystroke = options.onKeystroke;
   }
 
   async type(text: string, options: TypeOptions = {}): Promise<TextInputResult> {
-    const focused = await this.#focus.getFocused()
+    const focused = await this.#focus.getFocused();
 
     if (!focused.active) {
       throw textInputError('type requires a focused editable target.', {
         strategy: 'type',
-      })
+      });
     }
 
-    await this.#typeTarget('type', focused.active, text, options)
+    await this.#typeTarget('type', focused.active, text, options);
 
-    return { strategy: 'type', text }
+    return { strategy: 'type', text };
   }
 
   async typeInto(
@@ -98,30 +98,27 @@ export class BrowserTextInputEngine implements TextInputEngine {
     const focused =
       options.focusStrategy === 'none'
         ? await this.#focus.getFocused()
-        : await this.#focus.focus(target)
+        : await this.#focus.focus(target);
 
     if (!focused.active) {
       throw textInputError('typeInto could not focus an editable target.', {
         strategy: 'typeInto',
         focusStrategy: options.focusStrategy ?? 'programmatic',
-      })
+      });
     }
 
-    if (
-      options.focusStrategy === 'none' &&
-      !focusedTargetMatchesRequest(focused.active, target)
-    ) {
+    if (options.focusStrategy === 'none' && !focusedTargetMatchesRequest(focused.active, target)) {
       throw textInputError('typeInto requires the requested target to already be focused.', {
         strategy: 'typeInto',
         focusStrategy: 'none',
         targetId: isTargetHandle(target) ? target.id : undefined,
         focusedTargetId: focused.active.id,
-      })
+      });
     }
 
-    await this.#typeTarget('typeInto', focused.active, text, options)
+    await this.#typeTarget('typeInto', focused.active, text, options);
 
-    return { strategy: 'typeInto', text }
+    return { strategy: 'typeInto', text };
   }
 
   async fill(
@@ -129,19 +126,19 @@ export class BrowserTextInputEngine implements TextInputEngine {
     text: string,
     options: FillOptions = {},
   ): Promise<TextInputResult> {
-    const focused = await this.#focus.focus(target)
+    const focused = await this.#focus.focus(target);
 
     if (!focused.active) {
       throw textInputError('fill could not focus an editable target.', {
         strategy: 'fill',
-      })
+      });
     }
 
-    const targetHandle = focused.active
+    const targetHandle = focused.active;
 
     await this.#withTyping(targetHandle, async () => {
-      this.#assertEditable(targetHandle)
-      const inputType = options.clear === false ? 'insertText' : 'insertReplacementText'
+      this.#assertEditable(targetHandle);
+      const inputType = options.clear === false ? 'insertText' : 'insertReplacementText';
 
       if (
         !this.#events.dispatchTextInputEvent({
@@ -151,24 +148,24 @@ export class BrowserTextInputEngine implements TextInputEngine {
           inputType,
         })
       ) {
-        return
+        return;
       }
 
       this.#mutations.mutateTextInput(
         targetHandle.element,
         text,
         options.clear === false ? 'insert' : 'replace',
-      )
+      );
       this.#events.dispatchTextInputEvent({
         type: 'input',
         target: targetHandle.element,
         text,
         inputType,
-      })
-      this.#events.dispatchTextInputEvent({ type: 'change', target: targetHandle.element })
-    })
+      });
+      this.#events.dispatchTextInputEvent({ type: 'change', target: targetHandle.element });
+    });
 
-    return { strategy: 'fill', text }
+    return { strategy: 'fill', text };
   }
 
   async #typeTarget(
@@ -177,21 +174,21 @@ export class BrowserTextInputEngine implements TextInputEngine {
     text: string,
     options: TypeOptions,
   ): Promise<void> {
-    const operation = textOperationName(strategy)
+    const operation = textOperationName(strategy);
 
     await withTextOperationTimeout(operation, options, (signal) =>
       this.#withTyping(target, async () => {
-        this.#assertEditable(target)
+        this.#assertEditable(target);
 
-        const parts = splitGraphemes(text)
-        let mutated = false
+        const parts = splitGraphemes(text);
+        let mutated = false;
 
         for (const [index, part] of parts.entries()) {
           if (index > 0) {
-            await delayBetweenInputs(this.#timeline, options.delay, signal)
+            await delayBetweenInputs(this.#timeline, options.delay, signal);
           }
 
-          assertNotCancelled(operation, signal)
+          assertNotCancelled(operation, signal);
 
           if (
             !this.#events.dispatchTextInputEvent({
@@ -201,44 +198,44 @@ export class BrowserTextInputEngine implements TextInputEngine {
               inputType: 'insertText',
             })
           ) {
-            continue
+            continue;
           }
 
-          assertNotCancelled(operation, signal)
-          this.#mutations.mutateTextInput(target.element, part, 'insert')
-          mutated = true
+          assertNotCancelled(operation, signal);
+          this.#mutations.mutateTextInput(target.element, part, 'insert');
+          mutated = true;
           this.#events.dispatchTextInputEvent({
             type: 'input',
             target: target.element,
             text: part,
             inputType: 'insertText',
-          })
-          this.#emitKeystroke({ strategy, target, text: part })
+          });
+          this.#emitKeystroke({ strategy, target, text: part });
         }
 
         if (mutated) {
-          this.#events.dispatchTextInputEvent({ type: 'change', target: target.element })
+          this.#events.dispatchTextInputEvent({ type: 'change', target: target.element });
         }
       }),
-    )
+    );
   }
 
   async #withTyping(target: TargetHandle, operation: () => Promise<void>): Promise<void> {
-    const snapshot = this.#store.snapshot()
-    const focusVisible = snapshot.focused?.id === target.id && snapshot.focusVisible
+    const snapshot = this.#store.snapshot();
+    const focusVisible = snapshot.focused?.id === target.id && snapshot.focusVisible;
 
-    this.#store.setFocused(target, focusVisible)
-    this.#store.setTyping(target)
+    this.#store.setFocused(target, focusVisible);
+    this.#store.setTyping(target);
 
     try {
-      await operation()
+      await operation();
     } finally {
-      this.#store.setTyping(null)
+      this.#store.setTyping(null);
     }
   }
 
   #emitKeystroke(event: TextInputKeystrokeEvent): void {
-    this.#onKeystroke?.(event)
+    this.#onKeystroke?.(event);
   }
 
   #assertEditable(target: TargetHandle): void {
@@ -246,29 +243,27 @@ export class BrowserTextInputEngine implements TextInputEngine {
       throw textInputError('Text Input Engine target is not editable.', {
         targetId: target.id,
         description: target.debug.description,
-      })
+      });
     }
   }
 }
 
-type TextOperationName = 'text.type' | 'text.typeInto'
+type TextOperationName = 'text.type' | 'text.typeInto';
 
 type GraphemeSegmenter = Readonly<{
-  segment(text: string): Iterable<Readonly<{ segment: string }>>
-}>
+  segment(text: string): Iterable<Readonly<{ segment: string }>>;
+}>;
 
 type IntlWithSegmenter = typeof Intl &
   Readonly<{
     Segmenter?: new (
       locales?: string | readonly string[],
       options?: Readonly<{ granularity?: 'grapheme' }>,
-    ) => GraphemeSegmenter
-  }>
+    ) => GraphemeSegmenter;
+  }>;
 
-export function createTextInputEngine(
-  options: TextInputEngineOptions = {},
-): TextInputEngine {
-  return new BrowserTextInputEngine(options)
+export function createTextInputEngine(options: TextInputEngineOptions = {}): TextInputEngine {
+  return new BrowserTextInputEngine(options);
 }
 
 function textMutationPort(
@@ -278,7 +273,7 @@ function textMutationPort(
     typeof events.isEditableTarget === 'function' &&
     typeof events.mutateTextInput === 'function'
   ) {
-    return events as EventDispatcher
+    return events as EventDispatcher;
   }
 
   throw actorbleError(
@@ -287,26 +282,26 @@ function textMutationPort(
     {
       details: { boundary: 'text-input-engine' },
     },
-  )
+  );
 }
 
 function textOperationName(
   strategy: Extract<TextInputStrategy, 'type' | 'typeInto'>,
 ): TextOperationName {
-  return strategy === 'type' ? 'text.type' : 'text.typeInto'
+  return strategy === 'type' ? 'text.type' : 'text.typeInto';
 }
 
 function splitGraphemes(text: string): readonly string[] {
-  const Segmenter = (Intl as IntlWithSegmenter).Segmenter
+  const Segmenter = (Intl as IntlWithSegmenter).Segmenter;
 
   if (typeof Segmenter === 'function') {
     return Array.from(
       new Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
       (part) => part.segment,
-    )
+    );
   }
 
-  return Array.from(text)
+  return Array.from(text);
 }
 
 async function delayBetweenInputs(
@@ -315,10 +310,10 @@ async function delayBetweenInputs(
   signal: CancellationSignalLike | undefined,
 ): Promise<void> {
   if (delay === undefined || !Number.isFinite(delay) || delay <= 0) {
-    return
+    return;
   }
 
-  await timeline.delay(delay, signal === undefined ? {} : { signal })
+  await timeline.delay(delay, signal === undefined ? {} : { signal });
 }
 
 function withTextOperationTimeout<TValue>(
@@ -328,82 +323,82 @@ function withTextOperationTimeout<TValue>(
 ): Promise<TValue> {
   if (options.timeout === undefined) {
     if (options.signal?.aborted) {
-      return Promise.reject(cancellationError(operation, options.signal.reason))
+      return Promise.reject(cancellationError(operation, options.signal.reason));
     }
 
     return run(options.signal).catch((error: unknown) => {
-      throw normalizeTextOperationError(error, operation, options.timeout)
-    })
+      throw normalizeTextOperationError(error, operation, options.timeout);
+    });
   }
 
-  const timeout = normalizeDuration(options.timeout)
-  const signal = options.signal
+  const timeout = normalizeDuration(options.timeout);
+  const signal = options.signal;
 
   if (signal?.aborted) {
-    return Promise.reject(cancellationError(operation, signal.reason))
+    return Promise.reject(cancellationError(operation, signal.reason));
   }
 
-  const controller = new AbortController()
+  const controller = new AbortController();
   const timeoutFailure = timeoutError(operation, timeout, {
     details: textOperationDetails(),
-  })
+  });
 
   return new Promise((resolve, reject) => {
-    let timerId: ReturnType<typeof setTimeout> | null = null
-    let finished = false
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let finished = false;
 
     const cleanup = () => {
       if (timerId !== null) {
-        clearTimeout(timerId)
-        timerId = null
+        clearTimeout(timerId);
+        timerId = null;
       }
 
-      signal?.removeEventListener('abort', onAbort)
-    }
+      signal?.removeEventListener('abort', onAbort);
+    };
 
     const complete = (value: TValue) => {
       if (finished) {
-        return
+        return;
       }
 
-      finished = true
-      cleanup()
-      resolve(value)
-    }
+      finished = true;
+      cleanup();
+      resolve(value);
+    };
 
     const fail = (error: ActorbleError) => {
       if (finished) {
-        return
+        return;
       }
 
-      finished = true
-      cleanup()
-      reject(error)
-    }
+      finished = true;
+      cleanup();
+      reject(error);
+    };
 
     const onAbort = () => {
-      controller.abort(signal?.reason)
-      fail(cancellationError(operation, signal?.reason))
-    }
+      controller.abort(signal?.reason);
+      fail(cancellationError(operation, signal?.reason));
+    };
 
     timerId = setTimeout(() => {
-      controller.abort(timeoutFailure)
-      fail(timeoutFailure)
-    }, timeout)
+      controller.abort(timeoutFailure);
+      fail(timeoutFailure);
+    }, timeout);
 
-    signal?.addEventListener('abort', onAbort, { once: true })
+    signal?.addEventListener('abort', onAbort, { once: true });
     run(controller.signal).then(complete, (error) => {
-      fail(normalizeTextOperationError(error, operation, timeout))
-    })
-  })
+      fail(normalizeTextOperationError(error, operation, timeout));
+    });
+  });
 }
 
 function normalizeDuration(duration: DurationMs): DurationMs {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return 0
+    return 0;
   }
 
-  return duration
+  return duration;
 }
 
 function assertNotCancelled(
@@ -411,7 +406,7 @@ function assertNotCancelled(
   signal: CancellationSignalLike | undefined,
 ): void {
   if (signal?.aborted) {
-    throw cancellationError(operation, signal.reason)
+    throw cancellationError(operation, signal.reason);
   }
 }
 
@@ -422,7 +417,7 @@ function normalizeTextOperationError(
 ): ActorbleError {
   if (error instanceof ActorbleError) {
     if (error.code === 'ACTION_CANCELLED' && error.details?.operation !== operation) {
-      return cancellationError(operation, error.details?.reason)
+      return cancellationError(operation, error.details?.reason);
     }
 
     if (
@@ -433,61 +428,58 @@ function normalizeTextOperationError(
       return timeoutError(operation, normalizeDuration(timeout), {
         cause: error,
         details: textOperationDetails(),
-      })
+      });
     }
 
-    return error
+    return error;
   }
 
   return actorbleError('PLATFORM_UNSUPPORTED', `${operation} failed.`, {
     cause: error,
     details: textOperationDetails(),
-  })
+  });
 }
 
 function textOperationDetails(): ActorbleErrorDetails {
-  return { boundary: 'text-input-engine' }
+  return { boundary: 'text-input-engine' };
 }
 
-function textInputError(
-  message: string,
-  details: Readonly<Record<string, unknown>>,
-): Error {
+function textInputError(message: string, details: Readonly<Record<string, unknown>>): Error {
   return actorbleError('INTERACTABILITY_FAILED', message, {
     details: {
       boundary: 'text-input-engine',
       ...details,
     },
-  })
+  });
 }
 
 function focusedTargetMatchesRequest(
   focusedTarget: TargetHandle,
   requestedTarget: TargetLike,
 ): boolean {
-  const requestedElement = comparableTargetElement(requestedTarget)
+  const requestedElement = comparableTargetElement(requestedTarget);
 
   if (!requestedElement) {
-    return false
+    return false;
   }
 
   return (
     focusedTarget.element === requestedElement ||
     requestedElement.contains(focusedTarget.element) ||
     focusedTarget.element.contains(requestedElement)
-  )
+  );
 }
 
 function comparableTargetElement(target: TargetLike): Element | null {
   if (isTargetHandle(target)) {
-    return target.element
+    return target.element;
   }
 
   if (isLocator(target)) {
-    return target.kind === 'element' ? target.element : null
+    return target.kind === 'element' ? target.element : null;
   }
 
-  return isElementLike(target) ? target : null
+  return isElementLike(target) ? target : null;
 }
 
 function isTargetHandle(target: TargetLike): target is TargetHandle {
@@ -498,13 +490,13 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
     'element' in target &&
     'resolvedAt' in target &&
     'debug' in target
-  )
+  );
 }
 
 function isLocator(target: TargetLike): target is Locator {
-  return typeof target === 'object' && target !== null && 'kind' in target
+  return typeof target === 'object' && target !== null && 'kind' in target;
 }
 
 function isElementLike(target: TargetLike): target is Element {
-  return typeof target === 'object' && target !== null && 'nodeType' in target
+  return typeof target === 'object' && target !== null && 'nodeType' in target;
 }

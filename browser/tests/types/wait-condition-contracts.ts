@@ -15,11 +15,11 @@ import {
   url,
   value,
   visible,
-} from '../../src/index.js'
-import type { ScenarioStep, WaitCondition } from '../../src/index.js'
+} from '../../src/index.js';
+import type { ScenarioStep, WaitCondition } from '../../src/index.js';
 
-const actorble = new Actorble()
-const target = css('#save')
+const actorble = new Actorble();
+const target = css('#save');
 const conditions: readonly WaitCondition[] = [
   visible(target),
   hidden(target),
@@ -39,15 +39,15 @@ const conditions: readonly WaitCondition[] = [
   all(visible(target), enabled(target)),
   any(text('Saved'), url('/projects/1')),
   all(attached(target), any(enabled(target), disabled(target))),
-]
+];
 const steps: readonly ScenarioStep[] = conditions.map((condition) => ({
   action: 'waitFor',
   input: condition,
   options: { timeout: 250 },
-}))
+}));
 
 for (const condition of conditions) {
-  void actorble.waitFor(condition, { timeout: 250 })
+  void actorble.waitFor(condition, { timeout: 250 });
 }
 
-void steps
+void steps;

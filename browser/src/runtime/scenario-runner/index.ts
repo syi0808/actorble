@@ -1,28 +1,28 @@
-import { BrowserActionOrchestrator } from '../action-orchestrator/index.js'
-import { BrowserDiagnosticsTrace } from '../../diagnostics/diagnostics-trace/index.js'
+import { BrowserActionOrchestrator } from '../action-orchestrator/index.js';
+import { BrowserDiagnosticsTrace } from '../../diagnostics/diagnostics-trace/index.js';
 import {
   resolveActionOptions,
   resolveActorbleOptions,
   resolveRunOptions,
-} from '../../options/index.js'
-import { BrowserTimelineEngine } from '../timeline-engine/index.js'
+} from '../../options/index.js';
+import { BrowserTimelineEngine } from '../timeline-engine/index.js';
 import {
   ActorbleError,
   actorbleError,
   cancellationError,
   timeoutError,
-} from '../../shared/index.js'
-import { BrowserLayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
-import type { ActionOrchestrator } from '../action-orchestrator/index.js'
-import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
-import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js'
+} from '../../shared/index.js';
+import { BrowserLayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js';
+import type { ActionOrchestrator } from '../action-orchestrator/index.js';
+import type { LayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js';
+import type { SpanRecorder, TraceSpanHandle } from '../../diagnostics/diagnostics-trace/index.js';
 import type {
   BrowserActionName,
   BrowserActionOptions,
   BrowserActorbleOptions,
   ResolvedActorbleOptions,
   ResolvedRunOptions,
-} from '../../options/index.js'
+} from '../../options/index.js';
 import type {
   RunOptions,
   Scenario,
@@ -33,173 +33,173 @@ import type {
   ScrollPosition,
   TargetLike,
   WaitCondition,
-} from '../../shared/index.js'
-import type { TimelineEngine } from '../timeline-engine/index.js'
+} from '../../shared/index.js';
+import type { TimelineEngine } from '../timeline-engine/index.js';
 
-export type ScenarioRunStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'failed'
+export type ScenarioRunStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'failed';
 
 export type ScenarioRunSnapshot = Readonly<{
-  scenario: Scenario | null
-  status: ScenarioRunStatus
-  currentStepIndex: number | null
-}>
+  scenario: Scenario | null;
+  status: ScenarioRunStatus;
+  currentStepIndex: number | null;
+}>;
 
 export interface ScenarioRunner {
-  run(scenario: Scenario, options?: RunOptions): Promise<void>
-  pause(): void
-  resume(): void
-  stop(): void
-  getSnapshot(): ScenarioRunSnapshot
+  run(scenario: Scenario, options?: RunOptions): Promise<void>;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  getSnapshot(): ScenarioRunSnapshot;
 }
 
 export type ScenarioRunnerOptions = Readonly<{
-  actorble?: BrowserActorbleOptions | ResolvedActorbleOptions
-  layoutInvalidation?: LayoutInvalidationTracker
-  orchestrator?: ActionOrchestrator
-  timeline?: TimelineEngine
-  trace?: SpanRecorder
-}>
+  actorble?: BrowserActorbleOptions | ResolvedActorbleOptions;
+  layoutInvalidation?: LayoutInvalidationTracker;
+  orchestrator?: ActionOrchestrator;
+  timeline?: TimelineEngine;
+  trace?: SpanRecorder;
+}>;
 
 export class BrowserScenarioRunner implements ScenarioRunner {
-  readonly #actorbleOptions: ResolvedActorbleOptions
-  readonly #layoutInvalidation: LayoutInvalidationTracker
-  readonly #orchestrator: ActionOrchestrator
-  readonly #timeline: TimelineEngine
-  readonly #trace: SpanRecorder
-  #scenario: Scenario | null = null
-  #status: ScenarioRunStatus = 'idle'
-  #currentStepIndex: number | null = null
-  #controller: AbortController | null = null
-  #pauseRequested = false
-  #resumePausedRun: (() => void) | null = null
+  readonly #actorbleOptions: ResolvedActorbleOptions;
+  readonly #layoutInvalidation: LayoutInvalidationTracker;
+  readonly #orchestrator: ActionOrchestrator;
+  readonly #timeline: TimelineEngine;
+  readonly #trace: SpanRecorder;
+  #scenario: Scenario | null = null;
+  #status: ScenarioRunStatus = 'idle';
+  #currentStepIndex: number | null = null;
+  #controller: AbortController | null = null;
+  #pauseRequested = false;
+  #resumePausedRun: (() => void) | null = null;
 
   constructor(options: ScenarioRunnerOptions = {}) {
-    const actorbleOptions = resolveActorbleOptions(options.actorble)
-    const trace = options.trace ?? new BrowserDiagnosticsTrace()
-    const timeline = options.timeline ?? new BrowserTimelineEngine()
+    const actorbleOptions = resolveActorbleOptions(options.actorble);
+    const trace = options.trace ?? new BrowserDiagnosticsTrace();
+    const timeline = options.timeline ?? new BrowserTimelineEngine();
     const layoutInvalidation =
-      options.layoutInvalidation ?? new BrowserLayoutInvalidationTracker({ timeline })
+      options.layoutInvalidation ?? new BrowserLayoutInvalidationTracker({ timeline });
 
-    this.#actorbleOptions = actorbleOptions
-    this.#layoutInvalidation = layoutInvalidation
+    this.#actorbleOptions = actorbleOptions;
+    this.#layoutInvalidation = layoutInvalidation;
     this.#orchestrator =
       options.orchestrator ??
-      new BrowserActionOrchestrator({ layoutInvalidation, timeline, trace })
-    this.#timeline = timeline
-    this.#trace = trace
+      new BrowserActionOrchestrator({ layoutInvalidation, timeline, trace });
+    this.#timeline = timeline;
+    this.#trace = trace;
   }
 
   async run(scenario: Scenario, options: RunOptions = {}): Promise<void> {
     if (this.#controller !== null) {
       throw actorbleError('PLATFORM_UNSUPPORTED', 'A scenario is already running.', {
         details: { status: this.#status },
-      })
+      });
     }
 
-    const runOptions = resolveRunOptions(options)
+    const runOptions = resolveRunOptions(options);
     const span = this.#trace.startSpan('scenario.run', {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
       steps: scenario.steps.length,
       timeout: runOptions.timeout,
       startedAt: this.#timeline.now(),
-    })
-    const controller = new AbortController()
-    const cleanupExternalAbort = linkExternalAbort(runOptions.signal, controller)
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    });
+    const controller = new AbortController();
+    const cleanupExternalAbort = linkExternalAbort(runOptions.signal, controller);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    this.#scenario = scenario
-    this.#status = 'running'
-    this.#currentStepIndex = null
-    this.#controller = controller
-    this.#pauseRequested = false
-    this.#layoutInvalidation.start()
+    this.#scenario = scenario;
+    this.#status = 'running';
+    this.#currentStepIndex = null;
+    this.#controller = controller;
+    this.#pauseRequested = false;
+    this.#layoutInvalidation.start();
 
     if (runOptions.timeout !== undefined) {
-      const timeout = normalizeDuration(runOptions.timeout)
+      const timeout = normalizeDuration(runOptions.timeout);
       const timeoutFailure = timeoutError('scenario.run', timeout, {
         details: {
           scenarioId: scenario.id,
           scenarioName: scenario.name,
           steps: scenario.steps.length,
         },
-      })
+      });
 
       timeoutId = setTimeout(() => {
-        controller.abort(timeoutFailure)
-        this.#resolvePausedRun()
-      }, timeout)
+        controller.abort(timeoutFailure);
+        this.#resolvePausedRun();
+      }, timeout);
     }
 
     try {
-      assertScenarioNotCancelled(controller.signal)
+      assertScenarioNotCancelled(controller.signal);
 
       for (const [index, step] of scenario.steps.entries()) {
-        this.#currentStepIndex = index
-        await this.#waitIfPaused(controller.signal)
-        assertScenarioNotCancelled(controller.signal)
+        this.#currentStepIndex = index;
+        await this.#waitIfPaused(controller.signal);
+        assertScenarioNotCancelled(controller.signal);
         await raceWithScenarioSignal(
           this.#executeStep(step, index, controller.signal, runOptions),
           controller.signal,
-        )
+        );
         await this.#executePacingDelay(
           runOptions.pacing?.betweenSteps,
           index,
           scenario.steps.length,
           controller.signal,
-        )
+        );
       }
 
-      this.#status = 'completed'
-      this.#currentStepIndex = null
+      this.#status = 'completed';
+      this.#currentStepIndex = null;
       span.end({
         scenarioId: scenario.id,
         scenarioName: scenario.name,
         steps: scenario.steps.length,
         completed: true,
-      })
+      });
     } catch (error) {
-      const normalized = normalizeScenarioError(error, controller.signal)
+      const normalized = normalizeScenarioError(error, controller.signal);
 
-      this.#status = normalized.code === 'ACTION_CANCELLED' ? 'stopped' : 'failed'
-      this.#currentStepIndex = null
-      finishScenarioSpan(span, normalized)
-      throw normalized
+      this.#status = normalized.code === 'ACTION_CANCELLED' ? 'stopped' : 'failed';
+      this.#currentStepIndex = null;
+      finishScenarioSpan(span, normalized);
+      throw normalized;
     } finally {
       if (timeoutId !== null) {
-        clearTimeout(timeoutId)
+        clearTimeout(timeoutId);
       }
 
-      cleanupExternalAbort()
-      this.#layoutInvalidation.stop()
-      this.#controller = null
-      this.#scenario = null
-      this.#pauseRequested = false
-      this.#resolvePausedRun()
+      cleanupExternalAbort();
+      this.#layoutInvalidation.stop();
+      this.#controller = null;
+      this.#scenario = null;
+      this.#pauseRequested = false;
+      this.#resolvePausedRun();
     }
   }
 
   pause(): void {
     if (this.#controller === null || this.#status !== 'running') {
-      return
+      return;
     }
 
-    this.#pauseRequested = true
+    this.#pauseRequested = true;
   }
 
   resume(): void {
-    this.#pauseRequested = false
-    this.#resolvePausedRun()
+    this.#pauseRequested = false;
+    this.#resolvePausedRun();
   }
 
   stop(): void {
     if (this.#controller === null) {
-      return
+      return;
     }
 
-    this.#status = 'stopped'
-    this.#controller.abort('scenario stopped')
-    this.#resolvePausedRun()
+    this.#status = 'stopped';
+    this.#controller.abort('scenario stopped');
+    this.#resolvePausedRun();
   }
 
   getSnapshot(): ScenarioRunSnapshot {
@@ -207,49 +207,49 @@ export class BrowserScenarioRunner implements ScenarioRunner {
       scenario: this.#scenario,
       status: this.#status,
       currentStepIndex: this.#currentStepIndex,
-    }
+    };
   }
 
   async #waitIfPaused(signal: AbortSignal): Promise<void> {
     if (!this.#pauseRequested) {
-      return
+      return;
     }
 
-    this.#status = 'paused'
+    this.#status = 'paused';
     this.#trace.appendEvent('scenario:pause', {
       currentStepIndex: this.#currentStepIndex,
-    })
+    });
 
     await new Promise<void>((resolve, reject) => {
       const onAbort = () => {
-        cleanup()
-        reject(normalizeScenarioAbortReason(signal.reason))
-      }
+        cleanup();
+        reject(normalizeScenarioAbortReason(signal.reason));
+      };
       const resume = () => {
-        cleanup()
-        resolve()
-      }
+        cleanup();
+        resolve();
+      };
       const cleanup = () => {
-        signal.removeEventListener('abort', onAbort)
+        signal.removeEventListener('abort', onAbort);
 
         if (this.#resumePausedRun === resume) {
-          this.#resumePausedRun = null
+          this.#resumePausedRun = null;
         }
-      }
+      };
 
-      this.#resumePausedRun = resume
-      signal.addEventListener('abort', onAbort, { once: true })
+      this.#resumePausedRun = resume;
+      signal.addEventListener('abort', onAbort, { once: true });
 
       if (!this.#pauseRequested) {
-        resume()
+        resume();
       }
-    })
+    });
 
-    assertScenarioNotCancelled(signal)
-    this.#status = 'running'
+    assertScenarioNotCancelled(signal);
+    this.#status = 'running';
     this.#trace.appendEvent('scenario:resume', {
       currentStepIndex: this.#currentStepIndex,
-    })
+    });
   }
 
   #executeStep(
@@ -259,124 +259,124 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     runOptions: ResolvedRunOptions,
   ): Promise<void> {
     if (!isScenarioStepRecord(step)) {
-      throw unsupportedStepError(undefined, stepIndex)
+      throw unsupportedStepError(undefined, stepIndex);
     }
 
     switch (step.action) {
       case 'moveTo':
-        assertTarget(step.target, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
         return this.#orchestrator.moveTo(
           step.target,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'click':
-        assertTarget(step.target, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
         return this.#orchestrator.click(
           step.target,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'clickCurrent':
         return this.#orchestrator.clickCurrent(
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'doubleClick':
-        assertTarget(step.target, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
         return this.#orchestrator.doubleClick(
           step.target,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'focus':
-        assertTarget(step.target, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
         return this.#orchestrator.focus(
           step.target,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'type':
-        assertStringInput(step.input, step.action, stepIndex)
+        assertStringInput(step.input, step.action, stepIndex);
         return this.#orchestrator.type(
           step.input,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'typeInto':
-        assertTarget(step.target, step.action, stepIndex)
-        assertStringInput(step.input, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
+        assertStringInput(step.input, step.action, stepIndex);
         return this.#orchestrator.typeInto(
           step.target,
           step.input,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'fill':
-        assertTarget(step.target, step.action, stepIndex)
-        assertStringInput(step.input, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
+        assertStringInput(step.input, step.action, stepIndex);
         return this.#orchestrator.fill(
           step.target,
           step.input,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'press':
-        assertStringInput(step.input, step.action, stepIndex)
+        assertStringInput(step.input, step.action, stepIndex);
         return this.#orchestrator.press(
           step.input,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'reveal':
-        assertTarget(step.target, step.action, stepIndex)
+        assertTarget(step.target, step.action, stepIndex);
         return this.#orchestrator
           .reveal(
             step.target,
             this.#resolveStepOptions(step.action, step.options, signal, runOptions),
           )
-          .then(() => undefined)
+          .then(() => undefined);
       case 'scrollTo':
-        assertNoTarget(step, step.action, stepIndex)
-        assertScrollVector(step.input, step.action, stepIndex)
+        assertNoTarget(step, step.action, stepIndex);
+        assertScrollVector(step.input, step.action, stepIndex);
         return this.#orchestrator
           .scrollTo(
             step.input,
             this.#resolveStepOptions(step.action, step.options, signal, runOptions),
           )
-          .then(() => undefined)
+          .then(() => undefined);
       case 'scrollBy':
-        assertNoTarget(step, step.action, stepIndex)
-        assertScrollVector(step.input, step.action, stepIndex)
+        assertNoTarget(step, step.action, stepIndex);
+        assertScrollVector(step.input, step.action, stepIndex);
         return this.#orchestrator
           .scrollBy(
             step.input,
             this.#resolveStepOptions(step.action, step.options, signal, runOptions),
           )
-          .then(() => undefined)
+          .then(() => undefined);
       case 'drag':
-        assertTarget(step.from, step.action, stepIndex, 'from')
-        assertTarget(step.to, step.action, stepIndex, 'to')
+        assertTarget(step.from, step.action, stepIndex, 'from');
+        assertTarget(step.to, step.action, stepIndex, 'to');
         return this.#orchestrator.drag(
           step.from,
           step.to,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'selectText':
-        assertRequiredField(step.target, step.action, stepIndex, 'target')
+        assertRequiredField(step.target, step.action, stepIndex, 'target');
         return this.#orchestrator.selectText(
           step.target,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'pointerSequence':
-        assertPointerSequence(step.sequence, step.action, stepIndex)
+        assertPointerSequence(step.sequence, step.action, stepIndex);
         return this.#orchestrator.pointerSequence(
           step.sequence,
           this.#resolveStepOptions(step.action, step.options, signal, runOptions),
-        )
+        );
       case 'waitFor':
-        assertWaitCondition(step.input, step.action, stepIndex)
+        assertWaitCondition(step.input, step.action, stepIndex);
         return this.#orchestrator
           .waitFor(
             step.input,
             this.#resolveStepOptions(step.action, step.options, signal, runOptions),
           )
-          .then(() => undefined)
+          .then(() => undefined);
       case 'delay':
-        return this.#executeDelayStep(step, stepIndex, signal)
+        return this.#executeDelayStep(step, stepIndex, signal);
       default:
-        throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex)
+        throw unsupportedStepError((step as Readonly<{ action?: unknown }>).action, stepIndex);
     }
   }
 
@@ -393,7 +393,7 @@ export class BrowserScenarioRunner implements ScenarioRunner {
         ...(options ?? {}),
         signal,
       } as Readonly<Partial<BrowserActionOptions<TAction>>>,
-    })
+    });
   }
 
   async #executeDelayStep(
@@ -404,17 +404,17 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     const span = this.#trace.startSpan(
       'scenario.step.delay',
       delayStepTraceAttributes(step, stepIndex),
-    )
+    );
 
     try {
-      assertPositiveDuration(step.duration, step.action, stepIndex)
-      await raceWithScenarioSignal(this.#timeline.delay(step.duration, { signal }), signal)
-      span.end({ completed: true })
+      assertPositiveDuration(step.duration, step.action, stepIndex);
+      await raceWithScenarioSignal(this.#timeline.delay(step.duration, { signal }), signal);
+      span.end({ completed: true });
     } catch (error) {
-      const normalized = normalizeScenarioError(error, signal)
+      const normalized = normalizeScenarioError(error, signal);
 
-      finishStepSpan(span, normalized)
-      throw normalized
+      finishStepSpan(span, normalized);
+      throw normalized;
     }
   }
 
@@ -425,103 +425,100 @@ export class BrowserScenarioRunner implements ScenarioRunner {
     signal: AbortSignal,
   ): Promise<void> {
     if (stepIndex >= stepCount - 1 || !isPositiveFiniteDuration(duration)) {
-      return
+      return;
     }
 
     const span = this.#trace.startSpan(
       'scenario.pacing.delay',
       pacingDelayTraceAttributes(duration, stepIndex),
-    )
+    );
 
     try {
-      await raceWithScenarioSignal(this.#timeline.delay(duration, { signal }), signal)
-      span.end({ completed: true })
+      await raceWithScenarioSignal(this.#timeline.delay(duration, { signal }), signal);
+      span.end({ completed: true });
     } catch (error) {
-      const normalized = normalizeScenarioError(error, signal)
+      const normalized = normalizeScenarioError(error, signal);
 
-      finishStepSpan(span, normalized)
-      throw normalized
+      finishStepSpan(span, normalized);
+      throw normalized;
     }
   }
 
   #resolvePausedRun(): void {
-    const resume = this.#resumePausedRun
-    this.#resumePausedRun = null
-    resume?.()
+    const resume = this.#resumePausedRun;
+    this.#resumePausedRun = null;
+    resume?.();
   }
 }
 
 export function createScenarioRunner(options: ScenarioRunnerOptions = {}): ScenarioRunner {
-  return new BrowserScenarioRunner(options)
+  return new BrowserScenarioRunner(options);
 }
 
 function normalizeDuration(duration: number): number {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return 0
+    return 0;
   }
 
-  return duration
+  return duration;
 }
 
-function linkExternalAbort(
-  signal: RunOptions['signal'],
-  controller: AbortController,
-): () => void {
+function linkExternalAbort(signal: RunOptions['signal'], controller: AbortController): () => void {
   if (signal === undefined) {
-    return () => {}
+    return () => {};
   }
 
   const onAbort = () => {
-    controller.abort(signal.reason)
-  }
+    controller.abort(signal.reason);
+  };
 
   if (signal.aborted) {
-    onAbort()
-    return () => {}
+    onAbort();
+    return () => {};
   }
 
-  signal.addEventListener('abort', onAbort, { once: true })
+  signal.addEventListener('abort', onAbort, { once: true });
   return () => {
-    signal.removeEventListener('abort', onAbort)
-  }
+    signal.removeEventListener('abort', onAbort);
+  };
 }
 
 function assertScenarioNotCancelled(signal: AbortSignal): void {
   if (!signal.aborted) {
-    return
+    return;
   }
 
-  throw normalizeScenarioAbortReason(signal.reason)
+  throw normalizeScenarioAbortReason(signal.reason);
 }
 
 function normalizeScenarioAbortReason(reason: unknown): ActorbleError {
   if (reason instanceof ActorbleError && reason.code === 'ACTION_TIMEOUT') {
-    return reason
+    return reason;
   }
 
-  return cancellationError('scenario.run', reason)
+  return cancellationError('scenario.run', reason);
 }
 
 function normalizeScenarioError(error: unknown, signal: AbortSignal): ActorbleError {
   if (signal.aborted) {
-    const reason = normalizeScenarioAbortReason(signal.reason)
+    const reason = normalizeScenarioAbortReason(signal.reason);
 
     if (reason.code === 'ACTION_TIMEOUT') {
-      return reason
+      return reason;
     }
 
     if (error instanceof ActorbleError && error.code === 'ACTION_CANCELLED') {
-      return reason
+      return reason;
     }
   }
 
   if (error instanceof ActorbleError) {
-    return error
+    return error;
   }
 
   return actorbleError('PLATFORM_UNSUPPORTED', 'Scenario run failed.', {
     cause: error,
-  })
+  });
 }
 
 function raceWithScenarioSignal<TValue>(
@@ -529,48 +526,48 @@ function raceWithScenarioSignal<TValue>(
   signal: AbortSignal,
 ): Promise<TValue> {
   if (signal.aborted) {
-    return Promise.reject(normalizeScenarioAbortReason(signal.reason))
+    return Promise.reject(normalizeScenarioAbortReason(signal.reason));
   }
 
   return new Promise<TValue>((resolve, reject) => {
     const onAbort = () => {
-      cleanup()
-      reject(normalizeScenarioAbortReason(signal.reason))
-    }
+      cleanup();
+      reject(normalizeScenarioAbortReason(signal.reason));
+    };
     const cleanup = () => {
-      signal.removeEventListener('abort', onAbort)
-    }
+      signal.removeEventListener('abort', onAbort);
+    };
 
-    signal.addEventListener('abort', onAbort, { once: true })
+    signal.addEventListener('abort', onAbort, { once: true });
     operation.then(
       (value) => {
-        cleanup()
-        resolve(value)
+        cleanup();
+        resolve(value);
       },
       (error) => {
-        cleanup()
-        reject(error)
+        cleanup();
+        reject(error);
       },
-    )
-  })
+    );
+  });
 }
 
 function finishScenarioSpan(span: TraceSpanHandle, error: ActorbleError): void {
   if (error.code === 'ACTION_CANCELLED') {
-    span.cancel(error.details?.reason)
-    return
+    span.cancel(error.details?.reason);
+    return;
   }
 
-  span.error(error)
+  span.error(error);
 }
 
 function finishStepSpan(span: TraceSpanHandle, error: ActorbleError): void {
   if (error.code === 'ACTION_CANCELLED') {
-    span.cancel(error.details?.reason)
-    return
+    span.cancel(error.details?.reason);
+    return;
   }
 
-  span.error(error)
+  span.error(error);
 }
 
 function unsupportedStepError(action: unknown, stepIndex: number): ActorbleError {
@@ -580,7 +577,7 @@ function unsupportedStepError(action: unknown, stepIndex: number): ActorbleError
     {
       details: { action, stepIndex },
     },
-  )
+  );
 }
 
 function assertPositiveDuration(
@@ -589,7 +586,7 @@ function assertPositiveDuration(
   stepIndex: number,
 ): asserts duration is number {
   if (isPositiveFiniteDuration(duration)) {
-    return
+    return;
   }
 
   throw actorbleError(
@@ -598,7 +595,7 @@ function assertPositiveDuration(
     {
       details: { action, stepIndex, field: 'duration' },
     },
-  )
+  );
 }
 
 function assertTarget(
@@ -608,12 +605,12 @@ function assertTarget(
   field = 'target',
 ): asserts target is TargetLike {
   if (target !== undefined) {
-    return
+    return;
   }
 
   throw actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" requires a target.`, {
     details: { action, stepIndex, field },
-  })
+  });
 }
 
 function assertRequiredField<TValue>(
@@ -623,12 +620,12 @@ function assertRequiredField<TValue>(
   field: string,
 ): asserts value is TValue {
   if (value !== undefined) {
-    return
+    return;
   }
 
   throw actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" requires ${field}.`, {
     details: { action, stepIndex, field },
-  })
+  });
 }
 
 function assertStringInput(
@@ -637,12 +634,12 @@ function assertStringInput(
   stepIndex: number,
 ): asserts input is string {
   if (typeof input === 'string') {
-    return
+    return;
   }
 
   throw actorbleError('PLATFORM_UNSUPPORTED', `Scenario step "${action}" requires text input.`, {
     details: { action, stepIndex, field: 'input' },
-  })
+  });
 }
 
 function assertWaitCondition(
@@ -651,7 +648,7 @@ function assertWaitCondition(
   stepIndex: number,
 ): asserts input is WaitCondition {
   if (typeof input === 'object' && input !== null && 'kind' in input) {
-    return
+    return;
   }
 
   throw actorbleError(
@@ -660,7 +657,7 @@ function assertWaitCondition(
     {
       details: { action, stepIndex, field: 'input' },
     },
-  )
+  );
 }
 
 function assertPointerSequence(
@@ -669,7 +666,7 @@ function assertPointerSequence(
   stepIndex: number,
 ): asserts sequence is PointerSequence {
   if (Array.isArray(sequence)) {
-    return
+    return;
   }
 
   throw actorbleError(
@@ -678,11 +675,11 @@ function assertPointerSequence(
     {
       details: { action, stepIndex, field: 'sequence' },
     },
-  )
+  );
 }
 
 function isScenarioStepRecord(step: unknown): step is ScenarioStep & { action?: unknown } {
-  return typeof step === 'object' && step !== null && 'action' in step
+  return typeof step === 'object' && step !== null && 'action' in step;
 }
 
 function assertScrollVector(
@@ -691,50 +688,46 @@ function assertScrollVector(
   stepIndex: number,
 ): asserts input is ScrollPosition | ScrollDelta {
   if (typeof input !== 'object' || input === null) {
-    throw scrollToStepInputError(action, stepIndex, 'input')
+    throw scrollToStepInputError(action, stepIndex, 'input');
   }
 
   if (!isFiniteNumber((input as Readonly<{ x?: unknown }>).x)) {
-    throw scrollToStepInputError(action, stepIndex, 'input.x')
+    throw scrollToStepInputError(action, stepIndex, 'input.x');
   }
 
   if (!isFiniteNumber((input as Readonly<{ y?: unknown }>).y)) {
-    throw scrollToStepInputError(action, stepIndex, 'input.y')
+    throw scrollToStepInputError(action, stepIndex, 'input.y');
   }
 }
 
 function assertNoTarget(step: object, action: string, stepIndex: number): void {
   if (!('target' in step)) {
-    return
+    return;
   }
 
   throw actorbleError(
     'PLATFORM_UNSUPPORTED',
     `Scenario step "${action}" does not accept a target; use reveal(target).`,
     { details: { action, stepIndex, field: 'target' } },
-  )
+  );
 }
 
-function scrollToStepInputError(
-  action: string,
-  stepIndex: number,
-  field: string,
-): ActorbleError {
+function scrollToStepInputError(action: string, stepIndex: number, field: string): ActorbleError {
   return actorbleError(
     'PLATFORM_UNSUPPORTED',
     `Scenario step "${action}" requires a finite scroll vector input.`,
     {
       details: { action, stepIndex, field },
     },
-  )
+  );
 }
 
 function isPositiveFiniteDuration(duration: unknown): duration is number {
-  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function delayStepTraceAttributes(
@@ -747,17 +740,14 @@ function delayStepTraceAttributes(
     ...(step.id === undefined ? {} : { stepId: step.id }),
     duration: step.duration,
     ...(step.reason === undefined ? {} : { reason: step.reason }),
-  }
+  };
 }
 
-function pacingDelayTraceAttributes(
-  duration: number,
-  stepIndex: number,
-): Record<string, unknown> {
+function pacingDelayTraceAttributes(duration: number, stepIndex: number): Record<string, unknown> {
   return {
     kind: 'run-pacing',
     stepIndex,
     nextStepIndex: stepIndex + 1,
     duration,
-  }
+  };
 }

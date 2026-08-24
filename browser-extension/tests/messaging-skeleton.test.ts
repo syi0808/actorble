@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   type ActorbleExtensionMessage,
   createExtensionMessage,
@@ -6,30 +6,27 @@ import {
   isActorbleExtensionMessage,
   isExtensionMessageOfKind,
   isExtensionMessageKind,
-} from '../src/messaging/index.js'
-import {
-  DRAFT_SCENARIO_SCHEMA_VERSION,
-  type ScenarioDocument,
-} from '../src/scenario/types.js'
+} from '../src/messaging/index.js';
+import { DRAFT_SCENARIO_SCHEMA_VERSION, type ScenarioDocument } from '../src/scenario/types.js';
 
 const draftDocument = {
   schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
   steps: [],
-} satisfies ScenarioDocument
+} satisfies ScenarioDocument;
 
 const runCorrelation = {
   tabId: 7,
   frameId: 0,
   scenarioId: 'scenario-1',
   runId: 'run-1',
-} as const
+} as const;
 
 const compilation = {
   scenario: {
     id: 'scenario-1',
     steps: [],
   },
-} as const
+} as const;
 
 const traceEvent = {
   runId: 'run-1',
@@ -40,7 +37,7 @@ const traceEvent = {
   details: {
     stepId: 'step-1',
   },
-} as const
+} as const;
 
 const debugSnapshot = {
   capturedAt: 120,
@@ -83,7 +80,7 @@ const debugSnapshot = {
     ],
     warnings: [],
   },
-} as const
+} as const;
 
 const recordedEvent = {
   kind: 'click',
@@ -103,7 +100,7 @@ const recordedEvent = {
   clientX: 12,
   clientY: 18,
   button: 0,
-} as const
+} as const;
 
 const recordedPointerEvent = {
   kind: 'pointer',
@@ -116,7 +113,7 @@ const recordedPointerEvent = {
   buttons: 1,
   pointerId: 1,
   pointerType: 'mouse',
-} as const
+} as const;
 
 const recordedSelectionEvent = {
   kind: 'selection',
@@ -125,7 +122,7 @@ const recordedSelectionEvent = {
   activeTarget: recordedEvent.target,
   anchorTarget: recordedEvent.target,
   focusTarget: recordedEvent.target,
-} as const
+} as const;
 
 const recordedDragEvent = {
   kind: 'drag',
@@ -134,7 +131,7 @@ const recordedDragEvent = {
   timestamp: 103,
   clientX: 42,
   clientY: 58,
-} as const
+} as const;
 
 const validMessages = [
   {
@@ -328,7 +325,7 @@ const validMessages = [
       scenarioId: 'scenario-1',
     },
   },
-] satisfies readonly ActorbleExtensionMessage[]
+] satisfies readonly ActorbleExtensionMessage[];
 
 describe('messaging skeleton contracts', () => {
   it('lists the initial architecture message channels', () => {
@@ -352,8 +349,8 @@ describe('messaging skeleton contracts', () => {
       'runtime:status',
       'content:ready',
       'popup:get-state',
-    ])
-  })
+    ]);
+  });
 
   it('creates messages while preserving typed payloads', () => {
     const message = createExtensionMessage({
@@ -362,7 +359,7 @@ describe('messaging skeleton contracts', () => {
         ...runCorrelation,
         status: 'running',
       },
-    })
+    });
 
     expect(message.payload).toMatchObject({
       tabId: 7,
@@ -370,24 +367,24 @@ describe('messaging skeleton contracts', () => {
       scenarioId: 'scenario-1',
       runId: 'run-1',
       status: 'running',
-    })
-  })
+    });
+  });
 
   it('guards message kind values', () => {
-    expect(isExtensionMessageKind('trace:event')).toBe(true)
-    expect(isExtensionMessageKind('trace:unknown')).toBe(false)
-  })
+    expect(isExtensionMessageKind('trace:event')).toBe(true);
+    expect(isExtensionMessageKind('trace:unknown')).toBe(false);
+  });
 
   it.each(validMessages)('narrows valid $kind messages', (message) => {
-    expect(isActorbleExtensionMessage(message)).toBe(true)
-    expect(isExtensionMessageOfKind(message, message.kind)).toBe(true)
-  })
+    expect(isActorbleExtensionMessage(message)).toBe(true);
+    expect(isExtensionMessageOfKind(message, message.kind)).toBe(true);
+  });
 
   it('narrows inspector messages with target slot correlation', () => {
     const targetSlot = {
       kind: 'drag-to',
       stepId: 'drag-step',
-    } as const
+    } as const;
 
     expect(
       isActorbleExtensionMessage({
@@ -399,7 +396,7 @@ describe('messaging skeleton contracts', () => {
           targetSlot,
         },
       }),
-    ).toBe(true)
+    ).toBe(true);
 
     expect(
       isActorbleExtensionMessage({
@@ -419,16 +416,14 @@ describe('messaging skeleton contracts', () => {
           },
         },
       }),
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it('rejects unknown message kinds and invalid envelopes', () => {
-    expect(isActorbleExtensionMessage({ kind: 'runtime:status' })).toBe(false)
-    expect(isActorbleExtensionMessage({ kind: 'unknown', payload: {} })).toBe(false)
-    expect(isExtensionMessageOfKind({ kind: 'unknown', payload: {} }, 'trace:event')).toBe(
-      false,
-    )
-  })
+    expect(isActorbleExtensionMessage({ kind: 'runtime:status' })).toBe(false);
+    expect(isActorbleExtensionMessage({ kind: 'unknown', payload: {} })).toBe(false);
+    expect(isExtensionMessageOfKind({ kind: 'unknown', payload: {} }, 'trace:event')).toBe(false);
+  });
 
   it.each([
     ['scenario:run', { tabId: 7, scenarioId: 'scenario-1', compilation }],
@@ -438,12 +433,15 @@ describe('messaging skeleton contracts', () => {
     ['trace:event', { tabId: 7, scenarioId: 'scenario-1', runId: 'run-1' }],
     ['runtime:status', { tabId: 7, scenarioId: 'scenario-1', status: 'running' }],
   ])('rejects %s messages with missing run correlation fields', (kind, payload) => {
-    expect(isActorbleExtensionMessage({ kind, payload })).toBe(false)
-  })
+    expect(isActorbleExtensionMessage({ kind, payload })).toBe(false);
+  });
 
   it.each([
     ['record:start', { frameId: 0 }],
-    ['record:event', { frameId: 0, sessionId: 'record-1', reason: 'incremental', events: [recordedEvent] }],
+    [
+      'record:event',
+      { frameId: 0, sessionId: 'record-1', reason: 'incremental', events: [recordedEvent] },
+    ],
     ['record:stop', { scenarioId: 'scenario-1' }],
     ['inspector:start', { tabId: 7 }],
     ['inspector:stop', { frameId: 0 }],
@@ -451,8 +449,8 @@ describe('messaging skeleton contracts', () => {
     ['inspector:cancelled', { tabId: 7, reason: 'user' }],
     ['locator:preview', { frameId: 0, candidates: [] }],
   ])('rejects %s messages with missing tab correlation', (kind, payload) => {
-    expect(isActorbleExtensionMessage({ kind, payload })).toBe(false)
-  })
+    expect(isActorbleExtensionMessage({ kind, payload })).toBe(false);
+  });
 
   it('rejects invalid optional correlation field types', () => {
     expect(
@@ -463,7 +461,7 @@ describe('messaging skeleton contracts', () => {
           frameId: '0',
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -474,7 +472,7 @@ describe('messaging skeleton contracts', () => {
           sessionId: 'inspect-1',
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -484,7 +482,7 @@ describe('messaging skeleton contracts', () => {
           sessionId: 123,
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -493,8 +491,8 @@ describe('messaging skeleton contracts', () => {
           tabId: '7',
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid recorder event flush payloads', () => {
     expect(
@@ -507,7 +505,7 @@ describe('messaging skeleton contracts', () => {
           events: [recordedEvent],
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -519,7 +517,7 @@ describe('messaging skeleton contracts', () => {
           events: [recordedEvent],
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -531,8 +529,8 @@ describe('messaging skeleton contracts', () => {
           events: [],
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('accepts expanded recorder raw event payloads', () => {
     expect(
@@ -545,8 +543,8 @@ describe('messaging skeleton contracts', () => {
           events: [recordedPointerEvent, recordedSelectionEvent, recordedDragEvent],
         },
       }),
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it.each([
     [
@@ -581,8 +579,8 @@ describe('messaging skeleton contracts', () => {
           events: [event],
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid inspector selected and cancellation payloads', () => {
     expect(
@@ -602,7 +600,7 @@ describe('messaging skeleton contracts', () => {
           },
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -613,8 +611,8 @@ describe('messaging skeleton contracts', () => {
           reason: 'unknown',
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it.each([
     { kind: 'unknown', stepId: 'step-1' },
@@ -631,8 +629,8 @@ describe('messaging skeleton contracts', () => {
           targetSlot,
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid locator preview payloads', () => {
     expect(
@@ -643,7 +641,7 @@ describe('messaging skeleton contracts', () => {
           candidates: [],
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -663,8 +661,8 @@ describe('messaging skeleton contracts', () => {
           ],
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid runtime status values', () => {
     expect(
@@ -675,8 +673,8 @@ describe('messaging skeleton contracts', () => {
           status: 'unknown',
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid runtime debug snapshots', () => {
     expect(
@@ -703,8 +701,8 @@ describe('messaging skeleton contracts', () => {
           },
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects popup state messages with invalid optional fields', () => {
     expect(
@@ -714,7 +712,7 @@ describe('messaging skeleton contracts', () => {
           tabId: '7',
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -723,7 +721,7 @@ describe('messaging skeleton contracts', () => {
           frameId: '0',
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -732,8 +730,8 @@ describe('messaging skeleton contracts', () => {
           scenarioId: 123,
         },
       }),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
 
   it('rejects invalid content readiness metadata', () => {
     expect(
@@ -744,7 +742,7 @@ describe('messaging skeleton contracts', () => {
           frameId: '0',
         },
       }),
-    ).toBe(false)
+    ).toBe(false);
 
     expect(
       isActorbleExtensionMessage({
@@ -760,6 +758,6 @@ describe('messaging skeleton contracts', () => {
           },
         },
       }),
-    ).toBe(false)
-  })
-})
+    ).toBe(false);
+  });
+});

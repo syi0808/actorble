@@ -1,35 +1,39 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   createDevtoolsTracePanelStore,
   type RuntimeDebugSnapshot,
   type RuntimeStatusSnapshot,
   type TraceDisplayEvent,
-} from '../src/trace/index.js'
+} from '../src/trace/index.js';
 
 describe('devtools trace panel store', () => {
   it('derives advanced debug views from existing runtime status and trace channels', () => {
     const store = createDevtoolsTracePanelStore({
       historyLimit: 5,
       runLimit: 5,
-    })
+    });
 
-    store.ingestStatus(status('running', {
-      debugSnapshot: debugSnapshot(),
-    }))
-    store.ingestEvent(event('surface:scrolled', 130, {
-      details: {
-        spanId: 'span-2',
-        data: {
-          action: 'scrollTo',
-          inputKind: 'target',
-          targetId: 'target-1',
+    store.ingestStatus(
+      status('running', {
+        debugSnapshot: debugSnapshot(),
+      }),
+    );
+    store.ingestEvent(
+      event('surface:scrolled', 130, {
+        details: {
+          spanId: 'span-2',
+          data: {
+            action: 'scrollTo',
+            inputKind: 'target',
+            targetId: 'target-1',
+          },
         },
-      },
-    }))
+      }),
+    );
 
-    const view = store.getSnapshot()
+    const view = store.getSnapshot();
 
-    expect(view.summary).toBe('Running run-1: surface:scrolled')
+    expect(view.summary).toBe('Running run-1: surface:scrolled');
     expect(view.selectedRun).toMatchObject({
       runId: 'run-1',
       scenarioId: 'scenario-1',
@@ -57,37 +61,39 @@ describe('devtools trace panel store', () => {
           value: 'Synthetic events are not browser-trusted user input.',
         },
       ],
-    })
+    });
     expect(view.selectedRun?.frameSurfaceRows).toEqual([
       { label: 'Tab', value: '7' },
       { label: 'Frame', value: '0' },
       { label: 'surface:scrolled', value: 'scrollTo target target-1' },
-    ])
-  })
+    ]);
+  });
 
   it('selects explicit runs without creating a separate trace source', () => {
-    const store = createDevtoolsTracePanelStore()
+    const store = createDevtoolsTracePanelStore();
 
-    store.ingestStatus(status('completed'))
-    store.ingestEvent(event('scenario:end', 150))
-    store.ingestStatus(status('running', {
-      runId: 'run-2',
-      scenarioId: 'scenario-2',
-    }))
+    store.ingestStatus(status('completed'));
+    store.ingestEvent(event('scenario:end', 150));
+    store.ingestStatus(
+      status('running', {
+        runId: 'run-2',
+        scenarioId: 'scenario-2',
+      }),
+    );
 
-    store.selectRun('run-1')
+    store.selectRun('run-1');
 
-    const view = store.getSnapshot()
+    const view = store.getSnapshot();
 
-    expect(view.selectedRunId).toBe('run-1')
+    expect(view.selectedRunId).toBe('run-1');
     expect(view.selectedRun).toMatchObject({
       runId: 'run-1',
       selected: true,
       eventCount: 1,
-    })
-    expect(view.runs.map((run) => run.runId)).toEqual(['run-1', 'run-2'])
-  })
-})
+    });
+    expect(view.runs.map((run) => run.runId)).toEqual(['run-1', 'run-2']);
+  });
+});
 
 function status(
   runStatus: RuntimeStatusSnapshot['status'],
@@ -102,7 +108,7 @@ function status(
     status: runStatus,
     updatedAt: 120,
     ...options,
-  }
+  };
 }
 
 function event(
@@ -116,7 +122,7 @@ function event(
     timestamp,
     name,
     ...options,
-  }
+  };
 }
 
 function debugSnapshot(): RuntimeDebugSnapshot {
@@ -175,10 +181,7 @@ function debugSnapshot(): RuntimeDebugSnapshot {
               role: 'button',
             },
             ambiguity: 'strict-multiple-candidates',
-            candidates: [
-              { targetId: 'target-1' },
-              { targetId: 'target-2' },
-            ],
+            candidates: [{ targetId: 'target-1' }, { targetId: 'target-2' }],
           },
         },
       ],
@@ -192,5 +195,5 @@ function debugSnapshot(): RuntimeDebugSnapshot {
         },
       ],
     },
-  }
+  };
 }

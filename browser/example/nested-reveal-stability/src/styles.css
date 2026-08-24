@@ -2,9 +2,7 @@
   min-height: 1460px;
   border: 1px solid #1e2937;
   border-radius: 8px;
-  background:
-    linear-gradient(rgba(26, 35, 48, 0.04) 1px, transparent 1px),
-    #e9edf1;
+  background: linear-gradient(rgba(26, 35, 48, 0.04) 1px, transparent 1px), #e9edf1;
   background-size: 100% 28px;
   overflow: hidden;
 }
@@ -27,7 +25,7 @@
 
 .reveal-lab-header h3 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.35rem;
 }
 
@@ -125,7 +123,7 @@
     opacity 520ms ease;
 }
 
-.async-result[data-state="moving"] {
+.async-result[data-state='moving'] {
   opacity: 1;
   transform: translateY(0);
 }
@@ -149,13 +147,7 @@
   border: 2px solid #b94c36;
   border-radius: 6px;
   padding: 18px;
-  background: repeating-linear-gradient(
-    -45deg,
-    #fff1ed,
-    #fff1ed 16px,
-    #f8ded7 16px,
-    #f8ded7 32px
-  );
+  background: repeating-linear-gradient(-45deg, #fff1ed, #fff1ed 16px, #f8ded7 16px, #f8ded7 32px);
   color: #6d271a;
   font-weight: 850;
 }

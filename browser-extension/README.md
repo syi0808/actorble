@@ -38,4 +38,3 @@ browser-extension/
 Scenario documents remain portable JSON artifacts owned by `../schemas/scenario`. The extension validates, migrates, compiles, stores, imports, and exports those documents for the browser GUI workflow.
 
 Compiled runtime scenarios are sent to content script runtime hosts that call `@actorble/browser`. The extension should not reimplement pointer, keyboard, target resolution, geometry, interactability, settlement, or runtime trace behavior.
-

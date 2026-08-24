@@ -1,144 +1,143 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import { createRoot } from 'react-dom/client'
-import { browser } from 'wxt/browser'
-import { createWxtScenarioStorageRepository } from '../../storage/index.js'
-import {
-  Button,
-  BrandWordmark,
-  Field,
-  Select,
-  UiProvider,
-} from '../../ui/components.js'
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { browser } from 'wxt/browser';
+import { createWxtScenarioStorageRepository } from '../../storage/index.js';
+import { Button, BrandWordmark, Field, Select, UiProvider } from '../../ui/components.js';
 import {
   createPopupRunControls,
   createPopupRunControlsView,
   type PopupRunControlsSnapshot,
-} from './run-controls.js'
+} from './run-controls.js';
 import {
   recordedDraftIdFromRecordStopResult,
   sidepanelPathForHandoff,
-} from './sidepanel-handoff.js'
+} from './sidepanel-handoff.js';
 
 type ChromeSidePanelApi = Readonly<{
-  open(options: Readonly<{ windowId?: number }>): Promise<void>
-  setOptions?(options: Readonly<{
-    path?: string
-    tabId?: number
-    enabled?: boolean
-  }>): Promise<void>
-}>
+  open(options: Readonly<{ windowId?: number }>): Promise<void>;
+  setOptions?(
+    options: Readonly<{
+      path?: string;
+      tabId?: number;
+      enabled?: boolean;
+    }>,
+  ): Promise<void>;
+}>;
 
 type ChromeTabsApi = Readonly<{
-  query(options: Readonly<{ active: boolean; currentWindow: boolean }>): Promise<readonly Readonly<{ id?: number }>[]> | readonly Readonly<{ id?: number }>[]
-  create(options: Readonly<{ url: string }>): Promise<unknown> | void
-}>
+  query(
+    options: Readonly<{ active: boolean; currentWindow: boolean }>,
+  ): Promise<readonly Readonly<{ id?: number }>[]> | readonly Readonly<{ id?: number }>[];
+  create(options: Readonly<{ url: string }>): Promise<unknown> | void;
+}>;
 
 type ChromeRuntimeApi = Readonly<{
-  getURL(path: string): string
-}>
+  getURL(path: string): string;
+}>;
 
 type ChromeWindowsApi = Readonly<{
-  WINDOW_ID_CURRENT?: number
-}>
+  WINDOW_ID_CURRENT?: number;
+}>;
 
 type ChromeExtensionApi = Readonly<{
-  sidePanel?: ChromeSidePanelApi
-  tabs?: ChromeTabsApi
-  runtime?: ChromeRuntimeApi
-  windows?: ChromeWindowsApi
-}>
+  sidePanel?: ChromeSidePanelApi;
+  tabs?: ChromeTabsApi;
+  runtime?: ChromeRuntimeApi;
+  windows?: ChromeWindowsApi;
+}>;
 
-const scenarioRepository = createWxtScenarioStorageRepository()
+const scenarioRepository = createWxtScenarioStorageRepository();
 const controls = createPopupRunControls({
   listScenarios() {
-    return scenarioRepository.list()
+    return scenarioRepository.list();
   },
   sendMessage(message) {
-    return browser.runtime.sendMessage(message)
+    return browser.runtime.sendMessage(message);
   },
-})
+});
 
 function PopupApp(): ReactElement {
-  const [snapshot, setSnapshot] = useState<PopupRunControlsSnapshot>(() => controls.getSnapshot())
-  const [panelPending, setPanelPending] = useState(false)
-  const [panelMessage, setPanelMessage] = useState<string | undefined>()
-  const view = createPopupRunControlsView(snapshot)
-  const statusMessage = panelMessage ?? view.statusMessage
-  const showStatus = panelMessage !== undefined || view.statusTone !== 'ready'
-  const statusItems = popupStatusItems(snapshot, view)
+  const [snapshot, setSnapshot] = useState<PopupRunControlsSnapshot>(() => controls.getSnapshot());
+  const [panelPending, setPanelPending] = useState(false);
+  const [panelMessage, setPanelMessage] = useState<string | undefined>();
+  const view = createPopupRunControlsView(snapshot);
+  const statusMessage = panelMessage ?? view.statusMessage;
+  const showStatus = panelMessage !== undefined || view.statusTone !== 'ready';
+  const statusItems = popupStatusItems(snapshot, view);
 
   const renderSnapshot = useCallback(() => {
-    setSnapshot(controls.getSnapshot())
-  }, [])
+    setSnapshot(controls.getSnapshot());
+  }, []);
 
   const refreshPopup = useCallback(async () => {
-    const refresh = controls.refresh()
-    renderSnapshot()
-    await refresh
-    renderSnapshot()
-  }, [renderSnapshot])
+    const refresh = controls.refresh();
+    renderSnapshot();
+    await refresh;
+    renderSnapshot();
+  }, [renderSnapshot]);
 
-  const runAction = useCallback(async <TResult,>(
-    action: () => Promise<TResult>,
-  ): Promise<TResult> => {
-    const operation = action()
-    renderSnapshot()
-    const result = await operation
-    renderSnapshot()
-    return result
-  }, [renderSnapshot])
+  const runAction = useCallback(
+    async <TResult,>(action: () => Promise<TResult>): Promise<TResult> => {
+      const operation = action();
+      renderSnapshot();
+      const result = await operation;
+      renderSnapshot();
+      return result;
+    },
+    [renderSnapshot],
+  );
 
   const openSidePanel = useCallback(async (recordedDraftId?: string): Promise<void> => {
-    setPanelPending(true)
-    setPanelMessage('Opening panel')
+    setPanelPending(true);
+    setPanelMessage('Opening panel');
 
     try {
-      const chromeApi = chromeExtension()
+      const chromeApi = chromeExtension();
       if (chromeApi.sidePanel === undefined) {
-        throw new Error('Chrome sidePanel API is unavailable.')
+        throw new Error('Chrome sidePanel API is unavailable.');
       }
 
-      const targetTabId = await getCurrentTabId()
+      const targetTabId = await getCurrentTabId();
       const path = sidepanelPathForHandoff({
         targetTabId,
         recordedDraftId,
-      })
+      });
       if (chromeApi.sidePanel.setOptions === undefined && recordedDraftId !== undefined) {
-        throw new Error('Chrome sidePanel setOptions API is unavailable.')
+        throw new Error('Chrome sidePanel setOptions API is unavailable.');
       }
       await chromeApi.sidePanel.setOptions?.({
         path,
         ...(targetTabId === undefined ? {} : { tabId: targetTabId }),
         enabled: true,
-      })
+      });
       await chromeApi.sidePanel.open({
         windowId: chromeApi.windows?.WINDOW_ID_CURRENT ?? -2,
-      })
-      setPanelMessage('Panel opened')
-      window.close()
+      });
+      setPanelMessage('Panel opened');
+      window.close();
     } catch {
-      await openSidePanelFallback(recordedDraftId)
-      setPanelMessage('Panel opened in a tab')
-      window.close()
+      await openSidePanelFallback(recordedDraftId);
+      setPanelMessage('Panel opened in a tab');
+      window.close();
     } finally {
-      setPanelPending(false)
+      setPanelPending(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     const listener = (message: unknown): void => {
       if (controls.ingestMessage(message)) {
-        renderSnapshot()
+        renderSnapshot();
       }
-    }
+    };
 
-    browser.runtime.onMessage.addListener(listener)
-    void refreshPopup()
+    browser.runtime.onMessage.addListener(listener);
+    void refreshPopup();
 
     return () => {
-      browser.runtime.onMessage.removeListener(listener)
-    }
-  }, [refreshPopup, renderSnapshot])
+      browser.runtime.onMessage.removeListener(listener);
+    };
+  }, [refreshPopup, renderSnapshot]);
 
   return (
     <UiProvider>
@@ -162,18 +161,20 @@ function PopupApp(): ReactElement {
             aria-label="Scenario"
             disabled={view.scenarioSelectDisabled}
             onChange={(event) => {
-              controls.selectScenario(event.currentTarget.value)
-              renderSnapshot()
+              controls.selectScenario(event.currentTarget.value);
+              renderSnapshot();
             }}
             value={view.selectedScenarioId ?? ''}
           >
-            {view.scenarioOptions.length === 0
-              ? <option value="">No saved scenarios</option>
-              : view.scenarioOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+            {view.scenarioOptions.length === 0 ? (
+              <option value="">No saved scenarios</option>
+            ) : (
+              view.scenarioOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))
+            )}
           </Select>
         </Field>
 
@@ -205,21 +206,18 @@ function PopupApp(): ReactElement {
             disabled={view.buttons.record.disabled}
             icon={snapshot.currentRecord?.status === 'recording' ? 'square' : 'record'}
             onClick={() => {
-              const before = controls.getSnapshot()
+              const before = controls.getSnapshot();
               void (async () => {
-                const result = await runAction(() => (
+                const result = await runAction(() =>
                   before.currentRecord?.status === 'recording'
                     ? controls.stopRecording()
-                    : controls.startRecording()
-                ))
-                const recordedDraftId = recordedDraftIdFromRecordStopResult(result)
-                if (
-                  before.currentRecord?.status === 'recording' &&
-                  recordedDraftId !== undefined
-                ) {
-                  await openSidePanel(recordedDraftId)
+                    : controls.startRecording(),
+                );
+                const recordedDraftId = recordedDraftIdFromRecordStopResult(result);
+                if (before.currentRecord?.status === 'recording' && recordedDraftId !== undefined) {
+                  await openSidePanel(recordedDraftId);
                 }
-              })()
+              })();
             }}
             pending={view.buttons.record.pending}
             variant={snapshot.currentRecord?.status === 'recording' ? 'danger' : 'secondary'}
@@ -242,11 +240,13 @@ function PopupApp(): ReactElement {
             <Button
               disabled={view.buttons.pauseResume.disabled}
               icon={snapshot.currentRun?.status === 'paused' ? 'play' : 'pause'}
-              onClick={() => void runAction(() => (
-                snapshot.currentRun?.status === 'paused'
-                  ? controls.resumeCurrentRun()
-                  : controls.pauseCurrentRun()
-              ))}
+              onClick={() =>
+                void runAction(() =>
+                  snapshot.currentRun?.status === 'paused'
+                    ? controls.resumeCurrentRun()
+                    : controls.pauseCurrentRun(),
+                )
+              }
               pending={view.buttons.pauseResume.pending}
               variant="secondary"
             >
@@ -265,64 +265,65 @@ function PopupApp(): ReactElement {
         ) : null}
       </main>
     </UiProvider>
-  )
+  );
 }
 
 function popupStatusItems(
   snapshot: PopupRunControlsSnapshot,
   view: ReturnType<typeof createPopupRunControlsView>,
 ): readonly Readonly<{ label: string; value: string }>[] {
-  const items: Readonly<{ label: string; value: string }>[] = []
+  const items: Readonly<{ label: string; value: string }>[] = [];
 
   if (snapshot.currentRun !== undefined) {
-    items.push({ label: 'Current run', value: view.currentRunText })
+    items.push({ label: 'Current run', value: view.currentRunText });
   }
 
   if (snapshot.currentRecord !== undefined) {
-    items.push({ label: 'Recording', value: view.recordText })
+    items.push({ label: 'Recording', value: view.recordText });
   }
 
   if (view.lastRunText !== 'No scenario selected' && view.lastRunText !== 'No runs yet') {
-    items.push({ label: 'Last run', value: view.lastRunText })
+    items.push({ label: 'Last run', value: view.lastRunText });
   }
 
-  return items
+  return items;
 }
 
 function isActiveRunStatus(status: string | undefined): boolean {
-  return status === 'running' || status === 'paused'
+  return status === 'running' || status === 'paused';
 }
 
 async function openSidePanelFallback(recordedDraftId?: string): Promise<void> {
-  const chromeApi = chromeExtension()
-  const targetTabId = await getCurrentTabId()
+  const chromeApi = chromeExtension();
+  const targetTabId = await getCurrentTabId();
   const path = sidepanelPathForHandoff({
     targetTabId,
     recordedDraftId,
-  })
-  const url = chromeApi.runtime?.getURL(path) ?? `/${path}`
+  });
+  const url = chromeApi.runtime?.getURL(path) ?? `/${path}`;
 
-  await chromeApi.tabs?.create?.({ url })
+  await chromeApi.tabs?.create?.({ url });
 }
 
 async function getCurrentTabId(): Promise<number | undefined> {
-  const chromeApi = chromeExtension()
-  const tabs = await chromeApi.tabs?.query?.({
-    active: true,
-    currentWindow: true,
-  }) ?? []
-  const [tab] = tabs
+  const chromeApi = chromeExtension();
+  const tabs =
+    (await chromeApi.tabs?.query?.({
+      active: true,
+      currentWindow: true,
+    })) ?? [];
+  const [tab] = tabs;
 
-  return tab?.id
+  return tab?.id;
 }
 
 function chromeExtension(): ChromeExtensionApi {
-  return (globalThis as typeof globalThis & Readonly<{ chrome?: ChromeExtensionApi }>).chrome ?? {}
+  return (globalThis as typeof globalThis & Readonly<{ chrome?: ChromeExtensionApi }>).chrome ?? {};
 }
 
-const root = document.querySelector('#root')
+const root = document.querySelector('#root');
 if (root === null) {
-  throw new Error('Missing popup root element.')
+  throw new Error('Missing popup root element.');
 }
 
-createRoot(root).render(<PopupApp />)
+createRoot(root).render(<PopupApp />);

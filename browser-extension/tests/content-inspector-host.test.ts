@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest';
 import {
   createContentInspectorHost,
   describeDomInspectorElement,
   type ContentInspectorAdapter,
   type ContentInspectorPointerEvent,
-} from '../src/entrypoints/content/inspector-host.js'
+} from '../src/entrypoints/content/inspector-host.js';
 import {
   createExtensionMessage,
   type ActorbleExtensionMessage,
   type InspectorTargetMetadata,
-} from '../src/messaging/index.js'
+} from '../src/messaging/index.js';
 
 describe('content inspector host', () => {
   it('describes selected elements with a document-order index', () => {
@@ -17,26 +17,26 @@ describe('content inspector host', () => {
       { tagName: 'main', id: '', textContent: 'First Second' },
       { tagName: 'button', id: 'first', textContent: 'First' },
       { tagName: 'button', id: 'second', textContent: 'Second' },
-    ])
-    const second = dom.elements[2]
+    ]);
+    const second = dom.elements[2];
 
     const metadata = describeDomInspectorElement(
       second as unknown as Element,
       fakeWindow() as unknown as Window,
-    )
+    );
 
-    expect(metadata.documentOrderIndex).toBe(2)
-  })
+    expect(metadata.documentOrderIndex).toBe(2);
+  });
 
   it('highlights hovered elements and returns a start receipt', async () => {
-    const adapter = createFakeAdapter()
+    const adapter = createFakeAdapter();
     const host = createContentInspectorHost({
       adapter,
       sendMessage: async () => {},
-    })
+    });
 
-    const result = await host.handleMessage(startMessage())
-    adapter.dispatchPointerMove(12, 18)
+    const result = await host.handleMessage(startMessage());
+    adapter.dispatchPointerMove(12, 18);
 
     expect(result).toMatchObject({
       ok: true,
@@ -51,32 +51,32 @@ describe('content inspector host', () => {
           stepId: 'submit',
         },
       },
-    })
+    });
     expect(adapter.highlight).toHaveBeenCalledWith({
       x: 10,
       y: 20,
       width: 100,
       height: 32,
-    })
-  })
+    });
+  });
 
   it('selects a target on captured click and guarantees overlay cleanup', async () => {
-    const sent: ActorbleExtensionMessage[] = []
-    const adapter = createFakeAdapter()
+    const sent: ActorbleExtensionMessage[] = [];
+    const adapter = createFakeAdapter();
     const host = createContentInspectorHost({
       adapter,
       sendMessage: async (message) => {
-        sent.push(message)
+        sent.push(message);
       },
-    })
+    });
 
-    await host.handleMessage(startMessage())
-    const clickEvent = adapter.dispatchClick(12, 18)
+    await host.handleMessage(startMessage());
+    const clickEvent = adapter.dispatchClick(12, 18);
 
-    expect(clickEvent.preventDefault).toHaveBeenCalledOnce()
-    expect(clickEvent.stopPropagation).toHaveBeenCalledOnce()
-    expect(adapter.clearHighlight).toHaveBeenCalledOnce()
-    expect(adapter.removedListeners).toHaveLength(4)
+    expect(clickEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(clickEvent.stopPropagation).toHaveBeenCalledOnce();
+    expect(adapter.clearHighlight).toHaveBeenCalledOnce();
+    expect(adapter.removedListeners).toHaveLength(4);
     expect(sent).toEqual([
       createExtensionMessage({
         kind: 'inspector:selected',
@@ -92,25 +92,25 @@ describe('content inspector host', () => {
           target: targetMetadata,
         },
       }),
-    ])
-  })
+    ]);
+  });
 
   it('cancels on Escape, stop, and page navigation with cleanup', async () => {
-    const sent: ActorbleExtensionMessage[] = []
-    const adapter = createFakeAdapter()
+    const sent: ActorbleExtensionMessage[] = [];
+    const adapter = createFakeAdapter();
     const host = createContentInspectorHost({
       adapter,
       sendMessage: async (message) => {
-        sent.push(message)
+        sent.push(message);
       },
-    })
+    });
 
-    await host.handleMessage(startMessage())
-    const keyEvent = adapter.dispatchKeydown('Escape')
-    await Promise.resolve()
+    await host.handleMessage(startMessage());
+    const keyEvent = adapter.dispatchKeydown('Escape');
+    await Promise.resolve();
 
-    expect(keyEvent.preventDefault).toHaveBeenCalledOnce()
-    expect(adapter.clearHighlight).toHaveBeenCalledOnce()
+    expect(keyEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(adapter.clearHighlight).toHaveBeenCalledOnce();
     expect(sent.at(-1)).toMatchObject({
       kind: 'inspector:cancelled',
       payload: {
@@ -121,18 +121,18 @@ describe('content inspector host', () => {
           stepId: 'submit',
         },
       },
-    })
+    });
 
-    const stopAdapter = createFakeAdapter()
-    const stopSent: ActorbleExtensionMessage[] = []
+    const stopAdapter = createFakeAdapter();
+    const stopSent: ActorbleExtensionMessage[] = [];
     const stopHost = createContentInspectorHost({
       adapter: stopAdapter,
       sendMessage: async (message) => {
-        stopSent.push(message)
+        stopSent.push(message);
       },
-    })
-    await stopHost.handleMessage(startMessage())
-    const stopResult = await stopHost.handleMessage(stopMessage())
+    });
+    await stopHost.handleMessage(startMessage());
+    const stopResult = await stopHost.handleMessage(stopMessage());
 
     expect(stopResult).toMatchObject({
       ok: true,
@@ -140,8 +140,8 @@ describe('content inspector host', () => {
         kind: 'inspector:stop',
         status: 'stopped',
       },
-    })
-    expect(stopAdapter.clearHighlight).toHaveBeenCalledOnce()
+    });
+    expect(stopAdapter.clearHighlight).toHaveBeenCalledOnce();
     expect(stopSent.at(-1)).toMatchObject({
       kind: 'inspector:cancelled',
       payload: {
@@ -152,21 +152,21 @@ describe('content inspector host', () => {
           stepId: 'submit',
         },
       },
-    })
+    });
 
-    const navigationAdapter = createFakeAdapter()
-    const navigationSent: ActorbleExtensionMessage[] = []
+    const navigationAdapter = createFakeAdapter();
+    const navigationSent: ActorbleExtensionMessage[] = [];
     const navigationHost = createContentInspectorHost({
       adapter: navigationAdapter,
       sendMessage: async (message) => {
-        navigationSent.push(message)
+        navigationSent.push(message);
       },
-    })
-    await navigationHost.handleMessage(startMessage())
-    navigationAdapter.dispatchPagehide()
-    await Promise.resolve()
+    });
+    await navigationHost.handleMessage(startMessage());
+    navigationAdapter.dispatchPagehide();
+    await Promise.resolve();
 
-    expect(navigationAdapter.clearHighlight).toHaveBeenCalledOnce()
+    expect(navigationAdapter.clearHighlight).toHaveBeenCalledOnce();
     expect(navigationSent.at(-1)).toMatchObject({
       kind: 'inspector:cancelled',
       payload: {
@@ -177,28 +177,28 @@ describe('content inspector host', () => {
           stepId: 'submit',
         },
       },
-    })
-  })
-})
+    });
+  });
+});
 
-type FakeElement = Readonly<{ key: string }>
+type FakeElement = Readonly<{ key: string }>;
 
 type FakeDomElement = Readonly<{
-  tagName: string
-  id: string
-  classList: readonly string[]
-  textContent: string
+  tagName: string;
+  id: string;
+  classList: readonly string[];
+  textContent: string;
   ownerDocument: Readonly<{
-    querySelectorAll(selector: string): readonly FakeDomElement[]
-  }>
+    querySelectorAll(selector: string): readonly FakeDomElement[];
+  }>;
   getBoundingClientRect(): Readonly<{
-    x: number
-    y: number
-    width: number
-    height: number
-  }>
-  getAttribute(name: string): string | null
-}>
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  getAttribute(name: string): string | null;
+}>;
 
 const targetMetadata = {
   tagName: 'button',
@@ -214,90 +214,90 @@ const targetMetadata = {
     width: 100,
     height: 32,
   },
-} satisfies InspectorTargetMetadata
+} satisfies InspectorTargetMetadata;
 
 function createFakeAdapter() {
-  const removedListeners: string[] = []
-  const element = { key: 'submit' } satisfies FakeElement
-  let pointerMove: ((event: ContentInspectorPointerEvent) => void) | undefined
-  let click: ((event: ContentInspectorPointerEvent) => void) | undefined
-  let keydown: ((event: KeyboardEventLike) => void) | undefined
-  let pagehide: (() => void) | undefined
+  const removedListeners: string[] = [];
+  const element = { key: 'submit' } satisfies FakeElement;
+  let pointerMove: ((event: ContentInspectorPointerEvent) => void) | undefined;
+  let click: ((event: ContentInspectorPointerEvent) => void) | undefined;
+  let keydown: ((event: KeyboardEventLike) => void) | undefined;
+  let pagehide: (() => void) | undefined;
 
   const adapter = {
     removedListeners,
     highlight: vi.fn(),
     clearHighlight: vi.fn(),
     onPointerMove(listener) {
-      pointerMove = listener
+      pointerMove = listener;
       return () => {
-        removedListeners.push('pointermove')
-      }
+        removedListeners.push('pointermove');
+      };
     },
     onClick(listener) {
-      click = listener
+      click = listener;
       return () => {
-        removedListeners.push('click')
-      }
+        removedListeners.push('click');
+      };
     },
     onKeydown(listener) {
-      keydown = listener
+      keydown = listener;
       return () => {
-        removedListeners.push('keydown')
-      }
+        removedListeners.push('keydown');
+      };
     },
     onPagehide(listener) {
-      pagehide = listener
+      pagehide = listener;
       return () => {
-        removedListeners.push('pagehide')
-      }
+        removedListeners.push('pagehide');
+      };
     },
     elementFromPoint() {
-      return element
+      return element;
     },
     describeElement() {
-      return targetMetadata
+      return targetMetadata;
     },
     dispatchPointerMove(clientX: number, clientY: number) {
-      pointerMove?.(pointerEvent(clientX, clientY))
+      pointerMove?.(pointerEvent(clientX, clientY));
     },
     dispatchClick(clientX: number, clientY: number) {
-      const event = pointerEvent(clientX, clientY)
-      click?.(event)
-      return event
+      const event = pointerEvent(clientX, clientY);
+      click?.(event);
+      return event;
     },
     dispatchKeydown(key: string) {
       const event = {
         key,
         preventDefault: vi.fn(),
         stopPropagation: vi.fn(),
-      } satisfies KeyboardEventLike
-      keydown?.(event)
-      return event
+      } satisfies KeyboardEventLike;
+      keydown?.(event);
+      return event;
     },
     dispatchPagehide() {
-      pagehide?.()
+      pagehide?.();
     },
   } satisfies ContentInspectorAdapter<FakeElement> & {
-    removedListeners: string[]
-    dispatchPointerMove(clientX: number, clientY: number): void
-    dispatchClick(clientX: number, clientY: number): ContentInspectorPointerEvent
-    dispatchKeydown(key: string): KeyboardEventLike
-    dispatchPagehide(): void
-  }
+    removedListeners: string[];
+    dispatchPointerMove(clientX: number, clientY: number): void;
+    dispatchClick(clientX: number, clientY: number): ContentInspectorPointerEvent;
+    dispatchKeydown(key: string): KeyboardEventLike;
+    dispatchPagehide(): void;
+  };
 
-  return adapter
+  return adapter;
 }
 
 function createFakeDocumentOrder(
   inputs: readonly Readonly<{ tagName: string; id: string; textContent: string }>[],
 ): Readonly<{ elements: readonly FakeDomElement[] }> {
-  const elements: FakeDomElement[] = []
+  const elements: FakeDomElement[] = [];
   const ownerDocument = {
     querySelectorAll() {
-      return elements
+      return elements;
     },
-  }
+  };
 
   for (const input of inputs) {
     elements.push({
@@ -312,15 +312,15 @@ function createFakeDocumentOrder(
           y: 0,
           width: 100,
           height: 24,
-        }
+        };
       },
       getAttribute() {
-        return null
+        return null;
       },
-    })
+    });
   }
 
-  return { elements }
+  return { elements };
 }
 
 function fakeWindow(): Readonly<{ location: Readonly<{ href: string }> }> {
@@ -328,14 +328,14 @@ function fakeWindow(): Readonly<{ location: Readonly<{ href: string }> }> {
     location: {
       href: 'http://localhost.test/page',
     },
-  }
+  };
 }
 
 type KeyboardEventLike = Readonly<{
-  key: string
-  preventDefault(): void
-  stopPropagation(): void
-}>
+  key: string;
+  preventDefault(): void;
+  stopPropagation(): void;
+}>;
 
 function pointerEvent(clientX: number, clientY: number): ContentInspectorPointerEvent {
   return {
@@ -343,7 +343,7 @@ function pointerEvent(clientX: number, clientY: number): ContentInspectorPointer
     clientY,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
-  }
+  };
 }
 
 function startMessage(): ActorbleExtensionMessage {
@@ -359,7 +359,7 @@ function startMessage(): ActorbleExtensionMessage {
         stepId: 'submit',
       },
     },
-  })
+  });
 }
 
 function stopMessage(): ActorbleExtensionMessage {
@@ -375,5 +375,5 @@ function stopMessage(): ActorbleExtensionMessage {
         stepId: 'submit',
       },
     },
-  })
+  });
 }

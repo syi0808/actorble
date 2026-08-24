@@ -30,31 +30,26 @@ import {
   type BuilderTargetSlot,
   type CreateScenarioInput,
   type ScenarioAuthoringSessionState,
-} from '../../builder/index.js'
+} from '../../builder/index.js';
 import {
   createExtensionMessage,
   isActorbleExtensionMessage,
   type ActorbleExtensionMessage,
   type ActorbleExtensionMessageByKind,
   type RequiredRunCorrelation,
-} from '../../messaging/index.js'
+} from '../../messaging/index.js';
 import {
   compileToBrowserRuntime,
   type BrowserRuntimeCompilation,
-} from '../../scenario/compile-to-browser-runtime.js'
-import {
-  exportScenarioToCode,
-  type ScenarioCodeExport,
-} from '../../scenario/export-code.js'
-import {
-  RECORDER_MASKED_VALUE,
-} from '../../recorder/event-capture.js'
+} from '../../scenario/compile-to-browser-runtime.js';
+import { exportScenarioToCode, type ScenarioCodeExport } from '../../scenario/export-code.js';
+import { RECORDER_MASKED_VALUE } from '../../recorder/event-capture.js';
 import {
   documentWithRecordedDraftDefaults,
   type RecordedEmptyRecordingState,
   type RecordedSelectedTextWarning,
   type RecordedScenarioDraftHandoff,
-} from '../../recorder/workflow.js'
+} from '../../recorder/workflow.js';
 import type {
   ScenarioCoordinateSpace,
   ScenarioDocument,
@@ -63,28 +58,28 @@ import type {
   ScenarioScrollVector,
   ScenarioStep,
   ScenarioTarget,
-} from '../../scenario/types.js'
-import { validateScenarioDocument } from '../../scenario/validate.js'
-import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js'
+} from '../../scenario/types.js';
+import { validateScenarioDocument } from '../../scenario/validate.js';
+import { failure, ok, type ExtensionIssue, type ExtensionResult } from '../../shared/result.js';
 import type {
   ScenarioJsonExport,
   ScenarioRecord,
   ScenarioRecordInput,
   ScenarioRecordUpdate,
-} from '../../storage/index.js'
+} from '../../storage/index.js';
 import {
   createTraceDisplayStore,
   type RuntimeRunStatus,
   type RuntimeStatusSnapshot,
   type TraceDisplayState,
   type TraceRunDisplayView,
-} from '../../trace/index.js'
-import { formatIssuePath } from './imported-scenario-run.js'
+} from '../../trace/index.js';
+import { formatIssuePath } from './imported-scenario-run.js';
 
 export type SidepanelActiveTab = Readonly<{
-  id?: number
-  url?: string
-}>
+  id?: number;
+  url?: string;
+}>;
 
 export type SidepanelPendingAction =
   | 'refresh'
@@ -96,401 +91,405 @@ export type SidepanelPendingAction =
   | 'dry-run'
   | 'record:start'
   | 'record:stop'
-  | 'record:draft'
+  | 'record:draft';
 
 export type SidepanelScenarioRunReceipt = RequiredRunCorrelation &
   Readonly<{
-    status: RuntimeRunStatus
-  }>
+    status: RuntimeRunStatus;
+  }>;
 
 export type SidepanelRecordSession = Readonly<{
-  type: 'record'
-  sessionId: string
-  tabId: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-  status: 'recording' | 'stopped' | 'failed'
-  startedAt: number
-  updatedAt: number
-  draftId?: string
-  message?: string
-}>
+  type: 'record';
+  sessionId: string;
+  tabId: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+  status: 'recording' | 'stopped' | 'failed';
+  startedAt: number;
+  updatedAt: number;
+  draftId?: string;
+  message?: string;
+}>;
 
 export type SidepanelRecordCommandReceipt = Readonly<{
-  kind: 'record:start' | 'record:stop'
-  tabId: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-  status?: SidepanelRecordSession['status']
-  session?: SidepanelRecordSession
-  recordedDraft?: RecordedScenarioDraftHandoff
-  emptyRecording?: RecordedEmptyRecordingState
-}>
+  kind: 'record:start' | 'record:stop';
+  tabId: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+  status?: SidepanelRecordSession['status'];
+  session?: SidepanelRecordSession;
+  recordedDraft?: RecordedScenarioDraftHandoff;
+  emptyRecording?: RecordedEmptyRecordingState;
+}>;
 
 export type SidepanelTargetTabState =
   | Readonly<{ status: 'unknown' }>
   | Readonly<{ status: 'checking' }>
   | Readonly<{
-      status: 'ready'
-      tabId: number
-      frameId?: number
-      url?: string
+      status: 'ready';
+      tabId: number;
+      frameId?: number;
+      url?: string;
     }>
   | Readonly<{
-      status: 'blocked'
-      issue: ExtensionIssue
-    }>
+      status: 'blocked';
+      issue: ExtensionIssue;
+    }>;
 
 export type SidepanelRecordedDraftReview = Readonly<{
-  draftId: string
-  sessionId: string
-  tabId: number
-  frameId?: number
-  scenarioId?: string
-  runId?: string
-  sourceEventCount: number
-  createdAt: number
-  document: BuilderDraftDocument
-  validationStatus: 'valid' | 'invalid'
-  validationIssues: readonly ExtensionIssue[]
-  sensitiveInputCount: number
-  selectedTextWarnings: readonly RecordedSelectedTextWarning[]
-  sensitiveInputsConfirmed: boolean
-}>
+  draftId: string;
+  sessionId: string;
+  tabId: number;
+  frameId?: number;
+  scenarioId?: string;
+  runId?: string;
+  sourceEventCount: number;
+  createdAt: number;
+  document: BuilderDraftDocument;
+  validationStatus: 'valid' | 'invalid';
+  validationIssues: readonly ExtensionIssue[];
+  sensitiveInputCount: number;
+  selectedTextWarnings: readonly RecordedSelectedTextWarning[];
+  sensitiveInputsConfirmed: boolean;
+}>;
 
 export type SidepanelScenarioEditorSnapshot = Readonly<{
-  scenarios: readonly ScenarioRecord[]
-  selectedScenarioId?: string
-  selectedStepIndex: number
-  selectedStepId?: string
-  selectedTargetSlot?: BuilderTargetSlot
-  draftDocument?: BuilderDraftDocument
-  dirty: boolean
-  pendingAction: SidepanelPendingAction | null
-  issues: readonly ExtensionIssue[]
-  currentRun?: SidepanelScenarioRunReceipt
-  currentRecord?: SidepanelRecordSession
-  targetTab: SidepanelTargetTabState
-  recordedDraftReview?: SidepanelRecordedDraftReview
-  trace: TraceDisplayState
-  currentTrace: TraceRunDisplayView | undefined
-  message?: string
-}>
+  scenarios: readonly ScenarioRecord[];
+  selectedScenarioId?: string;
+  selectedStepIndex: number;
+  selectedStepId?: string;
+  selectedTargetSlot?: BuilderTargetSlot;
+  draftDocument?: BuilderDraftDocument;
+  dirty: boolean;
+  pendingAction: SidepanelPendingAction | null;
+  issues: readonly ExtensionIssue[];
+  currentRun?: SidepanelScenarioRunReceipt;
+  currentRecord?: SidepanelRecordSession;
+  targetTab: SidepanelTargetTabState;
+  recordedDraftReview?: SidepanelRecordedDraftReview;
+  trace: TraceDisplayState;
+  currentTrace: TraceRunDisplayView | undefined;
+  message?: string;
+}>;
 
 export type SidepanelScenarioEditorClient = Readonly<{
-  listScenarios(): Promise<ExtensionResult<readonly ScenarioRecord[]>>
-  saveScenario(input: ScenarioRecordInput): Promise<ExtensionResult<ScenarioRecord>>
+  listScenarios(): Promise<ExtensionResult<readonly ScenarioRecord[]>>;
+  saveScenario(input: ScenarioRecordInput): Promise<ExtensionResult<ScenarioRecord>>;
   updateScenario(
     id: string,
     update: ScenarioRecordUpdate,
-  ): Promise<ExtensionResult<ScenarioRecord>>
-  importScenarioJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>
-  exportScenarioJson(id: string): Promise<ExtensionResult<ScenarioJsonExport>>
-  getActiveTab(): Promise<SidepanelActiveTab | null>
-  getTab?(tabId: number): Promise<SidepanelActiveTab | null>
-  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>
-}>
+  ): Promise<ExtensionResult<ScenarioRecord>>;
+  importScenarioJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>;
+  exportScenarioJson(id: string): Promise<ExtensionResult<ScenarioJsonExport>>;
+  getActiveTab(): Promise<SidepanelActiveTab | null>;
+  getTab?(tabId: number): Promise<SidepanelActiveTab | null>;
+  sendMessage(message: ActorbleExtensionMessage): Promise<unknown>;
+}>;
 
 export type SidepanelScenarioEditorOptions = Readonly<{
-  createRunId?: () => string
-  createDryRunId?: () => string
-  createRecordId?: () => string
-  createScenarioId?: () => string
-  createStepId?: (family: BuilderStepActionFamily) => string
-  frameId?: number
-  targetTabId?: number
-  now?: () => number
-  traceHistoryLimit?: number
-  traceRunLimit?: number
-}>
+  createRunId?: () => string;
+  createDryRunId?: () => string;
+  createRecordId?: () => string;
+  createScenarioId?: () => string;
+  createStepId?: (family: BuilderStepActionFamily) => string;
+  frameId?: number;
+  targetTabId?: number;
+  now?: () => number;
+  traceHistoryLimit?: number;
+  traceRunLimit?: number;
+}>;
 
 export type SidepanelDocumentFieldUpdate = Readonly<{
-  name?: string
-  description?: string
-}>
+  name?: string;
+  description?: string;
+}>;
 
 export type SidepanelStepFieldUpdate = Readonly<{
-  note?: string
-  input?: string
-  duration?: string | number
-  waitText?: string
-  scrollX?: string | number
-  scrollY?: string | number
-  optionsJson?: string
-  targetJson?: string
-  fromJson?: string
-  toJson?: string
-  inputJson?: string
-}>
+  note?: string;
+  input?: string;
+  duration?: string | number;
+  waitText?: string;
+  scrollX?: string | number;
+  scrollY?: string | number;
+  optionsJson?: string;
+  targetJson?: string;
+  fromJson?: string;
+  toJson?: string;
+  inputJson?: string;
+}>;
 
 export type SidepanelStepRowView = Readonly<{
-  index: number
-  id: string
-  action: string
-  targetSummary: string
-  inputSummary: string
-  validationStatus: 'valid' | 'invalid'
-  selected: boolean
-}>
+  index: number;
+  id: string;
+  action: string;
+  targetSummary: string;
+  inputSummary: string;
+  validationStatus: 'valid' | 'invalid';
+  selected: boolean;
+}>;
 
 export type SidepanelIssueView = Readonly<{
-  path: string
-  message: string
-}>
+  path: string;
+  message: string;
+}>;
 
 export type SidepanelButtonView = Readonly<{
-  label: string
-  disabled: boolean
-  pending: boolean
-}>
+  label: string;
+  disabled: boolean;
+  pending: boolean;
+}>;
 
 export type SidepanelTargetTabView = Readonly<{
-  status: SidepanelTargetTabState['status']
-  tone: 'unknown' | 'checking' | 'ready' | 'blocked'
-  summary: string
-  tabId?: number
-  frameId?: number
-  url?: string
-  issue?: SidepanelIssueView
-}>
+  status: SidepanelTargetTabState['status'];
+  tone: 'unknown' | 'checking' | 'ready' | 'blocked';
+  summary: string;
+  tabId?: number;
+  frameId?: number;
+  url?: string;
+  issue?: SidepanelIssueView;
+}>;
 
 export type SidepanelWorkflowView = Readonly<{
-  status: 'empty' | 'saved' | 'draft' | 'running' | 'recording'
-  dirty: boolean
-  selectedStepId?: string
-  selectedTargetSlotId?: string
-  summary: string
-}>
+  status: 'empty' | 'saved' | 'draft' | 'running' | 'recording';
+  dirty: boolean;
+  selectedStepId?: string;
+  selectedTargetSlotId?: string;
+  summary: string;
+}>;
 
 export type SidepanelRecordedDraftReviewView = Readonly<{
-  draftId: string
-  sourceEventCount: number
-  validationStatus: SidepanelRecordedDraftReview['validationStatus']
-  summary: string
-  validationSummary: string
-  sensitiveSummary: string
-  sensitiveInputsConfirmed: boolean
+  draftId: string;
+  sourceEventCount: number;
+  validationStatus: SidepanelRecordedDraftReview['validationStatus'];
+  summary: string;
+  validationSummary: string;
+  sensitiveSummary: string;
+  sensitiveInputsConfirmed: boolean;
   buttons: Readonly<{
-    replace: SidepanelButtonView
-    append: SidepanelButtonView
-    discard: SidepanelButtonView
-    saveAsNew: SidepanelButtonView
-    export: SidepanelButtonView
-  }>
-}>
+    replace: SidepanelButtonView;
+    append: SidepanelButtonView;
+    discard: SidepanelButtonView;
+    saveAsNew: SidepanelButtonView;
+    export: SidepanelButtonView;
+  }>;
+}>;
 
 export type SidepanelActionFamilyOptionView = Readonly<{
-  value: BuilderStepActionFamily
-  label: string
-}>
+  value: BuilderStepActionFamily;
+  label: string;
+}>;
 
 export type SidepanelTargetSlotRowView = Readonly<{
-  id: string
-  label: string
-  summary: string
-  selected: boolean
-  validationStatus: 'valid' | 'invalid'
-}>
+  id: string;
+  label: string;
+  summary: string;
+  selected: boolean;
+  validationStatus: 'valid' | 'invalid';
+}>;
 
 export type SidepanelScenarioEditorView = Readonly<{
-  workflow: SidepanelWorkflowView
-  scenarioOptions: readonly Readonly<{ value: string; label: string }>[]
-  selectedScenarioId?: string
-  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
+  workflow: SidepanelWorkflowView;
+  scenarioOptions: readonly Readonly<{ value: string; label: string }>[];
+  selectedScenarioId?: string;
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[];
   documentFields: Readonly<{
-    name: string
-    description: string
-  }>
-  stepRows: readonly SidepanelStepRowView[]
-  targetSlotRows: readonly SidepanelTargetSlotRowView[]
+    name: string;
+    description: string;
+  }>;
+  stepRows: readonly SidepanelStepRowView[];
+  targetSlotRows: readonly SidepanelTargetSlotRowView[];
   selectedStepFields: Readonly<{
-    id: string
-    action: string
-    actionFamily: BuilderStepActionFamily | ''
-    note: string
-    input: string
-    duration: string
-    waitText: string
-    scrollX: string
-    scrollY: string
-    optionsJson: string
-    targetJson: string
-    fromJson: string
-    toJson: string
-    inputJson: string
+    id: string;
+    action: string;
+    actionFamily: BuilderStepActionFamily | '';
+    note: string;
+    input: string;
+    duration: string;
+    waitText: string;
+    scrollX: string;
+    scrollY: string;
+    optionsJson: string;
+    targetJson: string;
+    fromJson: string;
+    toJson: string;
+    inputJson: string;
     controls: Readonly<{
-      textInput: boolean
-      duration: boolean
-      waitText: boolean
-      scrollPosition: boolean
-      targetSlots: boolean
-    }>
-  }>
-  issueViews: readonly SidepanelIssueView[]
-  targetTab: SidepanelTargetTabView
-  validationSummary: string
-  recordedDraftReview?: SidepanelRecordedDraftReviewView
-  runSummary: string
-  traceView: TraceRunDisplayView | undefined
+      textInput: boolean;
+      duration: boolean;
+      waitText: boolean;
+      scrollPosition: boolean;
+      targetSlots: boolean;
+    }>;
+  }>;
+  issueViews: readonly SidepanelIssueView[];
+  targetTab: SidepanelTargetTabView;
+  validationSummary: string;
+  recordedDraftReview?: SidepanelRecordedDraftReviewView;
+  runSummary: string;
+  traceView: TraceRunDisplayView | undefined;
   buttons: Readonly<{
-    create: SidepanelButtonView
-    addStep: SidepanelButtonView
-    insertStep: SidepanelButtonView
-    duplicateStep: SidepanelButtonView
-    deleteStep: SidepanelButtonView
-    moveStepUp: SidepanelButtonView
-    moveStepDown: SidepanelButtonView
-    validate: SidepanelButtonView
-    save: SidepanelButtonView
-    import: SidepanelButtonView
-    export: SidepanelButtonView
-    run: SidepanelButtonView
-    dryRun: SidepanelButtonView
-    record: SidepanelButtonView
-  }>
-}>
+    create: SidepanelButtonView;
+    addStep: SidepanelButtonView;
+    insertStep: SidepanelButtonView;
+    duplicateStep: SidepanelButtonView;
+    deleteStep: SidepanelButtonView;
+    moveStepUp: SidepanelButtonView;
+    moveStepDown: SidepanelButtonView;
+    validate: SidepanelButtonView;
+    save: SidepanelButtonView;
+    import: SidepanelButtonView;
+    export: SidepanelButtonView;
+    run: SidepanelButtonView;
+    dryRun: SidepanelButtonView;
+    record: SidepanelButtonView;
+  }>;
+}>;
 
 export type SidepanelScenarioEditor = Readonly<{
-  refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>>
-  refreshTargetTabState(): Promise<ExtensionResult<SidepanelTargetTabState>>
-  createScenario(input?: CreateScenarioInput): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  selectScenario(id: string): void
-  selectStep(index: number): void
-  selectTargetSlot(slotId: string): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  addStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  insertStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  reorderStep(stepId: string, toIndex: number): ExtensionResult<SidepanelScenarioEditorSnapshot>
+  refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>>;
+  refreshTargetTabState(): Promise<ExtensionResult<SidepanelTargetTabState>>;
+  createScenario(input?: CreateScenarioInput): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  selectScenario(id: string): void;
+  selectStep(index: number): void;
+  selectTargetSlot(slotId: string): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  addStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  insertStep(family: BuilderStepActionFamily): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  reorderStep(stepId: string, toIndex: number): ExtensionResult<SidepanelScenarioEditorSnapshot>;
   updateSelectedStepActionFamily(
     family: BuilderStepActionFamily,
-  ): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  updateDocumentFields(update: SidepanelDocumentFieldUpdate): void
-  updateSelectedStepFields(
-    update: SidepanelStepFieldUpdate,
-  ): ExtensionResult<ScenarioDocument>
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  updateDocumentFields(update: SidepanelDocumentFieldUpdate): void;
+  updateSelectedStepFields(update: SidepanelStepFieldUpdate): ExtensionResult<ScenarioDocument>;
   applyLocatorToTargetSlot(
     slot: BuilderTargetSlot,
     locator: ScenarioLocator,
-  ): ExtensionResult<ScenarioDocument>
+  ): ExtensionResult<ScenarioDocument>;
   applyTargetToTargetSlot(
     slot: BuilderTargetSlot,
     target: ScenarioTarget,
-  ): ExtensionResult<ScenarioDocument>
-  applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument>
-  validateDraft(): ExtensionResult<ScenarioDocument>
-  saveDraft(): Promise<ExtensionResult<ScenarioRecord>>
-  importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>
-  exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>>
-  exportSelectedCode(): ExtensionResult<ScenarioCodeExport>
-  exportRecordedDraft(): ExtensionResult<ScenarioJsonExport>
-  replaceWithRecordedDraft(): ExtensionResult<ScenarioDocument>
-  appendRecordedDraftSteps(): ExtensionResult<ScenarioDocument>
-  discardRecordedDraft(): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  saveRecordedDraftAsNew(): Promise<ExtensionResult<ScenarioRecord>>
+  ): ExtensionResult<ScenarioDocument>;
+  applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument>;
+  validateDraft(): ExtensionResult<ScenarioDocument>;
+  saveDraft(): Promise<ExtensionResult<ScenarioRecord>>;
+  importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>>;
+  exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>>;
+  exportSelectedCode(): ExtensionResult<ScenarioCodeExport>;
+  exportRecordedDraft(): ExtensionResult<ScenarioJsonExport>;
+  replaceWithRecordedDraft(): ExtensionResult<ScenarioDocument>;
+  appendRecordedDraftSteps(): ExtensionResult<ScenarioDocument>;
+  discardRecordedDraft(): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  saveRecordedDraftAsNew(): Promise<ExtensionResult<ScenarioRecord>>;
   confirmRecordedDraftSensitiveInputs(
     confirmed: boolean,
-  ): ExtensionResult<SidepanelScenarioEditorSnapshot>
-  runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
-  dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>
-  startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
-  stopRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>
-  loadRecordedDraft(draftId?: string): Promise<ExtensionResult<RecordedScenarioDraftHandoff | null>>
-  ingestMessage(message: unknown): boolean
-  getSnapshot(): SidepanelScenarioEditorSnapshot
-}>
+  ): ExtensionResult<SidepanelScenarioEditorSnapshot>;
+  runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>;
+  dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>>;
+  startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>;
+  stopRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>>;
+  loadRecordedDraft(
+    draftId?: string,
+  ): Promise<ExtensionResult<RecordedScenarioDraftHandoff | null>>;
+  ingestMessage(message: unknown): boolean;
+  getSnapshot(): SidepanelScenarioEditorSnapshot;
+}>;
 
-let nextRunSequence = 1
-let nextDryRunSequence = 1
-let nextRecordSequence = 1
+let nextRunSequence = 1;
+let nextDryRunSequence = 1;
+let nextRecordSequence = 1;
 
 export function createSidepanelScenarioEditor(
   client: SidepanelScenarioEditorClient,
   options: SidepanelScenarioEditorOptions = {},
 ): SidepanelScenarioEditor {
-  const createRunId = options.createRunId ?? defaultRunId
-  const createDryRunId = options.createDryRunId ?? defaultDryRunId
-  const createRecordId = options.createRecordId ?? defaultRecordId
-  const createScenarioId = options.createScenarioId
-  const createStepId = options.createStepId
-  const frameId = options.frameId
-  const targetTabId = options.targetTabId
-  const now = options.now ?? Date.now
+  const createRunId = options.createRunId ?? defaultRunId;
+  const createDryRunId = options.createDryRunId ?? defaultDryRunId;
+  const createRecordId = options.createRecordId ?? defaultRecordId;
+  const createScenarioId = options.createScenarioId;
+  const createStepId = options.createStepId;
+  const frameId = options.frameId;
+  const targetTabId = options.targetTabId;
+  const now = options.now ?? Date.now;
   const traceStore = createTraceDisplayStore({
     historyLimit: options.traceHistoryLimit,
     runLimit: options.traceRunLimit,
-  })
-  let records: readonly ScenarioRecord[] = []
+  });
+  let records: readonly ScenarioRecord[] = [];
   let session = createScenarioAuthoringSession({
     scenarios: [],
     ...(createScenarioId === undefined ? {} : { createScenarioId }),
     ...(createStepId === undefined ? {} : { createStepId }),
-  })
-  let externalIssues: readonly ExtensionIssue[] = []
-  let recordedDraftReview: SidepanelRecordedDraftReview | undefined
-  let snapshot = emptySnapshot(traceStore.getState())
+  });
+  let externalIssues: readonly ExtensionIssue[] = [];
+  let recordedDraftReview: SidepanelRecordedDraftReview | undefined;
+  let snapshot = emptySnapshot(traceStore.getState());
 
   async function refresh(): Promise<ExtensionResult<SidepanelScenarioEditorSnapshot>> {
     syncSnapshotFromSession({
       pendingAction: 'refresh',
-    })
+    });
 
-    const loaded = await loadScenarios(snapshot.selectedScenarioId)
-    syncSnapshotFromSession({ pendingAction: null })
+    const loaded = await loadScenarios(snapshot.selectedScenarioId);
+    syncSnapshotFromSession({ pendingAction: null });
 
-    return loaded.ok ? ok(snapshot) : failure(loaded.issues)
+    return loaded.ok ? ok(snapshot) : failure(loaded.issues);
   }
 
   async function refreshTargetTabState(): Promise<ExtensionResult<SidepanelTargetTabState>> {
     syncSnapshotFromSession({
       targetTab: { status: 'checking' },
-    })
+    });
 
-    let response: unknown
+    let response: unknown;
     try {
-      response = await client.sendMessage(createExtensionMessage({
-        kind: 'popup:get-state',
-        payload: {
-          ...(targetTabId === undefined ? {} : { tabId: targetTabId }),
-          ...optionalFrameId(frameId),
-          ...optionalScenarioId(snapshot.selectedScenarioId),
-        },
-      }))
+      response = await client.sendMessage(
+        createExtensionMessage({
+          kind: 'popup:get-state',
+          payload: {
+            ...(targetTabId === undefined ? {} : { tabId: targetTabId }),
+            ...optionalFrameId(frameId),
+            ...optionalScenarioId(snapshot.selectedScenarioId),
+          },
+        }),
+      );
     } catch (error) {
       return setTargetTabIssue({
         code: 'routing_error',
         message: `Target tab readiness could not be loaded: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const responseResult = readExtensionResult(response)
+    const responseResult = readExtensionResult(response);
     if (responseResult === null) {
       return setTargetTabIssue({
         code: 'unsupported_message',
         message: 'Target tab readiness response was not understood.',
-      })
+      });
     }
 
     if (!responseResult.ok) {
-      return setTargetTabIssue(responseResult.issues[0] ?? {
-        code: 'routing_error',
-        message: 'Target tab readiness could not be resolved.',
-      })
+      return setTargetTabIssue(
+        responseResult.issues[0] ?? {
+          code: 'routing_error',
+          message: 'Target tab readiness could not be resolved.',
+        },
+      );
     }
 
-    const targetTab = targetTabStateFromBackground(responseResult.value)
+    const targetTab = targetTabStateFromBackground(responseResult.value);
     if (targetTab === null) {
       return setTargetTabIssue({
         code: 'unsupported_message',
         message: 'Target tab readiness response was not understood.',
-      })
+      });
     }
 
-    syncSnapshotFromSession({ targetTab })
-    return targetTab.status === 'blocked' ? failure(targetTab.issue) : ok(targetTab)
+    syncSnapshotFromSession({ targetTab });
+    return targetTab.status === 'blocked' ? failure(targetTab.issue) : ok(targetTab);
   }
 
   function createScenario(
@@ -498,147 +497,154 @@ export function createSidepanelScenarioEditor(
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
     return applySessionState(createBuilderScenario(session, input), {
       message: undefined,
-    })
+    });
   }
 
   function selectScenario(id: string): void {
-    const selected = selectBuilderScenario(session, id)
+    const selected = selectBuilderScenario(session, id);
     if (!selected.ok) {
-      setExternalIssues(selected.issues, { message: undefined })
-      return
+      setExternalIssues(selected.issues, { message: undefined });
+      return;
     }
 
-    session = withDefaultTargetSlot(selected.value)
-    externalIssues = []
-    syncSnapshotFromSession({ message: undefined })
+    session = withDefaultTargetSlot(selected.value);
+    externalIssues = [];
+    syncSnapshotFromSession({ message: undefined });
   }
 
   function selectStep(index: number): void {
-    const document = session.draftDocument
-    const selected = document?.steps[clampStepIndex(index, document.steps.length)]
+    const document = session.draftDocument;
+    const selected = document?.steps[clampStepIndex(index, document.steps.length)];
     if (selected === undefined) {
-      setExternalIssues([{
-        code: 'invalid_document',
-        message: 'Select a step before editing.',
-        path: ['steps'],
-      }], { message: undefined })
-      return
+      setExternalIssues(
+        [
+          {
+            code: 'invalid_document',
+            message: 'Select a step before editing.',
+            path: ['steps'],
+          },
+        ],
+        { message: undefined },
+      );
+      return;
     }
 
     applySessionState(selectBuilderStep(session, stepIdFor(selected, index)), {
       message: undefined,
-    })
+    });
   }
 
-  function selectTargetSlot(
-    slotId: string,
-  ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const slot = targetSlotFromViewId(session, slotId)
+  function selectTargetSlot(slotId: string): ExtensionResult<SidepanelScenarioEditorSnapshot> {
+    const slot = targetSlotFromViewId(session, slotId);
     if (slot === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: `Target slot "${slotId}" is not available for the selected step.`,
-      })
+      });
     }
 
     return applySessionState(selectBuilderTargetSlot(session, slot), {
       message: undefined,
-    })
+    });
   }
 
   function addStep(
     family: BuilderStepActionFamily,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    return applySessionState(addBuilderStep(session, family), { message: undefined })
+    return applySessionState(addBuilderStep(session, family), { message: undefined });
   }
 
   function insertStep(
     family: BuilderStepActionFamily,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    return applySessionState(
-      insertBuilderStep(session, snapshot.selectedStepIndex + 1, family),
-      { message: undefined },
-    )
+    return applySessionState(insertBuilderStep(session, snapshot.selectedStepIndex + 1, family), {
+      message: undefined,
+    });
   }
 
   function duplicateSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const stepId = session.selectedStepId
+    const stepId = session.selectedStepId;
     if (stepId === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before duplicating.',
         path: ['steps'],
-      })
+      });
     }
 
-    return applySessionState(duplicateBuilderStep(session, stepId), { message: undefined })
+    return applySessionState(duplicateBuilderStep(session, stepId), { message: undefined });
   }
 
   function deleteSelectedStep(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const stepId = session.selectedStepId
+    const stepId = session.selectedStepId;
     if (stepId === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before deleting.',
         path: ['steps'],
-      })
+      });
     }
 
-    return applySessionState(deleteBuilderStep(session, stepId), { message: undefined })
+    return applySessionState(deleteBuilderStep(session, stepId), { message: undefined });
   }
 
   function moveSelectedStep(delta: -1 | 1): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const stepId = session.selectedStepId
+    const stepId = session.selectedStepId;
     if (stepId === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before moving.',
         path: ['steps'],
-      })
+      });
     }
 
     return applySessionState(
       reorderBuilderStep(session, stepId, snapshot.selectedStepIndex + delta),
       { message: undefined },
-    )
+    );
   }
 
   function reorderStep(
     stepId: string,
     toIndex: number,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    return applySessionState(reorderBuilderStep(session, stepCommandIdFromViewId(session, stepId), toIndex), {
-      message: undefined,
-    })
+    return applySessionState(
+      reorderBuilderStep(session, stepCommandIdFromViewId(session, stepId), toIndex),
+      {
+        message: undefined,
+      },
+    );
   }
 
   function updateSelectedStepActionFamily(
     family: BuilderStepActionFamily,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const stepId = session.selectedStepId
+    const stepId = session.selectedStepId;
     if (stepId === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before changing the action.',
         path: ['steps'],
-      })
+      });
     }
 
     return applySessionState(updateBuilderStepActionFamily(session, stepId, family), {
       message: undefined,
-    })
+    });
   }
 
   function updateDocumentFields(update: SidepanelDocumentFieldUpdate): void {
     if (session.draftDocument === undefined) {
-      return
+      return;
     }
 
     const updated = updateBuilderDocumentFields(session, {
       ...(update.name === undefined ? {} : { name: nullableString(update.name) }),
-      ...(update.description === undefined ? {} : { description: nullableString(update.description) }),
-    })
-    applySessionState(updated, { message: undefined })
+      ...(update.description === undefined
+        ? {}
+        : { description: nullableString(update.description) }),
+    });
+    applySessionState(updated, { message: undefined });
   }
 
   function updateSelectedStepFields(
@@ -648,67 +654,65 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before editing a step.',
-      })
+      });
     }
 
-    const stepId = session.selectedStepId
-    const index = selectedStepIndexForSession(session)
-    const step = session.draftDocument.steps[index]
+    const stepId = session.selectedStepId;
+    const index = selectedStepIndexForSession(session);
+    const step = session.draftDocument.steps[index];
     if (stepId === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before editing.',
         path: ['steps'],
-      })
+      });
     }
     if (step === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before editing.',
         path: ['steps'],
-      })
+      });
     }
 
-    const fieldUpdate = stepFieldUpdateFromInput(step, index, update)
+    const fieldUpdate = stepFieldUpdateFromInput(step, index, update);
     if (!fieldUpdate.ok) {
-      setExternalIssues(fieldUpdate.issues, { message: undefined })
-      return failure(fieldUpdate.issues)
+      setExternalIssues(fieldUpdate.issues, { message: undefined });
+      return failure(fieldUpdate.issues);
     }
 
-    const updated = updateBuilderStepFields(session, stepId, fieldUpdate.value)
+    const updated = updateBuilderStepFields(session, stepId, fieldUpdate.value);
     if (!updated.ok) {
-      setExternalIssues(updated.issues, { message: undefined })
-      return failure(updated.issues)
+      setExternalIssues(updated.issues, { message: undefined });
+      return failure(updated.issues);
     }
 
-    session = withDefaultTargetSlot(updated.value)
-    externalIssues = []
-    syncSnapshotFromSession({ message: undefined })
+    session = withDefaultTargetSlot(updated.value);
+    externalIssues = [];
+    syncSnapshotFromSession({ message: undefined });
 
-    return scenarioDocumentResultFromSession()
+    return scenarioDocumentResultFromSession();
   }
 
-  function applyLocatorToSelectedStep(
-    locator: ScenarioLocator,
-  ): ExtensionResult<ScenarioDocument> {
+  function applyLocatorToSelectedStep(locator: ScenarioLocator): ExtensionResult<ScenarioDocument> {
     if (session.draftDocument === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before applying a locator.',
-      })
+      });
     }
 
-    const slotReady = ensureSelectedTargetSlot(session)
-    session = slotReady
-    const slot = session.selectedTargetSlot
+    const slotReady = ensureSelectedTargetSlot(session);
+    session = slotReady;
+    const slot = session.selectedTargetSlot;
     if (slot === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a target slot before applying a locator.',
-      })
+      });
     }
 
-    return applyLocatorToTargetSlot(slot, locator)
+    return applyLocatorToTargetSlot(slot, locator);
   }
 
   function applyLocatorToTargetSlot(
@@ -719,20 +723,20 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before applying a locator.',
-      })
+      });
     }
 
-    const assigned = assignLocatorToTargetSlot(session, slot, locator)
+    const assigned = assignLocatorToTargetSlot(session, slot, locator);
     if (!assigned.ok) {
-      setExternalIssues(assigned.issues, { message: undefined })
-      return failure(assigned.issues)
+      setExternalIssues(assigned.issues, { message: undefined });
+      return failure(assigned.issues);
     }
 
-    session = withDefaultTargetSlot(assigned.value)
-    externalIssues = []
-    syncSnapshotFromSession({ message: 'Locator applied' })
+    session = withDefaultTargetSlot(assigned.value);
+    externalIssues = [];
+    syncSnapshotFromSession({ message: 'Locator applied' });
 
-    return scenarioDocumentResultFromSession()
+    return scenarioDocumentResultFromSession();
   }
 
   function applyTargetToTargetSlot(
@@ -743,20 +747,20 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before applying a target.',
-      })
+      });
     }
 
-    const assigned = assignTargetToTargetSlot(session, slot, target)
+    const assigned = assignTargetToTargetSlot(session, slot, target);
     if (!assigned.ok) {
-      setExternalIssues(assigned.issues, { message: undefined })
-      return failure(assigned.issues)
+      setExternalIssues(assigned.issues, { message: undefined });
+      return failure(assigned.issues);
     }
 
-    session = withDefaultTargetSlot(assigned.value)
-    externalIssues = []
-    syncSnapshotFromSession({ message: 'Target applied' })
+    session = withDefaultTargetSlot(assigned.value);
+    externalIssues = [];
+    syncSnapshotFromSession({ message: 'Target applied' });
 
-    return scenarioDocumentResultFromSession()
+    return scenarioDocumentResultFromSession();
   }
 
   function validateDraft(): ExtensionResult<ScenarioDocument> {
@@ -764,21 +768,21 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before validating.',
-      })
+      });
     }
 
     syncSnapshotFromSession({
       pendingAction: 'validate',
       message: undefined,
-    })
-    const validation = getValidatedScenarioDocument(session)
-    externalIssues = validation.ok ? [] : validation.issues
+    });
+    const validation = getValidatedScenarioDocument(session);
+    externalIssues = validation.ok ? [] : validation.issues;
     syncSnapshotFromSession({
       pendingAction: null,
       message: undefined,
-    })
+    });
 
-    return validation
+    return validation;
   }
 
   async function saveDraft(): Promise<ExtensionResult<ScenarioRecord>> {
@@ -786,25 +790,25 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before saving.',
-      })
+      });
     }
 
     syncSnapshotFromSession({
       pendingAction: 'save',
       message: undefined,
-    })
+    });
 
-    const validation = getValidatedScenarioDocument(session)
+    const validation = getValidatedScenarioDocument(session);
     if (!validation.ok) {
-      externalIssues = validation.issues
+      externalIssues = validation.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return validation
+      });
+      return validation;
     }
 
-    const selectedId = session.selectedScenarioId
-    const name = validation.value.name ?? selectedRecord(snapshot)?.name
+    const selectedId = session.selectedScenarioId;
+    const name = validation.value.name ?? selectedRecord(snapshot)?.name;
     const result =
       selectedId === undefined
         ? await client.saveScenario({
@@ -814,94 +818,94 @@ export function createSidepanelScenarioEditor(
         : await client.updateScenario(selectedId, {
             name,
             document: validation.value,
-          })
+          });
 
     if (!result.ok) {
-      externalIssues = result.issues
+      externalIssues = result.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return result
+      });
+      return result;
     }
 
-    replaceScenario(result.value)
-    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)))
-    externalIssues = []
+    replaceScenario(result.value);
+    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)));
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Saved',
-    })
+    });
 
-    return result
+    return result;
   }
 
   async function importJson(jsonText: string): Promise<ExtensionResult<ScenarioRecord>> {
     syncSnapshotFromSession({
       pendingAction: 'import',
       message: undefined,
-    })
+    });
 
-    const imported = await client.importScenarioJson(jsonText)
+    const imported = await client.importScenarioJson(jsonText);
     if (!imported.ok) {
-      externalIssues = imported.issues
+      externalIssues = imported.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return imported
+      });
+      return imported;
     }
 
-    const loaded = await loadScenarios(imported.value.id)
+    const loaded = await loadScenarios(imported.value.id);
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Imported',
-    })
+    });
 
-    return loaded.ok ? imported : failure(loaded.issues)
+    return loaded.ok ? imported : failure(loaded.issues);
   }
 
   async function exportSelected(): Promise<ExtensionResult<ScenarioJsonExport>> {
-    const selectedId = session.selectedScenarioId
+    const selectedId = session.selectedScenarioId;
     if (selectedId === undefined || session.dirty) {
       if (session.draftDocument === undefined) {
         return setIssue({
           code: 'storage_error',
           message: 'Select a scenario before exporting.',
-        })
+        });
       }
 
-      const validation = getValidatedScenarioDocument(session)
-      externalIssues = validation.ok ? [] : validation.issues
+      const validation = getValidatedScenarioDocument(session);
+      externalIssues = validation.ok ? [] : validation.issues;
       syncSnapshotFromSession({
         pendingAction: null,
         message: validation.ok ? 'Exported' : undefined,
-      })
+      });
 
       if (!validation.ok) {
-        return validation
+        return validation;
       }
 
-      const id = validation.value.id ?? 'draft-scenario'
+      const id = validation.value.id ?? 'draft-scenario';
       return ok({
         id,
         filename: `${filenameBase(id)}.json`,
         jsonText: `${JSON.stringify(validation.value, null, 2)}\n`,
         document: validation.value,
-      })
+      });
     }
 
     syncSnapshotFromSession({
       pendingAction: 'export',
       message: undefined,
-    })
+    });
 
-    const exported = await client.exportScenarioJson(selectedId)
-    externalIssues = exported.ok ? [] : exported.issues
+    const exported = await client.exportScenarioJson(selectedId);
+    externalIssues = exported.ok ? [] : exported.issues;
     syncSnapshotFromSession({
       pendingAction: null,
       message: exported.ok ? 'Exported' : undefined,
-    })
+    });
 
-    return exported
+    return exported;
   }
 
   function exportSelectedCode(): ExtensionResult<ScenarioCodeExport> {
@@ -909,93 +913,95 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before exporting TypeScript.',
-      })
+      });
     }
 
-    const validation = getValidatedScenarioDocument(session)
+    const validation = getValidatedScenarioDocument(session);
     if (!validation.ok) {
-      externalIssues = validation.issues
+      externalIssues = validation.issues;
       syncSnapshotFromSession({
         pendingAction: null,
         message: undefined,
-      })
-      return failure(validation.issues)
+      });
+      return failure(validation.issues);
     }
 
-    const exported = exportScenarioToCode(validation.value)
-    externalIssues = exported.ok ? [] : exported.issues
+    const exported = exportScenarioToCode(validation.value);
+    externalIssues = exported.ok ? [] : exported.issues;
     syncSnapshotFromSession({
       pendingAction: null,
       message: exported.ok ? 'Exported TypeScript' : undefined,
-    })
+    });
 
-    return exported
+    return exported;
   }
 
   function exportRecordedDraft(): ExtensionResult<ScenarioJsonExport> {
-    const ready = recordedDraftReadyForSave('export')
+    const ready = recordedDraftReadyForSave('export');
     if (!ready.ok) {
-      return failure(ready.issues)
+      return failure(ready.issues);
     }
 
-    const id = ready.value.document.id ?? `recorded-${ready.value.review.draftId}`
-    externalIssues = []
+    const id = ready.value.document.id ?? `recorded-${ready.value.review.draftId}`;
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Recorded draft exported',
-    })
+    });
 
     return ok({
       id,
       filename: `${filenameBase(id)}.json`,
       jsonText: `${JSON.stringify(ready.value.document, null, 2)}\n`,
       document: ready.value.document,
-    })
+    });
   }
 
   function replaceWithRecordedDraft(): ExtensionResult<ScenarioDocument> {
-    const ready = recordedDraftReadyForSave('replace')
+    const ready = recordedDraftReadyForSave('replace');
     if (!ready.ok) {
-      return failure(ready.issues)
+      return failure(ready.issues);
     }
 
-    session = withDefaultTargetSlot(openDraftDocument(session, ready.value.document as BuilderDraftDocument, {
-      dirty: true,
-    }))
-    recordedDraftReview = undefined
-    externalIssues = []
+    session = withDefaultTargetSlot(
+      openDraftDocument(session, ready.value.document as BuilderDraftDocument, {
+        dirty: true,
+      }),
+    );
+    recordedDraftReview = undefined;
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Recorded draft replaced current draft',
-    })
+    });
 
-    return ok(ready.value.document)
+    return ok(ready.value.document);
   }
 
   function appendRecordedDraftSteps(): ExtensionResult<ScenarioDocument> {
-    const ready = recordedDraftReadyForSave('append')
+    const ready = recordedDraftReadyForSave('append');
     if (!ready.ok) {
-      return failure(ready.issues)
+      return failure(ready.issues);
     }
 
     const appended = appendBuilderDraftSteps(
       session,
       ready.value.document.steps as readonly BuilderDraftStep[],
-    )
+    );
     if (!appended.ok) {
       setExternalIssues(appended.issues, {
         pendingAction: null,
         message: undefined,
-      })
-      return failure(appended.issues)
+      });
+      return failure(appended.issues);
     }
 
-    session = withDefaultTargetSlot(appended.value)
-    recordedDraftReview = undefined
+    session = withDefaultTargetSlot(appended.value);
+    recordedDraftReview = undefined;
     return scenarioDocumentResultFromSession({
       pendingAction: null,
       message: 'Recorded steps appended',
-    })
+    });
   }
 
   function discardRecordedDraft(): ExtensionResult<SidepanelScenarioEditorSnapshot> {
@@ -1003,76 +1009,76 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'recorder_error',
         message: 'No recorded draft is available to discard.',
-      })
+      });
     }
 
-    recordedDraftReview = undefined
-    externalIssues = []
+    recordedDraftReview = undefined;
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Recorded draft discarded',
-    })
+    });
 
-    return ok(snapshot)
+    return ok(snapshot);
   }
 
   async function saveRecordedDraftAsNew(): Promise<ExtensionResult<ScenarioRecord>> {
-    const ready = recordedDraftReadyForSave('save')
+    const ready = recordedDraftReadyForSave('save');
     if (!ready.ok) {
-      return failure(ready.issues)
+      return failure(ready.issues);
     }
 
     syncSnapshotFromSession({
       pendingAction: 'save',
       message: undefined,
-    })
+    });
 
     const result = await client.saveScenario({
       name: ready.value.document.name,
       document: ready.value.document,
-    })
+    });
     if (!result.ok) {
-      externalIssues = result.issues
+      externalIssues = result.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return result
+      });
+      return result;
     }
 
-    replaceScenario(result.value)
-    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)))
-    recordedDraftReview = undefined
-    externalIssues = []
+    replaceScenario(result.value);
+    session = withDefaultTargetSlot(markScenarioSaved(session, sourceFromRecord(result.value)));
+    recordedDraftReview = undefined;
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: 'Recorded draft saved',
-    })
+    });
 
-    return result
+    return result;
   }
 
   function confirmRecordedDraftSensitiveInputs(
     confirmed: boolean,
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
-    const review = recordedDraftReview
+    const review = recordedDraftReview;
     if (review === undefined) {
       return setIssue({
         code: 'recorder_error',
         message: 'No recorded draft is available to confirm.',
-      })
+      });
     }
 
     recordedDraftReview = {
       ...review,
       sensitiveInputsConfirmed: sensitiveReviewItemCount(review) > 0 && confirmed,
-    }
-    externalIssues = []
+    };
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       message: undefined,
-    })
+    });
 
-    return ok(snapshot)
+    return ok(snapshot);
   }
 
   async function runSelectedScenario(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
@@ -1080,17 +1086,17 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before running.',
-      })
+      });
     }
 
-    const validation = getValidatedScenarioDocument(session)
+    const validation = getValidatedScenarioDocument(session);
     if (!validation.ok) {
-      externalIssues = validation.issues
-      syncSnapshotFromSession({ pendingAction: null, message: undefined })
-      return validation
+      externalIssues = validation.issues;
+      syncSnapshotFromSession({ pendingAction: null, message: undefined });
+      return validation;
     }
 
-    return dispatchScenarioRun(validation.value, createRunId(), 'run')
+    return dispatchScenarioRun(validation.value, createRunId(), 'run');
   }
 
   async function dryRunSelectedStep(): Promise<ExtensionResult<SidepanelScenarioRunReceipt>> {
@@ -1098,16 +1104,16 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'invalid_document',
         message: 'Select a scenario before running a step.',
-      })
+      });
     }
 
-    const step = session.draftDocument.steps[selectedStepIndexForSession(session)]
+    const step = session.draftDocument.steps[selectedStepIndexForSession(session)];
     if (step === undefined) {
       return setIssue({
         code: 'invalid_document',
         message: 'Select a step before running it.',
         path: ['steps'],
-      })
+      });
     }
 
     return dispatchScenarioRun(
@@ -1117,7 +1123,7 @@ export function createSidepanelScenarioEditor(
       },
       createDryRunId(),
       'dry-run',
-    )
+    );
   }
 
   async function startRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
@@ -1125,23 +1131,23 @@ export function createSidepanelScenarioEditor(
       return setIssue({
         code: 'recorder_error',
         message: 'Stop the active run before recording.',
-      })
+      });
     }
 
     if (snapshot.currentRecord?.status === 'recording') {
       return setIssue({
         code: 'recorder_error',
         message: 'A recorder session is already active.',
-      })
+      });
     }
 
-    const target = await resolveRunTargetTab(client, targetTabId)
+    const target = await resolveRunTargetTab(client, targetTabId);
     if (!target.ok) {
-      externalIssues = target.issues
+      externalIssues = target.issues;
       syncSnapshotFromSession({
         message: undefined,
-      })
-      return target
+      });
+      return target;
     }
 
     return dispatchRecordCommand(
@@ -1150,22 +1156,24 @@ export function createSidepanelScenarioEditor(
         payload: {
           tabId: target.value.id,
           ...(frameId === undefined ? {} : { frameId }),
-          ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
+          ...(snapshot.selectedScenarioId === undefined
+            ? {}
+            : { scenarioId: snapshot.selectedScenarioId }),
           runId: createRecordId(),
         },
       }),
       'record:start',
       'Record start command',
-    )
+    );
   }
 
   async function stopRecording(): Promise<ExtensionResult<SidepanelRecordCommandReceipt>> {
-    const record = snapshot.currentRecord
+    const record = snapshot.currentRecord;
     if (record === undefined || record.status !== 'recording') {
       return setIssue({
         code: 'recorder_error',
         message: 'No active recording is available to stop.',
-      })
+      });
     }
 
     return dispatchRecordCommand(
@@ -1180,7 +1188,7 @@ export function createSidepanelScenarioEditor(
       }),
       'record:stop',
       'Record stop command',
-    )
+    );
   }
 
   async function loadRecordedDraft(
@@ -1189,95 +1197,101 @@ export function createSidepanelScenarioEditor(
     syncSnapshotFromSession({
       pendingAction: 'record:draft',
       message: undefined,
-    })
+    });
 
-    const target = draftId === undefined
-      ? await resolveRunTargetTab(client, targetTabId)
-      : undefined
+    const target =
+      draftId === undefined ? await resolveRunTargetTab(client, targetTabId) : undefined;
     if (target !== undefined && !target.ok) {
-      externalIssues = target.issues
+      externalIssues = target.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return target
+      });
+      return target;
     }
 
     const message = createExtensionMessage({
       kind: 'record:draft:get',
       payload: {
         ...(draftId === undefined ? {} : { draftId }),
-        ...(target?.ok ? { tabId: target.value.id, ...(frameId === undefined ? {} : { frameId }) } : {}),
-        ...(snapshot.selectedScenarioId === undefined ? {} : { scenarioId: snapshot.selectedScenarioId }),
+        ...(target?.ok
+          ? { tabId: target.value.id, ...(frameId === undefined ? {} : { frameId }) }
+          : {}),
+        ...(snapshot.selectedScenarioId === undefined
+          ? {}
+          : { scenarioId: snapshot.selectedScenarioId }),
       },
-    })
+    });
 
-    let response: unknown
+    let response: unknown;
     try {
-      response = await client.sendMessage(message)
+      response = await client.sendMessage(message);
     } catch (error) {
       return setIssue({
         code: 'recorder_error',
         message: `Recorded draft could not be loaded: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const responseResult = readExtensionResult(response)
+    const responseResult = readExtensionResult(response);
     if (responseResult === null) {
       return setIssue({
         code: 'unsupported_message',
         message: 'Recorded draft response was not understood.',
-      })
+      });
     }
 
     if (!responseResult.ok) {
-      externalIssues = responseResult.issues
+      externalIssues = responseResult.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return responseResult as ExtensionResult<RecordedScenarioDraftHandoff | null>
+      });
+      return responseResult as ExtensionResult<RecordedScenarioDraftHandoff | null>;
     }
 
-    const draft = responseResult.value as RecordedScenarioDraftHandoff | null
+    const draft = responseResult.value as RecordedScenarioDraftHandoff | null;
     if (draft !== null) {
-      openRecordedDraftReview(draft)
+      openRecordedDraftReview(draft);
     } else {
-      externalIssues = []
+      externalIssues = [];
       syncSnapshotFromSession({
         pendingAction: null,
-      })
+      });
     }
 
-    return ok(draft)
+    return ok(draft);
   }
 
   function ingestMessage(message: unknown): boolean {
     if (snapshot.currentRun === undefined || !isActorbleExtensionMessage(message)) {
-      return false
+      return false;
     }
 
-    if (message.kind === 'runtime:status' && matchesCurrentRun(snapshot.currentRun, message.payload)) {
-      traceStore.ingestStatus(statusSnapshotFrom(
-        message.payload,
-        message.payload.status,
-        now(),
-        message.payload.message,
-      ))
+    if (
+      message.kind === 'runtime:status' &&
+      matchesCurrentRun(snapshot.currentRun, message.payload)
+    ) {
+      traceStore.ingestStatus(
+        statusSnapshotFrom(message.payload, message.payload.status, now(), message.payload.message),
+      );
       const currentRun = {
         tabId: message.payload.tabId,
         frameId: message.payload.frameId,
         scenarioId: message.payload.scenarioId,
         runId: message.payload.runId,
         status: message.payload.status,
-      } satisfies SidepanelScenarioRunReceipt
-      const builderStatus = builderRunStatus(currentRun.status)
-      session = builderStatus === undefined
-        ? setRunState(session, undefined)
-        : setRunState(session, {
-            runId: currentRun.runId,
-            scenarioId: currentRun.scenarioId,
-            status: builderStatus,
-            ...(message.payload.message === undefined ? {} : { message: message.payload.message }),
-          })
+      } satisfies SidepanelScenarioRunReceipt;
+      const builderStatus = builderRunStatus(currentRun.status);
+      session =
+        builderStatus === undefined
+          ? setRunState(session, undefined)
+          : setRunState(session, {
+              runId: currentRun.runId,
+              scenarioId: currentRun.scenarioId,
+              status: builderStatus,
+              ...(message.payload.message === undefined
+                ? {}
+                : { message: message.payload.message }),
+            });
       syncSnapshotFromSession({
         currentRun: {
           tabId: message.payload.tabId,
@@ -1288,49 +1302,51 @@ export function createSidepanelScenarioEditor(
         },
         message: message.payload.message,
         ...traceFields(),
-      })
-      return true
+      });
+      return true;
     }
 
     if (message.kind === 'trace:event' && matchesCurrentRun(snapshot.currentRun, message.payload)) {
-      traceStore.ingestEvent(message.payload.event)
+      traceStore.ingestEvent(message.payload.event);
       syncSnapshotFromSession({
         ...traceFields(),
-      })
-      return true
+      });
+      return true;
     }
 
-    return false
+    return false;
   }
 
   function getSnapshot(): SidepanelScenarioEditorSnapshot {
-    return snapshot
+    return snapshot;
   }
 
   async function loadScenarios(
     preferredSelection: string | undefined,
   ): Promise<ExtensionResult<readonly ScenarioRecord[]>> {
-    const scenarios = await client.listScenarios()
+    const scenarios = await client.listScenarios();
     if (!scenarios.ok) {
-      records = []
-      session = createEmptySession(createScenarioId, createStepId)
-      externalIssues = scenarios.issues
-      syncSnapshotFromSession()
-      return scenarios
+      records = [];
+      session = createEmptySession(createScenarioId, createStepId);
+      externalIssues = scenarios.issues;
+      syncSnapshotFromSession();
+      return scenarios;
     }
 
-    records = scenarios.value
-    const selectedId = selectDefaultScenarioId(scenarios.value, preferredSelection)
-    session = withDefaultTargetSlot(createScenarioAuthoringSession({
-      scenarios: scenarios.value.map(sourceFromRecord),
-      ...(selectedId === undefined ? {} : { selectedScenarioId: selectedId }),
-      ...(createScenarioId === undefined ? {} : { createScenarioId }),
-      ...(createStepId === undefined ? {} : { createStepId }),
-    }))
-    externalIssues = []
-    syncSnapshotFromSession()
+    records = scenarios.value;
+    const selectedId = selectDefaultScenarioId(scenarios.value, preferredSelection);
+    session = withDefaultTargetSlot(
+      createScenarioAuthoringSession({
+        scenarios: scenarios.value.map(sourceFromRecord),
+        ...(selectedId === undefined ? {} : { selectedScenarioId: selectedId }),
+        ...(createScenarioId === undefined ? {} : { createScenarioId }),
+        ...(createStepId === undefined ? {} : { createStepId }),
+      }),
+    );
+    externalIssues = [];
+    syncSnapshotFromSession();
 
-    return scenarios
+    return scenarios;
   }
 
   async function dispatchRecordCommand(
@@ -1341,49 +1357,50 @@ export function createSidepanelScenarioEditor(
     syncSnapshotFromSession({
       pendingAction,
       message: undefined,
-    })
+    });
 
-    let response: unknown
+    let response: unknown;
     try {
-      response = await client.sendMessage(message)
+      response = await client.sendMessage(message);
     } catch (error) {
       return setIssue({
         code: 'content_not_ready',
         message: `${label} could not be delivered: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const responseResult = readExtensionResult(response)
+    const responseResult = readExtensionResult(response);
     if (responseResult === null) {
       return setIssue({
         code: 'unsupported_message',
         message: `${label} returned an unsupported response.`,
-      })
+      });
     }
 
     if (!responseResult.ok) {
-      externalIssues = responseResult.issues
+      externalIssues = responseResult.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return responseResult as ExtensionResult<SidepanelRecordCommandReceipt>
+      });
+      return responseResult as ExtensionResult<SidepanelRecordCommandReceipt>;
     }
 
-    const receipt = responseResult.value as SidepanelRecordCommandReceipt
-    applyRecordReceipt(receipt)
+    const receipt = responseResult.value as SidepanelRecordCommandReceipt;
+    applyRecordReceipt(receipt);
 
     if (receipt.recordedDraft !== undefined) {
-      openRecordedDraftReview(receipt.recordedDraft)
+      openRecordedDraftReview(receipt.recordedDraft);
     } else {
-      externalIssues = []
+      externalIssues = [];
       syncSnapshotFromSession({
         pendingAction: null,
-        message: receipt.emptyRecording?.message ??
+        message:
+          receipt.emptyRecording?.message ??
           (receipt.kind === 'record:start' ? 'Recording' : snapshot.message),
-      })
+      });
     }
 
-    return ok(receipt)
+    return ok(receipt);
   }
 
   async function dispatchScenarioRun(
@@ -1395,104 +1412,106 @@ export function createSidepanelScenarioEditor(
       pendingAction,
       message: undefined,
       currentTrace: undefined,
-    })
+    });
 
-    const validation = validateScenarioDocument(document)
+    const validation = validateScenarioDocument(document);
     if (!validation.ok) {
-      externalIssues = validation.issues
+      externalIssues = validation.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return validation
+      });
+      return validation;
     }
 
-    const compilation = compileToBrowserRuntime(validation.value)
+    const compilation = compileToBrowserRuntime(validation.value);
     if (!compilation.ok) {
-      externalIssues = compilation.issues
+      externalIssues = compilation.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return compilation
+      });
+      return compilation;
     }
 
-    const target = await resolveRunTargetTab(client, targetTabId)
+    const target = await resolveRunTargetTab(client, targetTabId);
     if (!target.ok) {
-      externalIssues = target.issues
+      externalIssues = target.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return target
+      });
+      return target;
     }
 
-    const scenarioId = session.selectedScenarioId ?? validation.value.id ?? 'draft-scenario'
+    const scenarioId = session.selectedScenarioId ?? validation.value.id ?? 'draft-scenario';
     const correlation = {
       tabId: target.value.id,
       ...(frameId === undefined ? {} : { frameId }),
       scenarioId,
       runId,
-    } satisfies RequiredRunCorrelation
-    const message = createRunMessage(correlation, compilation.value)
+    } satisfies RequiredRunCorrelation;
+    const message = createRunMessage(correlation, compilation.value);
 
-    let response: unknown
+    let response: unknown;
     try {
-      response = await client.sendMessage(message)
+      response = await client.sendMessage(message);
     } catch (error) {
       return setIssue({
         code: 'content_not_ready',
         message: `Run command could not be delivered: ${describeUnknownError(error)}`,
-      })
+      });
     }
 
-    const responseResult = readExtensionResult(response)
+    const responseResult = readExtensionResult(response);
     if (responseResult !== null && !responseResult.ok) {
-      externalIssues = responseResult.issues
+      externalIssues = responseResult.issues;
       syncSnapshotFromSession({
         pendingAction: null,
-      })
-      return failure(responseResult.issues)
+      });
+      return failure(responseResult.issues);
     }
 
-    const resolvedCorrelation = correlationFromReceipt(correlation, responseResult?.value)
+    const resolvedCorrelation = correlationFromReceipt(correlation, responseResult?.value);
     const receipt = {
       ...resolvedCorrelation,
       status: 'running',
-    } satisfies SidepanelScenarioRunReceipt
-    traceStore.startRun(statusSnapshotFrom(resolvedCorrelation, 'running', now()))
+    } satisfies SidepanelScenarioRunReceipt;
+    traceStore.startRun(statusSnapshotFrom(resolvedCorrelation, 'running', now()));
     session = setRunState(session, {
       runId: receipt.runId,
       scenarioId: receipt.scenarioId,
       status: receipt.status,
-    })
-    externalIssues = []
+    });
+    externalIssues = [];
     syncSnapshotFromSession({
       pendingAction: null,
       currentRun: receipt,
       ...traceFields(),
-    })
-    return ok(receipt)
+    });
+    return ok(receipt);
   }
 
   function recordedDraftReadyForSave(
     _action: 'replace' | 'append' | 'save' | 'export',
-  ): ExtensionResult<Readonly<{
-    review: SidepanelRecordedDraftReview
-    document: ScenarioDocument
-  }>> {
-    const review = recordedDraftReview
+  ): ExtensionResult<
+    Readonly<{
+      review: SidepanelRecordedDraftReview;
+      document: ScenarioDocument;
+    }>
+  > {
+    const review = recordedDraftReview;
     if (review === undefined) {
       return setIssue({
         code: 'recorder_error',
         message: 'No recorded draft is available for review.',
-      })
+      });
     }
 
-    const validation = validateRecordedDraftReview(review)
+    const validation = validateRecordedDraftReview(review);
     if (!validation.ok) {
       setExternalIssues(validation.issues, {
         pendingAction: null,
         message: undefined,
-      })
-      return failure(validation.issues)
+      });
+      return failure(validation.issues);
     }
 
     if (recordedDraftNeedsSensitiveConfirmation(review)) {
@@ -1503,66 +1522,68 @@ export function createSidepanelScenarioEditor(
           draftId: review.draftId,
           sensitiveInputCount: review.sensitiveInputCount,
         },
-      })
+      });
     }
 
     return ok({
       review,
       document: validation.value,
-    })
+    });
   }
 
   function setIssue<TValue>(issue: ExtensionIssue): ExtensionResult<TValue> {
     setExternalIssues([issue], {
       pendingAction: null,
       message: undefined,
-    })
-    return failure(issue)
+    });
+    return failure(issue);
   }
 
   function setTargetTabIssue(issue: ExtensionIssue): ExtensionResult<SidepanelTargetTabState> {
     const targetTab = {
       status: 'blocked',
       issue,
-    } satisfies SidepanelTargetTabState
-    syncSnapshotFromSession({ targetTab })
-    return failure(issue)
+    } satisfies SidepanelTargetTabState;
+    syncSnapshotFromSession({ targetTab });
+    return failure(issue);
   }
 
   function applyRecordReceipt(receipt: SidepanelRecordCommandReceipt): void {
-    const record = receipt.session ?? {
-      type: 'record',
-      sessionId: receipt.runId ?? `${receipt.tabId}:${receipt.frameId ?? 0}`,
-      tabId: receipt.tabId,
-      ...(receipt.frameId === undefined ? {} : { frameId: receipt.frameId }),
-      ...(receipt.scenarioId === undefined ? {} : { scenarioId: receipt.scenarioId }),
-      ...(receipt.runId === undefined ? {} : { runId: receipt.runId }),
-      status: receipt.status ?? (receipt.kind === 'record:start' ? 'recording' : 'stopped'),
-      startedAt: now(),
-      updatedAt: now(),
-    } satisfies SidepanelRecordSession
+    const record =
+      receipt.session ??
+      ({
+        type: 'record',
+        sessionId: receipt.runId ?? `${receipt.tabId}:${receipt.frameId ?? 0}`,
+        tabId: receipt.tabId,
+        ...(receipt.frameId === undefined ? {} : { frameId: receipt.frameId }),
+        ...(receipt.scenarioId === undefined ? {} : { scenarioId: receipt.scenarioId }),
+        ...(receipt.runId === undefined ? {} : { runId: receipt.runId }),
+        status: receipt.status ?? (receipt.kind === 'record:start' ? 'recording' : 'stopped'),
+        startedAt: now(),
+        updatedAt: now(),
+      } satisfies SidepanelRecordSession);
 
-    setRecordStateInSession(record)
+    setRecordStateInSession(record);
   }
 
-  function openRecordedDraftReview(
-    draft: RecordedScenarioDraftHandoff,
-  ): void {
-    const document = documentWithRecordedDraftDefaults(draft)
-    const validation = validateScenarioDocument(document)
-    const currentRecord = snapshot.currentRecord ?? {
-      type: 'record',
-      sessionId: draft.sessionId,
-      tabId: draft.tabId,
-      ...(draft.frameId === undefined ? {} : { frameId: draft.frameId }),
-      ...(draft.scenarioId === undefined ? {} : { scenarioId: draft.scenarioId }),
-      ...(draft.runId === undefined ? {} : { runId: draft.runId }),
-      status: 'stopped',
-      startedAt: draft.createdAt,
-      updatedAt: draft.createdAt,
-    } satisfies SidepanelRecordSession
+  function openRecordedDraftReview(draft: RecordedScenarioDraftHandoff): void {
+    const document = documentWithRecordedDraftDefaults(draft);
+    const validation = validateScenarioDocument(document);
+    const currentRecord =
+      snapshot.currentRecord ??
+      ({
+        type: 'record',
+        sessionId: draft.sessionId,
+        tabId: draft.tabId,
+        ...(draft.frameId === undefined ? {} : { frameId: draft.frameId }),
+        ...(draft.scenarioId === undefined ? {} : { scenarioId: draft.scenarioId }),
+        ...(draft.runId === undefined ? {} : { runId: draft.runId }),
+        status: 'stopped',
+        startedAt: draft.createdAt,
+        updatedAt: draft.createdAt,
+      } satisfies SidepanelRecordSession);
 
-    const reviewDocument = (validation.ok ? validation.value : document) as BuilderDraftDocument
+    const reviewDocument = (validation.ok ? validation.value : document) as BuilderDraftDocument;
     recordedDraftReview = {
       draftId: draft.draftId,
       sessionId: draft.sessionId,
@@ -1578,36 +1599,36 @@ export function createSidepanelScenarioEditor(
       sensitiveInputCount: countSensitiveRecordedInputs(reviewDocument),
       selectedTextWarnings: draft.selectedTextWarnings ?? [],
       sensitiveInputsConfirmed: false,
-    }
+    };
 
     const nextRecord = {
       ...currentRecord,
       status: validation.ok ? 'stopped' : 'failed',
       draftId: draft.draftId,
       updatedAt: draft.createdAt,
-    } satisfies SidepanelRecordSession
+    } satisfies SidepanelRecordSession;
 
-    session = setRecordState(session, recordStateForSession(nextRecord))
-    externalIssues = []
+    session = setRecordState(session, recordStateForSession(nextRecord));
+    externalIssues = [];
     syncSnapshotFromSession({
       currentRecord: nextRecord,
       pendingAction: null,
       message: validation.ok ? 'Recorded draft ready for review' : 'Recorded draft needs review',
-    })
+    });
   }
 
   function replaceScenario(record: ScenarioRecord): void {
-    const exists = records.some((scenario) => scenario.id === record.id)
+    const exists = records.some((scenario) => scenario.id === record.id);
     records = exists
       ? records.map((scenario) => (scenario.id === record.id ? record : scenario))
-      : [record, ...records]
+      : [record, ...records];
   }
 
   function traceFields(): Pick<SidepanelScenarioEditorSnapshot, 'trace' | 'currentTrace'> {
     return {
       trace: traceStore.getState(),
       currentTrace: traceStore.getCurrentView(),
-    }
+    };
   }
 
   function applySessionState(
@@ -1615,28 +1636,26 @@ export function createSidepanelScenarioEditor(
     patch: Partial<SidepanelScenarioEditorSnapshot> = {},
   ): ExtensionResult<SidepanelScenarioEditorSnapshot> {
     if (!result.ok) {
-      setExternalIssues(result.issues, patch)
-      return failure(result.issues)
+      setExternalIssues(result.issues, patch);
+      return failure(result.issues);
     }
 
-    session = withDefaultTargetSlot(result.value)
-    externalIssues = []
-    syncSnapshotFromSession(patch)
-    return ok(snapshot)
+    session = withDefaultTargetSlot(result.value);
+    externalIssues = [];
+    syncSnapshotFromSession(patch);
+    return ok(snapshot);
   }
 
   function setExternalIssues(
     issues: readonly ExtensionIssue[],
     patch: Partial<SidepanelScenarioEditorSnapshot> = {},
   ): void {
-    externalIssues = issues
-    syncSnapshotFromSession(patch)
+    externalIssues = issues;
+    syncSnapshotFromSession(patch);
   }
 
-  function syncSnapshotFromSession(
-    patch: Partial<SidepanelScenarioEditorSnapshot> = {},
-  ): void {
-    const selectedStepIndex = selectedStepIndexForSession(session)
+  function syncSnapshotFromSession(patch: Partial<SidepanelScenarioEditorSnapshot> = {}): void {
+    const selectedStepIndex = selectedStepIndexForSession(session);
     snapshot = {
       ...snapshot,
       scenarios: records,
@@ -1651,59 +1670,59 @@ export function createSidepanelScenarioEditor(
       trace: traceStore.getState(),
       currentTrace: traceStore.getCurrentView(),
       ...patch,
-    }
+    };
   }
 
   function scenarioDocumentResultFromSession(
     patch: Partial<SidepanelScenarioEditorSnapshot> = {},
   ): ExtensionResult<ScenarioDocument> {
-    const validation = getValidatedScenarioDocument(session)
+    const validation = getValidatedScenarioDocument(session);
     if (!validation.ok) {
-      externalIssues = validation.issues
-      syncSnapshotFromSession(patch)
-      return validation
+      externalIssues = validation.issues;
+      syncSnapshotFromSession(patch);
+      return validation;
     }
 
-    externalIssues = []
-    syncSnapshotFromSession(patch)
-    return validation
+    externalIssues = [];
+    syncSnapshotFromSession(patch);
+    return validation;
   }
 
   function withDefaultTargetSlot(
     state: ScenarioAuthoringSessionState,
   ): ScenarioAuthoringSessionState {
-    return ensureSelectedTargetSlot(state)
+    return ensureSelectedTargetSlot(state);
   }
 
   function ensureSelectedTargetSlot(
     state: ScenarioAuthoringSessionState,
   ): ScenarioAuthoringSessionState {
-    const step = selectedBuilderStep(state)
+    const step = selectedBuilderStep(state);
     if (step === undefined || state.selectedStepId === undefined) {
-      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state)
+      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state);
     }
 
-    const slots = targetSlotsForStep(step, state.selectedStepId)
+    const slots = targetSlotsForStep(step, state.selectedStepId);
     if (slots.length === 0) {
-      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state)
+      return state.selectedTargetSlot === undefined ? state : clearTargetSlot(state);
     }
 
     if (
       state.selectedTargetSlot !== undefined &&
       slots.some((slot) => slotsEqual(slot, state.selectedTargetSlot))
     ) {
-      return state
+      return state;
     }
 
-    const selected = selectBuilderTargetSlot(state, slots[0])
-    return selected.ok ? selected.value : state
+    const selected = selectBuilderTargetSlot(state, slots[0]);
+    return selected.ok ? selected.value : state;
   }
 
   function setRecordStateInSession(record: SidepanelRecordSession): void {
-    session = setRecordState(session, recordStateForSession(record))
+    session = setRecordState(session, recordStateForSession(record));
     syncSnapshotFromSession({
       currentRecord: record,
-    })
+    });
   }
 
   return {
@@ -1743,21 +1762,22 @@ export function createSidepanelScenarioEditor(
     loadRecordedDraft,
     ingestMessage,
     getSnapshot,
-  }
+  };
 }
 
 export function createSidepanelScenarioEditorView(
   snapshot: SidepanelScenarioEditorSnapshot,
 ): SidepanelScenarioEditorView {
-  const anyPending = snapshot.pendingAction !== null
-  const hasDocument = snapshot.draftDocument !== undefined
-  const step = selectedStep(snapshot)
-  const recordActive = snapshot.currentRecord?.status === 'recording'
-  const runActive = snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)
+  const anyPending = snapshot.pendingAction !== null;
+  const hasDocument = snapshot.draftDocument !== undefined;
+  const step = selectedStep(snapshot);
+  const recordActive = snapshot.currentRecord?.status === 'recording';
+  const runActive =
+    snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status);
   const targetTabBlocksCommands =
-    snapshot.targetTab.status === 'checking' || snapshot.targetTab.status === 'blocked'
-  const hasStep = step !== undefined
-  const selectedStepIndex = snapshot.selectedStepIndex
+    snapshot.targetTab.status === 'checking' || snapshot.targetTab.status === 'blocked';
+  const hasStep = step !== undefined;
+  const selectedStepIndex = snapshot.selectedStepIndex;
 
   return {
     workflow: workflowView(snapshot),
@@ -1816,7 +1836,9 @@ export function createSidepanelScenarioEditorView(
       },
       moveStepDown: {
         label: 'Down',
-        disabled: anyPending || !hasStep ||
+        disabled:
+          anyPending ||
+          !hasStep ||
           selectedStepIndex >= (snapshot.draftDocument?.steps.length ?? 0) - 1,
         pending: false,
       },
@@ -1852,42 +1874,37 @@ export function createSidepanelScenarioEditorView(
       },
       record: {
         label: recordActive ? 'Stop recording' : 'Record',
-        disabled: recordActive
-          ? anyPending
-          : anyPending || runActive || targetTabBlocksCommands,
+        disabled: recordActive ? anyPending : anyPending || runActive || targetTabBlocksCommands,
         pending:
-          snapshot.pendingAction === 'record:start' ||
-          snapshot.pendingAction === 'record:stop',
+          snapshot.pendingAction === 'record:start' || snapshot.pendingAction === 'record:stop',
       },
     },
-  }
+  };
 }
 
 function validateRecordedDraftReview(
   review: SidepanelRecordedDraftReview,
 ): ExtensionResult<ScenarioDocument> {
-  return validateScenarioDocument(review.document)
+  return validateScenarioDocument(review.document);
 }
 
-function recordedDraftNeedsSensitiveConfirmation(
-  review: SidepanelRecordedDraftReview,
-): boolean {
-  return sensitiveReviewItemCount(review) > 0 && !review.sensitiveInputsConfirmed
+function recordedDraftNeedsSensitiveConfirmation(review: SidepanelRecordedDraftReview): boolean {
+  return sensitiveReviewItemCount(review) > 0 && !review.sensitiveInputsConfirmed;
 }
 
 function sensitiveReviewSummary(review: SidepanelRecordedDraftReview): string {
-  const selectedTextWarningCount = sensitiveSelectedTextWarningCount(review)
+  const selectedTextWarningCount = sensitiveSelectedTextWarningCount(review);
   if (review.sensitiveInputCount === 0 && selectedTextWarningCount === 0) {
-    return 'No sensitive inputs'
+    return 'No sensitive inputs';
   }
 
   if (review.sensitiveInputCount === 0) {
     const count = `${selectedTextWarningCount} sensitive selection${
       selectedTextWarningCount === 1 ? '' : 's'
-    }`
+    }`;
     return review.sensitiveInputsConfirmed
       ? `${count} confirmed`
-      : `${count} requires confirmation`
+      : `${count} requires confirmation`;
   }
 
   if (selectedTextWarningCount > 0) {
@@ -1895,40 +1912,38 @@ function sensitiveReviewSummary(review: SidepanelRecordedDraftReview): string {
       review.sensitiveInputCount === 1 ? '' : 's'
     } and ${selectedTextWarningCount} sensitive selection${
       selectedTextWarningCount === 1 ? '' : 's'
-    }`
+    }`;
     return review.sensitiveInputsConfirmed
       ? `${count} confirmed`
-      : `${count} requires confirmation`
+      : `${count} requires confirmation`;
   }
 
   const count = `${review.sensitiveInputCount} sensitive input${
     review.sensitiveInputCount === 1 ? '' : 's'
-  }`
-  return review.sensitiveInputsConfirmed
-    ? `${count} confirmed`
-    : `${count} requires confirmation`
+  }`;
+  return review.sensitiveInputsConfirmed ? `${count} confirmed` : `${count} requires confirmation`;
 }
 
 function sensitiveReviewItemCount(review: SidepanelRecordedDraftReview): number {
-  return review.sensitiveInputCount + sensitiveSelectedTextWarningCount(review)
+  return review.sensitiveInputCount + sensitiveSelectedTextWarningCount(review);
 }
 
 function sensitiveSelectedTextWarningCount(review: SidepanelRecordedDraftReview): number {
-  return review.selectedTextWarnings.filter((warning) => warning.requiresConfirmation).length
+  return review.selectedTextWarnings.filter((warning) => warning.requiresConfirmation).length;
 }
 
 function countSensitiveRecordedInputs(document: BuilderDraftDocument): number {
-  return document.steps.filter(stepHasSensitiveRecordedInput).length
+  return document.steps.filter(stepHasSensitiveRecordedInput).length;
 }
 
 function stepHasSensitiveRecordedInput(step: BuilderDraftStep): boolean {
-  const input = readStepProperty(step, 'input')
-  const note = readStepProperty(step, 'note')
+  const input = readStepProperty(step, 'input');
+  const note = readStepProperty(step, 'note');
 
   return (
     input === RECORDER_MASKED_VALUE ||
     (typeof note === 'string' && note.includes('Sensitive input was'))
-  )
+  );
 }
 
 function stepFieldUpdateFromInput(
@@ -1936,90 +1951,85 @@ function stepFieldUpdateFromInput(
   index: number,
   update: SidepanelStepFieldUpdate,
 ): ExtensionResult<BuilderStepFieldUpdate> {
-  const next: Record<string, unknown> = {}
+  const next: Record<string, unknown> = {};
 
   if (update.note !== undefined) {
-    next.note = nullableString(update.note)
+    next.note = nullableString(update.note);
   }
 
   if (update.input !== undefined && typeof next.input === 'string') {
-    next.input = update.input
+    next.input = update.input;
   } else if (update.input !== undefined && typeof readStepProperty(step, 'input') === 'string') {
-    next.input = update.input
+    next.input = update.input;
   }
 
   if (update.duration !== undefined) {
-    const duration = parseDuration(update.duration)
+    const duration = parseDuration(update.duration);
     if (!duration.ok) {
       return failure({
         ...duration.issues[0],
         path: ['steps', index, 'duration'],
-      })
+      });
     }
-    next.duration = duration.value
+    next.duration = duration.value;
   }
 
   if (update.waitText !== undefined) {
-    const input = readStepProperty(step, 'input')
+    const input = readStepProperty(step, 'input');
     if (!isRecord(input) || input.kind !== 'text') {
       return failure({
         code: 'invalid_document',
         message: 'Wait text can only be edited for wait-for-text steps.',
         path: ['steps', index, 'input'],
-      })
+      });
     }
 
-    const matcher = input.value
+    const matcher = input.value;
     next.input = {
       ...input,
-      value: isRecord(matcher)
-        ? { ...matcher, value: update.waitText }
-        : update.waitText,
-    }
+      value: isRecord(matcher) ? { ...matcher, value: update.waitText } : update.waitText,
+    };
   }
 
-  if (
-    update.scrollX !== undefined ||
-    update.scrollY !== undefined
-  ) {
-    const input = readStepProperty(step, 'input')
+  if (update.scrollX !== undefined || update.scrollY !== undefined) {
+    const input = readStepProperty(step, 'input');
     if (!isScenarioPoint(input)) {
       return failure({
         code: 'invalid_document',
         message: 'Scroll position can only be edited for scroll-to-position steps.',
         path: ['steps', index, 'input'],
-      })
+      });
     }
 
-    let nextX = input.x
-    let nextY = input.y
+    let nextX = input.x;
+    let nextY = input.y;
 
     if (update.scrollX !== undefined) {
-      const x = parseNumberField(update.scrollX, 'Scroll X')
+      const x = parseNumberField(update.scrollX, 'Scroll X');
       if (!x.ok) {
         return failure({
           ...x.issues[0],
           path: ['steps', index, 'input', 'x'],
-        })
+        });
       }
-      nextX = x.value
+      nextX = x.value;
     }
 
     if (update.scrollY !== undefined) {
-      const y = parseNumberField(update.scrollY, 'Scroll Y')
+      const y = parseNumberField(update.scrollY, 'Scroll Y');
       if (!y.ok) {
         return failure({
           ...y.issues[0],
           path: ['steps', index, 'input', 'y'],
-        })
+        });
       }
-      nextY = y.value
+      nextY = y.value;
     }
 
     next.input = {
       x: nextX,
       y: nextY,
-    }
+    };
   }
 
   const jsonFields = [
@@ -2028,27 +2038,27 @@ function stepFieldUpdateFromInput(
     ['toJson', 'to'],
     ['inputJson', 'input'],
     ['optionsJson', 'options'],
-  ] as const
+  ] as const;
 
   for (const [inputKey, stepKey] of jsonFields) {
-    const jsonText = update[inputKey]
+    const jsonText = update[inputKey];
     if (jsonText === undefined) {
-      continue
+      continue;
     }
 
-    const parsed = parseJsonField(jsonText, ['steps', index, stepKey])
+    const parsed = parseJsonField(jsonText, ['steps', index, stepKey]);
     if (!parsed.ok) {
-      return parsed
+      return parsed;
     }
 
     if (parsed.value === undefined) {
-      next[stepKey] = null
+      next[stepKey] = null;
     } else {
-      next[stepKey] = parsed.value
+      next[stepKey] = parsed.value;
     }
   }
 
-  return ok(next as BuilderStepFieldUpdate)
+  return ok(next as BuilderStepFieldUpdate);
 }
 
 function stepRows(snapshot: SidepanelScenarioEditorSnapshot): readonly SidepanelStepRowView[] {
@@ -2060,7 +2070,7 @@ function stepRows(snapshot: SidepanelScenarioEditorSnapshot): readonly Sidepanel
     inputSummary: inputSummaryForStep(step),
     validationStatus: hasIssueAtStep(snapshot.issues, index) ? 'invalid' : 'valid',
     selected: stepIdFor(step, index) === snapshot.selectedStepId,
-  }))
+  }));
 }
 
 function selectedStepFields(
@@ -2083,24 +2093,23 @@ function selectedStepFields(
       toJson: '',
       inputJson: '',
       controls: emptySelectedStepControls(),
-    }
+    };
   }
 
-  const input = readStepProperty(step, 'input')
-  const point = isScenarioPoint(input) ? input : undefined
-  const actionFamily = actionFamilyForStep(step)
+  const input = readStepProperty(step, 'input');
+  const point = isScenarioPoint(input) ? input : undefined;
+  const actionFamily = actionFamilyForStep(step);
 
   return {
     id: step.id ?? '',
     action: step.action,
     actionFamily,
     note: step.note ?? '',
-    input: typeof input === 'string'
-      ? String(input)
-      : '',
-    duration: typeof readStepProperty(step, 'duration') === 'number'
-      ? String(readStepProperty(step, 'duration'))
-      : '',
+    input: typeof input === 'string' ? String(input) : '',
+    duration:
+      typeof readStepProperty(step, 'duration') === 'number'
+        ? String(readStepProperty(step, 'duration'))
+        : '',
     waitText: waitTextValue(input),
     scrollX: point === undefined ? '' : String(point.x),
     scrollY: point === undefined ? '' : String(point.y),
@@ -2108,11 +2117,9 @@ function selectedStepFields(
     targetJson: jsonTextFor(readStepProperty(step, 'target')),
     fromJson: jsonTextFor(readStepProperty(step, 'from')),
     toJson: jsonTextFor(readStepProperty(step, 'to')),
-    inputJson: typeof input === 'object'
-      ? jsonTextFor(input)
-      : '',
+    inputJson: typeof input === 'object' ? jsonTextFor(input) : '',
     controls: selectedStepControls(step, actionFamily, input),
-  }
+  };
 }
 
 function emptySelectedStepControls(): SidepanelScenarioEditorView['selectedStepFields']['controls'] {
@@ -2122,7 +2129,7 @@ function emptySelectedStepControls(): SidepanelScenarioEditorView['selectedStepF
     waitText: false,
     scrollPosition: false,
     targetSlots: false,
-  }
+  };
 }
 
 function selectedStepControls(
@@ -2138,49 +2145,49 @@ function selectedStepControls(
       (actionFamily === 'scrollToPosition' || actionFamily === 'scrollBy') &&
       isScenarioScrollVector(input),
     targetSlots: targetSlotsForStep(step, step.id ?? 'selected').length > 0,
-  }
+  };
 }
 
 function workflowView(snapshot: SidepanelScenarioEditorSnapshot): SidepanelWorkflowView {
-  const status = workflowStatus(snapshot)
-  const stepCount = snapshot.draftDocument?.steps.length ?? 0
-  const summary = snapshot.draftDocument === undefined
-    ? `${snapshot.scenarios.length} saved`
-    : `${stepCount} step${stepCount === 1 ? '' : 's'} · ${
-        snapshot.dirty ? 'unsaved' : 'saved'
-      }`
+  const status = workflowStatus(snapshot);
+  const stepCount = snapshot.draftDocument?.steps.length ?? 0;
+  const summary =
+    snapshot.draftDocument === undefined
+      ? `${snapshot.scenarios.length} saved`
+      : `${stepCount} step${stepCount === 1 ? '' : 's'} · ${snapshot.dirty ? 'unsaved' : 'saved'}`;
 
   return {
     status,
     dirty: snapshot.dirty,
     selectedStepId: snapshot.selectedStepId,
-    selectedTargetSlotId: snapshot.selectedTargetSlot === undefined
-      ? undefined
-      : targetSlotViewId(snapshot.selectedTargetSlot),
+    selectedTargetSlotId:
+      snapshot.selectedTargetSlot === undefined
+        ? undefined
+        : targetSlotViewId(snapshot.selectedTargetSlot),
     summary,
-  }
+  };
 }
 
 function workflowStatus(
   snapshot: SidepanelScenarioEditorSnapshot,
 ): SidepanelWorkflowView['status'] {
   if (snapshot.pendingAction === 'run' || snapshot.pendingAction === 'dry-run') {
-    return 'running'
+    return 'running';
   }
 
   if (snapshot.currentRecord?.status === 'recording') {
-    return 'recording'
+    return 'recording';
   }
 
   if (snapshot.currentRun !== undefined && isActiveRunStatus(snapshot.currentRun.status)) {
-    return 'running'
+    return 'running';
   }
 
   if (snapshot.draftDocument === undefined) {
-    return 'empty'
+    return 'empty';
   }
 
-  return snapshot.dirty || snapshot.selectedScenarioId === undefined ? 'draft' : 'saved'
+  return snapshot.dirty || snapshot.selectedScenarioId === undefined ? 'draft' : 'saved';
 }
 
 function recordedDraftReviewView(
@@ -2188,14 +2195,14 @@ function recordedDraftReviewView(
   anyPending: boolean,
   hasDocument: boolean,
 ): SidepanelRecordedDraftReviewView | undefined {
-  const review = snapshot.recordedDraftReview
+  const review = snapshot.recordedDraftReview;
   if (review === undefined) {
-    return undefined
+    return undefined;
   }
 
-  const invalid = review.validationStatus === 'invalid'
-  const needsSensitiveConfirmation = recordedDraftNeedsSensitiveConfirmation(review)
-  const mergeDisabled = anyPending || invalid || needsSensitiveConfirmation
+  const invalid = review.validationStatus === 'invalid';
+  const needsSensitiveConfirmation = recordedDraftNeedsSensitiveConfirmation(review);
+  const mergeDisabled = anyPending || invalid || needsSensitiveConfirmation;
 
   return {
     draftId: review.draftId,
@@ -2236,22 +2243,22 @@ function recordedDraftReviewView(
         pending: false,
       },
     },
-  }
+  };
 }
 
 function actionFamilyOptions(): readonly SidepanelActionFamilyOptionView[] {
   return actionFamilies.map((value) => ({
     value,
     label: actionFamilyLabel(value),
-  }))
+  }));
 }
 
 function targetSlotRows(
   snapshot: SidepanelScenarioEditorSnapshot,
 ): readonly SidepanelTargetSlotRowView[] {
-  const step = selectedStep(snapshot)
+  const step = selectedStep(snapshot);
   if (step === undefined || snapshot.selectedStepId === undefined) {
-    return []
+    return [];
   }
 
   return targetSlotsForStep(step, snapshot.selectedStepId).map((slot) => ({
@@ -2262,7 +2269,7 @@ function targetSlotRows(
     validationStatus: hasIssueAtTargetSlot(snapshot.issues, snapshot.selectedStepIndex, slot)
       ? 'invalid'
       : 'valid',
-  }))
+  }));
 }
 
 const actionFamilies = [
@@ -2284,7 +2291,7 @@ const actionFamilies = [
   'waitForHidden',
   'waitForText',
   'delay',
-] as const satisfies readonly BuilderStepActionFamily[]
+] as const satisfies readonly BuilderStepActionFamily[];
 
 const scenarioCoordinateSpaces = [
   'viewport',
@@ -2292,79 +2299,76 @@ const scenarioCoordinateSpaces = [
   'screen',
   'surface',
   'element',
-] as const satisfies readonly ScenarioCoordinateSpace[]
+] as const satisfies readonly ScenarioCoordinateSpace[];
 
 function actionFamilyLabel(family: BuilderStepActionFamily): string {
   switch (family) {
     case 'clickCurrent':
-      return 'Click current'
+      return 'Click current';
     case 'typeInto':
-      return 'Type into'
+      return 'Type into';
     case 'reveal':
-      return 'Reveal target'
+      return 'Reveal target';
     case 'scrollToPosition':
-      return 'Scroll position'
+      return 'Scroll position';
     case 'scrollBy':
-      return 'Scroll by'
+      return 'Scroll by';
     case 'selectText':
-      return 'Select text'
+      return 'Select text';
     case 'waitForVisible':
-      return 'Wait visible'
+      return 'Wait visible';
     case 'waitForHidden':
-      return 'Wait hidden'
+      return 'Wait hidden';
     case 'waitForText':
-      return 'Wait text'
+      return 'Wait text';
     default:
-      return capitalize(family)
+      return capitalize(family);
   }
 }
 
 function actionFamilyForStep(step: BuilderDraftStep): BuilderStepActionFamily {
   switch (step.action) {
     case 'reveal':
-      return 'reveal'
+      return 'reveal';
     case 'scrollTo':
-      return 'scrollToPosition'
+      return 'scrollToPosition';
     case 'scrollBy':
-      return 'scrollBy'
+      return 'scrollBy';
     case 'waitFor': {
-      const input = readStepProperty(step, 'input')
+      const input = readStepProperty(step, 'input');
       if (isRecord(input) && input.kind === 'hidden') {
-        return 'waitForHidden'
+        return 'waitForHidden';
       }
       if (isRecord(input) && input.kind === 'text') {
-        return 'waitForText'
+        return 'waitForText';
       }
-      return 'waitForVisible'
+      return 'waitForVisible';
     }
     default:
-      return step.action
+      return step.action;
   }
 }
 
-function targetSlotsForStep(
-  step: BuilderDraftStep,
-  stepId: string,
-): readonly BuilderTargetSlot[] {
-  return listBuilderTargetSlotsForStep(step, stepId)
+function targetSlotsForStep(step: BuilderDraftStep, stepId: string): readonly BuilderTargetSlot[] {
+  return listBuilderTargetSlotsForStep(step, stepId);
 }
 
 function targetSlotLabel(slot: BuilderTargetSlot): string {
   switch (slot.kind) {
     case 'step-target':
-      return 'Target'
+      return 'Target';
     case 'drag-from':
-      return 'Drag from'
+      return 'Drag from';
     case 'drag-to':
-      return 'Drag to'
+      return 'Drag to';
     case 'selection-anchor':
-      return 'Selection anchor'
+      return 'Selection anchor';
     case 'selection-focus':
-      return 'Selection focus'
+      return 'Selection focus';
     case 'waitFor-target':
-      return 'Wait target'
+      return 'Wait target';
     case 'reveal-target':
-      return 'Reveal target'
+      return 'Reveal target';
   }
 }
 
@@ -2372,52 +2376,50 @@ function targetSlotSummary(step: BuilderDraftStep, slot: BuilderTargetSlot): str
   switch (slot.kind) {
     case 'step-target':
     case 'reveal-target':
-      return targetSummary(readStepProperty(step, 'target'))
+      return targetSummary(readStepProperty(step, 'target'));
     case 'drag-from':
-      return targetSummary(readStepProperty(step, 'from'))
+      return targetSummary(readStepProperty(step, 'from'));
     case 'drag-to':
-      return targetSummary(readStepProperty(step, 'to'))
+      return targetSummary(readStepProperty(step, 'to'));
     case 'selection-anchor':
     case 'selection-focus': {
-      const target = readStepProperty(step, 'target')
+      const target = readStepProperty(step, 'target');
       const endpoint = isRecord(target)
         ? target[slot.kind === 'selection-anchor' ? 'anchor' : 'focus']
-        : undefined
-      return isRecord(endpoint) ? targetSummary(endpoint.target) : 'current'
+        : undefined;
+      return isRecord(endpoint) ? targetSummary(endpoint.target) : 'current';
     }
     case 'waitFor-target': {
-      const input = readStepProperty(step, 'input')
-      return isRecord(input) ? targetSummary(input.target) : 'current'
+      const input = readStepProperty(step, 'input');
+      return isRecord(input) ? targetSummary(input.target) : 'current';
     }
   }
 }
 
 function targetSlotViewId(slot: BuilderTargetSlot): string {
-  return `${slot.kind}:${stepIdForViewId(slot.stepId)}`
+  return `${slot.kind}:${stepIdForViewId(slot.stepId)}`;
 }
 
 function stepIdForViewId(stepId: string): string {
-  return stepId.startsWith('index:') ? stepId.slice('index:'.length) : stepId
+  return stepId.startsWith('index:') ? stepId.slice('index:'.length) : stepId;
 }
 
 function targetSlotFromViewId(
   state: ScenarioAuthoringSessionState,
   slotId: string,
 ): BuilderTargetSlot | undefined {
-  const step = selectedBuilderStep(state)
+  const step = selectedBuilderStep(state);
   if (step === undefined || state.selectedStepId === undefined) {
-    return undefined
+    return undefined;
   }
 
-  return targetSlotsForStep(step, state.selectedStepId)
-    .find((slot) => targetSlotViewId(slot) === slotId)
+  return targetSlotsForStep(step, state.selectedStepId).find(
+    (slot) => targetSlotViewId(slot) === slotId,
+  );
 }
 
-function slotsEqual(
-  left: BuilderTargetSlot,
-  right: BuilderTargetSlot | undefined,
-): boolean {
-  return right !== undefined && left.kind === right.kind && left.stepId === right.stepId
+function slotsEqual(left: BuilderTargetSlot, right: BuilderTargetSlot | undefined): boolean {
+  return right !== undefined && left.kind === right.kind && left.stepId === right.stepId;
 }
 
 function hasIssueAtTargetSlot(
@@ -2425,42 +2427,43 @@ function hasIssueAtTargetSlot(
   stepIndex: number,
   slot: BuilderTargetSlot,
 ): boolean {
-  const slotPath = targetSlotPath(slot)
-  return issues.some((issue) => (
-    issue.path?.[0] === 'steps' &&
-    issue.path[1] === stepIndex &&
-    slotPath.every((part, index) => issue.path?.[index + 2] === part)
-  ))
+  const slotPath = targetSlotPath(slot);
+  return issues.some(
+    (issue) =>
+      issue.path?.[0] === 'steps' &&
+      issue.path[1] === stepIndex &&
+      slotPath.every((part, index) => issue.path?.[index + 2] === part),
+  );
 }
 
 function targetSlotPath(slot: BuilderTargetSlot): readonly string[] {
   switch (slot.kind) {
     case 'step-target':
     case 'reveal-target':
-      return ['target']
+      return ['target'];
     case 'drag-from':
-      return ['from']
+      return ['from'];
     case 'drag-to':
-      return ['to']
+      return ['to'];
     case 'selection-anchor':
-      return ['target', 'anchor', 'target']
+      return ['target', 'anchor', 'target'];
     case 'selection-focus':
-      return ['target', 'focus', 'target']
+      return ['target', 'focus', 'target'];
     case 'waitFor-target':
-      return ['input', 'target']
+      return ['input', 'target'];
   }
 }
 
 function validationSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   if (snapshot.pendingAction === 'validate') {
-    return 'Validating'
+    return 'Validating';
   }
 
   if (snapshot.issues.length > 0) {
-    return `${snapshot.issues.length} issue${snapshot.issues.length === 1 ? '' : 's'}`
+    return `${snapshot.issues.length} issue${snapshot.issues.length === 1 ? '' : 's'}`;
   }
 
-  return snapshot.draftDocument === undefined ? 'No scenario selected' : 'Ready'
+  return snapshot.draftDocument === undefined ? 'No scenario selected' : 'Ready';
 }
 
 function targetTabView(targetTab: SidepanelTargetTabState): SidepanelTargetTabView {
@@ -2470,13 +2473,13 @@ function targetTabView(targetTab: SidepanelTargetTabState): SidepanelTargetTabVi
         status: targetTab.status,
         tone: 'unknown',
         summary: 'Tab not checked',
-      }
+      };
     case 'checking':
       return {
         status: targetTab.status,
         tone: 'checking',
         summary: 'Checking tab',
-      }
+      };
     case 'ready':
       return {
         status: targetTab.status,
@@ -2485,7 +2488,7 @@ function targetTabView(targetTab: SidepanelTargetTabState): SidepanelTargetTabVi
         tabId: targetTab.tabId,
         ...(targetTab.frameId === undefined ? {} : { frameId: targetTab.frameId }),
         ...(targetTab.url === undefined ? {} : { url: targetTab.url }),
-      }
+      };
     case 'blocked':
       return {
         status: targetTab.status,
@@ -2495,61 +2498,62 @@ function targetTabView(targetTab: SidepanelTargetTabState): SidepanelTargetTabVi
           path: formatIssuePath(targetTab.issue.path ?? []),
           message: targetTab.issue.message,
         },
-      }
+      };
   }
 }
 
 function runSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
   if (snapshot.currentRun !== undefined) {
-    return snapshot.currentTrace?.summary ?? `${capitalize(snapshot.currentRun.status)} ${
-      snapshot.currentRun.runId
-    }`
+    return (
+      snapshot.currentTrace?.summary ??
+      `${capitalize(snapshot.currentRun.status)} ${snapshot.currentRun.runId}`
+    );
   }
 
-  return snapshot.message ?? 'No active run'
+  return snapshot.message ?? 'No active run';
 }
 
 function targetSummaryForStep(step: BuilderDraftStep): string {
-  const target = readStepProperty(step, 'target')
+  const target = readStepProperty(step, 'target');
   if (target !== undefined) {
-    return targetSummary(target)
+    return targetSummary(target);
   }
 
-  const from = readStepProperty(step, 'from')
-  const to = readStepProperty(step, 'to')
+  const from = readStepProperty(step, 'from');
+  const to = readStepProperty(step, 'to');
   if (from !== undefined || to !== undefined) {
-    return `from ${targetSummary(from)} to ${targetSummary(to)}`
+    return `from ${targetSummary(from)} to ${targetSummary(to)}`;
   }
 
-  const input = readStepProperty(step, 'input')
+  const input = readStepProperty(step, 'input');
   if (isRecord(input) && typeof input.kind === 'string' && isRecord(input.target)) {
-    return targetSummary(input.target)
+    return targetSummary(input.target);
   }
 
-  return 'Current context'
+  return 'Current context';
 }
 
 function inputSummaryForStep(step: BuilderDraftStep): string {
-  const input = readStepProperty(step, 'input')
+  const input = readStepProperty(step, 'input');
   if (typeof input === 'string') {
-    return input
+    return input;
   }
 
   if (input !== undefined) {
-    return compactJson(input)
+    return compactJson(input);
   }
 
-  const duration = readStepProperty(step, 'duration')
+  const duration = readStepProperty(step, 'duration');
   if (typeof duration === 'number') {
-    return `${duration} ms`
+    return `${duration} ms`;
   }
 
-  return ''
+  return '';
 }
 
 function targetSummary(value: unknown): string {
   if (!isRecord(value)) {
-    return value === undefined ? 'current' : String(value)
+    return value === undefined ? 'current' : String(value);
   }
 
   if (typeof value.strategy === 'string') {
@@ -2559,39 +2563,39 @@ function targetSummary(value: unknown): string {
       stringProperty(value, 'role') ??
       stringProperty(value, 'text') ??
       stringProperty(value, 'value') ??
-      pointSummary(value.point)
-    return details === undefined ? value.strategy : `${value.strategy}: ${details}`
+      pointSummary(value.point);
+    return details === undefined ? value.strategy : `${value.strategy}: ${details}`;
   }
 
   if (Array.isArray(value.locators)) {
-    const description = stringProperty(value, 'description')
-    const [first] = value.locators
-    const firstSummary = first === undefined ? 'no locators' : targetSummary(first)
-    return description === undefined ? firstSummary : `${description}: ${firstSummary}`
+    const description = stringProperty(value, 'description');
+    const [first] = value.locators;
+    const firstSummary = first === undefined ? 'no locators' : targetSummary(first);
+    return description === undefined ? firstSummary : `${description}: ${firstSummary}`;
   }
 
-  return compactJson(value)
+  return compactJson(value);
 }
 
 function pointSummary(value: unknown): string | undefined {
   if (!isRecord(value) || typeof value.x !== 'number' || typeof value.y !== 'number') {
-    return undefined
+    return undefined;
   }
 
-  return `${value.x}, ${value.y}`
+  return `${value.x}, ${value.y}`;
 }
 
 function waitTextValue(input: unknown): string {
   if (!isRecord(input) || input.kind !== 'text') {
-    return ''
+    return '';
   }
 
-  const value = input.value
+  const value = input.value;
   if (typeof value === 'string') {
-    return value
+    return value;
   }
 
-  return isRecord(value) && typeof value.value === 'string' ? value.value : ''
+  return isRecord(value) && typeof value.value === 'string' ? value.value : '';
 }
 
 function isScenarioPoint(value: unknown): value is ScenarioPoint {
@@ -2599,11 +2603,8 @@ function isScenarioPoint(value: unknown): value is ScenarioPoint {
     isRecord(value) &&
     typeof value.x === 'number' &&
     typeof value.y === 'number' &&
-    (
-      value.coordinateSpace === undefined ||
-      isScenarioCoordinateSpace(value.coordinateSpace)
-    )
-  )
+    (value.coordinateSpace === undefined || isScenarioCoordinateSpace(value.coordinateSpace))
+  );
 }
 
 function isScenarioScrollVector(value: unknown): value is ScenarioScrollVector {
@@ -2612,52 +2613,54 @@ function isScenarioScrollVector(value: unknown): value is ScenarioScrollVector {
     typeof value.x === 'number' &&
     typeof value.y === 'number' &&
     value.coordinateSpace === undefined
-  )
+  );
 }
 
 function isScenarioCoordinateSpace(value: unknown): value is ScenarioCoordinateSpace {
-  return typeof value === 'string' && scenarioCoordinateSpaces.includes(value as ScenarioCoordinateSpace)
+  return (
+    typeof value === 'string' && scenarioCoordinateSpaces.includes(value as ScenarioCoordinateSpace)
+  );
 }
 
 function compactJson(value: unknown): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 function filenameBase(value: string): string {
   const baseName = value
     .trim()
     .replace(/[^a-z0-9._-]+/gi, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/^-+|-+$/g, '');
 
-  return baseName.length === 0 ? 'scenario' : baseName
+  return baseName.length === 0 ? 'scenario' : baseName;
 }
 
 function jsonTextFor(value: unknown): string {
-  return value === undefined ? '' : JSON.stringify(value, null, 2)
+  return value === undefined ? '' : JSON.stringify(value, null, 2);
 }
 
 function parseDuration(value: string | number): ExtensionResult<number> {
-  const duration = typeof value === 'number' ? value : Number(value.trim())
+  const duration = typeof value === 'number' ? value : Number(value.trim());
   if (!Number.isFinite(duration)) {
     return failure({
       code: 'invalid_document',
       message: 'Duration must be a number.',
-    })
+    });
   }
 
-  return ok(duration)
+  return ok(duration);
 }
 
 function parseNumberField(value: string | number, label: string): ExtensionResult<number> {
-  const number = typeof value === 'number' ? value : Number(value.trim())
+  const number = typeof value === 'number' ? value : Number(value.trim());
   if (!Number.isFinite(number)) {
     return failure({
       code: 'invalid_document',
       message: `${label} must be a number.`,
-    })
+    });
   }
 
-  return ok(number)
+  return ok(number);
 }
 
 function parseJsonField(
@@ -2665,17 +2668,17 @@ function parseJsonField(
   path: readonly (string | number)[],
 ): ExtensionResult<unknown> {
   if (jsonText.trim().length === 0) {
-    return ok(undefined)
+    return ok(undefined);
   }
 
   try {
-    return ok(JSON.parse(jsonText))
+    return ok(JSON.parse(jsonText));
   } catch (error) {
     return failure({
       code: 'invalid_document',
       message: `Field JSON is not valid JSON: ${describeUnknownError(error)}`,
       path,
-    })
+    });
   }
 }
 
@@ -2684,7 +2687,7 @@ function sourceFromRecord(record: ScenarioRecord): BuilderScenarioSource {
     id: record.id,
     name: record.name,
     document: record.document,
-  }
+  };
 }
 
 function createEmptySession(
@@ -2695,52 +2698,47 @@ function createEmptySession(
     scenarios: [],
     ...(createScenarioId === undefined ? {} : { createScenarioId }),
     ...(createStepId === undefined ? {} : { createStepId }),
-  })
+  });
 }
 
 function selectedStepIndexForSession(state: ScenarioAuthoringSessionState): number {
-  const document = state.draftDocument
+  const document = state.draftDocument;
   if (document === undefined || state.selectedStepId === undefined) {
-    return 0
+    return 0;
   }
 
-  const index = document.steps.findIndex((step, stepIndex) => (
-    stepIdFor(step, stepIndex) === state.selectedStepId
-  ))
+  const index = document.steps.findIndex(
+    (step, stepIndex) => stepIdFor(step, stepIndex) === state.selectedStepId,
+  );
 
-  return index < 0 ? 0 : index
+  return index < 0 ? 0 : index;
 }
 
-function selectedBuilderStep(
-  state: ScenarioAuthoringSessionState,
-): BuilderDraftStep | undefined {
-  return state.draftDocument?.steps[selectedStepIndexForSession(state)]
+function selectedBuilderStep(state: ScenarioAuthoringSessionState): BuilderDraftStep | undefined {
+  return state.draftDocument?.steps[selectedStepIndexForSession(state)];
 }
 
-function stepCommandIdFromViewId(
-  state: ScenarioAuthoringSessionState,
-  stepId: string,
-): string {
-  const document = state.draftDocument
+function stepCommandIdFromViewId(state: ScenarioAuthoringSessionState, stepId: string): string {
+  const document = state.draftDocument;
   if (document === undefined || !/^\d+$/.test(stepId)) {
-    return stepId
+    return stepId;
   }
 
   return document.steps.some((step, index) => stepIdFor(step, index) === stepId)
     ? stepId
-    : `index:${stepId}`
+    : `index:${stepId}`;
 }
 
 function stepIdFor(step: BuilderDraftStep, index: number): string {
-  return step.id ?? `index:${index}`
+  return step.id ?? `index:${index}`;
 }
 
 function stepIdForView(step: BuilderDraftStep, index: number): string {
-  return step.id ?? String(index)
+  return step.id ?? String(index);
 }
 
 function nullableString(value: string): string | null {
-  return value.trim().length === 0 ? null : value
+  return value.trim().length === 0 ? null : value;
 }
 
 function recordStateForSession(record: SidepanelRecordSession) {
@@ -2750,22 +2748,22 @@ function recordStateForSession(record: SidepanelRecordSession) {
     ...(record.scenarioId === undefined ? {} : { scenarioId: record.scenarioId }),
     ...(record.draftId === undefined ? {} : { draftId: record.draftId }),
     ...(record.message === undefined ? {} : { message: record.message }),
-  }
+  };
 }
 
 function builderRunStatus(
   status: RuntimeRunStatus,
 ): 'running' | 'paused' | 'completed' | 'failed' | 'stopped' | undefined {
-  return status === 'idle' ? undefined : status
+  return status === 'idle' ? undefined : status;
 }
 
 async function resolveActiveTab(
   client: Pick<SidepanelScenarioEditorClient, 'getActiveTab'>,
 ): Promise<ExtensionResult<SidepanelActiveTab & Readonly<{ id: number }>>> {
-  let activeTab: SidepanelActiveTab | null
+  let activeTab: SidepanelActiveTab | null;
 
   try {
-    activeTab = await client.getActiveTab()
+    activeTab = await client.getActiveTab();
   } catch (error) {
     return failure({
       code: 'routing_error',
@@ -2773,20 +2771,20 @@ async function resolveActiveTab(
       details: {
         reason: describeUnknownError(error),
       },
-    })
+    });
   }
 
   if (activeTab?.id === undefined) {
     return failure({
       code: 'routing_error',
       message: 'No active tab is available.',
-    })
+    });
   }
 
   return ok({
     ...activeTab,
     id: activeTab.id,
-  })
+  });
 }
 
 async function resolveRunTargetTab(
@@ -2794,7 +2792,7 @@ async function resolveRunTargetTab(
   targetTabId: number | undefined,
 ): Promise<ExtensionResult<SidepanelActiveTab & Readonly<{ id: number }>>> {
   if (targetTabId === undefined) {
-    return resolveActiveTab(client)
+    return resolveActiveTab(client);
   }
 
   if (client.getTab === undefined) {
@@ -2802,12 +2800,12 @@ async function resolveRunTargetTab(
       code: 'routing_error',
       message: `Target tab ${targetTabId} cannot be resolved from this panel.`,
       details: { tabId: targetTabId },
-    })
+    });
   }
 
-  let tab: SidepanelActiveTab | null
+  let tab: SidepanelActiveTab | null;
   try {
-    tab = await client.getTab(targetTabId)
+    tab = await client.getTab(targetTabId);
   } catch (error) {
     return failure({
       code: 'routing_error',
@@ -2816,7 +2814,7 @@ async function resolveRunTargetTab(
         tabId: targetTabId,
         reason: describeUnknownError(error),
       },
-    })
+    });
   }
 
   if (tab?.id === undefined) {
@@ -2824,13 +2822,13 @@ async function resolveRunTargetTab(
       code: 'routing_error',
       message: `Target tab ${targetTabId} was not found.`,
       details: { tabId: targetTabId },
-    })
+    });
   }
 
   return ok({
     ...tab,
     id: tab.id,
-  })
+  });
 }
 
 function createRunMessage(
@@ -2843,7 +2841,7 @@ function createRunMessage(
       ...correlation,
       compilation,
     },
-  })
+  });
 }
 
 function emptySnapshot(trace: TraceDisplayState): SidepanelScenarioEditorSnapshot {
@@ -2856,7 +2854,7 @@ function emptySnapshot(trace: TraceDisplayState): SidepanelScenarioEditorSnapsho
     targetTab: { status: 'unknown' },
     trace,
     currentTrace: undefined,
-  }
+  };
 }
 
 function selectDefaultScenarioId(
@@ -2867,60 +2865,61 @@ function selectDefaultScenarioId(
     currentSelection !== undefined &&
     scenarios.some((scenario) => scenario.id === currentSelection)
   ) {
-    return currentSelection
+    return currentSelection;
   }
 
-  return scenarios[0]?.id
+  return scenarios[0]?.id;
 }
 
-function selectedRecord(
-  snapshot: SidepanelScenarioEditorSnapshot,
-): ScenarioRecord | undefined {
-  return snapshot.scenarios.find((scenario) => scenario.id === snapshot.selectedScenarioId)
+function selectedRecord(snapshot: SidepanelScenarioEditorSnapshot): ScenarioRecord | undefined {
+  return snapshot.scenarios.find((scenario) => scenario.id === snapshot.selectedScenarioId);
 }
 
 function selectedStep(snapshot: SidepanelScenarioEditorSnapshot): BuilderDraftStep | undefined {
-  return snapshot.draftDocument?.steps[snapshot.selectedStepIndex]
+  return snapshot.draftDocument?.steps[snapshot.selectedStepIndex];
 }
 
 function clampStepIndex(index: number, stepCount: number): number {
   if (stepCount <= 0) {
-    return 0
+    return 0;
   }
 
-  return Math.max(0, Math.min(index, stepCount - 1))
+  return Math.max(0, Math.min(index, stepCount - 1));
 }
 
 function hasIssueAtStep(issues: readonly ExtensionIssue[], index: number): boolean {
-  return issues.some((issue) => issue.path?.[0] === 'steps' && issue.path[1] === index)
+  return issues.some((issue) => issue.path?.[0] === 'steps' && issue.path[1] === index);
 }
 
 function readStepProperty(step: BuilderDraftStep, key: string): unknown {
-  return (step as unknown as Readonly<Record<string, unknown>>)[key]
+  return (step as unknown as Readonly<Record<string, unknown>>)[key];
 }
 
-function stringProperty(record: Readonly<Record<string, unknown>>, key: string): string | undefined {
-  const value = record[key]
+function stringProperty(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const value = record[key];
   if (typeof value === 'string') {
-    return value
+    return value;
   }
 
   if (isRecord(value) && typeof value.value === 'string') {
-    return value.value
+    return value.value;
   }
 
-  return undefined
+  return undefined;
 }
 
 function targetTabStateFromBackground(value: unknown): SidepanelTargetTabState | null {
   if (!isRecord(value) || value.kind !== 'popup:state' || !isRecord(value.activeTab)) {
-    return null
+    return null;
   }
 
-  const activeTab = value.activeTab
+  const activeTab = value.activeTab;
   if (activeTab.ready === true) {
     if (typeof activeTab.tabId !== 'number') {
-      return null
+      return null;
     }
 
     return {
@@ -2928,25 +2927,25 @@ function targetTabStateFromBackground(value: unknown): SidepanelTargetTabState |
       tabId: activeTab.tabId,
       ...(typeof activeTab.frameId === 'number' ? { frameId: activeTab.frameId } : {}),
       ...(typeof activeTab.url === 'string' ? { url: activeTab.url } : {}),
-    }
+    };
   }
 
   if (activeTab.ready === false) {
-    const issue = extensionIssueFromUnknown(activeTab.issue)
+    const issue = extensionIssueFromUnknown(activeTab.issue);
     return issue === null
       ? null
       : {
           status: 'blocked',
           issue,
-        }
+        };
   }
 
-  return null
+  return null;
 }
 
 function extensionIssueFromUnknown(value: unknown): ExtensionIssue | null {
   if (!isRecord(value) || typeof value.code !== 'string' || typeof value.message !== 'string') {
-    return null
+    return null;
   }
 
   return {
@@ -2954,23 +2953,23 @@ function extensionIssueFromUnknown(value: unknown): ExtensionIssue | null {
     message: value.message,
     ...(Array.isArray(value.path) ? { path: value.path as ExtensionIssue['path'] } : {}),
     ...(isRecord(value.details) ? { details: value.details } : {}),
-  }
+  };
 }
 
 function readExtensionResult<TValue = unknown>(value: unknown): ExtensionResult<TValue> | null {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
-    return null
+    return null;
   }
 
   if (value.ok === true && 'value' in value) {
-    return value as ExtensionResult<TValue>
+    return value as ExtensionResult<TValue>;
   }
 
   if (value.ok === false && Array.isArray(value.issues)) {
-    return value as ExtensionResult<TValue>
+    return value as ExtensionResult<TValue>;
   }
 
-  return null
+  return null;
 }
 
 function matchesCurrentRun(
@@ -2984,7 +2983,7 @@ function matchesCurrentRun(
     payload.frameId === currentRun.frameId &&
     payload.scenarioId === currentRun.scenarioId &&
     payload.runId === currentRun.runId
-  )
+  );
 }
 
 function correlationFromReceipt(
@@ -2992,23 +2991,25 @@ function correlationFromReceipt(
   value: unknown,
 ): RequiredRunCorrelation {
   if (!isRecord(value)) {
-    return fallback
+    return fallback;
   }
 
   return {
     tabId: typeof value.tabId === 'number' ? value.tabId : fallback.tabId,
-    ...(typeof value.frameId === 'number' ? { frameId: value.frameId } : optionalFrameId(fallback.frameId)),
+    ...(typeof value.frameId === 'number'
+      ? { frameId: value.frameId }
+      : optionalFrameId(fallback.frameId)),
     scenarioId: typeof value.scenarioId === 'string' ? value.scenarioId : fallback.scenarioId,
     runId: typeof value.runId === 'string' ? value.runId : fallback.runId,
-  }
+  };
 }
 
 function optionalFrameId(frameId: number | undefined): Readonly<{ frameId?: number }> {
-  return frameId === undefined ? {} : { frameId }
+  return frameId === undefined ? {} : { frameId };
 }
 
 function optionalScenarioId(scenarioId: string | undefined): Readonly<{ scenarioId?: string }> {
-  return scenarioId === undefined ? {} : { scenarioId }
+  return scenarioId === undefined ? {} : { scenarioId };
 }
 
 function statusSnapshotFrom(
@@ -3023,33 +3024,33 @@ function statusSnapshotFrom(
     status,
     updatedAt,
     ...(message === undefined ? {} : { message }),
-  }
+  };
 }
 
 function isActiveRunStatus(status: RuntimeRunStatus): boolean {
-  return status === 'running' || status === 'paused'
+  return status === 'running' || status === 'paused';
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function describeUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error ? error.message : String(error);
 }
 
 function defaultRunId(): string {
-  return `run-${Date.now()}-${nextRunSequence++}`
+  return `run-${Date.now()}-${nextRunSequence++}`;
 }
 
 function defaultDryRunId(): string {
-  return `dry-run-${Date.now()}-${nextDryRunSequence++}`
+  return `dry-run-${Date.now()}-${nextDryRunSequence++}`;
 }
 
 function defaultRecordId(): string {
-  return `record-${Date.now()}-${nextRecordSequence++}`
+  return `record-${Date.now()}-${nextRecordSequence++}`;
 }
 
 function capitalize(value: string): string {
-  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }

@@ -1,102 +1,85 @@
-export type PointerInputCapability = 'none' | 'visual' | 'synthetic' | 'native'
-export type KeyboardInputCapability = 'none' | 'synthetic' | 'native'
-export type TextInputCapability =
-  | 'none'
-  | 'set-value'
-  | 'insert-text'
-  | 'composition'
-  | 'native'
-export type PseudoStateCapability = 'none' | 'mirror' | 'native'
+export type PointerInputCapability = 'none' | 'visual' | 'synthetic' | 'native';
+export type KeyboardInputCapability = 'none' | 'synthetic' | 'native';
+export type TextInputCapability = 'none' | 'set-value' | 'insert-text' | 'composition' | 'native';
+export type PseudoStateCapability = 'none' | 'mirror' | 'native';
 export type DragAndDropCapability =
   | 'none'
   | 'pointer-gesture'
   | 'html5-dnd'
   | 'editor-selection'
-  | 'custom-adapter'
+  | 'custom-adapter';
 export type TextSelectionCapability =
   | 'none'
   | 'selection-api'
   | 'pointer-gesture'
   | 'editor-adapter'
-  | 'native'
-export type PointerSequenceCapability = 'none' | 'transactional'
-export type ScrollingCapability = 'none' | 'viewport' | 'nested-dom'
-export type RevealCapability = 'none' | 'scroll-into-view' | 'planned'
-export type StabilityCapability = 'none' | 'frame' | 'observed'
+  | 'native';
+export type PointerSequenceCapability = 'none' | 'transactional';
+export type ScrollingCapability = 'none' | 'viewport' | 'nested-dom';
+export type RevealCapability = 'none' | 'scroll-into-view' | 'planned';
+export type StabilityCapability = 'none' | 'frame' | 'observed';
 
-export type InputFidelity =
-  | 'visual-only'
-  | 'synthetic-dom-events'
-  | 'native-backed'
+export type InputFidelity = 'visual-only' | 'synthetic-dom-events' | 'native-backed';
 
-export type VisualOverlayImplementation =
-  | 'browser-overlay'
-  | 'custom-layer'
-  | 'none'
+export type VisualOverlayImplementation = 'browser-overlay' | 'custom-layer' | 'none';
 
-export type VisualOverlayRuntime = 'disabled' | 'enabled'
+export type VisualOverlayRuntime = 'disabled' | 'enabled';
 
-export type VisualOverlayInteractivity =
-  | 'non-interactive'
-  | 'caller-owned'
-  | 'none'
+export type VisualOverlayInteractivity = 'non-interactive' | 'caller-owned' | 'none';
 
-export type VisualOverlayHitTesting =
-  | 'ignored'
-  | 'caller-owned'
-  | 'not-applicable'
+export type VisualOverlayHitTesting = 'ignored' | 'caller-owned' | 'not-applicable';
 
 export type VisualOverlayFidelity = Readonly<{
-  implementation: VisualOverlayImplementation
-  runtime: VisualOverlayRuntime
-  interactivity: VisualOverlayInteractivity
-  hitTesting: VisualOverlayHitTesting
-}>
+  implementation: VisualOverlayImplementation;
+  runtime: VisualOverlayRuntime;
+  interactivity: VisualOverlayInteractivity;
+  hitTesting: VisualOverlayHitTesting;
+}>;
 
 export type CapabilityReport = Readonly<{
-  pointerInput: PointerInputCapability
-  keyboardInput: KeyboardInputCapability
-  textInput: TextInputCapability
-  pseudoState: PseudoStateCapability
-  trustedEvents: boolean
-  crossOriginFrame: boolean
-  closedShadowRoot: boolean
-  dragAndDrop: DragAndDropCapability
-  textSelection: TextSelectionCapability
-  pointerSequence: PointerSequenceCapability
-  scrolling: ScrollingCapability
-  reveal: RevealCapability
-  stability: StabilityCapability
-}>
+  pointerInput: PointerInputCapability;
+  keyboardInput: KeyboardInputCapability;
+  textInput: TextInputCapability;
+  pseudoState: PseudoStateCapability;
+  trustedEvents: boolean;
+  crossOriginFrame: boolean;
+  closedShadowRoot: boolean;
+  dragAndDrop: DragAndDropCapability;
+  textSelection: TextSelectionCapability;
+  pointerSequence: PointerSequenceCapability;
+  scrolling: ScrollingCapability;
+  reveal: RevealCapability;
+  stability: StabilityCapability;
+}>;
 
 export type FidelityReport = Readonly<{
-  pointerInput: InputFidelity
-  keyboardInput: InputFidelity
-  textInput: InputFidelity
-  pseudoState: PseudoStateCapability
-  visualOverlay: VisualOverlayFidelity
-  trustedEvents: boolean
-  limits: readonly string[]
-}>
+  pointerInput: InputFidelity;
+  keyboardInput: InputFidelity;
+  textInput: InputFidelity;
+  pseudoState: PseudoStateCapability;
+  visualOverlay: VisualOverlayFidelity;
+  trustedEvents: boolean;
+  limits: readonly string[];
+}>;
 
 export interface CapabilityFidelityReporter {
-  getCapabilities(): CapabilityReport
-  getFidelity(): FidelityReport
+  getCapabilities(): CapabilityReport;
+  getFidelity(): FidelityReport;
 }
 
 export type CapabilityFidelityReporterOptions = Readonly<{
-  visualOverlay?: VisualOverlayFidelity
-}>
+  visualOverlay?: VisualOverlayFidelity;
+}>;
 
 export class BrowserCapabilityFidelityReporter implements CapabilityFidelityReporter {
-  readonly #visualOverlay: VisualOverlayFidelity
+  readonly #visualOverlay: VisualOverlayFidelity;
 
   constructor(options: CapabilityFidelityReporterOptions = {}) {
-    this.#visualOverlay = options.visualOverlay ?? browserVisualOverlayDisabled
+    this.#visualOverlay = options.visualOverlay ?? browserVisualOverlayDisabled;
   }
 
   getCapabilities(): CapabilityReport {
-    return { ...browserCapabilityReport }
+    return { ...browserCapabilityReport };
   }
 
   getFidelity(): FidelityReport {
@@ -104,14 +87,14 @@ export class BrowserCapabilityFidelityReporter implements CapabilityFidelityRepo
       ...browserFidelityReport,
       visualOverlay: { ...this.#visualOverlay },
       limits: [...browserFidelityReport.limits],
-    }
+    };
   }
 }
 
 export function createCapabilityFidelityReporter(
   options: CapabilityFidelityReporterOptions = {},
 ): CapabilityFidelityReporter {
-  return new BrowserCapabilityFidelityReporter(options)
+  return new BrowserCapabilityFidelityReporter(options);
 }
 
 const browserCapabilityReport: CapabilityReport = {
@@ -128,14 +111,14 @@ const browserCapabilityReport: CapabilityReport = {
   scrolling: 'nested-dom',
   reveal: 'planned',
   stability: 'observed',
-}
+};
 
 const browserVisualOverlayDisabled: VisualOverlayFidelity = {
   implementation: 'browser-overlay',
   runtime: 'disabled',
   interactivity: 'none',
   hitTesting: 'not-applicable',
-}
+};
 
 const browserFidelityReport: FidelityReport = {
   pointerInput: 'synthetic-dom-events',
@@ -153,4 +136,4 @@ const browserFidelityReport: FidelityReport = {
     'Debug event subscriptions are exact-name trace event subscriptions; span lifecycle snapshots are available through getTrace().',
     'Native trusted wheel input is not available from the in-page browser runtime.',
   ],
-}
+};

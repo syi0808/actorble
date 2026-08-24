@@ -89,28 +89,28 @@ export const textSelectionEndpointPocMatrix = Object.freeze([
     collapsedRepresentation: 'not representable from outside the closed shadow boundary',
     capability: 'closed-shadow-root-unsupported',
   },
-])
+]);
 
 export function applySelectionEndpointRange({ surface, anchor, focus }) {
-  const matrixEntry = findMatrixEntry(surface)
+  const matrixEntry = findMatrixEntry(surface);
 
   if (!matrixEntry.supported) {
-    return { ...matrixEntry, selectedText: '', collapsed: true }
+    return { ...matrixEntry, selectedText: '', collapsed: true };
   }
 
   if (matrixEntry.strategy === 'input-range-api') {
-    return applyTextControlSelection(matrixEntry, anchor, focus)
+    return applyTextControlSelection(matrixEntry, anchor, focus);
   }
 
   if (matrixEntry.strategy === 'selection-api') {
-    return applyDomSelection(matrixEntry, anchor, focus)
+    return applyDomSelection(matrixEntry, anchor, focus);
   }
 
-  return { ...matrixEntry, selectedText: '', collapsed: true }
+  return { ...matrixEntry, selectedText: '', collapsed: true };
 }
 
 export function readSelectionSnapshot(root = document) {
-  const selection = root.getSelection()
+  const selection = root.getSelection();
 
   if (!selection) {
     return {
@@ -120,7 +120,7 @@ export function readSelectionSnapshot(root = document) {
       anchorOffset: 0,
       focusOffset: 0,
       collapsed: true,
-    }
+    };
   }
 
   return {
@@ -130,22 +130,22 @@ export function readSelectionSnapshot(root = document) {
     anchorOffset: selection.anchorOffset,
     focusOffset: selection.focusOffset,
     collapsed: selection.isCollapsed,
-  }
+  };
 }
 
 function applyTextControlSelection(matrixEntry, anchor, focus) {
-  const target = anchor.target
-  assertTextControl(target, matrixEntry.surface)
+  const target = anchor.target;
+  assertTextControl(target, matrixEntry.surface);
 
   if (focus.target !== target) {
-    throw new TypeError(`${matrixEntry.surface} selection endpoints must target the same control.`)
+    throw new TypeError(`${matrixEntry.surface} selection endpoints must target the same control.`);
   }
 
-  target.focus()
-  target.setSelectionRange(anchor.offset, focus.offset)
+  target.focus();
+  target.setSelectionRange(anchor.offset, focus.offset);
 
-  const start = target.selectionStart ?? 0
-  const end = target.selectionEnd ?? start
+  const start = target.selectionStart ?? 0;
+  const end = target.selectionEnd ?? start;
 
   return {
     ...matrixEntry,
@@ -153,53 +153,53 @@ function applyTextControlSelection(matrixEntry, anchor, focus) {
     anchorOffset: start,
     focusOffset: end,
     collapsed: start === end,
-  }
+  };
 }
 
 function applyDomSelection(matrixEntry, anchor, focus) {
-  const ownerDocument = ownerDocumentFor(anchor.target)
-  const selection = ownerDocument.getSelection()
+  const ownerDocument = ownerDocumentFor(anchor.target);
+  const selection = ownerDocument.getSelection();
 
   if (!selection) {
-    throw new Error(`Selection API is unavailable for ${matrixEntry.surface}.`)
+    throw new Error(`Selection API is unavailable for ${matrixEntry.surface}.`);
   }
 
-  const range = ownerDocument.createRange()
-  range.setStart(anchor.target, anchor.offset)
-  range.setEnd(focus.target, focus.offset)
-  selection.removeAllRanges()
-  selection.addRange(range)
+  const range = ownerDocument.createRange();
+  range.setStart(anchor.target, anchor.offset);
+  range.setEnd(focus.target, focus.offset);
+  selection.removeAllRanges();
+  selection.addRange(range);
 
   return {
     ...matrixEntry,
     ...readSelectionSnapshot(ownerDocument),
-  }
+  };
 }
 
 function findMatrixEntry(surface) {
-  const entry = textSelectionEndpointPocMatrix.find((candidate) => candidate.surface === surface)
+  const entry = textSelectionEndpointPocMatrix.find((candidate) => candidate.surface === surface);
 
   if (!entry) {
-    throw new Error(`Unknown text selection PoC surface: ${surface}.`)
+    throw new Error(`Unknown text selection PoC surface: ${surface}.`);
   }
 
-  return entry
+  return entry;
 }
 
 function assertTextControl(target, label) {
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-    throw new TypeError(`${label} selection requires an input or textarea target.`)
+    throw new TypeError(`${label} selection requires an input or textarea target.`);
   }
 
   if (typeof target.setSelectionRange !== 'function') {
-    throw new TypeError(`${label} target does not expose setSelectionRange().`)
+    throw new TypeError(`${label} target does not expose setSelectionRange().`);
   }
 }
 
 function ownerDocumentFor(node) {
   if (node instanceof Document) {
-    return node
+    return node;
   }
 
-  return node.ownerDocument ?? document
+  return node.ownerDocument ?? document;
 }

@@ -1,17 +1,17 @@
-import { BrowserStateApplier } from '../../platform/platform-adapter/state-applier/index.js'
-import { BrowserStyleAdapter } from '../../platform/platform-adapter/style-adapter/index.js'
+import { BrowserStateApplier } from '../../platform/platform-adapter/state-applier/index.js';
+import { BrowserStyleAdapter } from '../../platform/platform-adapter/style-adapter/index.js';
 import {
   buildPseudoStateMirrorCss,
   type PseudoStateMirrorBuildWarning,
-} from './stylesheet-mirror.js'
-import type { SpanRecorder } from '../../diagnostics/diagnostics-trace/index.js'
+} from './stylesheet-mirror.js';
+import type { SpanRecorder } from '../../diagnostics/diagnostics-trace/index.js';
 import type {
   StyleSheetRuleSnapshot,
   StyleSheetScanner,
   StyleSheetScanWarning,
   StyleSheetVersionProvider,
   StyleSheetVersionSnapshot,
-} from '../../platform/platform-adapter/style-adapter/index.js'
+} from '../../platform/platform-adapter/style-adapter/index.js';
 import type {
   Disposable,
   StateApplyPort,
@@ -19,55 +19,54 @@ import type {
   StateEffectKind,
   StylePort,
   TargetHandle,
-} from '../../shared/index.js'
+} from '../../shared/index.js';
 
-export type PseudoStateName = 'hover' | 'active' | 'focus-visible'
+export type PseudoStateName = 'hover' | 'active' | 'focus-visible';
 
 export type PseudoStateMirrorRequest = Readonly<{
-  target: TargetHandle
-  states: readonly PseudoStateName[]
-}>
+  target: TargetHandle;
+  states: readonly PseudoStateName[];
+}>;
 
 export type PseudoStateMirrorOptions = Readonly<{
-  state?: StateApplyPort
-  style?: StylePort
-  styleScanner?: StyleSheetScanner
-  trace?: SpanRecorder
-  mirrorStyleId?: string
-  mirrorCssText?: string
-}>
+  state?: StateApplyPort;
+  style?: StylePort;
+  styleScanner?: StyleSheetScanner;
+  trace?: SpanRecorder;
+  mirrorStyleId?: string;
+  mirrorCssText?: string;
+}>;
 
 export interface PseudoStateMirror extends StateApplyPort {
-  apply(request: PseudoStateMirrorRequest): void
-  clear(target?: TargetHandle): void
+  apply(request: PseudoStateMirrorRequest): void;
+  clear(target?: TargetHandle): void;
 }
 
 export class BrowserPseudoStateMirror implements PseudoStateMirror {
-  readonly #state: StateApplyPort
-  readonly #style?: StylePort
-  readonly #styleScanner?: StyleSheetScanner
-  readonly #styleVersion?: StyleSheetVersionProvider
-  readonly #trace?: SpanRecorder
-  readonly #mirrorStyleId: string
-  readonly #mirrorCssText?: string
-  readonly #activeTargets = new Map<StateEffectKind, Map<string, TargetHandle>>()
-  #mirrorCssCache?: PseudoStateMirrorCssCache
-  #styleDisposable?: Disposable
-  #styleAttempted = false
+  readonly #state: StateApplyPort;
+  readonly #style?: StylePort;
+  readonly #styleScanner?: StyleSheetScanner;
+  readonly #styleVersion?: StyleSheetVersionProvider;
+  readonly #trace?: SpanRecorder;
+  readonly #mirrorStyleId: string;
+  readonly #mirrorCssText?: string;
+  readonly #activeTargets = new Map<StateEffectKind, Map<string, TargetHandle>>();
+  #mirrorCssCache?: PseudoStateMirrorCssCache;
+  #styleDisposable?: Disposable;
+  #styleAttempted = false;
 
   constructor(options: PseudoStateMirrorOptions = {}) {
-    const style = options.style ?? createDefaultStyleAdapter()
+    const style = options.style ?? createDefaultStyleAdapter();
 
-    this.#state = options.state ?? new BrowserStateApplier()
-    this.#style = style
-    this.#styleScanner =
-      options.styleScanner ?? (isStyleSheetScanner(style) ? style : undefined)
+    this.#state = options.state ?? new BrowserStateApplier();
+    this.#style = style;
+    this.#styleScanner = options.styleScanner ?? (isStyleSheetScanner(style) ? style : undefined);
     this.#styleVersion = isStyleSheetVersionProvider(this.#styleScanner)
       ? this.#styleScanner
-      : undefined
-    this.#trace = options.trace
-    this.#mirrorStyleId = options.mirrorStyleId ?? defaultMirrorStyleId
-    this.#mirrorCssText = options.mirrorCssText
+      : undefined;
+    this.#trace = options.trace;
+    this.#mirrorStyleId = options.mirrorStyleId ?? defaultMirrorStyleId;
+    this.#mirrorCssText = options.mirrorCssText;
   }
 
   apply(request: PseudoStateMirrorRequest): void {
@@ -75,118 +74,118 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
       kind: state,
       target: request.target,
       active: true,
-    }))
+    }));
 
-    this.#applyEffects(effects, 'apply')
+    this.#applyEffects(effects, 'apply');
   }
 
   clear(target?: TargetHandle): void {
     if (target === undefined) {
-      this.cleanup()
-      return
+      this.cleanup();
+      return;
     }
 
-    this.#applyEffects(this.#clearEffectsForTarget(target), 'clear')
+    this.#applyEffects(this.#clearEffectsForTarget(target), 'clear');
   }
 
   applyStateEffects(effects: readonly StateEffect[]): void {
-    this.#applyEffects(effects, effects.some((effect) => effect.active) ? 'apply' : 'clear')
+    this.#applyEffects(effects, effects.some((effect) => effect.active) ? 'apply' : 'clear');
   }
 
   cleanup(): void {
     try {
-      this.#state.cleanup()
-      this.#activeTargets.clear()
-      this.#disposeStyle()
-      this.#trace?.appendEvent('pseudo:mirror:clear')
+      this.#state.cleanup();
+      this.#activeTargets.clear();
+      this.#disposeStyle();
+      this.#trace?.appendEvent('pseudo:mirror:clear');
     } catch (error) {
-      this.#recordWarning('clear', error)
+      this.#recordWarning('clear', error);
     }
   }
 
   #applyEffects(effects: readonly StateEffect[], phase: 'apply' | 'clear'): void {
     if (effects.length === 0) {
-      return
+      return;
     }
 
     if (effects.some(isPseudoStateEffect)) {
-      this.#ensureMirrorStyle()
+      this.#ensureMirrorStyle();
     }
 
     try {
-      this.#state.applyStateEffects(effects)
-      this.#updateTrackedEffects(effects)
+      this.#state.applyStateEffects(effects);
+      this.#updateTrackedEffects(effects);
       this.#trace?.appendEvent(phase === 'apply' ? 'pseudo:mirror:apply' : 'pseudo:mirror:clear', {
         effects: summarizeEffects(effects),
-      })
+      });
     } catch (error) {
-      this.#recordWarning(phase, error, { effects: summarizeEffects(effects) })
+      this.#recordWarning(phase, error, { effects: summarizeEffects(effects) });
     }
   }
 
   #ensureMirrorStyle(): void {
     if (this.#styleAttempted || this.#style === undefined) {
-      return
+      return;
     }
 
-    this.#styleAttempted = true
+    this.#styleAttempted = true;
 
-    const cssText = this.#resolveMirrorCssText()
+    const cssText = this.#resolveMirrorCssText();
 
     if (cssText.trim().length === 0) {
-      return
+      return;
     }
 
     try {
       this.#styleDisposable = this.#style.injectStyle({
         id: this.#mirrorStyleId,
         cssText,
-      })
+      });
     } catch (error) {
-      this.#recordWarning('style', error, { styleId: this.#mirrorStyleId })
+      this.#recordWarning('style', error, { styleId: this.#mirrorStyleId });
     }
   }
 
   #resolveMirrorCssText(): string {
     if (this.#mirrorCssText !== undefined) {
-      return this.#mirrorCssText
+      return this.#mirrorCssText;
     }
 
     if (this.#styleScanner === undefined) {
-      return ''
+      return '';
     }
 
-    const version = this.#readStyleSheetVersion()
-    const cache = this.#cacheForVersion(version)
+    const version = this.#readStyleSheetVersion();
+    const cache = this.#cacheForVersion(version);
 
     if (cache !== undefined) {
-      this.#recordCachedWarnings(cache.warnings)
+      this.#recordCachedWarnings(cache.warnings);
       this.#trace?.appendEvent('pseudo:mirror:stylesheet-scan', {
         sourceRuleCount: cache.sourceRuleCount,
         mirroredRuleCount: cache.mirroredRuleCount,
         warningCount: cache.warnings.length,
         cacheHit: true,
-      })
+      });
 
-      return cache.cssText
+      return cache.cssText;
     }
 
     try {
-      const scan = this.#styleScanner.scanStyleSheets()
-      const mirror = buildPseudoStateMirrorCss(scan.rules)
-      const warnings = collectMirrorWarnings(scan.warnings, mirror.warnings)
+      const scan = this.#styleScanner.scanStyleSheets();
+      const mirror = buildPseudoStateMirrorCss(scan.rules);
+      const warnings = collectMirrorWarnings(scan.warnings, mirror.warnings);
 
       for (const warning of warnings) {
-        this.#recordWarning(warning.phase, warning.error, warning.details ?? {})
+        this.#recordWarning(warning.phase, warning.error, warning.details ?? {});
       }
 
-      const sourceRuleCount = countStyleRules(scan.rules)
+      const sourceRuleCount = countStyleRules(scan.rules);
       this.#trace?.appendEvent('pseudo:mirror:stylesheet-scan', {
         sourceRuleCount,
         mirroredRuleCount: mirror.mirroredRuleCount,
         warningCount: warnings.length,
         cacheHit: false,
-      })
+      });
 
       this.#mirrorCssCache =
         version === undefined
@@ -198,26 +197,26 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
               sourceRuleCount,
               mirroredRuleCount: mirror.mirroredRuleCount,
               warnings,
-            }
+            };
 
-      return mirror.cssText
+      return mirror.cssText;
     } catch (error) {
-      this.#recordWarning('scan', error)
-      this.#mirrorCssCache = undefined
-      return ''
+      this.#recordWarning('scan', error);
+      this.#mirrorCssCache = undefined;
+      return '';
     }
   }
 
   #readStyleSheetVersion(): StyleSheetVersionSnapshot | undefined {
     if (this.#styleVersion === undefined) {
-      return undefined
+      return undefined;
     }
 
     try {
-      return this.#styleVersion.getStyleSheetVersion()
+      return this.#styleVersion.getStyleSheetVersion();
     } catch (error) {
-      this.#recordWarning('scan', error, { operation: 'stylesheet-version' })
-      return undefined
+      this.#recordWarning('scan', error, { operation: 'stylesheet-version' });
+      return undefined;
     }
   }
 
@@ -225,76 +224,76 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
     version: StyleSheetVersionSnapshot | undefined,
   ): PseudoStateMirrorCssCache | undefined {
     if (version === undefined || this.#mirrorCssCache === undefined) {
-      return undefined
+      return undefined;
     }
 
     if (
       this.#mirrorCssCache.root !== version.root ||
       this.#mirrorCssCache.version !== version.version
     ) {
-      return undefined
+      return undefined;
     }
 
-    return this.#mirrorCssCache
+    return this.#mirrorCssCache;
   }
 
   #recordCachedWarnings(warnings: readonly PseudoStateMirrorCachedWarning[]): void {
     for (const warning of warnings) {
-      this.#recordWarning(warning.phase, warning.error, warning.details ?? {})
+      this.#recordWarning(warning.phase, warning.error, warning.details ?? {});
     }
   }
 
   #disposeStyle(): void {
     if (this.#styleDisposable !== undefined) {
-      this.#styleDisposable.dispose()
-      this.#styleDisposable = undefined
+      this.#styleDisposable.dispose();
+      this.#styleDisposable = undefined;
     }
 
-    this.#styleAttempted = false
+    this.#styleAttempted = false;
   }
 
   #clearEffectsForTarget(target: TargetHandle): StateEffect[] {
-    const effects: StateEffect[] = []
+    const effects: StateEffect[] = [];
 
     for (const [kind, targets] of this.#activeTargets) {
-      const activeTarget = targets.get(target.id)
+      const activeTarget = targets.get(target.id);
 
       if (activeTarget) {
-        effects.push({ kind, target: activeTarget, active: false })
+        effects.push({ kind, target: activeTarget, active: false });
       }
     }
 
-    return effects
+    return effects;
   }
 
   #updateTrackedEffects(effects: readonly StateEffect[]): void {
     for (const effect of effects) {
       if (!effect.target) {
         if (!effect.active) {
-          this.#activeTargets.get(effect.kind)?.clear()
+          this.#activeTargets.get(effect.kind)?.clear();
         }
-        continue
+        continue;
       }
 
-      const targets = this.#targetsForKind(effect.kind)
+      const targets = this.#targetsForKind(effect.kind);
 
       if (effect.active) {
-        targets.set(effect.target.id, effect.target)
+        targets.set(effect.target.id, effect.target);
       } else {
-        targets.delete(effect.target.id)
+        targets.delete(effect.target.id);
       }
     }
   }
 
   #targetsForKind(kind: StateEffectKind): Map<string, TargetHandle> {
-    let targets = this.#activeTargets.get(kind)
+    let targets = this.#activeTargets.get(kind);
 
     if (!targets) {
-      targets = new Map()
-      this.#activeTargets.set(kind, targets)
+      targets = new Map();
+      this.#activeTargets.set(kind, targets);
     }
 
-    return targets
+    return targets;
   }
 
   #recordWarning(
@@ -306,63 +305,63 @@ export class BrowserPseudoStateMirror implements PseudoStateMirror {
       phase,
       error: describeUnknownError(error),
       ...details,
-    }
+    };
 
-    this.#trace?.appendEvent('pseudo:mirror:warning', warning)
-    this.#trace?.warn(`Pseudo state mirror ${phase} failed.`, warning)
+    this.#trace?.appendEvent('pseudo:mirror:warning', warning);
+    this.#trace?.warn(`Pseudo state mirror ${phase} failed.`, warning);
   }
 }
 
 export function createPseudoStateMirror(): PseudoStateMirror {
-  return new BrowserPseudoStateMirror()
+  return new BrowserPseudoStateMirror();
 }
 
-const defaultMirrorStyleId = 'actorble-pseudo-state-mirror'
+const defaultMirrorStyleId = 'actorble-pseudo-state-mirror';
 
 function createDefaultStyleAdapter(): BrowserStyleAdapter | undefined {
   try {
-    return new BrowserStyleAdapter()
+    return new BrowserStyleAdapter();
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
 function isStyleSheetScanner(value: unknown): value is StyleSheetScanner {
-  const scanner = value as { scanStyleSheets?: unknown }
+  const scanner = value as { scanStyleSheets?: unknown };
 
   return (
     typeof value === 'object' &&
     value !== null &&
     'scanStyleSheets' in value &&
     typeof scanner.scanStyleSheets === 'function'
-  )
+  );
 }
 
 function isStyleSheetVersionProvider(value: unknown): value is StyleSheetVersionProvider {
-  const provider = value as { getStyleSheetVersion?: unknown }
+  const provider = value as { getStyleSheetVersion?: unknown };
 
   return (
     typeof value === 'object' &&
     value !== null &&
     'getStyleSheetVersion' in value &&
     typeof provider.getStyleSheetVersion === 'function'
-  )
+  );
 }
 
 type PseudoStateMirrorCachedWarning = Readonly<{
-  phase: 'scan' | 'rewrite'
-  error: string
-  details?: Readonly<Record<string, unknown>>
-}>
+  phase: 'scan' | 'rewrite';
+  error: string;
+  details?: Readonly<Record<string, unknown>>;
+}>;
 
 type PseudoStateMirrorCssCache = Readonly<{
-  root: Document | ShadowRoot
-  version: string
-  cssText: string
-  sourceRuleCount: number
-  mirroredRuleCount: number
-  warnings: readonly PseudoStateMirrorCachedWarning[]
-}>
+  root: Document | ShadowRoot;
+  version: string;
+  cssText: string;
+  sourceRuleCount: number;
+  mirroredRuleCount: number;
+  warnings: readonly PseudoStateMirrorCachedWarning[];
+}>;
 
 function collectMirrorWarnings(
   scanWarnings: readonly StyleSheetScanWarning[],
@@ -379,29 +378,25 @@ function collectMirrorWarnings(
       error: warning.message,
       details: warning.details,
     })),
-  ]
+  ];
 }
 
 function countStyleRules(rules: readonly StyleSheetRuleSnapshot[]): number {
-  let count = 0
+  let count = 0;
 
   for (const rule of rules) {
     if (rule.kind === 'style') {
-      count += 1
+      count += 1;
     } else {
-      count += countStyleRules(rule.rules)
+      count += countStyleRules(rule.rules);
     }
   }
 
-  return count
+  return count;
 }
 
 function isPseudoStateEffect(effect: StateEffect): boolean {
-  return (
-    effect.kind === 'hover' ||
-    effect.kind === 'active' ||
-    effect.kind === 'focus-visible'
-  )
+  return effect.kind === 'hover' || effect.kind === 'active' || effect.kind === 'focus-visible';
 }
 
 function summarizeEffects(
@@ -411,13 +406,13 @@ function summarizeEffects(
     kind: effect.kind,
     targetId: effect.target?.id,
     active: effect.active,
-  }))
+  }));
 }
 
 function describeUnknownError(error: unknown): string {
   if (error instanceof Error) {
-    return error.message
+    return error.message;
   }
 
-  return String(error)
+  return String(error);
 }

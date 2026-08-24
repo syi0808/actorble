@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json'
-import { compileToBrowserRuntime } from '../src/scenario/compile-to-browser-runtime.js'
+import { describe, expect, it } from 'vitest';
+import browserLoginFlow from '../../schemas/scenario/draft/examples/browser-login-flow.json';
+import { compileToBrowserRuntime } from '../src/scenario/compile-to-browser-runtime.js';
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
   type ScenarioStep,
-} from '../src/scenario/types.js'
+} from '../src/scenario/types.js';
 
 function scenario(
   steps: readonly ScenarioStep[],
@@ -15,30 +15,30 @@ function scenario(
     schemaVersion: DRAFT_SCENARIO_SCHEMA_VERSION,
     ...extra,
     steps,
-  }
+  };
 }
 
 function compile(document: ScenarioDocument) {
-  const result = compileToBrowserRuntime(document)
+  const result = compileToBrowserRuntime(document);
 
-  expect(result.ok).toBe(true)
+  expect(result.ok).toBe(true);
   if (!result.ok) {
-    throw new Error(result.issues.map((issue) => issue.message).join('\n'))
+    throw new Error(result.issues.map((issue) => issue.message).join('\n'));
   }
 
-  return result.value
+  return result.value;
 }
 
 describe('compileToBrowserRuntime', () => {
   it('compiles the browser login example into a browser runtime scenario', () => {
-    const compilation = compile(browserLoginFlow as ScenarioDocument)
+    const compilation = compile(browserLoginFlow as ScenarioDocument);
 
     expect(compilation.runOptions).toEqual({
       timeout: 5000,
       pacing: {
         betweenSteps: 120,
       },
-    })
+    });
     expect(compilation.scenario).toEqual({
       id: 'browser-login-flow',
       name: 'Browser login flow',
@@ -67,8 +67,8 @@ describe('compileToBrowserRuntime', () => {
           options: { timeout: 8000 },
         },
       ],
-    })
-  })
+    });
+  });
 
   it('maps each draft locator strategy into browser runtime locators', () => {
     const compilation = compile(
@@ -123,9 +123,11 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    )
+    );
 
-    expect(compilation.scenario.steps.map((step) => 'target' in step ? step.target : undefined)).toEqual([
+    expect(
+      compilation.scenario.steps.map((step) => ('target' in step ? step.target : undefined)),
+    ).toEqual([
       { kind: 'css', selector: '#save' },
       { kind: 'role', role: 'button', name: 'Submit', exact: true, includeHidden: true },
       { kind: 'text', value: /created$/i },
@@ -133,13 +135,13 @@ describe('compileToBrowserRuntime', () => {
       { kind: 'testId', value: 'save', attribute: 'data-qa' },
       { kind: 'point', point: { x: 10, y: 20 }, coordinateSpace: 'viewport' },
       { kind: 'role', role: 'button', name: 'Primary' },
-    ])
-  })
+    ]);
+  });
 
   it('maps every supported draft step family and preserves step ids', () => {
-    const target = { strategy: 'css', selector: '#target' } as const
-    const otherTarget = { strategy: 'text', text: 'Drop here' } as const
-    const motion = { kind: 'ease', easing: 'ease-in', duration: 20 } as const
+    const target = { strategy: 'css', selector: '#target' } as const;
+    const otherTarget = { strategy: 'text', text: 'Drop here' } as const;
+    const motion = { kind: 'ease', easing: 'ease-in', duration: 20 } as const;
     const compilation = compile(
       scenario([
         {
@@ -280,7 +282,7 @@ describe('compileToBrowserRuntime', () => {
           reason: 'settle',
         },
       ]),
-    )
+    );
 
     expect(compilation.scenario.steps.map((step) => step.id)).toEqual([
       'click',
@@ -300,7 +302,7 @@ describe('compileToBrowserRuntime', () => {
       'wait-hidden',
       'wait-text',
       'delay',
-    ])
+    ]);
     expect(compilation.scenario.steps).toMatchObject([
       {
         action: 'click',
@@ -385,8 +387,8 @@ describe('compileToBrowserRuntime', () => {
         duration: 50,
         reason: 'settle',
       },
-    ])
-  })
+    ]);
+  });
 
   it('propagates document defaults to browser run options', () => {
     const compilation = compile(
@@ -406,21 +408,21 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ),
-    )
+    );
 
     expect(compilation.runOptions).toEqual({
       timeout: 3000,
       pacing: {
         betweenSteps: 25,
       },
-    })
-  })
+    });
+  });
 
   it('rejects unsupported schema versions', () => {
     const result = compileToBrowserRuntime({
       schemaVersion: 'actorble.scenario.v1',
       steps: [{ action: 'delay', duration: 1 }],
-    } as unknown as ScenarioDocument)
+    } as unknown as ScenarioDocument);
 
     expect(result).toMatchObject({
       ok: false,
@@ -430,8 +432,8 @@ describe('compileToBrowserRuntime', () => {
           path: ['schemaVersion'],
         },
       ],
-    })
-  })
+    });
+  });
 
   it('rejects platform extensions on documents, steps, and target groups', () => {
     const documents = [
@@ -455,21 +457,21 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    ]
+    ];
 
     for (const document of documents) {
-      const result = compileToBrowserRuntime(document)
+      const result = compileToBrowserRuntime(document);
 
-      expect(result.ok).toBe(false)
+      expect(result.ok).toBe(false);
       expect(result).toMatchObject({
         issues: [
           {
             code: 'unsupported_platform_extension',
           },
         ],
-      })
+      });
     }
-  })
+  });
 
   it('rejects options unsupported by the runtime step type', () => {
     const result = compileToBrowserRuntime(
@@ -482,7 +484,7 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    )
+    );
 
     expect(result).toMatchObject({
       ok: false,
@@ -492,8 +494,8 @@ describe('compileToBrowserRuntime', () => {
           path: ['steps', 0, 'options', 'button'],
         },
       ],
-    })
-  })
+    });
+  });
 
   it('rejects invalid regular expression matchers with a field-level path', () => {
     const result = compileToBrowserRuntime(
@@ -506,7 +508,7 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    )
+    );
 
     expect(result).toMatchObject({
       ok: false,
@@ -516,8 +518,8 @@ describe('compileToBrowserRuntime', () => {
           path: ['steps', 0, 'target', 'text', 'value'],
         },
       ],
-    })
-  })
+    });
+  });
 
   it('compiles selectText draft steps into browser runtime selection steps', () => {
     const compilation = compile(
@@ -543,7 +545,7 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    )
+    );
 
     expect(compilation.scenario.steps).toEqual([
       {
@@ -566,8 +568,8 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       },
-    ])
-  })
+    ]);
+  });
 
   it('rejects selectText when runtime capabilities do not support text selection', () => {
     const result = compileToBrowserRuntime(
@@ -582,7 +584,7 @@ describe('compileToBrowserRuntime', () => {
           textSelection: 'none',
         },
       },
-    )
+    );
 
     expect(result).toMatchObject({
       ok: false,
@@ -598,8 +600,8 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ],
-    })
-  })
+    });
+  });
 
   it('compiles selectText movement options into browser runtime selection steps', () => {
     const compilation = compile(
@@ -614,7 +616,7 @@ describe('compileToBrowserRuntime', () => {
           },
         },
       ]),
-    )
+    );
 
     expect(compilation.scenario.steps[0]).toMatchObject({
       action: 'selectText',
@@ -623,6 +625,6 @@ describe('compileToBrowserRuntime', () => {
         duration: 20,
         motion: { kind: 'ease', easing: 'ease-in-out', duration: 20 },
       },
-    })
-  })
-})
+    });
+  });
+});

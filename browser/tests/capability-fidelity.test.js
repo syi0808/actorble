@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { createActorble } from '../src/api/actorble-facade/index.js'
-import { BrowserCapabilityFidelityReporter } from '../src/capability/capability-fidelity/index.js'
+import { describe, expect, it } from 'vitest';
+import { createActorble } from '../src/api/actorble-facade/index.js';
+import { BrowserCapabilityFidelityReporter } from '../src/capability/capability-fidelity/index.js';
 
 describe('BrowserCapabilityFidelityReporter', () => {
   it('reports browser in-page synthetic input capabilities and hard limits', () => {
-    const reporter = new BrowserCapabilityFidelityReporter()
+    const reporter = new BrowserCapabilityFidelityReporter();
 
     expect(reporter.getCapabilities()).toEqual({
       pointerInput: 'synthetic',
@@ -20,7 +20,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
       scrolling: 'nested-dom',
       reveal: 'planned',
       stability: 'observed',
-    })
+    });
 
     expect(reporter.getFidelity()).toEqual({
       pointerInput: 'synthetic-dom-events',
@@ -43,11 +43,11 @@ describe('BrowserCapabilityFidelityReporter', () => {
         'Debug event subscriptions are exact-name trace event subscriptions; span lifecycle snapshots are available through getTrace().',
         'Native trusted wheel input is not available from the in-page browser runtime.',
       ],
-    })
-  })
+    });
+  });
 
   it('is wired into the default facade graph', () => {
-    const actorble = createActorble()
+    const actorble = createActorble();
 
     expect(actorble.getCapabilities()).toMatchObject({
       pointerInput: 'synthetic',
@@ -59,7 +59,7 @@ describe('BrowserCapabilityFidelityReporter', () => {
       scrolling: 'nested-dom',
       reveal: 'planned',
       stability: 'observed',
-    })
+    });
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',
       visualOverlay: {
@@ -68,11 +68,11 @@ describe('BrowserCapabilityFidelityReporter', () => {
         interactivity: 'non-interactive',
         hitTesting: 'ignored',
       },
-    })
-  })
+    });
+  });
 
   it('reports enabled browser visual runtime separately from synthetic input limits', () => {
-    const actorble = createActorble({ feedback: 'cursor' })
+    const actorble = createActorble({ feedback: 'cursor' });
 
     expect(actorble.getFidelity()).toMatchObject({
       pointerInput: 'synthetic-dom-events',
@@ -83,15 +83,15 @@ describe('BrowserCapabilityFidelityReporter', () => {
         interactivity: 'non-interactive',
         hitTesting: 'ignored',
       },
-    })
-  })
+    });
+  });
 
   it('does not conflate visual runtime fidelity with feedback detail options', () => {
-    const cursor = createActorble({ feedback: 'cursor' })
-    const debug = createActorble({ feedback: 'debug' })
+    const cursor = createActorble({ feedback: 'cursor' });
+    const debug = createActorble({ feedback: 'debug' });
 
-    expect(cursor.getFidelity().visualOverlay).toEqual(debug.getFidelity().visualOverlay)
-  })
+    expect(cursor.getFidelity().visualOverlay).toEqual(debug.getFidelity().visualOverlay);
+  });
 
   it('reports custom visual layers as caller-owned runtime fidelity', () => {
     const visualLayer = {
@@ -104,8 +104,8 @@ describe('BrowserCapabilityFidelityReporter', () => {
       clearFeedback() {},
       hide() {},
       destroy() {},
-    }
-    const actorble = createActorble({ feedback: 'debug', visualLayer })
+    };
+    const actorble = createActorble({ feedback: 'debug', visualLayer });
 
     expect(actorble.getFidelity()).toMatchObject({
       visualOverlay: {
@@ -114,6 +114,6 @@ describe('BrowserCapabilityFidelityReporter', () => {
         interactivity: 'caller-owned',
         hitTesting: 'caller-owned',
       },
-    })
-  })
-})
+    });
+  });
+});

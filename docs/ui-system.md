@@ -173,13 +173,13 @@ platform-specific constants.
 
 Brand tokens come from the current Actorble symbol and landing direction.
 
-| Token | Value | Usage |
-| --- | --- | --- |
-| `actorble.ink` | `#101418` | Brand dark base, logo contrast, high-emphasis text. |
-| `actorble.inkSoft` | `#17222C` | Deep product chrome and dark surface support. |
-| `actorble.mint` | `#33E6C2` | Primary motion/accent color. |
-| `actorble.amber` | `#F2B84B` | Secondary crossing/action color and attention moments. |
-| `actorble.wordmark` | `#F7FBFF` | Light wordmark color. |
+| Token               | Value     | Usage                                                  |
+| ------------------- | --------- | ------------------------------------------------------ |
+| `actorble.ink`      | `#101418` | Brand dark base, logo contrast, high-emphasis text.    |
+| `actorble.inkSoft`  | `#17222C` | Deep product chrome and dark surface support.          |
+| `actorble.mint`     | `#33E6C2` | Primary motion/accent color.                           |
+| `actorble.amber`    | `#F2B84B` | Secondary crossing/action color and attention moments. |
+| `actorble.wordmark` | `#F7FBFF` | Light wordmark color.                                  |
 
 Mint/teal is the primary product accent. Amber is reserved for attention,
 highlight, and secondary motion moments. Danger uses a red/coral family, not
@@ -190,71 +190,71 @@ amber.
 Actorble follows a semantic color model with foreground pairs where text or
 icons sit directly on a colored surface.
 
-| Token | Purpose |
-| --- | --- |
-| `color.background` | App/page background. |
-| `color.foreground` | Default text and icon color on background. |
-| `color.surface` | Default panels, controls, fields, and repeated items. |
-| `color.surfaceForeground` | Text and icons on `surface`. |
-| `color.surfaceSoft` | Low-emphasis surfaces, secondary controls, hover fills. |
-| `color.surfaceStrong` | Pressed state, selected neutral state, stronger grouping. |
-| `color.popover` | Menus, popovers, tooltips, and floating overlays. |
-| `color.popoverForeground` | Text and icons on `popover`. |
-| `color.primary` | Primary command and selected accent. |
-| `color.primaryForeground` | Text and icons on `primary`. |
-| `color.secondary` | Supporting command surface. |
-| `color.secondaryForeground` | Text and icons on `secondary`. |
-| `color.muted` | Quiet metadata surface. |
-| `color.mutedForeground` | Secondary text, descriptions, timestamps, inactive hints. |
-| `color.accent` | Interactive accent, focus-adjacent highlight, active slot. |
-| `color.accentForeground` | Text and icons on `accent`. |
-| `color.accentSoft` | Soft selected state, target preview, low-emphasis accent fill. |
-| `color.success` | Completed, ready, saved, valid. |
-| `color.warning` | Paused, stopped, blocked, needs attention. |
-| `color.danger` | Failed, invalid, destructive, stop/delete when dangerous. |
-| `color.border` | Default borders and separators. |
-| `color.input` | Field borders and input chrome. |
-| `color.ring` | Focus-visible outline/ring. |
-| `color.disabled` | Disabled text and icons. |
-| `color.selection` | Text selection and selected row support. |
+| Token                       | Purpose                                                        |
+| --------------------------- | -------------------------------------------------------------- |
+| `color.background`          | App/page background.                                           |
+| `color.foreground`          | Default text and icon color on background.                     |
+| `color.surface`             | Default panels, controls, fields, and repeated items.          |
+| `color.surfaceForeground`   | Text and icons on `surface`.                                   |
+| `color.surfaceSoft`         | Low-emphasis surfaces, secondary controls, hover fills.        |
+| `color.surfaceStrong`       | Pressed state, selected neutral state, stronger grouping.      |
+| `color.popover`             | Menus, popovers, tooltips, and floating overlays.              |
+| `color.popoverForeground`   | Text and icons on `popover`.                                   |
+| `color.primary`             | Primary command and selected accent.                           |
+| `color.primaryForeground`   | Text and icons on `primary`.                                   |
+| `color.secondary`           | Supporting command surface.                                    |
+| `color.secondaryForeground` | Text and icons on `secondary`.                                 |
+| `color.muted`               | Quiet metadata surface.                                        |
+| `color.mutedForeground`     | Secondary text, descriptions, timestamps, inactive hints.      |
+| `color.accent`              | Interactive accent, focus-adjacent highlight, active slot.     |
+| `color.accentForeground`    | Text and icons on `accent`.                                    |
+| `color.accentSoft`          | Soft selected state, target preview, low-emphasis accent fill. |
+| `color.success`             | Completed, ready, saved, valid.                                |
+| `color.warning`             | Paused, stopped, blocked, needs attention.                     |
+| `color.danger`              | Failed, invalid, destructive, stop/delete when dangerous.      |
+| `color.border`              | Default borders and separators.                                |
+| `color.input`               | Field borders and input chrome.                                |
+| `color.ring`                | Focus-visible outline/ring.                                    |
+| `color.disabled`            | Disabled text and icons.                                       |
+| `color.selection`           | Text selection and selected row support.                       |
 
 Default light mapping:
 
-| Token | Value |
-| --- | --- |
-| `background` | `#F6F7F8` |
-| `foreground` | `#15181D` |
-| `surface` | `#FFFFFF` |
-| `surfaceSoft` | `#EEF1F4` |
-| `surfaceStrong` | `#E5E9EE` |
-| `mutedForeground` | `#5D6876` |
-| `border` | `#D5DCE4` |
+| Token                            | Value     |
+| -------------------------------- | --------- |
+| `background`                     | `#F6F7F8` |
+| `foreground`                     | `#15181D` |
+| `surface`                        | `#FFFFFF` |
+| `surfaceSoft`                    | `#EEF1F4` |
+| `surfaceStrong`                  | `#E5E9EE` |
+| `mutedForeground`                | `#5D6876` |
+| `border`                         | `#D5DCE4` |
 | `primary` / `accent` / `success` | `#0F766E` |
-| `primaryStrong` | `#0B5F59` |
-| `accentSoft` | `#E2F5F0` |
-| `warning` | `#956100` |
-| `danger` | `#BD322B` |
-| `disabled` | `#8C97A4` |
-| `selection` | `#D8F4EE` |
+| `primaryStrong`                  | `#0B5F59` |
+| `accentSoft`                     | `#E2F5F0` |
+| `warning`                        | `#956100` |
+| `danger`                         | `#BD322B` |
+| `disabled`                       | `#8C97A4` |
+| `selection`                      | `#D8F4EE` |
 
 Default dark mapping:
 
-| Token | Value |
-| --- | --- |
-| `background` | `#17191C` |
-| `foreground` | `#EEF2F6` |
-| `surface` | `#20242A` |
-| `surfaceSoft` | `#292F37` |
-| `surfaceStrong` | `#343C46` |
-| `mutedForeground` | `#A9B4C0` |
-| `border` | `#3A4654` |
+| Token                            | Value     |
+| -------------------------------- | --------- |
+| `background`                     | `#17191C` |
+| `foreground`                     | `#EEF2F6` |
+| `surface`                        | `#20242A` |
+| `surfaceSoft`                    | `#292F37` |
+| `surfaceStrong`                  | `#343C46` |
+| `mutedForeground`                | `#A9B4C0` |
+| `border`                         | `#3A4654` |
 | `primary` / `accent` / `success` | `#63CDB7` |
-| `primaryStrong` | `#8EE0CF` |
-| `accentSoft` | `#173B36` |
-| `warning` | `#E7BD6F` |
-| `danger` | `#FFB4AB` |
-| `disabled` | `#6F7A87` |
-| `selection` | `#173B36` |
+| `primaryStrong`                  | `#8EE0CF` |
+| `accentSoft`                     | `#173B36` |
+| `warning`                        | `#E7BD6F` |
+| `danger`                         | `#FFB4AB` |
+| `disabled`                       | `#6F7A87` |
+| `selection`                      | `#173B36` |
 
 Exact values may be adjusted per platform for contrast and native appearance,
 but the semantic role must not change.
@@ -273,12 +273,12 @@ prefers `12`, `16`, `20`, and `24`. Large page or landing sections may use
 
 ### Radius
 
-| Token | Value | Usage |
-| --- | --- | --- |
-| `radius.xs` | `4` | Tiny tags, inner handles, code chips. |
-| `radius.sm` | `6` | Compact controls, menu items, small inputs. |
-| `radius.md` | `8` | Default controls, cards, panels, repeated items. |
-| `radius.pill` | `999` | Pills, badges, circular icon-only affordances. |
+| Token         | Value | Usage                                            |
+| ------------- | ----- | ------------------------------------------------ |
+| `radius.xs`   | `4`   | Tiny tags, inner handles, code chips.            |
+| `radius.sm`   | `6`   | Compact controls, menu items, small inputs.      |
+| `radius.md`   | `8`   | Default controls, cards, panels, repeated items. |
+| `radius.pill` | `999` | Pills, badges, circular icon-only affordances.   |
 
 Cards and framed repeated items stay at `8px` radius or less. Top-level page
 sections should not all become floating cards.
@@ -287,16 +287,16 @@ sections should not all become floating cards.
 
 Use platform system fonts by default.
 
-| Token | Size / line | Weight | Usage |
-| --- | --- | --- | --- |
-| `type.productTitle` | `20/26` to `28/34` | semibold/bold | Scenario title, app-level product title. |
-| `type.sectionTitle` | `16/22` to `20/26` | semibold | Workbench sections, drawer headings. |
-| `type.subsectionTitle` | `14/20` | semibold | Step editor groups and compact panels. |
-| `type.body` | `13/20` to `15/22` | regular | Primary product text. |
-| `type.control` | `13/18` | medium | Buttons, tabs, select triggers. |
-| `type.caption` | `12/16` to `13/18` | regular/medium | Metadata, descriptions, status details. |
-| `type.label` | `12/16` | medium | Field labels, compact row labels. |
-| `type.monospace` | `12/18` to `13/20` | regular | JSON, code, diagnostics only. |
+| Token                  | Size / line        | Weight         | Usage                                    |
+| ---------------------- | ------------------ | -------------- | ---------------------------------------- |
+| `type.productTitle`    | `20/26` to `28/34` | semibold/bold  | Scenario title, app-level product title. |
+| `type.sectionTitle`    | `16/22` to `20/26` | semibold       | Workbench sections, drawer headings.     |
+| `type.subsectionTitle` | `14/20`            | semibold       | Step editor groups and compact panels.   |
+| `type.body`            | `13/20` to `15/22` | regular        | Primary product text.                    |
+| `type.control`         | `13/18`            | medium         | Buttons, tabs, select triggers.          |
+| `type.caption`         | `12/16` to `13/18` | regular/medium | Metadata, descriptions, status details.  |
+| `type.label`           | `12/16`            | medium         | Field labels, compact row labels.        |
+| `type.monospace`       | `12/18` to `13/20` | regular        | JSON, code, diagnostics only.            |
 
 Text rules:
 
@@ -310,10 +310,10 @@ Text rules:
 
 ### Density
 
-| Density | Default control height | Row height | Usage |
-| --- | --- | --- | --- |
-| `compact` | `34-38` | `34-52` | Browser popup, narrow side panel areas, diagnostics. |
-| `comfortable` | `40-44` | `48-72` | Primary builder surfaces and native desktop apps. |
+| Density       | Default control height | Row height | Usage                                                |
+| ------------- | ---------------------- | ---------- | ---------------------------------------------------- |
+| `compact`     | `34-38`                | `34-52`    | Browser popup, narrow side panel areas, diagnostics. |
+| `comfortable` | `40-44`                | `48-72`    | Primary builder surfaces and native desktop apps.    |
 
 Icons inside controls are usually `16px`. Large controls may use `18px`.
 Standalone product icons may use `20px` or `24px` when they are the content,
@@ -323,11 +323,11 @@ not decoration.
 
 Motion clarifies state changes. It should not decorate every surface.
 
-| Token | Duration | Usage |
-| --- | --- | --- |
-| `motion.fast` | `120-180ms` | Hover, focus, selected, quick state change. |
-| `motion.standard` | `180-260ms` | Menus, popovers, small disclosures. |
-| `motion.workflowReveal` | `220-320ms` | Selected step expansion and drawer reveal. |
+| Token                   | Duration    | Usage                                       |
+| ----------------------- | ----------- | ------------------------------------------- |
+| `motion.fast`           | `120-180ms` | Hover, focus, selected, quick state change. |
+| `motion.standard`       | `180-260ms` | Menus, popovers, small disclosures.         |
+| `motion.workflowReveal` | `220-320ms` | Selected step expansion and drawer reveal.  |
 
 Runtime visual feedback such as Actorble cursor motion belongs to runtime
 visual layer policy, not the product UI token contract.
@@ -336,18 +336,18 @@ visual layer policy, not the product UI token contract.
 
 Actorble is used by non-developers, so primary UI avoids internal runtime terms.
 
-| Concept | User-facing term | Usage |
-| --- | --- | --- |
-| Saved runnable document | Scenario | Use "Create scenario", "Save scenario", "Run scenario". |
-| Ordered visual sequence inside a scenario | Workflow | Use for the builder area, not as a separate stored object. |
-| One item in a workflow | Step | Use "Add step", "Move step", "Test step". |
-| What a step performs | Action | Use in the action selector and step editor. |
-| Element or location Actorble controls | Target | Use "Pick target" and "Target". Explain as a page/app element only when helpful. |
-| Page/app readiness | Ready / Blocked / Checking | Use compact status language. |
-| Scenario validation | Check | Button label is "Check scenario", not "Validate" in primary UI. |
-| Per-step dry run | Test step | Use "Test step", not "Dry run" in primary UI. |
-| Execution details | Run details | Use in disclosed detail surfaces. |
-| Problems to fix | Issues | Use inline issues before opening diagnostics. |
+| Concept                                   | User-facing term           | Usage                                                                            |
+| ----------------------------------------- | -------------------------- | -------------------------------------------------------------------------------- |
+| Saved runnable document                   | Scenario                   | Use "Create scenario", "Save scenario", "Run scenario".                          |
+| Ordered visual sequence inside a scenario | Workflow                   | Use for the builder area, not as a separate stored object.                       |
+| One item in a workflow                    | Step                       | Use "Add step", "Move step", "Test step".                                        |
+| What a step performs                      | Action                     | Use in the action selector and step editor.                                      |
+| Element or location Actorble controls     | Target                     | Use "Pick target" and "Target". Explain as a page/app element only when helpful. |
+| Page/app readiness                        | Ready / Blocked / Checking | Use compact status language.                                                     |
+| Scenario validation                       | Check                      | Button label is "Check scenario", not "Validate" in primary UI.                  |
+| Per-step dry run                          | Test step                  | Use "Test step", not "Dry run" in primary UI.                                    |
+| Execution details                         | Run details                | Use in disclosed detail surfaces.                                                |
+| Problems to fix                           | Issues                     | Use inline issues before opening diagnostics.                                    |
 
 Terms to avoid in normal UI:
 
@@ -387,16 +387,16 @@ components, or another toolkit.
 
 Every interactive primitive that supports the state must define it explicitly.
 
-| State | Visual contract |
-| --- | --- |
-| `default` | Uses base variant styling and normal foreground contrast. |
-| `hover` | Changes border, surface, or foreground subtly; never moves layout. |
-| `active` / `pressed` | Uses `surfaceStrong` or a stronger variant tone. |
-| `focus-visible` | Uses a 2px `ring` outline or native equivalent with 2px offset where possible. |
-| `selected` | Uses structure: border, outline, ring, checkmark, or selected indicator. Avoid full accent fills for dense editable cards. |
-| `disabled` | Reduces contrast and removes pointer interaction, but the UI must still explain why action is unavailable when needed. |
-| `loading` / `pending` | Preserves component width and height. Use spinner or progress text without shifting labels. |
-| `invalid` | Uses `danger` border or text plus attached issue copy. Color alone is insufficient. |
+| State                 | Visual contract                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `default`             | Uses base variant styling and normal foreground contrast.                                                                  |
+| `hover`               | Changes border, surface, or foreground subtly; never moves layout.                                                         |
+| `active` / `pressed`  | Uses `surfaceStrong` or a stronger variant tone.                                                                           |
+| `focus-visible`       | Uses a 2px `ring` outline or native equivalent with 2px offset where possible.                                             |
+| `selected`            | Uses structure: border, outline, ring, checkmark, or selected indicator. Avoid full accent fills for dense editable cards. |
+| `disabled`            | Reduces contrast and removes pointer interaction, but the UI must still explain why action is unavailable when needed.     |
+| `loading` / `pending` | Preserves component width and height. Use spinner or progress text without shifting labels.                                |
+| `invalid`             | Uses `danger` border or text plus attached issue copy. Color alone is insufficient.                                        |
 
 ### Button
 
@@ -405,26 +405,26 @@ Actorble-specific names.
 
 Variants:
 
-| Variant | Meaning | Visual contract |
-| --- | --- | --- |
-| `primary` | Main action in the current local command group. | Filled `primary` background, `primaryForeground` text, stronger hover. |
-| `secondary` | Supporting action that should remain visible. | Bordered or soft filled surface, default text, subtle accent hover. |
-| `subtle` | Low-emphasis command or local utility. | Transparent or nearly transparent background, visible on hover/focus. |
-| `danger` | Destructive, stopping, or risky action. | Danger foreground and/or danger-tinted surface. Use filled danger only for irreversible confirmation. |
+| Variant     | Meaning                                         | Visual contract                                                                                       |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `primary`   | Main action in the current local command group. | Filled `primary` background, `primaryForeground` text, stronger hover.                                |
+| `secondary` | Supporting action that should remain visible.   | Bordered or soft filled surface, default text, subtle accent hover.                                   |
+| `subtle`    | Low-emphasis command or local utility.          | Transparent or nearly transparent background, visible on hover/focus.                                 |
+| `danger`    | Destructive, stopping, or risky action.         | Danger foreground and/or danger-tinted surface. Use filled danger only for irreversible confirmation. |
 
 Sizes:
 
-| Size | Height | Horizontal padding | Gap | Font | Icon | Usage |
-| --- | --- | --- | --- | --- | --- | --- |
-| `xs` | `28` | `8` | `4` | `12/16 medium` | `14` | Dense tables, tiny inline utilities. |
-| `sm` | `34` | `10` | `6` | `13/18 medium` | `16` | Compact extension surfaces and tight toolbars. |
-| `md` | `40` | `14` | `8` | `13/18 medium` | `16` | Default product button. |
-| `lg` | `44` | `18` | `8` | `14/20 medium` | `18` | High-emphasis primary action or landing CTA. |
+| Size | Height | Horizontal padding | Gap | Font           | Icon | Usage                                          |
+| ---- | ------ | ------------------ | --- | -------------- | ---- | ---------------------------------------------- |
+| `xs` | `28`   | `8`                | `4` | `12/16 medium` | `14` | Dense tables, tiny inline utilities.           |
+| `sm` | `34`   | `10`               | `6` | `13/18 medium` | `16` | Compact extension surfaces and tight toolbars. |
+| `md` | `40`   | `14`               | `8` | `13/18 medium` | `16` | Default product button.                        |
+| `lg` | `44`   | `18`               | `8` | `14/20 medium` | `18` | High-emphasis primary action or landing CTA.   |
 
 Icon-only sizes:
 
-| Size | Box | Icon | Radius |
-| --- | --- | --- | --- |
+| Size | Box       | Icon | Radius      |
+| ---- | --------- | ---- | ----------- |
 | `xs` | `28 x 28` | `14` | `6` or pill |
 | `sm` | `34 x 34` | `16` | `8` or pill |
 | `md` | `40 x 40` | `16` | `8` or pill |
@@ -489,10 +489,10 @@ options. It is not a replacement for top-level navigation.
 
 Specs:
 
-| Size | Height | Trigger padding | Font | Gap |
-| --- | --- | --- | --- | --- |
-| `sm` | `32` | `8` | `12/16 medium` | `2` |
-| `md` | `38` | `10-12` | `13/18 medium` | `2` |
+| Size | Height | Trigger padding | Font           | Gap |
+| ---- | ------ | --------------- | -------------- | --- |
+| `sm` | `32`   | `8`             | `12/16 medium` | `2` |
+| `md` | `38`   | `10-12`         | `13/18 medium` | `2` |
 
 Rules:
 
@@ -550,11 +550,11 @@ Rules:
 
 Sizes:
 
-| Size | Height | Padding | Font | Radius |
-| --- | --- | --- | --- | --- |
-| `sm` | `34` | `0 10` | `13/18 regular` | `6-8` |
-| `md` | `40` | `0 12` | `13/20 regular` | `8` |
-| `lg` | `44` | `0 14` | `14/20 regular` | `8` |
+| Size | Height | Padding | Font            | Radius |
+| ---- | ------ | ------- | --------------- | ------ |
+| `sm` | `34`   | `0 10`  | `13/18 regular` | `6-8`  |
+| `md` | `40`   | `0 12`  | `13/20 regular` | `8`    |
+| `lg` | `44`   | `0 14`  | `14/20 regular` | `8`    |
 
 Rules:
 
@@ -604,11 +604,11 @@ Rules:
 
 Specs:
 
-| Primitive | Control size | Label gap | Usage |
-| --- | --- | --- | --- |
-| Checkbox | `16-18` | `8` | Independent binary setting. |
-| Radio | `16-18` | `8` | Mutually exclusive choice inside a fieldset. |
-| Switch | `36 x 20` compact, `40 x 22` comfortable | `8-10` | Persistent on/off setting. |
+| Primitive | Control size                             | Label gap | Usage                                        |
+| --------- | ---------------------------------------- | --------- | -------------------------------------------- |
+| Checkbox  | `16-18`                                  | `8`       | Independent binary setting.                  |
+| Radio     | `16-18`                                  | `8`       | Mutually exclusive choice inside a fieldset. |
+| Switch    | `36 x 20` compact, `40 x 22` comfortable | `8-10`    | Persistent on/off setting.                   |
 
 Rules:
 
@@ -626,20 +626,20 @@ buttons.
 
 Tones:
 
-| Tone | Meaning |
-| --- | --- |
-| `neutral` | Idle, unknown, checking, metadata. |
+| Tone      | Meaning                                  |
+| --------- | ---------------------------------------- |
+| `neutral` | Idle, unknown, checking, metadata.       |
 | `success` | Ready, running, completed, saved, valid. |
-| `warning` | Paused, stopped, blocked, attention. |
-| `danger` | Failed, error, invalid. |
-| `accent` | Selected filter or active target slot. |
+| `warning` | Paused, stopped, blocked, attention.     |
+| `danger`  | Failed, error, invalid.                  |
+| `accent`  | Selected filter or active target slot.   |
 
 Sizes:
 
-| Size | Height | Padding | Gap | Font | Icon |
-| --- | --- | --- | --- | --- | --- |
-| `sm` | `20` | `6` | `4` | `12/16 regular` | `12` |
-| `md` | `24` | `8` | `5` | `12/16 medium` | `14` |
+| Size | Height | Padding | Gap | Font            | Icon |
+| ---- | ------ | ------- | --- | --------------- | ---- |
+| `sm` | `20`   | `6`     | `4` | `12/16 regular` | `12` |
+| `md` | `24`   | `8`     | `5` | `12/16 medium`  | `14` |
 
 Rules:
 
@@ -967,10 +967,10 @@ Shows:
 
 Collapsed specs:
 
-| Density | Min height | Padding | Gap | Icon/order box |
-| --- | --- | --- | --- | --- |
-| `compact` | `44-52` | `10-12` | `8-10` | `28` |
-| `comfortable` | `56-64` | `12-14` | `10-12` | `32` |
+| Density       | Min height | Padding | Gap     | Icon/order box |
+| ------------- | ---------- | ------- | ------- | -------------- |
+| `compact`     | `44-52`    | `10-12` | `8-10`  | `28`           |
+| `comfortable` | `56-64`    | `12-14` | `10-12` | `32`           |
 
 Expanded selected specs:
 

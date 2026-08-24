@@ -1,11 +1,11 @@
-import '../../shared/styles.css'
-import { testId } from '../../../src/index.js'
-import { byId } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import { testId } from '../../../src/index.js';
+import { byId } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
 const stageHtml = `
   <div class="browser-frame search-surface" data-testid="search-surface">
@@ -59,7 +59,7 @@ const stageHtml = `
       </aside>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'Web search',
@@ -72,93 +72,89 @@ mountTaskExample({
   run: runSearchScenario,
   typeFirstField: typeSearchQuery,
   clickPrimary: clickSearchPrimary,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  const searchForm = byId<HTMLFormElement>('search-form')
-  const queryInput = byId<HTMLInputElement>('search-query')
-  const submitButton = byId<HTMLButtonElement>('search-submit')
-  const resultButton = byId<HTMLButtonElement>('search-result-docs')
+  const searchForm = byId<HTMLFormElement>('search-form');
+  const queryInput = byId<HTMLInputElement>('search-query');
+  const submitButton = byId<HTMLButtonElement>('search-submit');
+  const resultButton = byId<HTMLButtonElement>('search-result-docs');
 
   searchForm.addEventListener('submit', (event) => {
-    event.preventDefault()
-    runSearch()
-  })
-  resultButton.addEventListener('click', openSearchResult)
+    event.preventDefault();
+    runSearch();
+  });
+  resultButton.addEventListener('click', openSearchResult);
 
-  context.bindDomEvents('searchInput', queryInput)
-  context.bindDomEvents('searchButton', submitButton)
-  context.bindDomEvents('searchResult', resultButton)
+  context.bindDomEvents('searchInput', queryInput);
+  context.bindDomEvents('searchButton', submitButton);
+  context.bindDomEvents('searchResult', resultButton);
 }
 
 async function runSearchScenario(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  await typeSearchQuery(context)
-  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 })
+  await typeSearchQuery(context);
+  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',
-  })
-  await actorble.click(testId('search-result-docs'), { pressDwell: 180, timeout: 1500 })
+  });
+  await actorble.click(testId('search-result-docs'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-preview')?.dataset.state === 'open',
-  })
+  });
 }
 
 async function typeSearchQuery(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
   await actorble.moveTo(testId('search-query'), {
     motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
-  })
-  await actorble.typeInto(
-    testId('search-query'),
-    'browser automation event dispatch',
-    {
-      ...clickFocusTyping(60, 5000),
-    },
-  )
+  });
+  await actorble.typeInto(testId('search-query'), 'browser automation event dispatch', {
+    ...clickFocusTyping(60, 5000),
+  });
 }
 
 async function clickSearchPrimary(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  context.ensureInputValue('search-query', 'browser automation event dispatch')
-  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 })
+  context.ensureInputValue('search-query', 'browser automation event dispatch');
+  await actorble.click(testId('search-submit'), { pressDwell: 180, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('search-results')?.dataset.state === 'ready',
-  })
+  });
 }
 
 function runSearch(): void {
-  const query = byId<HTMLInputElement>('search-query').value.trim() || 'browser automation'
-  const results = byId<HTMLElement>('search-results')
-  const count = byId<HTMLElement>('search-count')
-  const resultButton = byId<HTMLButtonElement>('search-result-docs')
-  const secondaryResult = document.querySelector<HTMLButtonElement>('.secondary-result')
+  const query = byId<HTMLInputElement>('search-query').value.trim() || 'browser automation';
+  const results = byId<HTMLElement>('search-results');
+  const count = byId<HTMLElement>('search-count');
+  const resultButton = byId<HTMLButtonElement>('search-result-docs');
+  const secondaryResult = document.querySelector<HTMLButtonElement>('.secondary-result');
 
-  results.dataset.state = 'ready'
-  count.textContent = `Top results for "${query}"`
-  resultButton.hidden = false
+  results.dataset.state = 'ready';
+  count.textContent = `Top results for "${query}"`;
+  resultButton.hidden = false;
 
   if (secondaryResult) {
-    secondaryResult.hidden = false
+    secondaryResult.hidden = false;
   }
 }
 
 function openSearchResult(): void {
-  const preview = byId<HTMLElement>('search-preview')
+  const preview = byId<HTMLElement>('search-preview');
 
-  preview.dataset.state = 'open'
+  preview.dataset.state = 'open';
   preview.innerHTML = `
     <p class="eyebrow">Preview</p>
     <h3>Actorble browser automation API</h3>
     <div class="outcome-strip" data-state="open">
       Opened result about target resolution and DOM event dispatch
     </div>
-  `
+  `;
 }

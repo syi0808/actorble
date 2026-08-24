@@ -1,6 +1,6 @@
-export const ACTORBLE_MARK_VIEW_BOX = '0 0 64 64'
-export const ACTORBLE_MOTION_VIEW_BOX = '0 0 760 520'
-export const ACTORBLE_WORDMARK_VIEW_BOX = '0 0 192 64'
+export const ACTORBLE_MARK_VIEW_BOX = '0 0 64 64';
+export const ACTORBLE_MOTION_VIEW_BOX = '0 0 760 520';
+export const ACTORBLE_WORDMARK_VIEW_BOX = '0 0 192 64';
 
 export const ACTORBLE_COLORS = Object.freeze({
   amber: '#F2B84B',
@@ -9,19 +9,15 @@ export const ACTORBLE_COLORS = Object.freeze({
   mint: '#33E6C2',
   tile: '#101418',
   wordmark: '#F7FBFF',
-})
+});
 
-const MARK_PRIMARY_PATH =
-  'M15.1 45.7C20.2 28.5 30.9 15.1 39.7 19.9C46.9 23.8 47.7 36.8 50.9 44.2'
+const MARK_PRIMARY_PATH = 'M15.1 45.7C20.2 28.5 30.9 15.1 39.7 19.9C46.9 23.8 47.7 36.8 50.9 44.2';
 
-const MARK_SECONDARY_PATH =
-  'M13.8 30.8C23 38.2 34 41.1 43.3 36.4C47.6 34.2 49.2 28.8 51.6 23.8'
+const MARK_SECONDARY_PATH = 'M13.8 30.8C23 38.2 34 41.1 43.3 36.4C47.6 34.2 49.2 28.8 51.6 23.8';
 
-const MOTION_PRIMARY_PATH =
-  'M174 416C234 216 358 60 460 118C544 166 552 320 590 408'
+const MOTION_PRIMARY_PATH = 'M174 416C234 216 358 60 460 118C544 166 552 320 590 408';
 
-const MOTION_SECONDARY_PATH =
-  'M162 258C272 346 402 380 512 322C562 296 584 234 606 176'
+const MOTION_SECONDARY_PATH = 'M162 258C272 346 402 380 512 322C562 296 584 234 606 176';
 
 const MARK_ELEMENTS = Object.freeze([
   {
@@ -74,7 +70,7 @@ const MARK_ELEMENTS = Object.freeze([
       'stroke-width': '4.8',
     },
   },
-])
+]);
 
 const MOTION_ELEMENTS = Object.freeze([
   {
@@ -125,7 +121,7 @@ const MOTION_ELEMENTS = Object.freeze([
       'stroke-width': '9',
     },
   },
-])
+]);
 
 export const ACTORBLE_WORDMARK_LETTER_BOUNDS = Object.freeze([
   { letter: 'c', minX: 56, maxX: 74 },
@@ -135,7 +131,7 @@ export const ACTORBLE_WORDMARK_LETTER_BOUNDS = Object.freeze([
   { letter: 'b', minX: 130, maxX: 151 },
   { letter: 'l', minX: 154, maxX: 159 },
   { letter: 'e', minX: 162, maxX: 183 },
-])
+]);
 
 const WORDMARK_LETTER_ELEMENTS = Object.freeze([
   createWordmarkLetter(
@@ -160,42 +156,39 @@ const WORDMARK_LETTER_ELEMENTS = Object.freeze([
     'M130 18.8H135.2V27.1C136.8 25.3 139.1 24.3 141.8 24.3C147.4 24.3 151 28.5 151 34.5C151 40.5 147.4 44.7 141.8 44.7C139 44.7 136.6 43.6 135 41.6V44.2H130V18.8ZM140.5 29C137.4 29 135.2 31.2 135.2 34.5C135.2 37.8 137.4 40 140.5 40C143.6 40 145.8 37.8 145.8 34.5C145.8 31.2 143.6 29 140.5 29Z',
     { 'fill-rule': 'evenodd' },
   ),
-  createWordmarkLetter(
-    ACTORBLE_WORDMARK_LETTER_BOUNDS[5],
-    'M154 18.8H159V44.2H154V18.8Z',
-  ),
+  createWordmarkLetter(ACTORBLE_WORDMARK_LETTER_BOUNDS[5], 'M154 18.8H159V44.2H154V18.8Z'),
   createWordmarkLetter(
     ACTORBLE_WORDMARK_LETTER_BOUNDS[6],
     'M182.5 38.1C180.9 42.3 177 44.7 172 44.7C166 44.7 162 40.5 162 34.5C162 28.5 166.2 24.3 171.9 24.3C177.6 24.3 181.6 28.3 181.6 34.1C181.6 34.9 181.5 35.7 181.3 36.4H167.1C167.7 39 169.5 40.3 172.3 40.3C174.8 40.3 176.6 39.4 177.7 37.4L182.5 38.1ZM171.9 28.5C169.4 28.5 167.6 29.9 167.1 32.4H176.7C176.2 29.9 174.5 28.5 171.9 28.5Z',
     { 'fill-rule': 'evenodd' },
   ),
-])
+]);
 
 export function renderActorbleSymbolContent(options = {}) {
-  const { classNames = false, variant = 'mark' } = options
-  const elements = variant === 'motion' ? MOTION_ELEMENTS : MARK_ELEMENTS
+  const { classNames = false, variant = 'mark' } = options;
+  const elements = variant === 'motion' ? MOTION_ELEMENTS : MARK_ELEMENTS;
 
-  return elements.map((element) => renderElement(element, classNames)).join('\n  ')
+  return elements.map((element) => renderElement(element, classNames)).join('\n  ');
 }
 
 export function renderActorbleWordmarkContent(options = {}) {
-  const { classNames = false, letterFill = ACTORBLE_COLORS.wordmark } = options
+  const { classNames = false, letterFill = ACTORBLE_COLORS.wordmark } = options;
   const symbol = renderGroup({
     attrs: {
       transform: 'translate(0 0)',
     },
     children: renderActorbleSymbolContent({ classNames }),
-  })
+  });
   const letters = renderGroup({
     attrs: {
       fill: letterFill,
     },
-    children: WORDMARK_LETTER_ELEMENTS.map((element) =>
-      renderElement(element, classNames),
-    ).join('\n  '),
-  })
+    children: WORDMARK_LETTER_ELEMENTS.map((element) => renderElement(element, classNames)).join(
+      '\n  ',
+    ),
+  });
 
-  return `${symbol}\n  ${letters}`
+  return `${symbol}\n  ${letters}`;
 }
 
 export function renderActorbleLogoSvg() {
@@ -203,7 +196,7 @@ export function renderActorbleLogoSvg() {
     ariaLabel: 'Actorble',
     content: renderActorbleSymbolContent(),
     viewBox: ACTORBLE_MARK_VIEW_BOX,
-  })
+  });
 }
 
 export function renderActorbleWordmarkSvg() {
@@ -211,7 +204,7 @@ export function renderActorbleWordmarkSvg() {
     ariaLabel: 'Actorble',
     content: renderActorbleWordmarkContent({ classNames: true }),
     viewBox: ACTORBLE_WORDMARK_VIEW_BOX,
-  })
+  });
 }
 
 export function renderActorbleWordmarkLightSvg() {
@@ -222,7 +215,7 @@ export function renderActorbleWordmarkLightSvg() {
       letterFill: ACTORBLE_COLORS.ink,
     }),
     viewBox: ACTORBLE_WORDMARK_VIEW_BOX,
-  })
+  });
 }
 
 export function renderActorbleFaviconSvg() {
@@ -234,13 +227,13 @@ export function renderActorbleFaviconSvg() {
       rx: '14',
       width: '64',
     },
-  })
+  });
 
   return renderSvg({
     ariaLabel: 'Actorble',
     content: `${tile}\n  ${renderActorbleSymbolContent()}`,
     viewBox: ACTORBLE_MARK_VIEW_BOX,
-  })
+  });
 }
 
 function renderSvg({ ariaLabel, content, viewBox }) {
@@ -249,32 +242,30 @@ function renderSvg({ ariaLabel, content, viewBox }) {
     `  ${content}`,
     '</svg>',
     '',
-  ].join('\n')
+  ].join('\n');
 }
 
 function renderElement(element, classNames = false) {
-  const attrs = classNames
-    ? { class: element.className, ...element.attrs }
-    : element.attrs
+  const attrs = classNames ? { class: element.className, ...element.attrs } : element.attrs;
   const renderedAttrs = Object.entries(attrs)
     .filter(([, value]) => value !== undefined)
     .map(([name, value]) => `${name}="${escapeAttribute(value)}"`)
-    .join(' ')
+    .join(' ');
 
   if (element.children !== undefined) {
-    return `<${element.tagName} ${renderedAttrs}>${escapeText(element.children)}</${element.tagName}>`
+    return `<${element.tagName} ${renderedAttrs}>${escapeText(element.children)}</${element.tagName}>`;
   }
 
-  return `<${element.tagName} ${renderedAttrs}/>`
+  return `<${element.tagName} ${renderedAttrs}/>`;
 }
 
 function renderGroup({ attrs, children }) {
   const renderedAttrs = Object.entries(attrs)
     .filter(([, value]) => value !== undefined)
     .map(([name, value]) => `${name}="${escapeAttribute(value)}"`)
-    .join(' ')
+    .join(' ');
 
-  return `<g ${renderedAttrs}>\n  ${children}\n  </g>`
+  return `<g ${renderedAttrs}>\n  ${children}\n  </g>`;
 }
 
 function createWordmarkLetter(bounds, d, attrs = {}) {
@@ -288,7 +279,7 @@ function createWordmarkLetter(bounds, d, attrs = {}) {
       d,
       ...attrs,
     },
-  }
+  };
 }
 
 function escapeAttribute(value) {
@@ -296,12 +287,9 @@ function escapeAttribute(value) {
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+    .replaceAll('>', '&gt;');
 }
 
 function escapeText(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

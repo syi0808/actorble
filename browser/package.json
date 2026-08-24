@@ -2,7 +2,23 @@
   "name": "@actorble/browser",
   "version": "0.0.1",
   "description": "Browser implementation of Actorble.",
-  "type": "module",
+  "keywords": [
+    "browser-automation",
+    "interaction",
+    "scenario",
+    "ui-testing"
+  ],
+  "homepage": "https://github.com/syi0808/actorble#readme",
+  "bugs": {
+    "url": "https://github.com/syi0808/actorble/issues"
+  },
+  "license": "Apache-2.0 OR MIT",
+  "author": "Yein Sung",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syi0808/actorble.git",
+    "directory": "browser"
+  },
   "files": [
     "dist",
     "src",
@@ -10,6 +26,7 @@
     "LICENSE-APACHE",
     "LICENSE-MIT"
   ],
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -19,15 +36,21 @@
       "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "bench": "vitest bench --run --config vitest.bench.config.mjs",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsdown",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "example:build": "vite build --config example/vite.config.ts",
     "example:dev": "vite --config example/vite.config.ts --host 127.0.0.1",
     "example:preview": "vite preview --config example/vite.config.ts --host 127.0.0.1",
     "example:smoke": "node scripts/example-smoke.mjs",
     "example:typecheck": "tsc -p example/tsconfig.json --noEmit",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
     "prepack": "pnpm run clean && pnpm run build",
     "prepublishOnly": "pnpm test && pnpm run typecheck",
     "release:check": "pnpm test && pnpm run typecheck && pnpm pack --dry-run",
@@ -35,41 +58,18 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": [
-    "browser-automation",
-    "interaction",
-    "scenario",
-    "ui-testing"
-  ],
-  "author": "Yein Sung",
-  "license": "Apache-2.0 OR MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/syi0808/actorble.git",
-    "directory": "browser"
-  },
-  "bugs": {
-    "url": "https://github.com/syi0808/actorble/issues"
-  },
-  "homepage": "https://github.com/syi0808/actorble#readme",
-  "publishConfig": {
-    "access": "public"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.5.3",
-      "onFail": "download"
-    }
+  "dependencies": {
+    "scroller2": "0.0.1"
   },
   "devDependencies": {
     "jsdom": "^29.1.1",
+    "oxfmt": "0.62.0",
+    "oxlint": "1.77.0",
     "playwright": "^1.60.0",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
-  "dependencies": {
-    "scroller2": "0.0.1"
-  }
+  "packageManager": "pnpm@11.23.0"
 }

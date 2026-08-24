@@ -8,34 +8,34 @@ sidebar:
 ## Click a target
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble()
+const actorble = createActorble();
 
-await actorble.click(css('#save'))
+await actorble.click(css('#save'));
 
-actorble.destroy()
+actorble.destroy();
 ```
 
 ## Type into an input
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble({ feedback: 'cursor' })
+const actorble = createActorble({ feedback: 'cursor' });
 
-await actorble.typeInto(css('#message'), 'Hello from Actorble')
+await actorble.typeInto(css('#message'), 'Hello from Actorble');
 
-console.log(actorble.getFidelity())
-actorble.destroy()
+console.log(actorble.getFidelity());
+actorble.destroy();
 ```
 
 ## Run a scenario
 
 ```ts
-import { createActorble, css } from '@actorble/browser'
+import { createActorble, css } from '@actorble/browser';
 
-const actorble = createActorble({ feedback: 'debug' })
+const actorble = createActorble({ feedback: 'debug' });
 
 await actorble.run({
   steps: [
@@ -43,17 +43,17 @@ await actorble.run({
     { action: 'typeInto', target: css('#project-name'), input: 'Orbit' },
     { action: 'click', target: css('#create-project') },
   ],
-})
+});
 
-console.log(actorble.getTrace())
-actorble.destroy()
+console.log(actorble.getTrace());
+actorble.destroy();
 ```
 
 ## Inspect execution
 
 ```ts
-const trace = actorble.getTrace()
-const failedSpans = trace.spans.filter((span) => span.status === 'error')
+const trace = actorble.getTrace();
+const failedSpans = trace.spans.filter((span) => span.status === 'error');
 ```
 
 Trace data is intentionally available through the facade so failed actions can be reported with concrete execution context.

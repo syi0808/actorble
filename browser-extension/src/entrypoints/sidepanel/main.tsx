@@ -8,13 +8,9 @@ import {
   type ReactElement,
   type RefObject,
   type TextareaHTMLAttributes,
-} from 'react'
-import { createRoot } from 'react-dom/client'
-import {
-  Collapsible,
-  Select as RadixSelect,
-  Tabs,
-} from 'radix-ui'
+} from 'react';
+import { createRoot } from 'react-dom/client';
+import { Collapsible, Select as RadixSelect, Tabs } from 'radix-ui';
 import {
   closestCenter,
   DndContext,
@@ -23,25 +19,23 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from '@dnd-kit/core'
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { browser } from 'wxt/browser'
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { browser } from 'wxt/browser';
 import {
   autoApplyTargetFromPreview,
   createLocatorPreviewer,
   type LocatorPreviewCandidateView,
-} from '../../inspector/locator-preview.js'
-import {
-  createTargetPicker,
-} from '../../inspector/target-picker.js'
-import { createWxtScenarioStorageRepository } from '../../storage/index.js'
+} from '../../inspector/locator-preview.js';
+import { createTargetPicker } from '../../inspector/target-picker.js';
+import { createWxtScenarioStorageRepository } from '../../storage/index.js';
 import {
   Button,
   BrandWordmark,
@@ -52,17 +46,17 @@ import {
   Textarea,
   UiProvider,
   type ButtonVariant,
-} from '../../ui/components.js'
-import { CommandIcon, type CommandIconName } from '../../ui/icons.js'
+} from '../../ui/components.js';
+import { CommandIcon, type CommandIconName } from '../../ui/icons.js';
 import {
   actionHint,
   actionIcon,
   capitalize,
   downloadFile,
   formatActionLabel,
-} from '../../ui/product-format.js'
-import type { BuilderStepActionFamily } from '../../builder/index.js'
-import { sidepanelLaunchParamsFromUrl } from './launch-params.js'
+} from '../../ui/product-format.js';
+import type { BuilderStepActionFamily } from '../../builder/index.js';
+import { sidepanelLaunchParamsFromUrl } from './launch-params.js';
 import {
   createSidepanelScenarioEditor,
   createSidepanelScenarioEditorView,
@@ -74,7 +68,7 @@ import {
   type SidepanelScenarioEditorView,
   type SidepanelStepRowView,
   type SidepanelTargetSlotRowView,
-} from './scenario-editor.js'
+} from './scenario-editor.js';
 import {
   createSidepanelRecompositionViewModel,
   type SidepanelBuilderWorkbenchView,
@@ -83,268 +77,296 @@ import {
   type SidepanelDebugDrawerViewModel,
   type SidepanelScenarioShellView,
   type SidepanelTargetAssignmentView,
-} from './recomposition-view-model.js'
+} from './recomposition-view-model.js';
 
-const scenarioRepository = createWxtScenarioStorageRepository()
-const launchParams = sidepanelLaunchParamsFromUrl(window.location.href)
-const targetTabId = launchParams.targetTabId
-const editor = createSidepanelScenarioEditor({
-  listScenarios() {
-    return scenarioRepository.list()
+const scenarioRepository = createWxtScenarioStorageRepository();
+const launchParams = sidepanelLaunchParamsFromUrl(window.location.href);
+const targetTabId = launchParams.targetTabId;
+const editor = createSidepanelScenarioEditor(
+  {
+    listScenarios() {
+      return scenarioRepository.list();
+    },
+    saveScenario(input) {
+      return scenarioRepository.save(input);
+    },
+    updateScenario(id, update) {
+      return scenarioRepository.update(id, update);
+    },
+    importScenarioJson(jsonText) {
+      return scenarioRepository.importJson(jsonText);
+    },
+    exportScenarioJson(id) {
+      return scenarioRepository.exportJson(id);
+    },
+    async getActiveTab() {
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      return activeTab ?? null;
+    },
+    async getTab(tabId) {
+      return await browser.tabs.get(tabId);
+    },
+    sendMessage(message) {
+      return browser.runtime.sendMessage(message);
+    },
   },
-  saveScenario(input) {
-    return scenarioRepository.save(input)
+  {
+    targetTabId,
   },
-  updateScenario(id, update) {
-    return scenarioRepository.update(id, update)
+);
+const targetPicker = createTargetPicker(
+  {
+    async getActiveTab() {
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      return activeTab ?? null;
+    },
+    async getTab(tabId) {
+      return await browser.tabs.get(tabId);
+    },
+    sendMessage(message) {
+      return browser.runtime.sendMessage(message);
+    },
   },
-  importScenarioJson(jsonText) {
-    return scenarioRepository.importJson(jsonText)
+  {
+    targetTabId,
   },
-  exportScenarioJson(id) {
-    return scenarioRepository.exportJson(id)
+);
+const locatorPreviewer = createLocatorPreviewer(
+  {
+    async getActiveTab() {
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      return activeTab ?? null;
+    },
+    async getTab(tabId) {
+      return await browser.tabs.get(tabId);
+    },
+    sendMessage(message) {
+      return browser.runtime.sendMessage(message);
+    },
   },
-  async getActiveTab() {
-    const [activeTab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    })
-    return activeTab ?? null
+  {
+    targetTabId,
   },
-  async getTab(tabId) {
-    return await browser.tabs.get(tabId)
-  },
-  sendMessage(message) {
-    return browser.runtime.sendMessage(message)
-  },
-}, {
-  targetTabId,
-})
-const targetPicker = createTargetPicker({
-  async getActiveTab() {
-    const [activeTab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    })
-    return activeTab ?? null
-  },
-  async getTab(tabId) {
-    return await browser.tabs.get(tabId)
-  },
-  sendMessage(message) {
-    return browser.runtime.sendMessage(message)
-  },
-}, {
-  targetTabId,
-})
-const locatorPreviewer = createLocatorPreviewer({
-  async getActiveTab() {
-    const [activeTab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    })
-    return activeTab ?? null
-  },
-  async getTab(tabId) {
-    return await browser.tabs.get(tabId)
-  },
-  sendMessage(message) {
-    return browser.runtime.sendMessage(message)
-  },
-}, {
-  targetTabId,
-})
+);
 
-type ExportFormat = 'json' | 'typescript'
+type ExportFormat = 'json' | 'typescript';
 
 type PendingWorkflowStep = Readonly<{
-  id: 'pending-step'
-}>
+  id: 'pending-step';
+}>;
 
 function SidepanelApp(): ReactElement {
-  const [, forceRender] = useState(0)
-  const [debugDrawerState, setDebugDrawerState] = useState<SidepanelDebugDrawerState>({})
-  const [pendingStep, setPendingStep] = useState<PendingWorkflowStep | undefined>()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const snapshot = editor.getSnapshot()
-  const editorView = createSidepanelScenarioEditorView(snapshot)
+  const [, forceRender] = useState(0);
+  const [debugDrawerState, setDebugDrawerState] = useState<SidepanelDebugDrawerState>({});
+  const [pendingStep, setPendingStep] = useState<PendingWorkflowStep | undefined>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const snapshot = editor.getSnapshot();
+  const editorView = createSidepanelScenarioEditorView(snapshot);
   const recomposedView = createSidepanelRecompositionViewModel({
     editor: snapshot,
     targetPicker: targetPicker.getSnapshot(),
     locatorPreview: locatorPreviewer.getSnapshot(),
     debugDrawer: debugDrawerState,
-  })
+  });
   const defaultActionFamily = useMemo(
-    () => defaultWorkflowActionFamily(
-      editorView.actionFamilyOptions,
-      editorView.selectedStepFields.actionFamily,
-    ),
+    () =>
+      defaultWorkflowActionFamily(
+        editorView.actionFamilyOptions,
+        editorView.selectedStepFields.actionFamily,
+      ),
     [editorView.actionFamilyOptions, editorView.selectedStepFields.actionFamily],
-  )
+  );
   const refreshView = useCallback(() => {
-    forceRender((version) => version + 1)
-  }, [])
-  const runAction = useCallback(async <TResult,>(
-    action: () => Promise<TResult>,
-  ): Promise<TResult> => {
-    const operation = action()
-    refreshView()
-    try {
-      return await operation
-    } finally {
-      refreshView()
-    }
-  }, [refreshView])
-  const runTargetPickerAction = useCallback(async (
-    action: () => Promise<unknown>,
-  ): Promise<void> => {
-    const operation = action()
-    refreshView()
-    await operation
-    refreshView()
-  }, [refreshView])
-  const runLocatorPreviewAction = useCallback(async (
-    action: () => Promise<unknown>,
-  ): Promise<void> => {
-    const operation = action()
-    refreshView()
-    await operation
-    const preview = locatorPreviewer.getSnapshot()
-    if (preview.status === 'failed' || preview.issues.length > 0) {
-      setDebugDrawerState((current) => ({
-        ...current,
-        activeView: 'locator',
-      }))
-    }
-    refreshView()
-  }, [refreshView])
-  const startTargetAssignment = useCallback(async (slotId?: string): Promise<void> => {
-    if (slotId !== undefined) {
-      const selected = editor.selectTargetSlot(slotId)
-      if (!selected.ok) {
-        refreshView()
-        return
+    forceRender((version) => version + 1);
+  }, []);
+  const runAction = useCallback(
+    async <TResult,>(action: () => Promise<TResult>): Promise<TResult> => {
+      const operation = action();
+      refreshView();
+      try {
+        return await operation;
+      } finally {
+        refreshView();
       }
-    }
-
-    const currentSnapshot = editor.getSnapshot()
-    const targetSlot = currentSnapshot.selectedTargetSlot
-    if (targetSlot === undefined) {
-      refreshView()
-      return
-    }
-
-    locatorPreviewer.clear()
-    await runTargetPickerAction(() => targetPicker.start({
-      scenarioId: currentSnapshot.selectedScenarioId,
-      targetSlot,
-    }))
-  }, [refreshView, runTargetPickerAction])
-  const importSelectedFile = useCallback(async (file: File | undefined): Promise<void> => {
-    if (file === undefined) {
-      return
-    }
-
-    try {
-      await runAction(async () => {
-        await editor.importJson(await file.text())
-      })
-    } finally {
-      if (fileInputRef.current !== null) {
-        fileInputRef.current.value = ''
+    },
+    [refreshView],
+  );
+  const runTargetPickerAction = useCallback(
+    async (action: () => Promise<unknown>): Promise<void> => {
+      const operation = action();
+      refreshView();
+      await operation;
+      refreshView();
+    },
+    [refreshView],
+  );
+  const runLocatorPreviewAction = useCallback(
+    async (action: () => Promise<unknown>): Promise<void> => {
+      const operation = action();
+      refreshView();
+      await operation;
+      const preview = locatorPreviewer.getSnapshot();
+      if (preview.status === 'failed' || preview.issues.length > 0) {
+        setDebugDrawerState((current) => ({
+          ...current,
+          activeView: 'locator',
+        }));
       }
-    }
-  }, [runAction])
-  const exportSelectedScenario = useCallback(async (format: ExportFormat): Promise<void> => {
-    if (format === 'typescript') {
-      const exported = editor.exportSelectedCode()
+      refreshView();
+    },
+    [refreshView],
+  );
+  const startTargetAssignment = useCallback(
+    async (slotId?: string): Promise<void> => {
+      if (slotId !== undefined) {
+        const selected = editor.selectTargetSlot(slotId);
+        if (!selected.ok) {
+          refreshView();
+          return;
+        }
+      }
+
+      const currentSnapshot = editor.getSnapshot();
+      const targetSlot = currentSnapshot.selectedTargetSlot;
+      if (targetSlot === undefined) {
+        refreshView();
+        return;
+      }
+
+      locatorPreviewer.clear();
+      await runTargetPickerAction(() =>
+        targetPicker.start({
+          scenarioId: currentSnapshot.selectedScenarioId,
+          targetSlot,
+        }),
+      );
+    },
+    [refreshView, runTargetPickerAction],
+  );
+  const importSelectedFile = useCallback(
+    async (file: File | undefined): Promise<void> => {
+      if (file === undefined) {
+        return;
+      }
+
+      try {
+        await runAction(async () => {
+          await editor.importJson(await file.text());
+        });
+      } finally {
+        if (fileInputRef.current !== null) {
+          fileInputRef.current.value = '';
+        }
+      }
+    },
+    [runAction],
+  );
+  const exportSelectedScenario = useCallback(
+    async (format: ExportFormat): Promise<void> => {
+      if (format === 'typescript') {
+        const exported = editor.exportSelectedCode();
+        if (exported.ok) {
+          downloadFile(exported.value.filename, exported.value.source, 'text/typescript');
+        }
+        refreshView();
+        return;
+      }
+
+      const operation = editor.exportSelected();
+      refreshView();
+      const exported = await operation;
       if (exported.ok) {
-        downloadFile(exported.value.filename, exported.value.source, 'text/typescript')
+        downloadFile(exported.value.filename, exported.value.jsonText, 'application/json');
       }
-      refreshView()
-      return
-    }
-
-    const operation = editor.exportSelected()
-    refreshView()
-    const exported = await operation
-    if (exported.ok) {
-      downloadFile(exported.value.filename, exported.value.jsonText, 'application/json')
-    }
-    refreshView()
-  }, [refreshView])
+      refreshView();
+    },
+    [refreshView],
+  );
 
   useEffect(() => {
     const listener = (message: unknown): void => {
-      const editorHandled = editor.ingestMessage(message)
-      const pickerHandled = targetPicker.ingestMessage(message)
+      const editorHandled = editor.ingestMessage(message);
+      const pickerHandled = targetPicker.ingestMessage(message);
 
       if (editorHandled && isFailedRuntimeStatusMessage(message)) {
         setDebugDrawerState((current) => ({
           ...current,
           activeView: 'failure',
-        }))
+        }));
       }
 
       if (editorHandled || pickerHandled) {
-        refreshView()
+        refreshView();
       }
 
       if (!pickerHandled) {
-        return
+        return;
       }
 
-      const selected = targetPicker.getSnapshot().selected
+      const selected = targetPicker.getSnapshot().selected;
       if (selected?.targetSlot === undefined) {
-        return
+        return;
       }
 
       void runLocatorPreviewAction(async () => {
         const preview = await locatorPreviewer.previewTarget(selected.target, {
           scenarioId: selected.scenarioId ?? editor.getSnapshot().selectedScenarioId,
           targetSlot: selected.targetSlot,
-        })
+        });
         if (!preview.ok) {
-          return
+          return;
         }
 
-        const autoApplied = autoApplyTargetFromPreview(locatorPreviewer.getSnapshot())
+        const autoApplied = autoApplyTargetFromPreview(locatorPreviewer.getSnapshot());
         if (!autoApplied.ok) {
-          locatorPreviewer.reportIssue(autoApplied.issues[0] ?? {
-            code: 'inspector_error',
-            message: 'Selected element could not be applied to the target slot.',
-          })
-          return
+          locatorPreviewer.reportIssue(
+            autoApplied.issues[0] ?? {
+              code: 'inspector_error',
+              message: 'Selected element could not be applied to the target slot.',
+            },
+          );
+          return;
         }
 
         const applied = editor.applyTargetToTargetSlot(
           autoApplied.value.targetSlot,
           autoApplied.value.target,
-        )
+        );
         if (!applied.ok) {
-          locatorPreviewer.reportIssue(applied.issues[0] ?? {
-            code: 'invalid_document',
-            message: 'Selected element could not be applied to the target slot.',
-          })
+          locatorPreviewer.reportIssue(
+            applied.issues[0] ?? {
+              code: 'invalid_document',
+              message: 'Selected element could not be applied to the target slot.',
+            },
+          );
         }
-      })
-    }
+      });
+    };
 
-    browser.runtime.onMessage.addListener(listener)
+    browser.runtime.onMessage.addListener(listener);
     void runAction(async () => {
-      await editor.refresh()
-      await editor.refreshTargetTabState()
-      await editor.loadRecordedDraft(launchParams.recordedDraftId)
-    })
+      await editor.refresh();
+      await editor.refreshTargetTabState();
+      await editor.loadRecordedDraft(launchParams.recordedDraftId);
+    });
 
     return () => {
-      browser.runtime.onMessage.removeListener(listener)
-    }
-  }, [refreshView, runAction, runLocatorPreviewAction])
+      browser.runtime.onMessage.removeListener(listener);
+    };
+  }, [refreshView, runAction, runLocatorPreviewAction]);
 
   useEffect(() => {
-    setPendingStep(undefined)
-  }, [snapshot.draftDocument?.id, snapshot.selectedScenarioId])
+    setPendingStep(undefined);
+  }, [snapshot.draftDocument?.id, snapshot.selectedScenarioId]);
 
   return (
     <UiProvider>
@@ -356,128 +378,134 @@ function SidepanelApp(): ReactElement {
             editor.createScenario({
               name: 'Untitled scenario',
               initialStepFamily: defaultActionFamily,
-            })
-            setPendingStep(undefined)
-            refreshView()
+            });
+            setPendingStep(undefined);
+            refreshView();
           }}
           onExport={(format) => void exportSelectedScenario(format)}
           onImport={(file) => void importSelectedFile(file)}
           onMetadataChange={(update) => {
-            editor.updateDocumentFields(update)
-            refreshView()
+            editor.updateDocumentFields(update);
+            refreshView();
           }}
-          onRecord={() => void runAction(() => (
-            snapshot.currentRecord?.status === 'recording'
-              ? editor.stopRecording()
-              : editor.startRecording()
-          ))}
+          onRecord={() =>
+            void runAction(() =>
+              snapshot.currentRecord?.status === 'recording'
+                ? editor.stopRecording()
+                : editor.startRecording(),
+            )
+          }
           onRun={() => void runAction(() => editor.runSelectedScenario())}
           onSave={() => void runAction(() => editor.saveDraft())}
           onScenarioChange={(id) => {
-            setPendingStep(undefined)
-            editor.selectScenario(id)
-            refreshView()
+            setPendingStep(undefined);
+            editor.selectScenario(id);
+            refreshView();
           }}
           onValidate={() => {
             setDebugDrawerState((current) => ({
               ...current,
               activeView: 'validation',
-            }))
-            editor.validateDraft()
-            refreshView()
+            }));
+            editor.validateDraft();
+            refreshView();
           }}
           review={recomposedView.recordedDraftReview}
           shell={recomposedView.scenarioShell}
           snapshot={snapshot}
           pendingStepOpen={pendingStep !== undefined}
           onRecordedDraftAction={(action) => {
-            setPendingStep(undefined)
+            setPendingStep(undefined);
             switch (action) {
               case 'replace':
-                editor.replaceWithRecordedDraft()
-                refreshView()
-                return
+                editor.replaceWithRecordedDraft();
+                refreshView();
+                return;
               case 'append':
-                editor.appendRecordedDraftSteps()
-                refreshView()
-                return
+                editor.appendRecordedDraftSteps();
+                refreshView();
+                return;
               case 'discard':
-                editor.discardRecordedDraft()
-                refreshView()
-                return
+                editor.discardRecordedDraft();
+                refreshView();
+                return;
               case 'save-as-new':
-                void runAction(() => editor.saveRecordedDraftAsNew())
-                return
+                void runAction(() => editor.saveRecordedDraftAsNew());
+                return;
               case 'export': {
-                const exported = editor.exportRecordedDraft()
+                const exported = editor.exportRecordedDraft();
                 if (exported.ok) {
-                  downloadFile(exported.value.filename, exported.value.jsonText, 'application/json')
+                  downloadFile(
+                    exported.value.filename,
+                    exported.value.jsonText,
+                    'application/json',
+                  );
                 }
-                refreshView()
-                return
+                refreshView();
+                return;
               }
             }
           }}
           onSensitiveConfirm={(confirmed) => {
-            editor.confirmRecordedDraftSensitiveInputs(confirmed)
-            refreshView()
+            editor.confirmRecordedDraftSensitiveInputs(confirmed);
+            refreshView();
           }}
         />
         <BuilderWorkbench
           editorView={editorView}
           onAddPendingStep={() => {
-            setPendingStep({ id: 'pending-step' })
+            setPendingStep({ id: 'pending-step' });
           }}
           onCancelPendingStep={() => {
-            setPendingStep(undefined)
+            setPendingStep(undefined);
           }}
           onCommitPendingStep={(family) => {
-            editor.addStep(family)
-            setPendingStep(undefined)
-            refreshView()
+            editor.addStep(family);
+            setPendingStep(undefined);
+            refreshView();
           }}
           onCandidateSelect={(candidate) => {
-            const preview = locatorPreviewer.getSnapshot()
-            const selectedCandidate = preview.candidates[candidate.index]
+            const preview = locatorPreviewer.getSnapshot();
+            const selectedCandidate = preview.candidates[candidate.index];
             if (selectedCandidate === undefined || selectedCandidate.status !== 'unique') {
-              return
+              return;
             }
 
-            const targetSlot = preview.targetSlot
+            const targetSlot = preview.targetSlot;
             if (targetSlot !== undefined) {
-              editor.applyLocatorToTargetSlot(targetSlot, selectedCandidate.locator)
+              editor.applyLocatorToTargetSlot(targetSlot, selectedCandidate.locator);
             }
-            refreshView()
+            refreshView();
           }}
           onDeleteStep={() => {
-            editor.deleteSelectedStep()
-            refreshView()
+            editor.deleteSelectedStep();
+            refreshView();
           }}
           onDuplicateStep={() => {
-            editor.duplicateSelectedStep()
-            refreshView()
+            editor.duplicateSelectedStep();
+            refreshView();
           }}
           onMoveStep={(delta) => {
-            editor.moveSelectedStep(delta)
-            refreshView()
+            editor.moveSelectedStep(delta);
+            refreshView();
           }}
           onReorderStep={(stepId, toIndex) => {
-            editor.reorderStep(stepId, toIndex)
-            refreshView()
+            editor.reorderStep(stepId, toIndex);
+            refreshView();
           }}
           onSelectStep={(index) => {
-            setPendingStep(undefined)
-            editor.selectStep(index)
-            refreshView()
+            setPendingStep(undefined);
+            editor.selectStep(index);
+            refreshView();
           }}
           onStartTargetAssignment={(slotId) => void startTargetAssignment(slotId)}
           onStepActionChange={(family) => {
-            editor.updateSelectedStepActionFamily(family)
-            refreshView()
+            editor.updateSelectedStepActionFamily(family);
+            refreshView();
           }}
           onStepFieldChange={(update) => {
-            editor.updateSelectedStepFields(update)
-            refreshView()
+            editor.updateSelectedStepFields(update);
+            refreshView();
           }}
           onTestStep={() => void runAction(() => editor.dryRunSelectedStep())}
           pendingStep={pendingStep}
@@ -490,19 +518,19 @@ function SidepanelApp(): ReactElement {
             setDebugDrawerState((current) => ({
               ...current,
               expanded,
-            }))
+            }));
           }}
           onViewChange={(activeView) => {
             setDebugDrawerState({
               expanded: true,
               activeView,
-            })
+            });
           }}
           view={recomposedView.debugDrawer}
         />
       </main>
     </UiProvider>
-  )
+  );
 }
 
 function AppHeader(): ReactElement {
@@ -513,7 +541,7 @@ function AppHeader(): ReactElement {
         <h1>Scenario builder</h1>
       </div>
     </header>
-  )
+  );
 }
 
 function ScenarioShell({
@@ -534,28 +562,28 @@ function ScenarioShell({
   snapshot,
   pendingStepOpen,
 }: Readonly<{
-  fileInputRef: RefObject<HTMLInputElement | null>
-  onCreate(): void
-  onExport(format: ExportFormat): void
-  onImport(file: File | undefined): void
-  onMetadataChange(update: Readonly<{ name?: string; description?: string }>): void
-  onRecord(): void
-  onRecordedDraftAction(action: 'replace' | 'append' | 'discard' | 'save-as-new' | 'export'): void
-  onRun(): void
-  onSave(): void
-  onScenarioChange(id: string): void
-  onSensitiveConfirm(confirmed: boolean): void
-  onValidate(): void
-  review: SidepanelRecordedDraftReviewView | undefined
-  shell: SidepanelScenarioShellView
-  snapshot: SidepanelScenarioEditorSnapshot
-  pendingStepOpen: boolean
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  onCreate(): void;
+  onExport(format: ExportFormat): void;
+  onImport(file: File | undefined): void;
+  onMetadataChange(update: Readonly<{ name?: string; description?: string }>): void;
+  onRecord(): void;
+  onRecordedDraftAction(action: 'replace' | 'append' | 'discard' | 'save-as-new' | 'export'): void;
+  onRun(): void;
+  onSave(): void;
+  onScenarioChange(id: string): void;
+  onSensitiveConfirm(confirmed: boolean): void;
+  onValidate(): void;
+  review: SidepanelRecordedDraftReviewView | undefined;
+  shell: SidepanelScenarioShellView;
+  snapshot: SidepanelScenarioEditorSnapshot;
+  pendingStepOpen: boolean;
 }>): ReactElement {
-  const activityItems = scenarioActivityItems(shell, snapshot)
-  const recordActive = snapshot.currentRecord?.status === 'recording'
-  const runView = blockedButtonView(shell.buttons.run, pendingStepOpen)
-  const saveView = blockedButtonView(shell.buttons.save, pendingStepOpen)
-  const validateView = blockedButtonView(shell.buttons.validate, pendingStepOpen)
+  const activityItems = scenarioActivityItems(shell, snapshot);
+  const recordActive = snapshot.currentRecord?.status === 'recording';
+  const runView = blockedButtonView(shell.buttons.run, pendingStepOpen);
+  const saveView = blockedButtonView(shell.buttons.save, pendingStepOpen);
+  const validateView = blockedButtonView(shell.buttons.validate, pendingStepOpen);
 
   return (
     <section id="scenario-shell" className="scenario-shell" aria-labelledby="scenario-shell-title">
@@ -565,9 +593,7 @@ function ScenarioShell({
           {shell.dirty ? <span className="summary">Unsaved changes</span> : null}
         </div>
       </div>
-      {shell.issueSummary === 'None' ? null : (
-        <p className="shell-issue">{shell.issueSummary}</p>
-      )}
+      {shell.issueSummary === 'None' ? null : <p className="shell-issue">{shell.issueSummary}</p>}
       <div className="scenario-metadata-grid">
         <Field label="Scenario">
           <Select
@@ -576,13 +602,15 @@ function ScenarioShell({
             onChange={(event) => onScenarioChange(event.currentTarget.value)}
             value={shell.selectedScenarioId ?? ''}
           >
-            {shell.scenarioOptions.length === 0
-              ? <option value="">No saved scenarios</option>
-              : shell.scenarioOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+            {shell.scenarioOptions.length === 0 ? (
+              <option value="">No saved scenarios</option>
+            ) : (
+              shell.scenarioOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))
+            )}
           </Select>
         </Field>
         <Field label="Name">
@@ -611,12 +639,7 @@ function ScenarioShell({
           type="file"
         />
         {recordActive ? (
-          <ViewButton
-            icon="square"
-            onClick={onRecord}
-            variant="danger"
-            view={shell.buttons.record}
-          >
+          <ViewButton icon="square" onClick={onRecord} variant="danger" view={shell.buttons.record}>
             {shell.buttons.record.label}
           </ViewButton>
         ) : (
@@ -684,7 +707,7 @@ function ScenarioShell({
         review={review}
       />
     </section>
-  )
+  );
 }
 
 function RecordedDraftReview({
@@ -692,15 +715,15 @@ function RecordedDraftReview({
   onSensitiveConfirm,
   review,
 }: Readonly<{
-  onAction(action: 'replace' | 'append' | 'discard' | 'save-as-new' | 'export'): void
-  onSensitiveConfirm(confirmed: boolean): void
-  review: SidepanelRecordedDraftReviewView | undefined
+  onAction(action: 'replace' | 'append' | 'discard' | 'save-as-new' | 'export'): void;
+  onSensitiveConfirm(confirmed: boolean): void;
+  review: SidepanelRecordedDraftReviewView | undefined;
 }>): ReactElement | null {
   if (review === undefined) {
-    return null
+    return null;
   }
 
-  const hasSensitiveReviewItems = review.sensitiveSummary !== 'No sensitive inputs'
+  const hasSensitiveReviewItems = review.sensitiveSummary !== 'No sensitive inputs';
 
   return (
     <div className="recorded-draft-review">
@@ -728,10 +751,20 @@ function RecordedDraftReview({
         <span>Confirm sensitive recorded inputs</span>
       </label>
       <div className="toolbar wrap-toolbar">
-        <ViewButton icon="check" onClick={() => onAction('replace')} variant="primary" view={review.buttons.replace}>
+        <ViewButton
+          icon="check"
+          onClick={() => onAction('replace')}
+          variant="primary"
+          view={review.buttons.replace}
+        >
           Replace
         </ViewButton>
-        <ViewButton icon="plus" onClick={() => onAction('append')} variant="secondary" view={review.buttons.append}>
+        <ViewButton
+          icon="plus"
+          onClick={() => onAction('append')}
+          variant="secondary"
+          view={review.buttons.append}
+        >
           Append
         </ViewButton>
         <OverflowMenu
@@ -759,7 +792,7 @@ function RecordedDraftReview({
         />
       </div>
     </div>
-  )
+  );
 }
 
 function BuilderWorkbench({
@@ -782,30 +815,27 @@ function BuilderWorkbench({
   targetAssignment,
   workbench,
 }: Readonly<{
-  editorView: SidepanelScenarioEditorView
-  onAddPendingStep(): void
-  onCancelPendingStep(): void
-  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
-  onCommitPendingStep(family: BuilderStepActionFamily): void
-  onDeleteStep(): void
-  onDuplicateStep(): void
-  onMoveStep(delta: -1 | 1): void
-  onReorderStep(stepId: string, toIndex: number): void
-  onSelectStep(index: number): void
-  onStartTargetAssignment(slotId?: string): void
-  onStepActionChange(family: BuilderStepActionFamily): void
-  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onTestStep(): void
-  pendingStep: PendingWorkflowStep | undefined
-  snapshot: SidepanelScenarioEditorSnapshot
-  targetAssignment: SidepanelTargetAssignmentView
-  workbench: SidepanelBuilderWorkbenchView
+  editorView: SidepanelScenarioEditorView;
+  onAddPendingStep(): void;
+  onCancelPendingStep(): void;
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void;
+  onCommitPendingStep(family: BuilderStepActionFamily): void;
+  onDeleteStep(): void;
+  onDuplicateStep(): void;
+  onMoveStep(delta: -1 | 1): void;
+  onReorderStep(stepId: string, toIndex: number): void;
+  onSelectStep(index: number): void;
+  onStartTargetAssignment(slotId?: string): void;
+  onStepActionChange(family: BuilderStepActionFamily): void;
+  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void;
+  onTestStep(): void;
+  pendingStep: PendingWorkflowStep | undefined;
+  snapshot: SidepanelScenarioEditorSnapshot;
+  targetAssignment: SidepanelTargetAssignmentView;
+  workbench: SidepanelBuilderWorkbenchView;
 }>): ReactElement {
-  const selectedSummary = selectedStepSummary(snapshot)
-  const stepIds = useMemo(
-    () => workbench.steps.map((step) => step.id),
-    [workbench.steps],
-  )
+  const selectedSummary = selectedStepSummary(snapshot);
+  const stepIds = useMemo(() => workbench.steps.map((step) => step.id), [workbench.steps]);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
@@ -813,29 +843,30 @@ function BuilderWorkbench({
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
-  )
-  const handleDragEnd = useCallback((event: DragEndEvent): void => {
-    const overId = event.over?.id
-    if (overId === undefined || event.active.id === overId) {
-      return
-    }
+  );
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent): void => {
+      const overId = event.over?.id;
+      if (overId === undefined || event.active.id === overId) {
+        return;
+      }
 
-    const toIndex = workbench.steps.findIndex((step) => step.id === String(overId))
-    if (toIndex < 0) {
-      return
-    }
+      const toIndex = workbench.steps.findIndex((step) => step.id === String(overId));
+      if (toIndex < 0) {
+        return;
+      }
 
-    onReorderStep(String(event.active.id), toIndex)
-  }, [onReorderStep, workbench.steps])
-  const disableDrag = pendingStep !== undefined || snapshot.pendingAction !== null
+      onReorderStep(String(event.active.id), toIndex);
+    },
+    [onReorderStep, workbench.steps],
+  );
+  const disableDrag = pendingStep !== undefined || snapshot.pendingAction !== null;
 
   return (
     <section id="builder-workbench" aria-labelledby="builder-workbench-title">
       <div className="section-heading builder-heading">
         <h2 id="builder-workbench-title">Workflow</h2>
-        {selectedSummary === '' ? null : (
-          <span className="summary">{selectedSummary}</span>
-        )}
+        {selectedSummary === '' ? null : <span className="summary">{selectedSummary}</span>}
       </div>
 
       <DndContext
@@ -893,7 +924,7 @@ function BuilderWorkbench({
         </div>
       ) : null}
     </section>
-  )
+  );
 }
 
 function SortableWorkflowStepCard({
@@ -913,37 +944,30 @@ function SortableWorkflowStepCard({
   targetAssignment,
   view,
 }: Readonly<{
-  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
-  disabled: boolean
-  expanded: boolean
-  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
-  onDeleteStep(): void
-  onDuplicateStep(): void
-  onMoveStep(delta: -1 | 1): void
-  onSelectStep(index: number): void
-  onStartTargetAssignment(slotId?: string): void
-  onStepActionChange(family: BuilderStepActionFamily): void
-  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onTestStep(): void
-  row: SidepanelStepRowView
-  targetAssignment: SidepanelTargetAssignmentView
-  view: SidepanelBuilderWorkbenchView
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[];
+  disabled: boolean;
+  expanded: boolean;
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void;
+  onDeleteStep(): void;
+  onDuplicateStep(): void;
+  onMoveStep(delta: -1 | 1): void;
+  onSelectStep(index: number): void;
+  onStartTargetAssignment(slotId?: string): void;
+  onStepActionChange(family: BuilderStepActionFamily): void;
+  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void;
+  onTestStep(): void;
+  row: SidepanelStepRowView;
+  targetAssignment: SidepanelTargetAssignmentView;
+  view: SidepanelBuilderWorkbenchView;
 }>): ReactElement {
-  const {
-    attributes,
-    isDragging,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({
+  const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
     id: row.id,
     disabled,
-  })
+  });
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-  }
+  };
 
   return (
     <li
@@ -972,7 +996,7 @@ function SortableWorkflowStepCard({
         view={view}
       />
     </li>
-  )
+  );
 }
 
 function WorkflowStepCard({
@@ -994,26 +1018,26 @@ function WorkflowStepCard({
   targetAssignment,
   view,
 }: Readonly<{
-  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
-  dragAttributes: ReturnType<typeof useSortable>['attributes']
-  dragDisabled: boolean
-  dragListeners: ReturnType<typeof useSortable>['listeners']
-  expanded: boolean
-  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
-  onDeleteStep(): void
-  onDuplicateStep(): void
-  onMoveStep(delta: -1 | 1): void
-  onSelectStep(index: number): void
-  onStartTargetAssignment(slotId?: string): void
-  onStepActionChange(family: BuilderStepActionFamily): void
-  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
-  onTestStep(): void
-  row: SidepanelStepRowView
-  targetAssignment: SidepanelTargetAssignmentView
-  view: SidepanelBuilderWorkbenchView
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[];
+  dragAttributes: ReturnType<typeof useSortable>['attributes'];
+  dragDisabled: boolean;
+  dragListeners: ReturnType<typeof useSortable>['listeners'];
+  expanded: boolean;
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void;
+  onDeleteStep(): void;
+  onDuplicateStep(): void;
+  onMoveStep(delta: -1 | 1): void;
+  onSelectStep(index: number): void;
+  onStartTargetAssignment(slotId?: string): void;
+  onStepActionChange(family: BuilderStepActionFamily): void;
+  onStepFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void;
+  onTestStep(): void;
+  row: SidepanelStepRowView;
+  targetAssignment: SidepanelTargetAssignmentView;
+  view: SidepanelBuilderWorkbenchView;
 }>): ReactElement {
-  const detailText = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ')
-  const selected = view.selectedStep?.id === row.id ? view.selectedStep : undefined
+  const detailText = [row.targetSummary, row.inputSummary].filter(Boolean).join(' · ');
+  const selected = view.selectedStep?.id === row.id ? view.selectedStep : undefined;
 
   return (
     <article
@@ -1033,11 +1057,7 @@ function WorkflowStepCard({
         >
           <CommandIcon name="grab" />
         </button>
-        <button
-          className="step-card-summary"
-          onClick={() => onSelectStep(row.index)}
-          type="button"
-        >
+        <button className="step-card-summary" onClick={() => onSelectStep(row.index)} type="button">
           <span className="step-index">{row.index + 1}</span>
           <span className="step-card-icon">
             <CommandIcon name={actionIcon(row.action)} />
@@ -1055,8 +1075,16 @@ function WorkflowStepCard({
       </div>
       {expanded && selected !== undefined ? (
         <div className="expanded-step-editor">
-          <div className="selected-step-actions inline-step-actions" aria-label="Selected step actions">
-            <ViewButton icon="play" onClick={onTestStep} variant="secondary" view={view.buttons.dryRun}>
+          <div
+            className="selected-step-actions inline-step-actions"
+            aria-label="Selected step actions"
+          >
+            <ViewButton
+              icon="play"
+              onClick={onTestStep}
+              variant="secondary"
+              view={view.buttons.dryRun}
+            >
               Test step
             </ViewButton>
             <OverflowMenu
@@ -1102,14 +1130,11 @@ function WorkflowStepCard({
               view={targetAssignment}
             />
           ) : null}
-          <AdvancedJsonRepair
-            fields={selected.fields}
-            onFieldChange={onStepFieldChange}
-          />
+          <AdvancedJsonRepair fields={selected.fields} onFieldChange={onStepFieldChange} />
         </div>
       ) : null}
     </article>
-  )
+  );
 }
 
 function PendingWorkflowStepCard({
@@ -1119,11 +1144,11 @@ function PendingWorkflowStepCard({
   onCancel,
   options,
 }: Readonly<{
-  addStepView: SidepanelButtonView
-  nextIndex: number
-  onActionChange(family: BuilderStepActionFamily): void
-  onCancel(): void
-  options: readonly SidepanelActionFamilyOptionView[]
+  addStepView: SidepanelButtonView;
+  nextIndex: number;
+  onActionChange(family: BuilderStepActionFamily): void;
+  onCancel(): void;
+  options: readonly SidepanelActionFamilyOptionView[];
 }>): ReactElement {
   return (
     <li className="workflow-step-list-item pending-step-list-item">
@@ -1170,7 +1195,7 @@ function PendingWorkflowStepCard({
         </div>
       </article>
     </li>
-  )
+  );
 }
 
 function ActionFamilySelect({
@@ -1182,16 +1207,16 @@ function ActionFamilySelect({
   placeholder = 'Choose action',
   value,
 }: Readonly<{
-  ariaLabel: string
-  autoFocus?: boolean
-  disabled?: boolean
-  onChange(family: BuilderStepActionFamily): void
-  options: readonly SidepanelActionFamilyOptionView[]
-  placeholder?: string
-  value: BuilderStepActionFamily | ''
+  ariaLabel: string;
+  autoFocus?: boolean;
+  disabled?: boolean;
+  onChange(family: BuilderStepActionFamily): void;
+  options: readonly SidepanelActionFamilyOptionView[];
+  placeholder?: string;
+  value: BuilderStepActionFamily | '';
 }>): ReactElement {
-  const selected = options.find((option) => option.value === value)
-  const triggerIcon = selected === undefined ? 'target' : actionIcon(selected.value)
+  const selected = options.find((option) => option.value === value);
+  const triggerIcon = selected === undefined ? 'target' : actionIcon(selected.value);
 
   return (
     <RadixSelect.Root
@@ -1208,9 +1233,7 @@ function ActionFamilySelect({
           <CommandIcon name={triggerIcon} />
         </span>
         <span className="action-select-trigger-copy">
-          <span className="action-select-trigger-label">
-            {selected?.label ?? placeholder}
-          </span>
+          <span className="action-select-trigger-label">{selected?.label ?? placeholder}</span>
           <span className="action-select-trigger-hint">
             {selected === undefined ? 'Select from available actions' : actionHint(selected.value)}
           </span>
@@ -1218,11 +1241,7 @@ function ActionFamilySelect({
         <CommandIcon className="action-select-chevron" name="arrow-down" />
       </RadixSelect.Trigger>
       <RadixSelect.Portal>
-        <RadixSelect.Content
-          className="action-select-content"
-          position="popper"
-          sideOffset={6}
-        >
+        <RadixSelect.Content className="action-select-content" position="popper" sideOffset={6}>
           <RadixSelect.Viewport className="action-select-viewport">
             {options.map((option) => (
               <RadixSelect.Item
@@ -1248,7 +1267,7 @@ function ActionFamilySelect({
         </RadixSelect.Content>
       </RadixSelect.Portal>
     </RadixSelect.Root>
-  )
+  );
 }
 
 function StepInspector({
@@ -1257,10 +1276,10 @@ function StepInspector({
   onActionChange,
   onFieldChange,
 }: Readonly<{
-  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
-  fields: SidepanelScenarioEditorView['selectedStepFields']
-  onActionChange(family: BuilderStepActionFamily): void
-  onFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[];
+  fields: SidepanelScenarioEditorView['selectedStepFields'];
+  onActionChange(family: BuilderStepActionFamily): void;
+  onFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void;
 }>): ReactElement {
   return (
     <>
@@ -1351,7 +1370,7 @@ function StepInspector({
         ) : null}
       </div>
     </>
-  )
+  );
 }
 
 function TargetAssignment({
@@ -1359,30 +1378,28 @@ function TargetAssignment({
   onStart,
   view,
 }: Readonly<{
-  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
-  onStart(slotId?: string): void
-  view: SidepanelTargetAssignmentView
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void;
+  onStart(slotId?: string): void;
+  view: SidepanelTargetAssignmentView;
 }>): ReactElement {
   const showLocatorPanel =
     view.locatorPreview.status !== 'idle' ||
     view.locatorPreview.candidates.length > 0 ||
-    view.locatorPreview.issueSummary !== 'None'
+    view.locatorPreview.issueSummary !== 'None';
 
   return (
     <div className="property-section target-property-section">
       <div className="target-assignment-panel" aria-labelledby="target-assignment-title">
         <div className="target-assignment-heading">
           <div>
-            <span id="target-assignment-title" className="field-label">Targets</span>
+            <span id="target-assignment-title" className="field-label">
+              Targets
+            </span>
             <p className="panel-caption">Pick page elements for this step.</p>
           </div>
           <span className="summary">{view.picker.statusSummary}</span>
         </div>
-        <TargetSlotList
-          onStart={onStart}
-          rows={view.slots}
-          startButton={view.buttons.start}
-        />
+        <TargetSlotList onStart={onStart} rows={view.slots} startButton={view.buttons.start} />
         <dl className="target-assignment-fields">
           <div>
             <dt>Selected</dt>
@@ -1413,7 +1430,7 @@ function TargetAssignment({
         ) : null}
       </div>
     </div>
-  )
+  );
 }
 
 function TargetSlotList({
@@ -1421,9 +1438,9 @@ function TargetSlotList({
   rows,
   startButton,
 }: Readonly<{
-  onStart(slotId?: string): void
-  rows: readonly SidepanelTargetSlotRowView[]
-  startButton: SidepanelButtonView
+  onStart(slotId?: string): void;
+  rows: readonly SidepanelTargetSlotRowView[];
+  startButton: SidepanelButtonView;
 }>): ReactElement {
   return (
     <ul className="target-slot-list" aria-label="Target slots">
@@ -1446,15 +1463,15 @@ function TargetSlotList({
         </li>
       ))}
     </ul>
-  )
+  );
 }
 
 function LocatorPreviewCandidates({
   candidates,
   onCandidateSelect,
 }: Readonly<{
-  candidates: readonly LocatorPreviewCandidateView[]
-  onCandidateSelect(candidate: LocatorPreviewCandidateView): void
+  candidates: readonly LocatorPreviewCandidateView[];
+  onCandidateSelect(candidate: LocatorPreviewCandidateView): void;
 }>): ReactElement {
   return (
     <ul className="locator-preview-list" aria-label="Locator candidates">
@@ -1475,15 +1492,15 @@ function LocatorPreviewCandidates({
         </li>
       ))}
     </ul>
-  )
+  );
 }
 
 function AdvancedJsonRepair({
   fields,
   onFieldChange,
 }: Readonly<{
-  fields: SidepanelScenarioEditorView['selectedStepFields']
-  onFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void
+  fields: SidepanelScenarioEditorView['selectedStepFields'];
+  onFieldChange(update: Parameters<typeof editor.updateSelectedStepFields>[0]): void;
 }>): ReactElement {
   return (
     <details className="advanced-repair property-section">
@@ -1526,7 +1543,7 @@ function AdvancedJsonRepair({
         />
       </Field>
     </details>
-  )
+  );
 }
 
 function DebugDrawer({
@@ -1534,16 +1551,12 @@ function DebugDrawer({
   onViewChange,
   view,
 }: Readonly<{
-  onExpandedChange(expanded: boolean): void
-  onViewChange(view: SidepanelDebugDrawerView): void
-  view: SidepanelDebugDrawerViewModel
+  onExpandedChange(expanded: boolean): void;
+  onViewChange(view: SidepanelDebugDrawerView): void;
+  view: SidepanelDebugDrawerViewModel;
 }>): ReactElement {
   return (
-    <Collapsible.Root
-      asChild
-      open={view.expanded}
-      onOpenChange={onExpandedChange}
-    >
+    <Collapsible.Root asChild open={view.expanded} onOpenChange={onExpandedChange}>
       <section
         id="debug-drawer"
         className="debug-drawer"
@@ -1571,7 +1584,7 @@ function DebugDrawer({
             className="debug-tabs-root"
             onValueChange={(value) => {
               if (isDebugDrawerView(value)) {
-                onViewChange(value)
+                onViewChange(value);
               }
             }}
             value={view.activeView}
@@ -1653,13 +1666,13 @@ function DebugDrawer({
         </Collapsible.Content>
       </section>
     </Collapsible.Root>
-  )
+  );
 }
 
 function IssuesList({
   issues,
 }: Readonly<{
-  issues: readonly SidepanelIssueView[]
+  issues: readonly SidepanelIssueView[];
 }>): ReactElement {
   return (
     <ul className="issue-list" aria-live="polite">
@@ -1670,13 +1683,13 @@ function IssuesList({
         </li>
       ))}
     </ul>
-  )
+  );
 }
 
 function DebugLocatorCandidates({
   candidates,
 }: Readonly<{
-  candidates: readonly LocatorPreviewCandidateView[]
+  candidates: readonly LocatorPreviewCandidateView[];
 }>): ReactElement {
   return (
     <ul className="debug-locator-candidates" aria-label="Debug locator candidates">
@@ -1689,7 +1702,7 @@ function DebugLocatorCandidates({
         </li>
       ))}
     </ul>
-  )
+  );
 }
 
 function ViewButton({
@@ -1702,14 +1715,14 @@ function ViewButton({
   variant,
   view,
 }: Readonly<{
-  children: string
-  className?: string
-  icon?: CommandIconName
-  iconOnly?: boolean
-  onClick(): void
-  tooltip?: string
-  variant: ButtonVariant
-  view: SidepanelButtonView
+  children: string;
+  className?: string;
+  icon?: CommandIconName;
+  iconOnly?: boolean;
+  onClick(): void;
+  tooltip?: string;
+  variant: ButtonVariant;
+  view: SidepanelButtonView;
 }>): ReactElement {
   return (
     <Button
@@ -1724,20 +1737,17 @@ function ViewButton({
     >
       {children}
     </Button>
-  )
+  );
 }
 
-function blockedButtonView(
-  view: SidepanelButtonView,
-  blocked: boolean,
-): SidepanelButtonView {
+function blockedButtonView(view: SidepanelButtonView, blocked: boolean): SidepanelButtonView {
   return blocked
     ? {
         ...view,
         disabled: true,
         pending: false,
       }
-    : view
+    : view;
 }
 
 function CommitTextarea({
@@ -1746,14 +1756,14 @@ function CommitTextarea({
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> &
   Readonly<{
-    onCommit(value: string): void
-    value: string
+    onCommit(value: string): void;
+    value: string;
   }>): ReactElement {
-  const [draft, setDraft] = useState(value)
+  const [draft, setDraft] = useState(value);
 
   useEffect(() => {
-    setDraft(value)
-  }, [value])
+    setDraft(value);
+  }, [value]);
 
   return (
     <Textarea
@@ -1762,7 +1772,7 @@ function CommitTextarea({
       onChange={(event) => setDraft(event.currentTarget.value)}
       value={draft}
     />
-  )
+  );
 }
 
 function defaultWorkflowActionFamily(
@@ -1770,52 +1780,54 @@ function defaultWorkflowActionFamily(
   selectedStepFamily: BuilderStepActionFamily | '',
 ): BuilderStepActionFamily {
   if (selectedStepFamily !== '' && options.some((option) => option.value === selectedStepFamily)) {
-    return selectedStepFamily
+    return selectedStepFamily;
   }
 
-  return options[0]?.value ?? 'click'
+  return options[0]?.value ?? 'click';
 }
 
 function targetSlotCommandLabel(summary: string): string {
-  return summary === 'no locators' || summary === 'current' ? 'Set target' : 'Change target'
+  return summary === 'no locators' || summary === 'current' ? 'Set target' : 'Change target';
 }
 
 function recordSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
-  const record = snapshot.currentRecord
+  const record = snapshot.currentRecord;
   if (record === undefined) {
-    return 'Not recording'
+    return 'Not recording';
   }
 
   if (record.status === 'recording') {
-    return 'Recording'
+    return 'Recording';
   }
 
   if (record.status === 'failed') {
-    return record.message === undefined ? 'Recording failed' : `Recording failed: ${record.message}`
+    return record.message === undefined
+      ? 'Recording failed'
+      : `Recording failed: ${record.message}`;
   }
 
-  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready'
+  return record.draftId === undefined ? 'Recording stopped' : 'Draft ready';
 }
 
 function scenarioActivityItems(
   shell: SidepanelScenarioShellView,
   snapshot: SidepanelScenarioEditorSnapshot,
 ): readonly Readonly<{ label: string; value: string }>[] {
-  const items: Readonly<{ label: string; value: string }>[] = []
+  const items: Readonly<{ label: string; value: string }>[] = [];
 
   if (shell.targetTab.status === 'checking' || shell.targetTab.status === 'blocked') {
-    items.push({ label: 'Target', value: shell.targetTab.summary })
+    items.push({ label: 'Target', value: shell.targetTab.summary });
   }
 
   if (snapshot.currentRun !== undefined) {
     items.push({
       label: 'Run',
       value: snapshot.currentTrace?.summary ?? capitalize(snapshot.currentRun.status),
-    })
+    });
   }
 
   if (snapshot.currentRecord !== undefined) {
-    items.push({ label: 'Recording', value: recordSummary(snapshot) })
+    items.push({ label: 'Recording', value: recordSummary(snapshot) });
   }
 
   if (
@@ -1823,73 +1835,71 @@ function scenarioActivityItems(
     shell.message.length > 0 &&
     !items.some((item) => item.value === shell.message)
   ) {
-    items.push({ label: 'Message', value: shell.message })
+    items.push({ label: 'Message', value: shell.message });
   }
 
-  return items
+  return items;
 }
 
 function selectedStepSummary(snapshot: SidepanelScenarioEditorSnapshot): string {
-  const step = snapshot.draftDocument?.steps[snapshot.selectedStepIndex]
+  const step = snapshot.draftDocument?.steps[snapshot.selectedStepIndex];
   return step === undefined
     ? ''
-    : `Step ${snapshot.selectedStepIndex + 1} · ${formatActionLabel(step.action)}`
+    : `Step ${snapshot.selectedStepIndex + 1} · ${formatActionLabel(step.action)}`;
 }
 
 function latestDebugEventSummary(
   traceView: SidepanelDebugDrawerViewModel['views']['runTrace'],
 ): string {
   if (traceView.latestEventName === undefined) {
-    return 'No trace events'
+    return 'No trace events';
   }
 
-  return [
-    traceView.latestEventName,
-    traceView.latestEventMessage,
-  ].filter((part) => part !== undefined && part.length > 0).join(' · ')
+  return [traceView.latestEventName, traceView.latestEventMessage]
+    .filter((part) => part !== undefined && part.length > 0)
+    .join(' · ');
 }
 
 function debugDrawerSummaryText(view: SidepanelDebugDrawerViewModel): string {
   if (view.views.failure.message !== undefined) {
-    return 'Run failure'
+    return 'Run failure';
   }
 
   if (view.views.validation.issueCount > 0) {
-    const count = view.views.validation.issueCount
-    return `${count} issue${count === 1 ? '' : 's'}`
+    const count = view.views.validation.issueCount;
+    return `${count} issue${count === 1 ? '' : 's'}`;
   }
 
   if (view.views.locator.issueSummary !== 'None') {
-    return 'Locator issue'
+    return 'Locator issue';
   }
 
   return view.views.runTrace.eventCount > 0
     ? view.views.runTrace.summary
-    : view.views.validation.summary
+    : view.views.validation.summary;
 }
 
 function isDebugDrawerView(value: string): value is SidepanelDebugDrawerView {
-  return value === 'validation' ||
-    value === 'locator' ||
-    value === 'run-trace' ||
-    value === 'failure'
+  return (
+    value === 'validation' || value === 'locator' || value === 'run-trace' || value === 'failure'
+  );
 }
 
 function isFailedRuntimeStatusMessage(message: unknown): boolean {
   if (typeof message !== 'object' || message === null) {
-    return false
+    return false;
   }
 
   const candidate = message as Readonly<{
-    kind?: unknown
-    payload?: Readonly<{ status?: unknown }>
-  }>
-  return candidate.kind === 'runtime:status' && candidate.payload?.status === 'failed'
+    kind?: unknown;
+    payload?: Readonly<{ status?: unknown }>;
+  }>;
+  return candidate.kind === 'runtime:status' && candidate.payload?.status === 'failed';
 }
 
-const root = document.querySelector('#root')
+const root = document.querySelector('#root');
 if (root === null) {
-  throw new Error('Missing sidepanel root element.')
+  throw new Error('Missing sidepanel root element.');
 }
 
-createRoot(root).render(<SidepanelApp />)
+createRoot(root).render(<SidepanelApp />);

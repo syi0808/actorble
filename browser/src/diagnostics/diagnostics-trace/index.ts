@@ -5,142 +5,142 @@ import type {
   Clock,
   DebugEventName,
   TimestampMs,
-} from '../../shared/index.js'
+} from '../../shared/index.js';
 
-export type TraceSpanStatus = 'running' | 'ok' | 'error' | 'cancelled'
+export type TraceSpanStatus = 'running' | 'ok' | 'error' | 'cancelled';
 
 export type TraceSpan = Readonly<{
-  id: string
-  name: string
-  parentId?: string
-  status: TraceSpanStatus
-  startedAt: TimestampMs
-  endedAt?: TimestampMs
-  attributes?: ActorbleErrorDetails
-  error?: ActorbleError
-}>
+  id: string;
+  name: string;
+  parentId?: string;
+  status: TraceSpanStatus;
+  startedAt: TimestampMs;
+  endedAt?: TimestampMs;
+  attributes?: ActorbleErrorDetails;
+  error?: ActorbleError;
+}>;
 
 export type TraceEvent = Readonly<{
-  name: DebugEventName
-  at: TimestampMs
-  spanId?: string
-  data?: unknown
-}>
+  name: DebugEventName;
+  at: TimestampMs;
+  spanId?: string;
+  data?: unknown;
+}>;
 
 export type TraceSnapshot = Readonly<{
-  name: string
-  at: TimestampMs
-  data: unknown
-}>
+  name: string;
+  at: TimestampMs;
+  data: unknown;
+}>;
 
 export type TraceWarning = Readonly<{
-  message: string
-  at: TimestampMs
-  details?: ActorbleErrorDetails
-}>
+  message: string;
+  at: TimestampMs;
+  details?: ActorbleErrorDetails;
+}>;
 
 export type Trace = Readonly<{
-  spans: readonly TraceSpan[]
-  events: readonly TraceEvent[]
-  snapshots: readonly TraceSnapshot[]
-  warnings: readonly TraceWarning[]
-}>
+  spans: readonly TraceSpan[];
+  events: readonly TraceEvent[];
+  snapshots: readonly TraceSnapshot[];
+  warnings: readonly TraceWarning[];
+}>;
 
 export interface TraceSpanHandle {
-  readonly id: string
-  end(attributes?: ActorbleErrorDetails): void
-  error(error: ActorbleError, attributes?: ActorbleErrorDetails): void
-  cancel(reason?: unknown): void
-  event(name: DebugEventName, data?: unknown): void
+  readonly id: string;
+  end(attributes?: ActorbleErrorDetails): void;
+  error(error: ActorbleError, attributes?: ActorbleErrorDetails): void;
+  cancel(reason?: unknown): void;
+  event(name: DebugEventName, data?: unknown): void;
 }
 
 export interface SpanRecorder {
-  startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle
-  appendEvent(name: DebugEventName, data?: unknown): void
-  attachSnapshot(name: string, data: unknown): void
-  warn(message: string, details?: ActorbleErrorDetails): void
+  startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle;
+  appendEvent(name: DebugEventName, data?: unknown): void;
+  attachSnapshot(name: string, data: unknown): void;
+  warn(message: string, details?: ActorbleErrorDetails): void;
 }
 
 export interface TraceReader {
-  getTrace(): Trace
+  getTrace(): Trace;
 }
 
 export interface TraceEventSubscriber {
-  on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
-  off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void
+  on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void;
+  off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void;
 }
 
 export interface TraceCollector extends SpanRecorder, TraceReader, TraceEventSubscriber {}
 
 export type DiagnosticsTraceRetentionOptions = Readonly<{
-  maxEvents?: number
-  maxSnapshots?: number
-  maxWarnings?: number
-}>
+  maxEvents?: number;
+  maxSnapshots?: number;
+  maxWarnings?: number;
+}>;
 
 export type DiagnosticsTraceOptions = Readonly<{
-  clock?: Clock
-  idPrefix?: string
-  retention?: DiagnosticsTraceRetentionOptions
-}>
+  clock?: Clock;
+  idPrefix?: string;
+  retention?: DiagnosticsTraceRetentionOptions;
+}>;
 
 type MutableTraceSpan = {
-  id: string
-  name: string
-  parentId?: string
-  status: TraceSpanStatus
-  startedAt: TimestampMs
-  endedAt?: TimestampMs
-  attributes?: ActorbleErrorDetails
-  error?: ActorbleError
-}
+  id: string;
+  name: string;
+  parentId?: string;
+  status: TraceSpanStatus;
+  startedAt: TimestampMs;
+  endedAt?: TimestampMs;
+  attributes?: ActorbleErrorDetails;
+  error?: ActorbleError;
+};
 
 const defaultClock: Clock = {
   now() {
-    return Date.now()
+    return Date.now();
   },
-}
+};
 
 function mergeAttributes(
   current: ActorbleErrorDetails | undefined,
   next: ActorbleErrorDetails | undefined,
 ): ActorbleErrorDetails | undefined {
   if (current === undefined && next === undefined) {
-    return undefined
+    return undefined;
   }
 
-  return { ...current, ...next }
+  return { ...current, ...next };
 }
 
 function cloneSpan(span: MutableTraceSpan): TraceSpan {
-  return { ...span }
+  return { ...span };
 }
 
 function cloneEvent(event: TraceEvent): TraceEvent {
-  return { ...event }
+  return { ...event };
 }
 
 export class BrowserDiagnosticsTrace implements TraceCollector {
-  readonly #clock: Clock
-  readonly #idPrefix: string
-  readonly #retention: DiagnosticsTraceRetentionOptions
-  #nextSpanId = 1
-  readonly #spans: MutableTraceSpan[] = []
-  readonly #events: TraceEvent[] = []
-  readonly #snapshots: TraceSnapshot[] = []
-  readonly #warnings: TraceWarning[] = []
-  readonly #openSpanIds: string[] = []
-  readonly #eventListeners = new Map<DebugEventName, Set<ActorbleListener<TraceEvent>>>()
+  readonly #clock: Clock;
+  readonly #idPrefix: string;
+  readonly #retention: DiagnosticsTraceRetentionOptions;
+  #nextSpanId = 1;
+  readonly #spans: MutableTraceSpan[] = [];
+  readonly #events: TraceEvent[] = [];
+  readonly #snapshots: TraceSnapshot[] = [];
+  readonly #warnings: TraceWarning[] = [];
+  readonly #openSpanIds: string[] = [];
+  readonly #eventListeners = new Map<DebugEventName, Set<ActorbleListener<TraceEvent>>>();
 
   constructor(options: DiagnosticsTraceOptions = {}) {
-    this.#clock = options.clock ?? defaultClock
-    this.#idPrefix = options.idPrefix ?? 'span'
-    this.#retention = normalizeRetention(options.retention)
+    this.#clock = options.clock ?? defaultClock;
+    this.#idPrefix = options.idPrefix ?? 'span';
+    this.#retention = normalizeRetention(options.retention);
   }
 
   startSpan(name: string, attributes?: ActorbleErrorDetails): TraceSpanHandle {
-    const id = `${this.#idPrefix}-${this.#nextSpanId++}`
-    const parentId = this.#openSpanIds.at(-1)
+    const id = `${this.#idPrefix}-${this.#nextSpanId++}`;
+    const parentId = this.#openSpanIds.at(-1);
     const span: MutableTraceSpan = {
       id,
       name,
@@ -148,52 +148,52 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       status: 'running',
       startedAt: this.#clock.now(),
       ...(attributes === undefined ? {} : { attributes: { ...attributes } }),
-    }
+    };
 
-    this.#spans.push(span)
-    this.#openSpanIds.push(id)
+    this.#spans.push(span);
+    this.#openSpanIds.push(id);
 
     return {
       id,
       end: (terminalAttributes?: ActorbleErrorDetails) => {
-        this.#finishSpan(id, 'ok', terminalAttributes)
+        this.#finishSpan(id, 'ok', terminalAttributes);
       },
       error: (error: ActorbleError, terminalAttributes?: ActorbleErrorDetails) => {
-        this.#finishSpan(id, 'error', terminalAttributes, error)
+        this.#finishSpan(id, 'error', terminalAttributes, error);
       },
       cancel: (reason?: unknown) => {
         const terminalAttributes =
-          reason === undefined ? undefined : ({ reason } satisfies ActorbleErrorDetails)
-        this.#finishSpan(id, 'cancelled', terminalAttributes)
+          reason === undefined ? undefined : ({ reason } satisfies ActorbleErrorDetails);
+        this.#finishSpan(id, 'cancelled', terminalAttributes);
       },
       event: (eventName: DebugEventName, data?: unknown) => {
-        this.#appendEvent(eventName, data, id)
+        this.#appendEvent(eventName, data, id);
       },
-    }
+    };
   }
 
   appendEvent(name: DebugEventName, data?: unknown): void {
-    this.#appendEvent(name, data)
+    this.#appendEvent(name, data);
   }
 
   on(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
-    const listeners = this.#eventListeners.get(name) ?? new Set<ActorbleListener<TraceEvent>>()
+    const listeners = this.#eventListeners.get(name) ?? new Set<ActorbleListener<TraceEvent>>();
 
-    listeners.add(listener)
-    this.#eventListeners.set(name, listeners)
+    listeners.add(listener);
+    this.#eventListeners.set(name, listeners);
   }
 
   off(name: DebugEventName, listener: ActorbleListener<TraceEvent>): void {
-    const listeners = this.#eventListeners.get(name)
+    const listeners = this.#eventListeners.get(name);
 
     if (listeners === undefined) {
-      return
+      return;
     }
 
-    listeners.delete(listener)
+    listeners.delete(listener);
 
     if (listeners.size === 0) {
-      this.#eventListeners.delete(name)
+      this.#eventListeners.delete(name);
     }
   }
 
@@ -202,8 +202,8 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       name,
       at: this.#clock.now(),
       data,
-    })
-    retainNewest(this.#snapshots, this.#retention.maxSnapshots)
+    });
+    retainNewest(this.#snapshots, this.#retention.maxSnapshots);
   }
 
   warn(message: string, details?: ActorbleErrorDetails): void {
@@ -211,8 +211,8 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       message,
       at: this.#clock.now(),
       ...(details === undefined ? {} : { details: { ...details } }),
-    })
-    retainNewest(this.#warnings, this.#retention.maxWarnings)
+    });
+    retainNewest(this.#warnings, this.#retention.maxWarnings);
   }
 
   getTrace(): Trace {
@@ -221,7 +221,7 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       events: this.#events.map(cloneEvent),
       snapshots: this.#snapshots.map((snapshot) => ({ ...snapshot })),
       warnings: this.#warnings.map((warning) => ({ ...warning })),
-    }
+    };
   }
 
   #appendEvent(name: DebugEventName, data?: unknown, spanId?: string): void {
@@ -230,28 +230,28 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
       at: this.#clock.now(),
       ...(spanId === undefined ? {} : { spanId }),
       ...(data === undefined ? {} : { data }),
-    }
+    };
 
-    this.#events.push(event)
-    this.#emitEvent(event)
-    retainNewest(this.#events, this.#retention.maxEvents)
+    this.#events.push(event);
+    this.#emitEvent(event);
+    retainNewest(this.#events, this.#retention.maxEvents);
   }
 
   #emitEvent(event: TraceEvent): void {
-    const listeners = this.#eventListeners.get(event.name)
+    const listeners = this.#eventListeners.get(event.name);
 
     if (listeners === undefined) {
-      return
+      return;
     }
 
     for (const listener of [...listeners]) {
       try {
-        listener(cloneEvent(event))
+        listener(cloneEvent(event));
       } catch (error) {
         this.warn('Trace event listener failed.', {
           eventName: event.name,
           error: describeUnknownError(error),
-        })
+        });
       }
     }
   }
@@ -262,37 +262,37 @@ export class BrowserDiagnosticsTrace implements TraceCollector {
     terminalAttributes?: ActorbleErrorDetails,
     error?: ActorbleError,
   ): void {
-    const span = this.#spans.find((candidate) => candidate.id === id)
+    const span = this.#spans.find((candidate) => candidate.id === id);
 
     if (span === undefined || span.status !== 'running') {
-      return
+      return;
     }
 
-    span.status = status
-    span.endedAt = this.#clock.now()
-    span.attributes = mergeAttributes(span.attributes, terminalAttributes)
+    span.status = status;
+    span.endedAt = this.#clock.now();
+    span.attributes = mergeAttributes(span.attributes, terminalAttributes);
 
     if (error !== undefined) {
-      span.error = error
+      span.error = error;
     }
 
-    const stackIndex = this.#openSpanIds.lastIndexOf(id)
+    const stackIndex = this.#openSpanIds.lastIndexOf(id);
     if (stackIndex >= 0) {
-      this.#openSpanIds.splice(stackIndex, 1)
+      this.#openSpanIds.splice(stackIndex, 1);
     }
   }
 }
 
 export function createDiagnosticsTrace(options: DiagnosticsTraceOptions = {}): TraceCollector {
-  return new BrowserDiagnosticsTrace(options)
+  return new BrowserDiagnosticsTrace(options);
 }
 
 function describeUnknownError(error: unknown): string {
   if (error instanceof Error) {
-    return error.message
+    return error.message;
   }
 
-  return String(error)
+  return String(error);
 }
 
 function normalizeRetention(
@@ -302,21 +302,21 @@ function normalizeRetention(
     maxEvents: normalizeRetentionLimit(retention?.maxEvents),
     maxSnapshots: normalizeRetentionLimit(retention?.maxSnapshots),
     maxWarnings: normalizeRetentionLimit(retention?.maxWarnings),
-  }
+  };
 }
 
 function normalizeRetentionLimit(limit: number | undefined): number | undefined {
   if (limit === undefined || !Number.isFinite(limit)) {
-    return undefined
+    return undefined;
   }
 
-  return Math.max(0, Math.floor(limit))
+  return Math.max(0, Math.floor(limit));
 }
 
 function retainNewest<TRecord>(records: TRecord[], limit: number | undefined): void {
   if (limit === undefined || records.length <= limit) {
-    return
+    return;
   }
 
-  records.splice(0, records.length - limit)
+  records.splice(0, records.length - limit);
 }

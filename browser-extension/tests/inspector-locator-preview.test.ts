@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   autoApplyTargetFromPreview,
   createLocatorCandidates,
   createLocatorPreviewCandidateViews,
   createLocatorPreviewer,
   type LocatorPreviewClient,
-} from '../src/inspector/locator-preview.js'
+} from '../src/inspector/locator-preview.js';
 import {
   createExtensionMessage,
   type ActorbleExtensionMessage,
   type InspectorTargetMetadata,
-} from '../src/messaging/index.js'
-import { ok } from '../src/shared/result.js'
+} from '../src/messaging/index.js';
+import { ok } from '../src/shared/result.js';
 
 const pickedTarget = {
   tagName: 'button',
@@ -29,11 +29,11 @@ const pickedTarget = {
     width: 100,
     height: 40,
   },
-} satisfies InspectorTargetMetadata
+} satisfies InspectorTargetMetadata;
 
 describe('inspector locator preview', () => {
   it('builds ranked locator candidates from selected target metadata', () => {
-    const candidates = createLocatorCandidates(pickedTarget)
+    const candidates = createLocatorCandidates(pickedTarget);
 
     expect(candidates.map((candidate) => candidate.strategy)).toEqual([
       'role',
@@ -42,7 +42,7 @@ describe('inspector locator preview', () => {
       'text',
       'css',
       'point',
-    ])
+    ]);
     expect(candidates[0]).toMatchObject({
       id: 'role-1',
       rank: 1,
@@ -55,22 +55,22 @@ describe('inspector locator preview', () => {
           match: 'exact',
         },
       },
-    })
+    });
     expect(candidates[1].locator).toEqual({
       strategy: 'label',
       label: {
         value: 'Submit form',
         match: 'exact',
       },
-    })
+    });
     expect(candidates[2].locator).toEqual({
       strategy: 'testId',
       value: 'submit-button',
-    })
+    });
     expect(candidates[4].locator).toEqual({
       strategy: 'css',
       selector: '#submit',
-    })
+    });
     expect(candidates[5].locator).toEqual({
       strategy: 'point',
       point: {
@@ -78,11 +78,11 @@ describe('inspector locator preview', () => {
         y: 40,
         coordinateSpace: 'viewport',
       },
-    })
-  })
+    });
+  });
 
   it('formats preview results so unique, ambiguous, and zero-match states are visible', () => {
-    const [role, label, text] = createLocatorCandidates(pickedTarget)
+    const [role, label, text] = createLocatorCandidates(pickedTarget);
     const views = createLocatorPreviewCandidateViews([
       {
         ...role,
@@ -102,27 +102,23 @@ describe('inspector locator preview', () => {
         strict: false,
         status: 'zero-match',
       },
-    ])
+    ]);
 
     expect(views.map((view) => view.matchSummary)).toEqual([
       '1 match · strict',
       '3 matches · ambiguous',
       '0 matches · zero-match',
-    ])
-    expect(views.map((view) => view.status)).toEqual([
-      'unique',
-      'ambiguous',
-      'zero-match',
-    ])
-  })
+    ]);
+    expect(views.map((view) => view.status)).toEqual(['unique', 'ambiguous', 'zero-match']);
+  });
 
   it('builds an auto-apply target from the selected ambiguous match index', () => {
     const [roleCandidate] = createLocatorCandidates({
       ...pickedTarget,
       documentOrderIndex: 12,
-    })
+    });
     if (roleCandidate === undefined) {
-      throw new Error('Expected role candidate.')
+      throw new Error('Expected role candidate.');
     }
 
     const result = autoApplyTargetFromPreview({
@@ -145,7 +141,7 @@ describe('inspector locator preview', () => {
         },
       ],
       issues: [],
-    })
+    });
 
     expect(result).toMatchObject({
       ok: true,
@@ -178,13 +174,13 @@ describe('inspector locator preview', () => {
           },
         },
       },
-    })
-  })
+    });
+  });
 
   it('does not auto-apply when no candidate matches the selected element', () => {
-    const [roleCandidate] = createLocatorCandidates(pickedTarget)
+    const [roleCandidate] = createLocatorCandidates(pickedTarget);
     if (roleCandidate === undefined) {
-      throw new Error('Expected role candidate.')
+      throw new Error('Expected role candidate.');
     }
 
     const result = autoApplyTargetFromPreview({
@@ -203,7 +199,7 @@ describe('inspector locator preview', () => {
         },
       ],
       issues: [],
-    })
+    });
 
     expect(result).toMatchObject({
       ok: false,
@@ -213,14 +209,14 @@ describe('inspector locator preview', () => {
           message: 'Selected element could not be matched by locator candidates.',
         },
       ],
-    })
-  })
+    });
+  });
 
   it('delegates preview checks through the extension messaging boundary', async () => {
-    const sent: ActorbleExtensionMessage[] = []
-    const previewer = createLocatorPreviewer(createPreviewClient(sent))
+    const sent: ActorbleExtensionMessage[] = [];
+    const previewer = createLocatorPreviewer(createPreviewClient(sent));
 
-    const result = await previewer.previewTarget(pickedTarget, 'scenario-1')
+    const result = await previewer.previewTarget(pickedTarget, 'scenario-1');
 
     expect(result).toMatchObject({
       ok: true,
@@ -236,7 +232,7 @@ describe('inspector locator preview', () => {
           },
         ],
       },
-    })
+    });
     expect(sent[0]).toMatchObject({
       kind: 'locator:preview',
       payload: {
@@ -244,7 +240,7 @@ describe('inspector locator preview', () => {
         scenarioId: 'scenario-1',
         target: pickedTarget,
       },
-    })
+    });
     expect(sent[0]).toEqual(
       createExtensionMessage({
         kind: 'locator:preview',
@@ -255,7 +251,7 @@ describe('inspector locator preview', () => {
           candidates: createLocatorCandidates(pickedTarget),
         },
       }),
-    )
+    );
     expect(previewer.getSnapshot()).toMatchObject({
       status: 'ready',
       candidates: [
@@ -263,12 +259,12 @@ describe('inspector locator preview', () => {
           status: 'unique',
         },
       ],
-    })
-  })
+    });
+  });
 
   it('preserves builder target slot correlation through preview requests and snapshots', async () => {
-    const sent: ActorbleExtensionMessage[] = []
-    const previewer = createLocatorPreviewer(createPreviewClient(sent))
+    const sent: ActorbleExtensionMessage[] = [];
+    const previewer = createLocatorPreviewer(createPreviewClient(sent));
 
     const result = await previewer.previewTarget(pickedTarget, {
       scenarioId: 'scenario-1',
@@ -276,7 +272,7 @@ describe('inspector locator preview', () => {
         kind: 'waitFor-target',
         stepId: 'wait-step',
       },
-    })
+    });
 
     expect(result).toMatchObject({
       ok: true,
@@ -287,7 +283,7 @@ describe('inspector locator preview', () => {
           stepId: 'wait-step',
         },
       },
-    })
+    });
     expect(sent[0]).toMatchObject({
       kind: 'locator:preview',
       payload: {
@@ -298,30 +294,33 @@ describe('inspector locator preview', () => {
           stepId: 'wait-step',
         },
       },
-    })
+    });
     expect(previewer.getSnapshot()).toMatchObject({
       status: 'ready',
       targetSlot: {
         kind: 'waitFor-target',
         stepId: 'wait-step',
       },
-    })
-  })
-})
+    });
+  });
+});
 
 function createPreviewClient(sent: ActorbleExtensionMessage[]): LocatorPreviewClient {
   return {
     async getActiveTab() {
-      return { id: 7, url: 'http://localhost:3000/login' }
+      return { id: 7, url: 'http://localhost:3000/login' };
     },
     async sendMessage(message) {
-      sent.push(message)
+      sent.push(message);
       return ok({
         tabId: 7,
         scenarioId: 'scenario-1',
         ...(message.kind === 'locator:preview' && message.payload.targetSlot === undefined
           ? {}
-          : { targetSlot: message.kind === 'locator:preview' ? message.payload.targetSlot : undefined }),
+          : {
+              targetSlot:
+                message.kind === 'locator:preview' ? message.payload.targetSlot : undefined,
+            }),
         candidates: [
           {
             ...createLocatorCandidates(pickedTarget)[0],
@@ -330,7 +329,7 @@ function createPreviewClient(sent: ActorbleExtensionMessage[]): LocatorPreviewCl
             status: 'unique',
           },
         ],
-      })
+      });
     },
-  }
+  };
 }

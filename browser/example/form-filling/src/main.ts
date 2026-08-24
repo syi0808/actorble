@@ -1,11 +1,11 @@
-import '../../shared/styles.css'
-import { testId } from '../../../src/index.js'
-import { byId, escapeHtml } from '../../shared/example-utils.js'
+import '../../shared/styles.css';
+import { testId } from '../../../src/index.js';
+import { byId, escapeHtml } from '../../shared/example-utils.js';
 import {
   clickFocusTyping,
   mountTaskExample,
   type TaskExampleContext,
-} from '../../shared/task-example.js'
+} from '../../shared/task-example.js';
 
 const stageHtml = `
   <div class="browser-frame form-surface" data-testid="form-surface">
@@ -87,7 +87,7 @@ const stageHtml = `
       </aside>
     </div>
   </div>
-`
+`;
 
 mountTaskExample({
   title: 'Form filling',
@@ -100,92 +100,92 @@ mountTaskExample({
   run: runFormScenario,
   typeFirstField: typeFormFirstField,
   clickPrimary: clickFormPrimary,
-})
+});
 
 function bindStage(context: TaskExampleContext): void {
-  const requestForm = byId<HTMLFormElement>('request-form')
-  const nameInput = byId<HTMLInputElement>('request-name')
-  const emailInput = byId<HTMLInputElement>('request-email')
-  const companyInput = byId<HTMLInputElement>('request-company')
-  const detailsInput = byId<HTMLTextAreaElement>('request-details')
-  const copyCheckbox = byId<HTMLInputElement>('request-copy')
-  const submitButton = byId<HTMLButtonElement>('request-submit')
+  const requestForm = byId<HTMLFormElement>('request-form');
+  const nameInput = byId<HTMLInputElement>('request-name');
+  const emailInput = byId<HTMLInputElement>('request-email');
+  const companyInput = byId<HTMLInputElement>('request-company');
+  const detailsInput = byId<HTMLTextAreaElement>('request-details');
+  const copyCheckbox = byId<HTMLInputElement>('request-copy');
+  const submitButton = byId<HTMLButtonElement>('request-submit');
 
   requestForm.addEventListener('submit', (event) => {
-    event.preventDefault()
-    submitRequestForm()
-  })
+    event.preventDefault();
+    submitRequestForm();
+  });
 
-  context.bindDomEvents('nameInput', nameInput)
-  context.bindDomEvents('emailInput', emailInput)
-  context.bindDomEvents('companyInput', companyInput)
-  context.bindDomEvents('detailsInput', detailsInput)
-  context.bindDomEvents('copyCheckbox', copyCheckbox)
-  context.bindDomEvents('submitRequest', submitButton)
+  context.bindDomEvents('nameInput', nameInput);
+  context.bindDomEvents('emailInput', emailInput);
+  context.bindDomEvents('companyInput', companyInput);
+  context.bindDomEvents('detailsInput', detailsInput);
+  context.bindDomEvents('copyCheckbox', copyCheckbox);
+  context.bindDomEvents('submitRequest', submitButton);
 }
 
 async function runFormScenario(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  await typeFormFirstField(context)
+  await typeFormFirstField(context);
   await actorble.typeInto(testId('request-email'), 'mina@example.com', {
     ...clickFocusTyping(50, 5000),
-  })
+  });
   await actorble.typeInto(testId('request-company'), 'Northstar Labs', {
     ...clickFocusTyping(50, 5000),
-  })
+  });
   await actorble.typeInto(
     testId('request-details'),
     'Please automate a browser QA pass for the new onboarding form.',
     {
       ...clickFocusTyping(30, 7000),
     },
-  )
-  await actorble.click(testId('request-copy'), { pressDwell: 160, timeout: 1500 })
-  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 })
+  );
+  await actorble.click(testId('request-copy'), { pressDwell: 160, timeout: 1500 });
+  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',
-  })
+  });
 }
 
 async function typeFormFirstField(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
   await actorble.moveTo(testId('request-name'), {
     motion: { kind: 'ease', timing: 'ease-in-out', duration: 320 },
     timeout: 1500,
-  })
+  });
   await actorble.typeInto(testId('request-name'), 'Mina Park', {
     ...clickFocusTyping(70, 5000),
-  })
+  });
 }
 
 async function clickFormPrimary(context: TaskExampleContext): Promise<void> {
-  const actorble = context.actorble()
+  const actorble = context.actorble();
 
-  context.ensureInputValue('request-name', 'Mina Park')
-  context.ensureInputValue('request-email', 'mina@example.com')
-  context.ensureInputValue('request-company', 'Northstar Labs')
-  context.ensureInputValue('request-details', 'Please review this automated request.')
-  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 })
+  context.ensureInputValue('request-name', 'Mina Park');
+  context.ensureInputValue('request-email', 'mina@example.com');
+  context.ensureInputValue('request-company', 'Northstar Labs');
+  context.ensureInputValue('request-details', 'Please review this automated request.');
+  await actorble.click(testId('request-submit'), { pressDwell: 200, timeout: 1500 });
   await actorble.waitFor({
     kind: 'custom',
     predicate: () => document.getElementById('form-status')?.dataset.state === 'submitted',
-  })
+  });
 }
 
 function submitRequestForm(): void {
-  const nameInput = byId<HTMLInputElement>('request-name')
-  const emailInput = byId<HTMLInputElement>('request-email')
-  const copyCheckbox = byId<HTMLInputElement>('request-copy')
-  const status = byId<HTMLElement>('form-status')
-  const summary = byId<HTMLElement>('form-summary')
-  const name = nameInput.value.trim() || 'Unknown requester'
-  const email = emailInput.value.trim() || 'unknown@example.com'
+  const nameInput = byId<HTMLInputElement>('request-name');
+  const emailInput = byId<HTMLInputElement>('request-email');
+  const copyCheckbox = byId<HTMLInputElement>('request-copy');
+  const status = byId<HTMLElement>('form-status');
+  const summary = byId<HTMLElement>('form-summary');
+  const name = nameInput.value.trim() || 'Unknown requester';
+  const email = emailInput.value.trim() || 'unknown@example.com';
 
-  status.dataset.state = 'submitted'
-  status.textContent = `Submitted request for ${name}`
+  status.dataset.state = 'submitted';
+  status.textContent = `Submitted request for ${name}`;
   summary.innerHTML = `
     <div>
       <dt>Name</dt>
@@ -199,5 +199,5 @@ function submitRequestForm(): void {
       <dt>Copy</dt>
       <dd>${copyCheckbox.checked ? 'Yes' : 'No'}</dd>
     </div>
-  `
+  `;
 }

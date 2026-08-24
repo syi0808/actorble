@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - scroller2@0.0.1

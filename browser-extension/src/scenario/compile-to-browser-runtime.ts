@@ -7,15 +7,15 @@ import type {
   ScrollPosition as BrowserRuntimeScrollPosition,
   TextSelectionTarget as BrowserRuntimeTextSelectionTarget,
   WaitCondition as BrowserRuntimeWaitCondition,
-} from '@actorble/browser'
-import { createCapabilityFidelityReporter } from '@actorble/browser'
+} from '@actorble/browser';
+import { createCapabilityFidelityReporter } from '@actorble/browser';
 import {
   failure,
   ok,
   type ExtensionIssue,
   type ExtensionIssuePath,
   type ExtensionResult,
-} from '../shared/result.js'
+} from '../shared/result.js';
 import {
   DRAFT_SCENARIO_SCHEMA_VERSION,
   type ScenarioDocument,
@@ -28,51 +28,51 @@ import {
   type ScenarioTextMatcher,
   type ScenarioTextSelectionTarget,
   type ScenarioWaitCondition,
-} from './types.js'
+} from './types.js';
 
-export type BrowserRuntimeRunOptions = Omit<BrowserRunOptions, 'signal'>
+export type BrowserRuntimeRunOptions = Omit<BrowserRunOptions, 'signal'>;
 
 export type BrowserRuntimeCompilation = Readonly<{
-  scenario: BrowserRuntimeScenario
-  runOptions?: BrowserRuntimeRunOptions
-}>
+  scenario: BrowserRuntimeScenario;
+  runOptions?: BrowserRuntimeRunOptions;
+}>;
 
-export type BrowserRuntimeCompileResult = ExtensionResult<BrowserRuntimeCompilation>
+export type BrowserRuntimeCompileResult = ExtensionResult<BrowserRuntimeCompilation>;
 
-export type BrowserRuntimeLocatorCompileResult = ExtensionResult<BrowserRuntimeLocator>
+export type BrowserRuntimeLocatorCompileResult = ExtensionResult<BrowserRuntimeLocator>;
 
 export type BrowserRuntimeCompileContext = Readonly<{
-  capabilities?: Partial<BrowserRuntimeCapabilityReport>
-}>
+  capabilities?: Partial<BrowserRuntimeCapabilityReport>;
+}>;
 
 type ResolvedBrowserRuntimeCompileContext = Readonly<{
-  capabilities: BrowserRuntimeCapabilityReport
-}>
+  capabilities: BrowserRuntimeCapabilityReport;
+}>;
 
-const ACTORBLE_BROWSER_PLATFORM_KEY = 'actorble.browser'
-const DEFAULT_BROWSER_RUNTIME_CAPABILITIES = createCapabilityFidelityReporter().getCapabilities()
+const ACTORBLE_BROWSER_PLATFORM_KEY = 'actorble.browser';
+const DEFAULT_BROWSER_RUNTIME_CAPABILITIES = createCapabilityFidelityReporter().getCapabilities();
 const supportedTextSelectionCapabilities = [
   'selection-api',
   'pointer-gesture',
   'editor-adapter',
   'native',
-] as const
+] as const;
 
 export function compileScenarioLocatorToBrowserRuntime(
   locator: ScenarioLocator,
   path: ExtensionIssuePath = [],
 ): BrowserRuntimeLocatorCompileResult {
-  const issues: ExtensionIssue[] = []
-  const compiled = compileLocator(locator, path, issues)
+  const issues: ExtensionIssue[] = [];
+  const compiled = compileLocator(locator, path, issues);
 
-  return compiled === null || issues.length > 0 ? failure(issues) : ok(compiled)
+  return compiled === null || issues.length > 0 ? failure(issues) : ok(compiled);
 }
 
 export function compileToBrowserRuntime(
   document: ScenarioDocument,
   context: BrowserRuntimeCompileContext = {},
 ): BrowserRuntimeCompileResult {
-  const schemaVersion = readProperty(document, 'schemaVersion')
+  const schemaVersion = readProperty(document, 'schemaVersion');
 
   if (schemaVersion !== DRAFT_SCENARIO_SCHEMA_VERSION) {
     return failure({
@@ -83,32 +83,32 @@ export function compileToBrowserRuntime(
         schemaVersion,
         supportedSchemaVersions: [DRAFT_SCENARIO_SCHEMA_VERSION],
       },
-    })
+    });
   }
 
-  const issues: ExtensionIssue[] = []
-  rejectPlatformExtensions(document.platform, ['platform'], issues)
-  const resolvedContext = resolveCompileContext(context)
+  const issues: ExtensionIssue[] = [];
+  rejectPlatformExtensions(document.platform, ['platform'], issues);
+  const resolvedContext = resolveCompileContext(context);
 
   const steps = document.steps
     .map((step, index) => compileStep(step, index, issues, resolvedContext))
-    .filter((step): step is BrowserRuntimeScenarioStep => step !== null)
+    .filter((step): step is BrowserRuntimeScenarioStep => step !== null);
 
   if (issues.length > 0) {
-    return failure(issues)
+    return failure(issues);
   }
 
   const scenario: BrowserRuntimeScenario = {
     ...(document.id === undefined ? {} : { id: document.id }),
     ...(document.name === undefined ? {} : { name: document.name }),
     steps,
-  }
-  const runOptions = compileRunOptions(document)
+  };
+  const runOptions = compileRunOptions(document);
 
   return ok({
     scenario,
     ...(runOptions === undefined ? {} : { runOptions }),
-  })
+  });
 }
 
 const clickOptionKeys = [
@@ -119,8 +119,8 @@ const clickOptionKeys = [
   'clickCount',
   'force',
   'pressDwell',
-] as const
-const moveOptionKeys = ['timeout', 'duration', 'motion'] as const
+] as const;
+const moveOptionKeys = ['timeout', 'duration', 'motion'] as const;
 const clickCurrentOptionKeys = [
   'timeout',
   'duration',
@@ -128,17 +128,17 @@ const clickCurrentOptionKeys = [
   'button',
   'clickCount',
   'pressDwell',
-] as const
-const focusOptionKeys = ['timeout', 'focusVisible'] as const
+] as const;
+const focusOptionKeys = ['timeout', 'focusVisible'] as const;
 const typeOptionKeys = [
   'timeout',
   'delay',
   'focusStrategy',
   'focusClick',
   'afterFocusDelay',
-] as const
-const fillOptionKeys = ['timeout', 'clear'] as const
-const pressOptionKeys = ['timeout', 'delay'] as const
+] as const;
+const fillOptionKeys = ['timeout', 'clear'] as const;
+const pressOptionKeys = ['timeout', 'delay'] as const;
 const revealOptionKeys = [
   'timeout',
   'visibility',
@@ -149,26 +149,24 @@ const revealOptionKeys = [
   'offset',
   'motion',
   'settle',
-] as const
-const scrollOptionKeys = ['timeout', 'motion', 'settle'] as const
-const dragOptionKeys = ['timeout', 'duration', 'motion', 'force'] as const
-const selectTextOptionKeys = ['timeout', 'duration', 'motion'] as const
-const waitOptionKeys = ['timeout'] as const
+] as const;
+const scrollOptionKeys = ['timeout', 'motion', 'settle'] as const;
+const dragOptionKeys = ['timeout', 'duration', 'motion', 'force'] as const;
+const selectTextOptionKeys = ['timeout', 'duration', 'motion'] as const;
+const waitOptionKeys = ['timeout'] as const;
 
-type BrowserRuntimeStepOptions = Readonly<Record<string, unknown>>
+type BrowserRuntimeStepOptions = Readonly<Record<string, unknown>>;
 type BrowserRuntimeTextMatcher = Readonly<{
-  value: string | RegExp
-  exact?: boolean
-}>
+  value: string | RegExp;
+  exact?: boolean;
+}>;
 
-function compileRunOptions(
-  document: ScenarioDocument,
-): BrowserRuntimeRunOptions | undefined {
-  const timeout = document.defaults?.timeout
-  const betweenSteps = document.defaults?.pacing?.betweenSteps
+function compileRunOptions(document: ScenarioDocument): BrowserRuntimeRunOptions | undefined {
+  const timeout = document.defaults?.timeout;
+  const betweenSteps = document.defaults?.pacing?.betweenSteps;
 
   if (timeout === undefined && betweenSteps === undefined) {
-    return undefined
+    return undefined;
   }
 
   return {
@@ -180,7 +178,7 @@ function compileRunOptions(
             betweenSteps,
           },
         }),
-  }
+  };
 }
 
 function compileStep(
@@ -189,20 +187,20 @@ function compileStep(
   issues: ExtensionIssue[],
   context: ResolvedBrowserRuntimeCompileContext,
 ): BrowserRuntimeScenarioStep | null {
-  const path: ExtensionIssuePath = ['steps', index]
+  const path: ExtensionIssuePath = ['steps', index];
 
-  rejectPlatformExtensions(step.platform, [...path, 'platform'], issues)
+  rejectPlatformExtensions(step.platform, [...path, 'platform'], issues);
 
   switch (step.action) {
     case 'click': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         clickOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -211,17 +209,17 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'moveTo': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         moveOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -230,7 +228,7 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'clickCurrent': {
       const options = compileOptions(
@@ -239,23 +237,23 @@ function compileStep(
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return asRuntimeStep({
         ...stepIdentity(step),
         action: step.action,
         ...optionsProperty(options),
-      })
+      });
     }
     case 'doubleClick': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         clickOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -264,17 +262,17 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'focus': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         focusOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -283,7 +281,7 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'type': {
       const options = compileOptions(
@@ -292,24 +290,24 @@ function compileStep(
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return asRuntimeStep({
         ...stepIdentity(step),
         action: step.action,
         input: step.input,
         ...optionsProperty(options),
-      })
+      });
     }
     case 'typeInto': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         typeOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -319,17 +317,17 @@ function compileStep(
             target,
             input: step.input,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'fill': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         fillOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -339,7 +337,7 @@ function compileStep(
             target,
             input: step.input,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'press': {
       const options = compileOptions(
@@ -348,24 +346,24 @@ function compileStep(
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return asRuntimeStep({
         ...stepIdentity(step),
         action: step.action,
         input: step.input,
         ...optionsProperty(options),
-      })
+      });
     }
     case 'reveal': {
-      const target = compileTarget(step.target, [...path, 'target'], issues)
+      const target = compileTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         revealOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -374,7 +372,7 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'scrollTo':
     case 'scrollBy': {
@@ -384,25 +382,25 @@ function compileStep(
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return asRuntimeStep({
         ...stepIdentity(step),
         action: step.action,
         input: compileScrollVector(step.input),
         ...optionsProperty(options),
-      })
+      });
     }
     case 'drag': {
-      const from = compileTarget(step.from, [...path, 'from'], issues)
-      const to = compileTarget(step.to, [...path, 'to'], issues)
+      const from = compileTarget(step.from, [...path, 'from'], issues);
+      const to = compileTarget(step.to, [...path, 'to'], issues);
       const options = compileOptions(
         step.options,
         dragOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return from === null || to === null
         ? null
@@ -412,18 +410,18 @@ function compileStep(
             from,
             to,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'selectText': {
-      validateSelectTextCapability([...path], issues, context)
-      const target = compileTextSelectionTarget(step.target, [...path, 'target'], issues)
+      validateSelectTextCapability([...path], issues, context);
+      const target = compileTextSelectionTarget(step.target, [...path, 'target'], issues);
       const options = compileOptions(
         step.options,
         selectTextOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return target === null
         ? null
@@ -432,17 +430,17 @@ function compileStep(
             action: step.action,
             target,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'waitFor': {
-      const input = compileWaitCondition(step.input, [...path, 'input'], issues)
+      const input = compileWaitCondition(step.input, [...path, 'input'], issues);
       const options = compileOptions(
         step.options,
         waitOptionKeys,
         [...path, 'options'],
         step.action,
         issues,
-      )
+      );
 
       return input === null
         ? null
@@ -451,7 +449,7 @@ function compileStep(
             action: step.action,
             input,
             ...optionsProperty(options),
-          })
+          });
     }
     case 'delay':
       return asRuntimeStep({
@@ -459,16 +457,20 @@ function compileStep(
         action: step.action,
         duration: step.duration,
         ...(step.reason === undefined ? {} : { reason: step.reason }),
-      })
+      });
   }
 
   issues.push(
-    compilerIssue(`Scenario step action "${String(readProperty(step, 'action'))}" is not supported.`, path, {
-      action: readProperty(step, 'action'),
-    }),
-  )
+    compilerIssue(
+      `Scenario step action "${String(readProperty(step, 'action'))}" is not supported.`,
+      path,
+      {
+        action: readProperty(step, 'action'),
+      },
+    ),
+  );
 
-  return null
+  return null;
 }
 
 function compileTextSelectionTarget(
@@ -477,8 +479,8 @@ function compileTextSelectionTarget(
   issues: ExtensionIssue[],
 ): BrowserRuntimeTextSelectionTarget | null {
   if (isTextSelectionRangeTarget(target)) {
-    const anchorTarget = compileTarget(target.anchor.target, [...path, 'anchor', 'target'], issues)
-    const focusTarget = compileTarget(target.focus.target, [...path, 'focus', 'target'], issues)
+    const anchorTarget = compileTarget(target.anchor.target, [...path, 'anchor', 'target'], issues);
+    const focusTarget = compileTarget(target.focus.target, [...path, 'focus', 'target'], issues);
 
     return anchorTarget === null || focusTarget === null
       ? null
@@ -491,10 +493,10 @@ function compileTextSelectionTarget(
             target: focusTarget,
             offset: target.focus.offset,
           },
-        }
+        };
   }
 
-  return compileTarget(target, path, issues)
+  return compileTarget(target, path, issues);
 }
 
 function compileTarget(
@@ -503,25 +505,25 @@ function compileTarget(
   issues: ExtensionIssue[],
 ): BrowserRuntimeLocator | null {
   if (isTargetGroup(target)) {
-    rejectUnsupportedTargetPlatformExtensions(target.platform, [...path, 'platform'], issues)
+    rejectUnsupportedTargetPlatformExtensions(target.platform, [...path, 'platform'], issues);
 
     // Runtime scenarios currently accept one TargetLike, so target groups use
     // their primary locator until fallback and strict semantics are representable.
-    const firstLocator = target.locators[0]
+    const firstLocator = target.locators[0];
 
     if (firstLocator === undefined) {
       issues.push(
         compilerIssue('Target group must include at least one locator.', [...path, 'locators'], {
           targetKind: 'target',
         }),
-      )
-      return null
+      );
+      return null;
     }
 
-    return compileLocator(firstLocator, [...path, 'locators', 0], issues)
+    return compileLocator(firstLocator, [...path, 'locators', 0], issues);
   }
 
-  return compileLocator(target, path, issues)
+  return compileLocator(target, path, issues);
 }
 
 function compileLocator(
@@ -535,15 +537,15 @@ function compileLocator(
         kind: 'css',
         selector: locator.selector,
         ...matchIndexProperty(locator.matchIndex),
-      }
+      };
     case 'role': {
       const name =
         locator.name === undefined
           ? undefined
-          : compileLocatorTextMatcher(locator.name, [...path, 'name'], issues)
+          : compileLocatorTextMatcher(locator.name, [...path, 'name'], issues);
 
       if (name === null) {
-        return null
+        return null;
       }
 
       return {
@@ -553,10 +555,10 @@ function compileLocator(
         ...(name?.exact === undefined ? {} : { exact: name.exact }),
         ...(locator.includeHidden === undefined ? {} : { includeHidden: locator.includeHidden }),
         ...matchIndexProperty(locator.matchIndex),
-      }
+      };
     }
     case 'text': {
-      const value = compileLocatorTextMatcher(locator.text, [...path, 'text'], issues)
+      const value = compileLocatorTextMatcher(locator.text, [...path, 'text'], issues);
 
       return value === null
         ? null
@@ -565,10 +567,10 @@ function compileLocator(
             value: value.value,
             ...(value.exact === undefined ? {} : { exact: value.exact }),
             ...matchIndexProperty(locator.matchIndex),
-          }
+          };
     }
     case 'label': {
-      const value = compileLocatorTextMatcher(locator.label, [...path, 'label'], issues)
+      const value = compileLocatorTextMatcher(locator.label, [...path, 'label'], issues);
 
       return value === null
         ? null
@@ -577,7 +579,7 @@ function compileLocator(
             value: value.value,
             ...(value.exact === undefined ? {} : { exact: value.exact }),
             ...matchIndexProperty(locator.matchIndex),
-          }
+          };
     }
     case 'testId':
       return {
@@ -585,7 +587,7 @@ function compileLocator(
         value: locator.value,
         ...(locator.attribute === undefined ? {} : { attribute: locator.attribute }),
         ...matchIndexProperty(locator.matchIndex),
-      }
+      };
     case 'point':
       return {
         kind: 'point',
@@ -596,7 +598,7 @@ function compileLocator(
         ...(locator.point.coordinateSpace === undefined
           ? {}
           : { coordinateSpace: locator.point.coordinateSpace }),
-      }
+      };
   }
 }
 
@@ -608,24 +610,24 @@ function compileWaitCondition(
   switch (condition.kind) {
     case 'visible':
     case 'hidden': {
-      const target = compileTarget(condition.target, [...path, 'target'], issues)
+      const target = compileTarget(condition.target, [...path, 'target'], issues);
 
       return target === null
         ? null
         : {
             kind: condition.kind,
             target,
-          }
+          };
     }
     case 'text': {
-      const value = compileWaitTextMatcher(condition.value, [...path, 'value'], issues)
+      const value = compileWaitTextMatcher(condition.value, [...path, 'value'], issues);
 
       return value === null
         ? null
         : {
             kind: 'text',
             value,
-          }
+          };
     }
   }
 }
@@ -634,7 +636,7 @@ function compileScrollVector(point: ScenarioScrollVector): BrowserRuntimeScrollP
   return {
     x: point.x,
     y: point.y,
-  }
+  };
 }
 
 function compileOptions(
@@ -645,15 +647,15 @@ function compileOptions(
   issues: ExtensionIssue[],
 ): BrowserRuntimeStepOptions | undefined {
   if (options === undefined) {
-    return undefined
+    return undefined;
   }
 
-  const allowed = new Set<string>(allowedKeys)
-  const compiled: Record<string, unknown> = {}
+  const allowed = new Set<string>(allowedKeys);
+  const compiled: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(options)) {
     if (value === undefined) {
-      continue
+      continue;
     }
 
     if (!allowed.has(key)) {
@@ -667,14 +669,14 @@ function compileOptions(
             supportedOptions: allowedKeys,
           },
         ),
-      )
-      continue
+      );
+      continue;
     }
 
-    compiled[key] = value
+    compiled[key] = value;
   }
 
-  return Object.keys(compiled).length === 0 ? undefined : compiled
+  return Object.keys(compiled).length === 0 ? undefined : compiled;
 }
 
 function compileLocatorTextMatcher(
@@ -683,11 +685,11 @@ function compileLocatorTextMatcher(
   issues: ExtensionIssue[],
 ): BrowserRuntimeTextMatcher | null {
   if (typeof matcher === 'string') {
-    return { value: matcher }
+    return { value: matcher };
   }
 
-  const match = matcher.match ?? 'contains'
-  const caseSensitive = matcher.caseSensitive !== false
+  const match = matcher.match ?? 'contains';
+  const caseSensitive = matcher.caseSensitive !== false;
 
   if (match === 'regex') {
     const value = compileRegExp(
@@ -695,21 +697,22 @@ function compileLocatorTextMatcher(
       matcher.caseSensitive === false ? 'i' : '',
       [...path, 'value'],
       issues,
-    )
-    return value === null ? null : { value }
+    );
+    return value === null ? null : { value };
   }
 
   if (caseSensitive) {
     return {
       value: matcher.value,
       ...(match === 'exact' ? { exact: true } : {}),
-    }
+    };
   }
 
-  const source = match === 'exact' ? `^${escapeRegExp(matcher.value)}$` : escapeRegExp(matcher.value)
-  const value = compileRegExp(source, 'i', [...path, 'value'], issues)
+  const source =
+    match === 'exact' ? `^${escapeRegExp(matcher.value)}$` : escapeRegExp(matcher.value);
+  const value = compileRegExp(source, 'i', [...path, 'value'], issues);
 
-  return value === null ? null : { value }
+  return value === null ? null : { value };
 }
 
 function compileWaitTextMatcher(
@@ -718,10 +721,10 @@ function compileWaitTextMatcher(
   issues: ExtensionIssue[],
 ): string | RegExp | null {
   if (typeof matcher === 'string') {
-    return matcher
+    return matcher;
   }
 
-  const match = matcher.match ?? 'contains'
+  const match = matcher.match ?? 'contains';
 
   if (match === 'regex') {
     return compileRegExp(
@@ -729,15 +732,21 @@ function compileWaitTextMatcher(
       matcher.caseSensitive === false ? 'i' : '',
       [...path, 'value'],
       issues,
-    )
+    );
   }
 
   if (match === 'contains' && matcher.caseSensitive !== false) {
-    return matcher.value
+    return matcher.value;
   }
 
-  const source = match === 'exact' ? `^${escapeRegExp(matcher.value)}$` : escapeRegExp(matcher.value)
-  return compileRegExp(source, matcher.caseSensitive === false ? 'i' : '', [...path, 'value'], issues)
+  const source =
+    match === 'exact' ? `^${escapeRegExp(matcher.value)}$` : escapeRegExp(matcher.value);
+  return compileRegExp(
+    source,
+    matcher.caseSensitive === false ? 'i' : '',
+    [...path, 'value'],
+    issues,
+  );
 }
 
 function compileRegExp(
@@ -747,7 +756,7 @@ function compileRegExp(
   issues: ExtensionIssue[],
 ): RegExp | null {
   try {
-    return new RegExp(source, flags)
+    return new RegExp(source, flags);
   } catch (error) {
     issues.push(
       compilerIssue(`Invalid regular expression "${source}".`, path, {
@@ -755,8 +764,8 @@ function compileRegExp(
         flags,
         reason: error instanceof Error ? error.message : String(error),
       }),
-    )
-    return null
+    );
+    return null;
   }
 }
 
@@ -765,7 +774,7 @@ function rejectPlatformExtensions(
   path: ExtensionIssuePath,
   issues: ExtensionIssue[],
 ): void {
-  rejectUnsupportedPlatformExtensions(platform, path, issues, [])
+  rejectUnsupportedPlatformExtensions(platform, path, issues, []);
 }
 
 function rejectUnsupportedTargetPlatformExtensions(
@@ -773,7 +782,7 @@ function rejectUnsupportedTargetPlatformExtensions(
   path: ExtensionIssuePath,
   issues: ExtensionIssue[],
 ): void {
-  rejectUnsupportedPlatformExtensions(platform, path, issues, [ACTORBLE_BROWSER_PLATFORM_KEY])
+  rejectUnsupportedPlatformExtensions(platform, path, issues, [ACTORBLE_BROWSER_PLATFORM_KEY]);
 }
 
 function rejectUnsupportedPlatformExtensions(
@@ -782,13 +791,13 @@ function rejectUnsupportedPlatformExtensions(
   issues: ExtensionIssue[],
   supportedPlatformExtensions: readonly string[],
 ): void {
-  const extensionKeys = platform === undefined ? [] : Object.keys(platform)
-  const unsupportedExtensionKeys = extensionKeys.filter((key) => (
-    !supportedPlatformExtensions.includes(key)
-  ))
+  const extensionKeys = platform === undefined ? [] : Object.keys(platform);
+  const unsupportedExtensionKeys = extensionKeys.filter(
+    (key) => !supportedPlatformExtensions.includes(key),
+  );
 
   if (unsupportedExtensionKeys.length === 0) {
-    return
+    return;
   }
 
   issues.push({
@@ -799,23 +808,21 @@ function rejectUnsupportedPlatformExtensions(
       platformExtensions: unsupportedExtensionKeys,
       supportedPlatformExtensions,
     },
-  })
+  });
 }
 
-function matchIndexProperty(
-  matchIndex: number | undefined,
-): Readonly<{ matchIndex?: number }> {
-  return matchIndex === undefined ? {} : { matchIndex }
+function matchIndexProperty(matchIndex: number | undefined): Readonly<{ matchIndex?: number }> {
+  return matchIndex === undefined ? {} : { matchIndex };
 }
 
 function stepIdentity(step: ScenarioStep): Readonly<{ id?: string }> {
-  return step.id === undefined ? {} : { id: step.id }
+  return step.id === undefined ? {} : { id: step.id };
 }
 
 function optionsProperty(
   options: BrowserRuntimeStepOptions | undefined,
 ): Readonly<{ options?: BrowserRuntimeStepOptions }> {
-  return options === undefined ? {} : { options }
+  return options === undefined ? {} : { options };
 }
 
 function resolveCompileContext(
@@ -826,7 +833,7 @@ function resolveCompileContext(
       ...DEFAULT_BROWSER_RUNTIME_CAPABILITIES,
       ...context.capabilities,
     },
-  }
+  };
 }
 
 function validateSelectTextCapability(
@@ -835,7 +842,7 @@ function validateSelectTextCapability(
   context: ResolvedBrowserRuntimeCompileContext,
 ): void {
   if (context.capabilities.textSelection !== 'none') {
-    return
+    return;
   }
 
   issues.push(
@@ -845,17 +852,17 @@ function validateSelectTextCapability(
       actual: context.capabilities.textSelection,
       supported: supportedTextSelectionCapabilities,
     }),
-  )
+  );
 }
 
 function isTextSelectionRangeTarget(
   target: ScenarioTextSelectionTarget,
 ): target is Extract<ScenarioTextSelectionTarget, Readonly<{ anchor: unknown; focus: unknown }>> {
-  return 'anchor' in target && 'focus' in target
+  return 'anchor' in target && 'focus' in target;
 }
 
 function asRuntimeStep(step: BrowserRuntimeScenarioStep): BrowserRuntimeScenarioStep {
-  return step
+  return step;
 }
 
 function compilerIssue(
@@ -868,21 +875,21 @@ function compilerIssue(
     message,
     path,
     details,
-  }
+  };
 }
 
 function readProperty(input: unknown, property: string): unknown {
   if (typeof input !== 'object' || input === null) {
-    return undefined
+    return undefined;
   }
 
-  return (input as Readonly<Record<string, unknown>>)[property]
+  return (input as Readonly<Record<string, unknown>>)[property];
 }
 
 function isTargetGroup(target: ScenarioTarget): target is ScenarioTargetGroup {
-  return 'locators' in target
+  return 'locators' in target;
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }

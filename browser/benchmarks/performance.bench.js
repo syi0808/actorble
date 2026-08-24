@@ -1,115 +1,115 @@
-import { beforeAll, bench, describe } from 'vitest'
-import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js'
-import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js'
-import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js'
+import { beforeAll, bench, describe } from 'vitest';
+import { BrowserDiagnosticsTrace } from '../src/diagnostics/diagnostics-trace/index.js';
+import { BrowserPointerSignalBus } from '../src/input/pointer-signals/index.js';
+import { BrowserPointerEngine } from '../src/input/pointer-engine/index.js';
 import {
   BrowserDomAdapter,
   BrowserStateApplier,
   BrowserStyleAdapter,
-} from '../src/platform/platform-adapter/index.js'
-import { BrowserWaitObservationEngine } from '../src/runtime/wait-observation-engine/index.js'
-import { css, label, role, text } from '../src/shared/index.js'
-import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js'
-import { BrowserGeometryEngine } from '../src/targeting/geometry-engine/index.js'
-import { BrowserSurfaceEngine } from '../src/targeting/surface-engine/index.js'
-import { BrowserTargetResolver } from '../src/targeting/target-resolver/index.js'
-import { BrowserVisualLayer } from '../src/visual/visual-layer/index.js'
-import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js'
+} from '../src/platform/platform-adapter/index.js';
+import { BrowserWaitObservationEngine } from '../src/runtime/wait-observation-engine/index.js';
+import { css, label, role, text } from '../src/shared/index.js';
+import { createFrameGeometrySurfaceCache } from '../src/targeting/frame-geometry-surface-cache/index.js';
+import { BrowserGeometryEngine } from '../src/targeting/geometry-engine/index.js';
+import { BrowserSurfaceEngine } from '../src/targeting/surface-engine/index.js';
+import { BrowserTargetResolver } from '../src/targeting/target-resolver/index.js';
+import { BrowserVisualLayer } from '../src/visual/visual-layer/index.js';
+import { BrowserPseudoStateMirror } from '../src/visual/pseudo-state-mirror/index.js';
 
 const BENCH_OPTIONS = {
   time: 80,
   warmupTime: 20,
-}
+};
 
-const LARGE_DOM_SIZE = 80
-const TARGET_INDEX = LARGE_DOM_SIZE - 1
-const NESTED_TEXT_ROW_COUNT = 120
-const STYLE_RULE_COUNT = 50
-const PSEUDO_STATE_WORST_STYLE_COUNT = 8
-const PSEUDO_STATE_WORST_RULES_PER_STYLE = 80
-const GEOMETRY_REPEAT_COUNT = 200
-const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8
-const WAIT_RETRY_REPEAT_COUNT = 50
-const PSEUDO_STATE_REPEAT_COUNT = 20
-const PSEUDO_STATE_WORST_REPEAT_COUNT = 5
-const POINTER_LONG_FRAME_COUNT = 512
-const EXPENSIVE_WAIT_DOM_SIZE = 160
-const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1
-const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5
+const LARGE_DOM_SIZE = 80;
+const TARGET_INDEX = LARGE_DOM_SIZE - 1;
+const NESTED_TEXT_ROW_COUNT = 120;
+const STYLE_RULE_COUNT = 50;
+const PSEUDO_STATE_WORST_STYLE_COUNT = 8;
+const PSEUDO_STATE_WORST_RULES_PER_STYLE = 80;
+const GEOMETRY_REPEAT_COUNT = 200;
+const GEOMETRY_SCROLL_ANCESTOR_COUNT = 8;
+const WAIT_RETRY_REPEAT_COUNT = 50;
+const PSEUDO_STATE_REPEAT_COUNT = 20;
+const PSEUDO_STATE_WORST_REPEAT_COUNT = 5;
+const POINTER_LONG_FRAME_COUNT = 512;
+const EXPENSIVE_WAIT_DOM_SIZE = 160;
+const EXPENSIVE_WAIT_TARGET_INDEX = EXPENSIVE_WAIT_DOM_SIZE - 1;
+const EXPENSIVE_WAIT_UNCHANGED_RETRIES = 5;
 const EXPENSIVE_WAIT_BENCH_OPTIONS = {
   time: 240,
   warmupTime: 40,
-}
-const LONG_TRACE_APPEND_COUNT = 400
-const TRACE_RETENTION_LIMIT = 40
+};
+const LONG_TRACE_APPEND_COUNT = 400;
+const TRACE_RETENTION_LIMIT = 40;
 
 function createClock() {
-  let current = 1
+  let current = 1;
 
   return {
     now() {
-      return current++
+      return current++;
     },
-  }
+  };
 }
 
 function createFrameTimeline() {
-  let current = 0
+  let current = 0;
 
   return {
     now() {
-      return current
+      return current;
     },
     async delay(duration) {
-      current += Math.max(0, duration)
+      current += Math.max(0, duration);
     },
     async nextFrame() {
-      current += 16
-      return current
+      current += 16;
+      return current;
     },
     async settle() {
-      current += 16
+      current += 16;
     },
     withTimeout(operation) {
-      return operation
+      return operation;
     },
-  }
+  };
 }
 
 function createHeldFrameTimeline() {
-  let current = 0
+  let current = 0;
 
   return {
     now() {
-      return current
+      return current;
     },
     nextFrame() {
-      current += 16
-      return new Promise(() => {})
+      current += 16;
+      return new Promise(() => {});
     },
-  }
+  };
 }
 
 function createPassthroughGeometrySurfaceCache() {
   return {
     getBoundingRect(_element, read) {
-      return read()
+      return read();
     },
     getViewportRect(_root, read) {
-      return read()
+      return read();
     },
     getScrollMetrics(_target, read) {
-      return read()
+      return read();
     },
     getComputedStyle(_element, read) {
-      return read()
+      return read();
     },
     getScrollableAncestors(_target, read) {
-      return read()
+      return read();
     },
     invalidate() {},
     dispose() {},
-  }
+  };
 }
 
 function targetHandle(id, element, root = document) {
@@ -123,16 +123,16 @@ function targetHandle(id, element, root = document) {
       selector: `#${id}`,
       description: `${element.tagName.toLowerCase()}#${id}`,
     },
-  }
+  };
 }
 
 function createNoopStylePort() {
   return {
     injectStyle() {
-      return { dispose() {} }
+      return { dispose() {} };
     },
     removeStyle() {},
-  }
+  };
 }
 
 function createInstrumentedGeometryFixture(
@@ -140,17 +140,15 @@ function createInstrumentedGeometryFixture(
 ) {
   const clips = Array.from({ length: GEOMETRY_SCROLL_ANCESTOR_COUNT }, () =>
     document.createElement('section'),
-  )
-  const target = document.createElement('button')
+  );
+  const target = document.createElement('button');
   const counts = {
     rect: 0,
     style: 0,
     scrollMetrics: 0,
     viewport: 0,
-  }
-  const rects = new Map([
-    [target, { x: 10, y: 20, width: 100, height: 50 }],
-  ])
+  };
+  const rects = new Map([[target, { x: 10, y: 20, width: 100, height: 50 }]]);
 
   clips.forEach((clip, index) => {
     rects.set(clip, {
@@ -158,39 +156,39 @@ function createInstrumentedGeometryFixture(
       y: 10 + index,
       width: 100 - index * 2,
       height: 70 - index,
-    })
-  })
+    });
+  });
   const dom = {
     getRoot: () => document,
     querySelectorAll: () => [],
     getBoundingClientRect(element) {
-      counts.rect += 1
-      return rects.get(element) ?? { x: 0, y: 0, width: 0, height: 0 }
+      counts.rect += 1;
+      return rects.get(element) ?? { x: 0, y: 0, width: 0, height: 0 };
     },
     getComputedStyle() {
-      counts.style += 1
+      counts.style += 1;
       return {
         overflow: 'visible',
         overflowX: 'visible',
         overflowY: 'scroll',
-      }
+      };
     },
     getViewportRect() {
-      counts.viewport += 1
-      return { x: 0, y: 0, width: 1024, height: 768 }
+      counts.viewport += 1;
+      return { x: 0, y: 0, width: 1024, height: 768 };
     },
     getViewportScrollTarget: () => window,
     getParentElement(element) {
       if (element === target) {
-        return clips[0]
+        return clips[0];
       }
 
-      const index = clips.indexOf(element)
+      const index = clips.indexOf(element);
 
-      return index >= 0 ? (clips[index + 1] ?? null) : null
+      return index >= 0 ? (clips[index + 1] ?? null) : null;
     },
     getScrollMetrics() {
-      counts.scrollMetrics += 1
+      counts.scrollMetrics += 1;
       return {
         scrollLeft: 0,
         scrollTop: 0,
@@ -198,7 +196,7 @@ function createInstrumentedGeometryFixture(
         scrollHeight: 160,
         clientWidth: 80,
         clientHeight: 60,
-      }
+      };
     },
     elementFromPoint: () => null,
     getAttribute: () => null,
@@ -209,35 +207,36 @@ function createInstrumentedGeometryFixture(
     getActiveElement: () => null,
     describeElement: (element) => ({
       selector: element === target ? '#bench-geometry-target' : '#bench-geometry-clip',
-      description: element === target ? 'button#bench-geometry-target' : 'section#bench-geometry-clip',
+      description:
+        element === target ? 'button#bench-geometry-target' : 'section#bench-geometry-clip',
     }),
     observeLayoutInvalidations: () => ({ dispose() {} }),
     focus() {},
     blur() {},
     scrollIntoView() {},
     scrollTo() {},
-  }
-  const surface = new BrowserSurfaceEngine({ dom, cache })
+  };
+  const surface = new BrowserSurfaceEngine({ dom, cache });
   const geometry = new BrowserGeometryEngine({
     dom,
     surface,
     cache,
     clock: createClock(),
-  })
-  const handle = targetHandle('bench-geometry-target', target)
+  });
+  const handle = targetHandle('bench-geometry-target', target);
 
-  return { cache, counts, geometry, handle, rects, surface, target }
+  return { cache, counts, geometry, handle, rects, surface, target };
 }
 
 function createResolver() {
   return new BrowserTargetResolver({
     dom: new BrowserDomAdapter(document),
     clock: createClock(),
-  })
+  });
 }
 
 function createManualLayoutInvalidationTracker() {
-  const listeners = []
+  const listeners = [];
 
   return {
     tracker: {
@@ -246,17 +245,17 @@ function createManualLayoutInvalidationTracker() {
       isRunning: () => true,
       markDirty() {},
       subscribe(listener) {
-        listeners.push(listener)
+        listeners.push(listener);
 
         return {
           dispose() {
-            const index = listeners.indexOf(listener)
+            const index = listeners.indexOf(listener);
 
             if (index >= 0) {
-              listeners.splice(index, 1)
+              listeners.splice(index, 1);
             }
           },
-        }
+        };
       },
       dispose() {},
     },
@@ -267,24 +266,24 @@ function createManualLayoutInvalidationTracker() {
           reasons: [reason],
           at: 1,
           coalesced: 1,
-        })
+        });
       }
     },
-  }
+  };
 }
 
 function createVisibleWaitRetryFixture({ dirtyAfterSettles }) {
-  const element = document.querySelector(`#bench-save-${TARGET_INDEX}`)
-  const target = targetHandle('bench-wait-visible-target', element)
-  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const element = document.querySelector(`#bench-save-${TARGET_INDEX}`);
+  const target = targetHandle('bench-wait-visible-target', element);
+  const layoutInvalidation = createManualLayoutInvalidationTracker();
   const counts = {
     resolve: 0,
     validate: 0,
     geometry: 0,
     inspect: 0,
-  }
-  let settleAttempts = 0
-  let visible = false
+  };
+  let settleAttempts = 0;
+  let visible = false;
   const geometrySnapshot = {
     target,
     rect: { x: 20, y: 30, width: 120, height: 32 },
@@ -297,44 +296,44 @@ function createVisibleWaitRetryFixture({ dirtyAfterSettles }) {
     },
     coordinateSpace: 'viewport',
     computedAt: 1,
-  }
+  };
   const timeline = {
     ...createFrameTimeline(),
     async settle() {
-      settleAttempts += 1
+      settleAttempts += 1;
 
       if (settleAttempts === dirtyAfterSettles) {
-        visible = true
-        layoutInvalidation.emit('mutation')
+        visible = true;
+        layoutInvalidation.emit('mutation');
       }
     },
-  }
+  };
   const engine = new BrowserWaitObservationEngine({
     layoutInvalidation: layoutInvalidation.tracker,
     timeline,
     resolver: {
       async resolve() {
-        counts.resolve += 1
-        return target
+        counts.resolve += 1;
+        return target;
       },
       async resolveAll() {
-        return [target]
+        return [target];
       },
       async exists() {
-        return true
+        return true;
       },
       async inspect() {
-        return { target, debug: target.debug, validity: 'live' }
+        return { target, debug: target.debug, validity: 'live' };
       },
       async validate(handle) {
-        counts.validate += 1
-        return handle
+        counts.validate += 1;
+        return handle;
       },
     },
     geometry: {
       async snapshot() {
-        counts.geometry += 1
-        return geometrySnapshot
+        counts.geometry += 1;
+        return geometrySnapshot;
       },
       getBoundingRect: () => geometrySnapshot.rect,
       getVisibleRect: () => geometrySnapshot.visibleRect,
@@ -343,7 +342,7 @@ function createVisibleWaitRetryFixture({ dirtyAfterSettles }) {
     },
     interactability: {
       async inspect() {
-        counts.inspect += 1
+        counts.inspect += 1;
 
         return {
           target,
@@ -359,140 +358,140 @@ function createVisibleWaitRetryFixture({ dirtyAfterSettles }) {
           blockingReasons: visible ? [] : ['not-visible'],
           forceBypassedReasons: [],
           unforceableReasons: [],
-        }
+        };
       },
       async canClick() {},
       async canFocus() {},
       async canType() {},
     },
-  })
+  });
 
   return {
     counts,
     engine,
     reset() {
-      counts.resolve = 0
-      counts.validate = 0
-      counts.geometry = 0
-      counts.inspect = 0
-      settleAttempts = 0
-      visible = false
+      counts.resolve = 0;
+      counts.validate = 0;
+      counts.geometry = 0;
+      counts.inspect = 0;
+      settleAttempts = 0;
+      visible = false;
     },
-  }
+  };
 }
 
 function createRootTextWaitRetryFixture() {
-  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  const layoutInvalidation = createManualLayoutInvalidationTracker();
   const counts = {
     rootText: 0,
-  }
-  let settleAttempts = 0
-  let ready = false
+  };
+  let settleAttempts = 0;
+  let ready = false;
   const timeline = {
     ...createFrameTimeline(),
     async settle() {
-      settleAttempts += 1
+      settleAttempts += 1;
 
       if (settleAttempts === 2) {
-        ready = true
-        layoutInvalidation.emit('mutation')
+        ready = true;
+        layoutInvalidation.emit('mutation');
       }
     },
-  }
+  };
   const engine = new BrowserWaitObservationEngine({
     layoutInvalidation: layoutInvalidation.tracker,
     timeline,
     dom: {
       getRoot: () => document,
       getRootTextContent() {
-        counts.rootText += 1
-        return ready ? 'Project created' : 'Loading'
+        counts.rootText += 1;
+        return ready ? 'Project created' : 'Loading';
       },
     },
-  })
+  });
 
   return {
     counts,
     engine,
     reset() {
-      counts.rootText = 0
-      settleAttempts = 0
-      ready = false
+      counts.rootText = 0;
+      settleAttempts = 0;
+      ready = false;
     },
-  }
+  };
 }
 
 function assertCounts(actual, expected) {
   for (const [name, value] of Object.entries(expected)) {
     if (actual[name] !== value) {
-      throw new Error(`Expected ${name} count ${value}, received ${actual[name]}.`)
+      throw new Error(`Expected ${name} count ${value}, received ${actual[name]}.`);
     }
   }
 }
 
 function createExpensiveWaitTimeline({ dirtyAfterSettles, onDirty }) {
-  const timeline = createFrameTimeline()
-  let settleAttempts = 0
+  const timeline = createFrameTimeline();
+  let settleAttempts = 0;
 
   return {
     ...timeline,
     async settle() {
-      settleAttempts += 1
+      settleAttempts += 1;
 
       if (settleAttempts === dirtyAfterSettles) {
-        onDirty()
+        onDirty();
       }
     },
     reset() {
-      settleAttempts = 0
+      settleAttempts = 0;
     },
-  }
+  };
 }
 
 function createExpensiveRoleWaitRetryFixture() {
-  ensureExpensiveWaitFixture()
-  const dom = new BrowserDomAdapter(document)
-  const resolver = new BrowserTargetResolver({ dom, clock: createClock() })
-  const layoutInvalidation = createManualLayoutInvalidationTracker()
+  ensureExpensiveWaitFixture();
+  const dom = new BrowserDomAdapter(document);
+  const resolver = new BrowserTargetResolver({ dom, clock: createClock() });
+  const layoutInvalidation = createManualLayoutInvalidationTracker();
   const counts = {
     resolve: 0,
     validate: 0,
     geometry: 0,
     inspect: 0,
-  }
-  let visible = false
+  };
+  let visible = false;
   const timeline = createExpensiveWaitTimeline({
     dirtyAfterSettles: EXPENSIVE_WAIT_UNCHANGED_RETRIES + 1,
     onDirty() {
-      visible = true
-      layoutInvalidation.emit('mutation')
+      visible = true;
+      layoutInvalidation.emit('mutation');
     },
-  })
+  });
   const engine = new BrowserWaitObservationEngine({
     layoutInvalidation: layoutInvalidation.tracker,
     timeline,
     resolver: {
       async resolve(locator, options) {
-        counts.resolve += 1
-        return await resolver.resolve(locator, options)
+        counts.resolve += 1;
+        return await resolver.resolve(locator, options);
       },
       async resolveAll(locator, options) {
-        return await resolver.resolveAll(locator, options)
+        return await resolver.resolveAll(locator, options);
       },
       async exists(locator, options) {
-        return await resolver.exists(locator, options)
+        return await resolver.exists(locator, options);
       },
       async inspect(target) {
-        return await resolver.inspect(target)
+        return await resolver.inspect(target);
       },
       async validate(handle) {
-        counts.validate += 1
-        return await resolver.validate(handle)
+        counts.validate += 1;
+        return await resolver.validate(handle);
       },
     },
     geometry: {
       async snapshot(target) {
-        counts.geometry += 1
+        counts.geometry += 1;
 
         return {
           target,
@@ -506,7 +505,7 @@ function createExpensiveRoleWaitRetryFixture() {
           },
           coordinateSpace: 'viewport',
           computedAt: 1,
-        }
+        };
       },
       getBoundingRect: () => ({ x: 20, y: 30, width: 120, height: 32 }),
       getVisibleRect: () => ({ x: 20, y: 30, width: 120, height: 32 }),
@@ -519,7 +518,7 @@ function createExpensiveRoleWaitRetryFixture() {
     },
     interactability: {
       async inspect(target) {
-        counts.inspect += 1
+        counts.inspect += 1;
 
         return {
           target,
@@ -535,13 +534,13 @@ function createExpensiveRoleWaitRetryFixture() {
           blockingReasons: visible ? [] : ['not-visible'],
           forceBypassedReasons: [],
           unforceableReasons: [],
-        }
+        };
       },
       async canClick() {},
       async canFocus() {},
       async canType() {},
     },
-  })
+  });
 
   return {
     counts,
@@ -550,59 +549,59 @@ function createExpensiveRoleWaitRetryFixture() {
       name: `Launch expensive wait item ${EXPENSIVE_WAIT_TARGET_INDEX}`,
     }),
     reset() {
-      counts.resolve = 0
-      counts.validate = 0
-      counts.geometry = 0
-      counts.inspect = 0
-      visible = false
-      timeline.reset()
+      counts.resolve = 0;
+      counts.validate = 0;
+      counts.geometry = 0;
+      counts.inspect = 0;
+      visible = false;
+      timeline.reset();
     },
-  }
+  };
 }
 
 function createExpensiveRootTextWaitRetryFixture() {
-  ensureExpensiveWaitFixture()
-  const realDom = new BrowserDomAdapter(document)
-  const layoutInvalidation = createManualLayoutInvalidationTracker()
-  const status = document.querySelector('#bench-expensive-wait-status')
+  ensureExpensiveWaitFixture();
+  const realDom = new BrowserDomAdapter(document);
+  const layoutInvalidation = createManualLayoutInvalidationTracker();
+  const status = document.querySelector('#bench-expensive-wait-status');
   const counts = {
     rootText: 0,
-  }
+  };
   const timeline = createExpensiveWaitTimeline({
     dirtyAfterSettles: EXPENSIVE_WAIT_UNCHANGED_RETRIES + 1,
     onDirty() {
-      status.textContent = 'Expensive wait benchmark completed'
-      layoutInvalidation.emit('mutation')
+      status.textContent = 'Expensive wait benchmark completed';
+      layoutInvalidation.emit('mutation');
     },
-  })
+  });
   const engine = new BrowserWaitObservationEngine({
     layoutInvalidation: layoutInvalidation.tracker,
     timeline,
     dom: {
       getRoot: () => document,
       getRootTextContent(root) {
-        counts.rootText += 1
-        return realDom.getRootTextContent(root)
+        counts.rootText += 1;
+        return realDom.getRootTextContent(root);
       },
     },
-  })
+  });
 
   return {
     counts,
     engine,
     reset() {
-      counts.rootText = 0
-      status.textContent = 'Expensive wait benchmark loading'
-      timeline.reset()
+      counts.rootText = 0;
+      status.textContent = 'Expensive wait benchmark loading';
+      timeline.reset();
     },
-  }
+  };
 }
 
 function buildLargeDomFixture() {
-  const root = document.createElement('main')
-  root.id = 'bench-root'
+  const root = document.createElement('main');
+  root.id = 'bench-root';
 
-  const chunks = []
+  const chunks = [];
   for (let index = 0; index < LARGE_DOM_SIZE; index += 1) {
     chunks.push(`
       <section class="bench-row" data-row="${index}">
@@ -614,13 +613,13 @@ function buildLargeDomFixture() {
           Save item ${index}
         </button>
       </section>
-    `)
+    `);
   }
 
-  root.innerHTML = chunks.join('')
-  document.body.append(root)
+  root.innerHTML = chunks.join('');
+  document.body.append(root);
 
-  const visibleTarget = document.querySelector(`#bench-save-${TARGET_INDEX}`)
+  const visibleTarget = document.querySelector(`#bench-save-${TARGET_INDEX}`);
   visibleTarget.getBoundingClientRect = () => ({
     x: 20,
     y: 30,
@@ -631,14 +630,14 @@ function buildLargeDomFixture() {
     bottom: 62,
     left: 20,
     toJSON() {},
-  })
+  });
 }
 
 function buildNestedTextFixture() {
-  const root = document.createElement('main')
-  root.id = 'bench-nested-text-root'
+  const root = document.createElement('main');
+  root.id = 'bench-nested-text-root';
 
-  const chunks = []
+  const chunks = [];
   for (let index = 0; index < NESTED_TEXT_ROW_COUNT; index += 1) {
     chunks.push(`
       <section class="nested-text-row" data-row="${index}">
@@ -648,24 +647,22 @@ function buildNestedTextFixture() {
           </div>
         </article>
       </section>
-    `)
+    `);
   }
 
-  root.innerHTML = chunks.join('')
-  document.body.append(root)
+  root.innerHTML = chunks.join('');
+  document.body.append(root);
 }
 
 function buildExpensiveWaitFixture() {
   if (document.querySelector('#bench-expensive-wait-root') !== null) {
-    return
+    return;
   }
 
-  const root = document.createElement('main')
-  root.id = 'bench-expensive-wait-root'
+  const root = document.createElement('main');
+  root.id = 'bench-expensive-wait-root';
 
-  const chunks = [
-    '<div id="bench-expensive-wait-status">Expensive wait benchmark loading</div>',
-  ]
+  const chunks = ['<div id="bench-expensive-wait-status">Expensive wait benchmark loading</div>'];
 
   for (let index = 0; index < EXPENSIVE_WAIT_DOM_SIZE; index += 1) {
     chunks.push(`
@@ -685,21 +682,21 @@ function buildExpensiveWaitFixture() {
           Launch expensive wait item ${index}
         </button>
       </section>
-    `)
+    `);
   }
 
-  root.innerHTML = chunks.join('')
-  document.body.append(root)
+  root.innerHTML = chunks.join('');
+  document.body.append(root);
 }
 
 function ensureExpensiveWaitFixture() {
-  buildExpensiveWaitFixture()
+  buildExpensiveWaitFixture();
 }
 
 function buildStylesheetFixture() {
-  const style = document.createElement('style')
-  style.id = 'bench-pseudo-source'
-  const rules = []
+  const style = document.createElement('style');
+  style.id = 'bench-pseudo-source';
+  const rules = [];
 
   for (let index = 0; index < STYLE_RULE_COUNT; index += 1) {
     rules.push(`
@@ -708,47 +705,43 @@ function buildStylesheetFixture() {
       @media (min-width: 1px) {
         .bench-row[data-row="${index}"] input:focus-visible { outline: 1px solid blue; }
       }
-    `)
+    `);
   }
 
-  style.textContent = rules.join('\n')
-  document.head.append(style)
+  style.textContent = rules.join('\n');
+  document.head.append(style);
 
-  const mutationStyle = document.createElement('style')
-  mutationStyle.id = 'bench-pseudo-mutation-source'
-  mutationStyle.textContent = '.bench-pseudo-mutation:hover { color: rgb(0, 20, 40); }'
-  document.head.append(mutationStyle)
+  const mutationStyle = document.createElement('style');
+  mutationStyle.id = 'bench-pseudo-mutation-source';
+  mutationStyle.textContent = '.bench-pseudo-mutation:hover { color: rgb(0, 20, 40); }';
+  document.head.append(mutationStyle);
 }
 
 function createWorstCasePseudoStateFixture() {
-  let target = document.querySelector('#pseudo-worst-target')
+  let target = document.querySelector('#pseudo-worst-target');
 
   if (target === null) {
-    const fixtureRoot = document.createElement('section')
-    fixtureRoot.id = 'pseudo-worst-root'
-    target = document.createElement('button')
-    target.id = 'pseudo-worst-target'
-    target.className = 'pseudo-worst-action'
-    target.textContent = 'Worst case target'
-    fixtureRoot.append(target)
-    document.body.append(fixtureRoot)
+    const fixtureRoot = document.createElement('section');
+    fixtureRoot.id = 'pseudo-worst-root';
+    target = document.createElement('button');
+    target.id = 'pseudo-worst-target';
+    target.className = 'pseudo-worst-action';
+    target.textContent = 'Worst case target';
+    fixtureRoot.append(target);
+    document.body.append(fixtureRoot);
   }
 
   for (let sheetIndex = 0; sheetIndex < PSEUDO_STATE_WORST_STYLE_COUNT; sheetIndex += 1) {
     if (document.querySelector(`#pseudo-worst-source-${sheetIndex}`) !== null) {
-      continue
+      continue;
     }
 
-    const style = document.createElement('style')
-    style.id = `pseudo-worst-source-${sheetIndex}`
-    const rules = []
+    const style = document.createElement('style');
+    style.id = `pseudo-worst-source-${sheetIndex}`;
+    const rules = [];
 
-    for (
-      let ruleIndex = 0;
-      ruleIndex < PSEUDO_STATE_WORST_RULES_PER_STYLE;
-      ruleIndex += 1
-    ) {
-      const hue = (sheetIndex * 31 + ruleIndex * 7) % 255
+    for (let ruleIndex = 0; ruleIndex < PSEUDO_STATE_WORST_RULES_PER_STYLE; ruleIndex += 1) {
+      const hue = (sheetIndex * 31 + ruleIndex * 7) % 255;
 
       rules.push(`
         .pseudo-worst-shell-${sheetIndex} .card-${ruleIndex}:hover > .label {
@@ -768,27 +761,27 @@ function createWorstCasePseudoStateFixture() {
         .pseudo-worst-shell-${sheetIndex} .static-${ruleIndex} {
           border-color: rgb(${hue}, 120, 180);
         }
-      `)
+      `);
     }
 
-    style.textContent = rules.join('\n')
-    document.head.append(style)
+    style.textContent = rules.join('\n');
+    document.head.append(style);
   }
 
-  let mutationStyle = document.querySelector('#pseudo-worst-mutation-source')
+  let mutationStyle = document.querySelector('#pseudo-worst-mutation-source');
 
   if (mutationStyle === null) {
-    mutationStyle = document.createElement('style')
-    mutationStyle.id = 'pseudo-worst-mutation-source'
-    mutationStyle.textContent = worstCaseMutationRule(0)
-    document.head.append(mutationStyle)
+    mutationStyle = document.createElement('style');
+    mutationStyle.id = 'pseudo-worst-mutation-source';
+    mutationStyle.textContent = worstCaseMutationRule(0);
+    document.head.append(mutationStyle);
   }
 
   return {
     root: document,
     mutationStyle,
     target: targetHandle('pseudo-worst-target', target, document),
-  }
+  };
 }
 
 function worstCaseMutationRule(index) {
@@ -797,7 +790,7 @@ function worstCaseMutationRule(index) {
       color: rgb(${index % 255}, 40, 80);
       text-decoration-color: rgb(${(index * 3) % 255}, 120, 180);
     }
-  `
+  `;
 }
 
 function createDiagnosticsCandidateSnapshot(index) {
@@ -832,7 +825,7 @@ function createDiagnosticsCandidateSnapshot(index) {
         },
       },
     ],
-  }
+  };
 }
 
 function appendLongDiagnosticsTrace(trace, count = LONG_TRACE_APPEND_COUNT) {
@@ -840,7 +833,7 @@ function appendLongDiagnosticsTrace(trace, count = LONG_TRACE_APPEND_COUNT) {
     const span = trace.startSpan('diagnostics.bench.step', {
       stepIndex: index,
       action: 'click',
-    })
+    });
 
     span.event('wait:retry', {
       attempts: index + 1,
@@ -849,23 +842,23 @@ function appendLongDiagnosticsTrace(trace, count = LONG_TRACE_APPEND_COUNT) {
         targetId: `bench-diagnostics-target-${index}`,
         visible: false,
       },
-    })
-    trace.attachSnapshot('target.resolve.candidates', createDiagnosticsCandidateSnapshot(index))
+    });
+    trace.attachSnapshot('target.resolve.candidates', createDiagnosticsCandidateSnapshot(index));
     trace.warn('Diagnostics benchmark warning.', {
       stepIndex: index,
       reason: 'benchmark',
-    })
-    span.end({ completed: true })
+    });
+    span.end({ completed: true });
   }
 
-  const snapshot = trace.getTrace()
+  const snapshot = trace.getTrace();
 
   return {
     events: snapshot.events.length,
     snapshots: snapshot.snapshots.length,
     warnings: snapshot.warnings.length,
     retainedSize: retainedDiagnosticsSize(snapshot),
-  }
+  };
 }
 
 function retainedDiagnosticsSize(trace) {
@@ -873,44 +866,44 @@ function retainedDiagnosticsSize(trace) {
     events: trace.events,
     snapshots: trace.snapshots,
     warnings: trace.warnings,
-  }).length
+  }).length;
 }
 
 function assertTraceSummary(actual, expected) {
   for (const [name, value] of Object.entries(expected)) {
     if (actual[name] !== value) {
-      throw new Error(`Expected ${name} ${value}, received ${actual[name]}.`)
+      throw new Error(`Expected ${name} ${value}, received ${actual[name]}.`);
     }
   }
 
   if (actual.retainedSize <= 0) {
-    throw new Error('Expected retained diagnostics size to be positive.')
+    throw new Error('Expected retained diagnostics size to be positive.');
   }
 }
 
 beforeAll(() => {
-  document.body.innerHTML = ''
-  document.head.innerHTML = ''
-  buildLargeDomFixture()
-  buildNestedTextFixture()
-  buildStylesheetFixture()
-})
+  document.body.innerHTML = '';
+  document.head.innerHTML = '';
+  buildLargeDomFixture();
+  buildNestedTextFixture();
+  buildStylesheetFixture();
+});
 
 describe('diagnostics trace', () => {
   bench(
     'unlimited diagnostics trace appends long event snapshot warning stream',
     () => {
-      const trace = new BrowserDiagnosticsTrace({ clock: createClock() })
-      const summary = appendLongDiagnosticsTrace(trace)
+      const trace = new BrowserDiagnosticsTrace({ clock: createClock() });
+      const summary = appendLongDiagnosticsTrace(trace);
 
       assertTraceSummary(summary, {
         events: LONG_TRACE_APPEND_COUNT,
         snapshots: LONG_TRACE_APPEND_COUNT,
         warnings: LONG_TRACE_APPEND_COUNT,
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'limited diagnostics trace retains bounded event snapshot warning stream',
@@ -922,94 +915,94 @@ describe('diagnostics trace', () => {
           maxSnapshots: TRACE_RETENTION_LIMIT,
           maxWarnings: TRACE_RETENTION_LIMIT,
         },
-      })
-      const summary = appendLongDiagnosticsTrace(trace)
+      });
+      const summary = appendLongDiagnosticsTrace(trace);
 
       assertTraceSummary(summary, {
         events: TRACE_RETENTION_LIMIT,
         snapshots: TRACE_RETENTION_LIMIT,
         warnings: TRACE_RETENTION_LIMIT,
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('target resolver', () => {
-  const resolver = createResolver()
+  const resolver = createResolver();
 
   bench(
     'css locator resolves an indexed target',
     async () => {
-      await resolver.resolve(css(`#bench-save-${TARGET_INDEX}`))
+      await resolver.resolve(css(`#bench-save-${TARGET_INDEX}`));
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'role locator scans accessible names in a large DOM',
     async () => {
-      await resolver.resolve(role('button', { name: `Save item ${TARGET_INDEX}` }))
+      await resolver.resolve(role('button', { name: `Save item ${TARGET_INDEX}` }));
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'label locator resolves a native label association',
     async () => {
-      await resolver.resolve(label(`Email ${TARGET_INDEX}`))
+      await resolver.resolve(label(`Email ${TARGET_INDEX}`));
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'partial text locator ranks many text matches',
     async () => {
-      await resolver.resolveAll(text('Save item'))
+      await resolver.resolveAll(text('Save item'));
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'partial text locator prunes large nested matches',
     async () => {
-      await resolver.resolveAll(text('Nested performance target'))
+      await resolver.resolveAll(text('Nested performance target'));
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('wait observation', () => {
   const engine = new BrowserWaitObservationEngine({
     dom: new BrowserDomAdapter(document),
     timeline: createFrameTimeline(),
-  })
-  let unchangedVisibleRetry
-  let dirtyVisibleRetry
-  let unchangedRootTextRetry
-  let expensiveRoleRetry
-  let expensiveRootTextRetry
+  });
+  let unchangedVisibleRetry;
+  let dirtyVisibleRetry;
+  let unchangedRootTextRetry;
+  let expensiveRoleRetry;
+  let expensiveRootTextRetry;
 
   const getUnchangedVisibleRetry = () => {
-    unchangedVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 2 })
-    return unchangedVisibleRetry
-  }
+    unchangedVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 2 });
+    return unchangedVisibleRetry;
+  };
   const getDirtyVisibleRetry = () => {
-    dirtyVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 1 })
-    return dirtyVisibleRetry
-  }
+    dirtyVisibleRetry ??= createVisibleWaitRetryFixture({ dirtyAfterSettles: 1 });
+    return dirtyVisibleRetry;
+  };
   const getUnchangedRootTextRetry = () => {
-    unchangedRootTextRetry ??= createRootTextWaitRetryFixture()
-    return unchangedRootTextRetry
-  }
+    unchangedRootTextRetry ??= createRootTextWaitRetryFixture();
+    return unchangedRootTextRetry;
+  };
   const getExpensiveRoleRetry = () => {
-    expensiveRoleRetry ??= createExpensiveRoleWaitRetryFixture()
-    return expensiveRoleRetry
-  }
+    expensiveRoleRetry ??= createExpensiveRoleWaitRetryFixture();
+    return expensiveRoleRetry;
+  };
   const getExpensiveRootTextRetry = () => {
-    expensiveRootTextRetry ??= createExpensiveRootTextWaitRetryFixture()
-    return expensiveRootTextRetry
-  }
+    expensiveRootTextRetry ??= createExpensiveRootTextWaitRetryFixture();
+    return expensiveRootTextRetry;
+  };
 
   bench(
     'visible wait resolves and inspects an already-visible role target',
@@ -1017,10 +1010,10 @@ describe('wait observation', () => {
       await engine.waitFor({
         kind: 'visible',
         target: role('button', { name: `Save item ${TARGET_INDEX}` }),
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'root text wait scans and normalizes document text',
@@ -1028,196 +1021,198 @@ describe('wait observation', () => {
       await engine.waitFor({
         kind: 'text',
         value: `Searchable copy for item ${TARGET_INDEX}`,
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'unchanged visible wait retry reuses target observation until dirty',
     async () => {
-      const fixture = getUnchangedVisibleRetry()
+      const fixture = getUnchangedVisibleRetry();
 
       for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
-        fixture.reset()
+        fixture.reset();
 
         await fixture.engine.waitFor({
           kind: 'visible',
           target: css(`#bench-save-${TARGET_INDEX}`),
-        })
+        });
 
         assertCounts(fixture.counts, {
           resolve: 1,
           validate: 2,
           geometry: 2,
           inspect: 2,
-        })
+        });
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'dirty-after-retry visible wait refreshes target observation',
     async () => {
-      const fixture = getDirtyVisibleRetry()
+      const fixture = getDirtyVisibleRetry();
 
       for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
-        fixture.reset()
+        fixture.reset();
 
         await fixture.engine.waitFor({
           kind: 'visible',
           target: css(`#bench-save-${TARGET_INDEX}`),
-        })
+        });
 
         assertCounts(fixture.counts, {
           resolve: 1,
           validate: 2,
           geometry: 2,
           inspect: 2,
-        })
+        });
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'unchanged root text wait retry reuses normalized text until mutation',
     async () => {
-      const fixture = getUnchangedRootTextRetry()
+      const fixture = getUnchangedRootTextRetry();
 
       for (let index = 0; index < WAIT_RETRY_REPEAT_COUNT; index += 1) {
-        fixture.reset()
+        fixture.reset();
 
         await fixture.engine.waitFor({
           kind: 'text',
           value: 'Project created',
-        })
+        });
 
         assertCounts(fixture.counts, {
           rootText: 2,
-        })
+        });
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'expensive role wait reuses unchanged retries until mutation',
     async () => {
-      const fixture = getExpensiveRoleRetry()
+      const fixture = getExpensiveRoleRetry();
 
-      fixture.reset()
+      fixture.reset();
 
       await fixture.engine.waitFor({
         kind: 'visible',
         target: fixture.locator,
-      })
+      });
 
       assertCounts(fixture.counts, {
         resolve: 1,
         validate: 2,
         geometry: 2,
         inspect: 2,
-      })
+      });
     },
     EXPENSIVE_WAIT_BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'expensive root text wait reuses unchanged retries until mutation',
     async () => {
-      const fixture = getExpensiveRootTextRetry()
+      const fixture = getExpensiveRootTextRetry();
 
-      fixture.reset()
+      fixture.reset();
 
       await fixture.engine.waitFor({
         kind: 'text',
         value: 'Expensive wait benchmark completed',
-      })
+      });
 
       assertCounts(fixture.counts, {
         rootText: 2,
-      })
+      });
     },
     EXPENSIVE_WAIT_BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('geometry and surface cache', () => {
-  const uncachedFixture = createInstrumentedGeometryFixture(createPassthroughGeometrySurfaceCache())
-  const fixture = createInstrumentedGeometryFixture()
+  const uncachedFixture = createInstrumentedGeometryFixture(
+    createPassthroughGeometrySurfaceCache(),
+  );
+  const fixture = createInstrumentedGeometryFixture();
 
   bench(
     'uncached repeated geometry snapshots baseline',
     async () => {
       for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
-        await uncachedFixture.geometry.snapshot(uncachedFixture.handle)
+        await uncachedFixture.geometry.snapshot(uncachedFixture.handle);
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'same-frame repeated geometry snapshots reuse cached surface reads',
     async () => {
-      fixture.cache.invalidate('manual')
+      fixture.cache.invalidate('manual');
 
       for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
-        await fixture.geometry.snapshot(fixture.handle)
+        await fixture.geometry.snapshot(fixture.handle);
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'uncached repeated surface snapshots baseline',
     () => {
       for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
-        uncachedFixture.surface.getSurfaceFor(uncachedFixture.handle)
+        uncachedFixture.surface.getSurfaceFor(uncachedFixture.handle);
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'same-frame repeated surface snapshots reuse scrollable ancestors',
     () => {
-      fixture.cache.invalidate('manual')
+      fixture.cache.invalidate('manual');
 
       for (let index = 0; index < GEOMETRY_REPEAT_COUNT; index += 1) {
-        fixture.surface.getSurfaceFor(fixture.handle)
+        fixture.surface.getSurfaceFor(fixture.handle);
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'geometry cache refreshes after invalidation',
     async () => {
-      fixture.cache.invalidate('manual')
-      await fixture.geometry.snapshot(fixture.handle)
-      fixture.rects.set(fixture.target, { x: 20, y: 30, width: 100, height: 50 })
-      fixture.cache.invalidate('mutation')
-      await fixture.geometry.snapshot(fixture.handle)
+      fixture.cache.invalidate('manual');
+      await fixture.geometry.snapshot(fixture.handle);
+      fixture.rects.set(fixture.target, { x: 20, y: 30, width: 100, height: 50 });
+      fixture.cache.invalidate('mutation');
+      await fixture.geometry.snapshot(fixture.handle);
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('pseudo-state mirror', () => {
-  let target
-  let cachedTarget
-  let cachedMirror
-  let mutationTarget
-  let mutationMirror
-  let mutationIndex = 0
-  let worstFirstApplyFixture
-  let worstCachedFixture
-  let worstCachedMirror
-  let worstMutationFixture
-  let worstMutationMirror
-  let worstMutationIndex = 0
+  let target;
+  let cachedTarget;
+  let cachedMirror;
+  let mutationTarget;
+  let mutationMirror;
+  let mutationIndex = 0;
+  let worstFirstApplyFixture;
+  let worstCachedFixture;
+  let worstCachedMirror;
+  let worstMutationFixture;
+  let worstMutationMirror;
+  let worstMutationIndex = 0;
 
   bench(
     'stylesheet scan and pseudo-state rewrite on first apply',
@@ -1225,17 +1220,17 @@ describe('pseudo-state mirror', () => {
       target ??= targetHandle(
         `bench-save-${TARGET_INDEX}`,
         document.querySelector(`#bench-save-${TARGET_INDEX}`),
-      )
+      );
       const mirror = new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: new BrowserStyleAdapter(document),
-      })
+      });
 
-      mirror.apply({ target, states: ['hover', 'active', 'focus-visible'] })
-      mirror.cleanup()
+      mirror.apply({ target, states: ['hover', 'active', 'focus-visible'] });
+      mirror.cleanup();
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'repeated mirror apply reuses cached pseudo-state rewrite',
@@ -1243,22 +1238,22 @@ describe('pseudo-state mirror', () => {
       cachedTarget ??= targetHandle(
         `bench-save-${TARGET_INDEX}`,
         document.querySelector(`#bench-save-${TARGET_INDEX}`),
-      )
+      );
       cachedMirror ??= new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: new BrowserStyleAdapter(document),
-      })
+      });
 
       for (let index = 0; index < PSEUDO_STATE_REPEAT_COUNT; index += 1) {
         cachedMirror.apply({
           target: cachedTarget,
           states: ['hover', 'active', 'focus-visible'],
-        })
-        cachedMirror.cleanup()
+        });
+        cachedMirror.cleanup();
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'stylesheet mutation refreshes pseudo-state mirror cache',
@@ -1266,104 +1261,102 @@ describe('pseudo-state mirror', () => {
       mutationTarget ??= targetHandle(
         `bench-save-${TARGET_INDEX}`,
         document.querySelector(`#bench-save-${TARGET_INDEX}`),
-      )
+      );
       mutationMirror ??= new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: new BrowserStyleAdapter(document),
-      })
+      });
 
       for (let index = 0; index < PSEUDO_STATE_REPEAT_COUNT; index += 1) {
-        mutationIndex += 1
+        mutationIndex += 1;
         document.querySelector('#bench-pseudo-mutation-source').textContent =
-          `.bench-pseudo-mutation:hover { color: rgb(${mutationIndex % 255}, 20, 40); }`
+          `.bench-pseudo-mutation:hover { color: rgb(${mutationIndex % 255}, 20, 40); }`;
         mutationMirror.apply({
           target: mutationTarget,
           states: ['hover', 'active', 'focus-visible'],
-        })
-        mutationMirror.cleanup()
+        });
+        mutationMirror.cleanup();
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'worst-case stylesheet scan and pseudo-state rewrite on first apply',
     () => {
-      worstFirstApplyFixture ??= createWorstCasePseudoStateFixture()
-      const scanner = new BrowserStyleAdapter(worstFirstApplyFixture.root)
+      worstFirstApplyFixture ??= createWorstCasePseudoStateFixture();
+      const scanner = new BrowserStyleAdapter(worstFirstApplyFixture.root);
       const mirror = new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: createNoopStylePort(),
         styleScanner: scanner,
-      })
+      });
 
       mirror.apply({
         target: worstFirstApplyFixture.target,
         states: ['hover', 'active', 'focus-visible'],
-      })
-      mirror.cleanup()
+      });
+      mirror.cleanup();
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'worst-case repeated mirror apply reuses cached pseudo-state rewrite',
     () => {
-      worstCachedFixture ??= createWorstCasePseudoStateFixture()
+      worstCachedFixture ??= createWorstCasePseudoStateFixture();
       worstCachedMirror ??= new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: createNoopStylePort(),
         styleScanner: new BrowserStyleAdapter(worstCachedFixture.root),
-      })
+      });
 
       for (let index = 0; index < PSEUDO_STATE_WORST_REPEAT_COUNT; index += 1) {
         worstCachedMirror.apply({
           target: worstCachedFixture.target,
           states: ['hover', 'active', 'focus-visible'],
-        })
-        worstCachedMirror.cleanup()
+        });
+        worstCachedMirror.cleanup();
       }
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'worst-case stylesheet mutation refreshes pseudo-state mirror cache',
     () => {
-      worstMutationFixture ??= createWorstCasePseudoStateFixture()
+      worstMutationFixture ??= createWorstCasePseudoStateFixture();
       worstMutationMirror ??= new BrowserPseudoStateMirror({
         state: new BrowserStateApplier(),
         style: createNoopStylePort(),
         styleScanner: new BrowserStyleAdapter(worstMutationFixture.root),
-      })
+      });
 
       for (let index = 0; index < PSEUDO_STATE_WORST_REPEAT_COUNT; index += 1) {
-        worstMutationIndex += 1
-        worstMutationFixture.mutationStyle.textContent = worstCaseMutationRule(
-          worstMutationIndex,
-        )
+        worstMutationIndex += 1;
+        worstMutationFixture.mutationStyle.textContent = worstCaseMutationRule(worstMutationIndex);
         worstMutationMirror.apply({
           target: worstMutationFixture.target,
           states: ['hover', 'active', 'focus-visible'],
-        })
-        worstMutationMirror.cleanup()
+        });
+        worstMutationMirror.cleanup();
       }
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('visual layer', () => {
-  const sameKindLayer = new BrowserVisualLayer({ root: document })
-  const switchKindLayer = new BrowserVisualLayer({ root: document })
-  let sameKindCursorIndex = 0
-  let switchKindCursorIndex = 0
-  const cursorKinds = ['default', 'pointer', 'text', 'grab', 'grabbing', 'wait']
+  const sameKindLayer = new BrowserVisualLayer({ root: document });
+  const switchKindLayer = new BrowserVisualLayer({ root: document });
+  let sameKindCursorIndex = 0;
+  let switchKindCursorIndex = 0;
+  const cursorKinds = ['default', 'pointer', 'text', 'grab', 'grabbing', 'wait'];
 
   bench(
     'same-kind cursor overlay update repositions existing SVG',
     () => {
-      sameKindCursorIndex += 1
+      sameKindCursorIndex += 1;
       sameKindLayer.showCursor({
         point: {
           x: sameKindCursorIndex % 300,
@@ -1371,16 +1364,16 @@ describe('visual layer', () => {
         },
         cursor: 'pointer',
         pressed: sameKindCursorIndex % 2 === 0,
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
+  );
 
   bench(
     'cursor overlay update switches SVG cursor variants',
     () => {
-      const cursor = cursorKinds[switchKindCursorIndex % cursorKinds.length]
-      switchKindCursorIndex += 1
+      const cursor = cursorKinds[switchKindCursorIndex % cursorKinds.length];
+      switchKindCursorIndex += 1;
       switchKindLayer.showCursor({
         point: {
           x: switchKindCursorIndex % 300,
@@ -1388,50 +1381,49 @@ describe('visual layer', () => {
         },
         cursor,
         pressed: cursor === 'grabbing',
-      })
+      });
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});
 
 describe('pointer engine', () => {
-  const signals = new BrowserPointerSignalBus()
+  const signals = new BrowserPointerSignalBus();
   const pointer = new BrowserPointerEngine({
     signals,
     timeline: createFrameTimeline(),
-  })
-  let direction = 1
+  });
+  let direction = 1;
 
   bench(
     'animated pointer movement updates state across frames',
     async () => {
-      direction *= -1
-      await pointer.moveTo(
-        direction > 0 ? { x: 300, y: 200 } : { x: 0, y: 0 },
-        { motion: { kind: 'ease', duration: 250 } },
-      )
+      direction *= -1;
+      await pointer.moveTo(direction > 0 ? { x: 300, y: 200 } : { x: 0, y: 0 }, {
+        motion: { kind: 'ease', duration: 250 },
+      });
     },
     BENCH_OPTIONS,
-  )
+  );
 
   const longPointer = new BrowserPointerEngine({
     timeline: createFrameTimeline(),
-  })
-  let longDirection = -1
+  });
+  let longDirection = -1;
 
   bench(
     'long animated pointer movement records path across many frames',
     async () => {
-      longDirection *= -1
+      longDirection *= -1;
       const state = await longPointer.moveTo(
         longDirection > 0 ? { x: 512, y: 256 } : { x: 0, y: 0 },
         { motion: { kind: 'linear', duration: POINTER_LONG_FRAME_COUNT * 16 } },
-      )
+      );
 
       if (state.motion.path?.length !== POINTER_LONG_FRAME_COUNT) {
-        throw new Error(`Expected ${POINTER_LONG_FRAME_COUNT} pointer path frames.`)
+        throw new Error(`Expected ${POINTER_LONG_FRAME_COUNT} pointer path frames.`);
       }
     },
     BENCH_OPTIONS,
-  )
-})
+  );
+});

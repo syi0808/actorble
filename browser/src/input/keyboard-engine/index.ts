@@ -3,103 +3,103 @@ import {
   actorbleError,
   cancellationError,
   timeoutError,
-} from '../../shared/index.js'
-import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
-import { BrowserEventDispatcher } from '../../platform/platform-adapter/event-dispatcher/index.js'
-import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js'
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../shared/index.js';
+import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js';
+import { BrowserEventDispatcher } from '../../platform/platform-adapter/event-dispatcher/index.js';
+import { BrowserInteractionStateStore } from '../../state/interaction-state-store/index.js';
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js';
 import type {
   CancellationSignalLike,
   DomPort,
   DurationMs,
   EventDispatchPort,
   PressOptions,
-} from '../../shared/index.js'
-import type { InteractionStateStore } from '../../state/interaction-state-store/index.js'
-import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../shared/index.js';
+import type { InteractionStateStore } from '../../state/interaction-state-store/index.js';
+import type { TimelineEngine } from '../../runtime/timeline-engine/index.js';
 
-export type KeyboardModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
+export type KeyboardModifier = 'Alt' | 'Control' | 'Meta' | 'Shift';
 
 export type KeyboardState = Readonly<{
-  pressedKeys: readonly string[]
-  modifiers: readonly KeyboardModifier[]
-}>
+  pressedKeys: readonly string[];
+  modifiers: readonly KeyboardModifier[];
+}>;
 
 export type KeyboardEngineOptions = Readonly<{
-  dom?: DomPort
-  events?: EventDispatchPort
-  store?: InteractionStateStore
-  timeline?: TimelineEngine
-}>
+  dom?: DomPort;
+  events?: EventDispatchPort;
+  store?: InteractionStateStore;
+  timeline?: TimelineEngine;
+}>;
 
 export interface KeyboardEngine {
-  getState(): KeyboardState
-  keyDown(key: string, options?: PressOptions): Promise<KeyboardState>
-  keyUp(key: string, options?: PressOptions): Promise<KeyboardState>
-  press(keys: string, options?: PressOptions): Promise<KeyboardState>
+  getState(): KeyboardState;
+  keyDown(key: string, options?: PressOptions): Promise<KeyboardState>;
+  keyUp(key: string, options?: PressOptions): Promise<KeyboardState>;
+  press(keys: string, options?: PressOptions): Promise<KeyboardState>;
 }
 
 export class BrowserKeyboardEngine implements KeyboardEngine {
-  readonly #dom: DomPort
-  readonly #events: EventDispatchPort
-  readonly #store: InteractionStateStore
-  readonly #timeline: TimelineEngine
-  readonly #pressedKeys: string[] = []
+  readonly #dom: DomPort;
+  readonly #events: EventDispatchPort;
+  readonly #store: InteractionStateStore;
+  readonly #timeline: TimelineEngine;
+  readonly #pressedKeys: string[] = [];
 
   constructor(options: KeyboardEngineOptions = {}) {
-    this.#dom = options.dom ?? new BrowserDomAdapter()
-    this.#events = options.events ?? new BrowserEventDispatcher()
-    this.#store = options.store ?? new BrowserInteractionStateStore()
-    this.#timeline = options.timeline ?? new BrowserTimelineEngine()
+    this.#dom = options.dom ?? new BrowserDomAdapter();
+    this.#events = options.events ?? new BrowserEventDispatcher();
+    this.#store = options.store ?? new BrowserInteractionStateStore();
+    this.#timeline = options.timeline ?? new BrowserTimelineEngine();
   }
 
   getState(): KeyboardState {
     return {
       pressedKeys: [...this.#pressedKeys],
       modifiers: this.#pressedKeys.filter(isKeyboardModifier) as KeyboardModifier[],
-    }
+    };
   }
 
   async keyDown(key: string, _options: PressOptions = {}): Promise<KeyboardState> {
-    const normalizedKey = normalizeKey(key)
-    const target = this.#activeKeyboardTargetOrThrow(normalizedKey)
-    const pressed = !this.#pressedKeys.includes(normalizedKey)
+    const normalizedKey = normalizeKey(key);
+    const target = this.#activeKeyboardTargetOrThrow(normalizedKey);
+    const pressed = !this.#pressedKeys.includes(normalizedKey);
 
     if (pressed) {
-      this.#pressedKeys.push(normalizedKey)
+      this.#pressedKeys.push(normalizedKey);
     }
 
     try {
-      this.#dispatch('keydown', normalizedKey, target)
+      this.#dispatch('keydown', normalizedKey, target);
     } catch (error) {
       if (pressed) {
-        this.#removePressedKey(normalizedKey)
+        this.#removePressedKey(normalizedKey);
       }
 
-      throw error
+      throw error;
     }
 
-    this.#syncKeyboardModality()
+    this.#syncKeyboardModality();
 
-    return this.getState()
+    return this.getState();
   }
 
   async keyUp(key: string, _options: PressOptions = {}): Promise<KeyboardState> {
-    const normalizedKey = normalizeKey(key)
+    const normalizedKey = normalizeKey(key);
 
-    this.#removePressedKey(normalizedKey)
+    this.#removePressedKey(normalizedKey);
 
-    this.#dispatch('keyup', normalizedKey)
+    this.#dispatch('keyup', normalizedKey);
 
-    return this.getState()
+    return this.getState();
   }
 
   async press(keys: string, options: PressOptions = {}): Promise<KeyboardState> {
     return withKeyboardOperationTimeout('keyboard.press', options, async (signal) => {
-      await this.#pressSequence(keys, options, signal)
+      await this.#pressSequence(keys, options, signal);
 
-      return this.getState()
-    })
+      return this.getState();
+    });
   }
 
   async #pressSequence(
@@ -107,51 +107,51 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
     options: PressOptions,
     signal: CancellationSignalLike | undefined,
   ): Promise<void> {
-    const sequence = parseKeySequence(keys)
-    const key = sequence[sequence.length - 1]
-    const modifiers = sequence.slice(0, -1).filter(isKeyboardModifier) as KeyboardModifier[]
-    const pressedByPress: string[] = []
+    const sequence = parseKeySequence(keys);
+    const key = sequence[sequence.length - 1];
+    const modifiers = sequence.slice(0, -1).filter(isKeyboardModifier) as KeyboardModifier[];
+    const pressedByPress: string[] = [];
 
     try {
       for (const modifier of modifiers) {
-        assertKeyboardNotCancelled('keyboard.press', signal)
+        assertKeyboardNotCancelled('keyboard.press', signal);
 
         if (!this.#pressedKeys.includes(modifier)) {
-          pressedByPress.push(modifier)
+          pressedByPress.push(modifier);
         }
 
-        await this.keyDown(modifier, signal === undefined ? options : { ...options, signal })
+        await this.keyDown(modifier, signal === undefined ? options : { ...options, signal });
       }
 
-      assertKeyboardNotCancelled('keyboard.press', signal)
+      assertKeyboardNotCancelled('keyboard.press', signal);
 
       if (!this.#pressedKeys.includes(key)) {
-        pressedByPress.push(key)
+        pressedByPress.push(key);
       }
 
-      await this.keyDown(key, signal === undefined ? options : { ...options, signal })
-      await delayKeyHold(this.#timeline, options.delay, signal)
-      assertKeyboardNotCancelled('keyboard.press', signal)
+      await this.keyDown(key, signal === undefined ? options : { ...options, signal });
+      await delayKeyHold(this.#timeline, options.delay, signal);
+      assertKeyboardNotCancelled('keyboard.press', signal);
     } finally {
-      await this.#releasePressedByPress(pressedByPress)
+      await this.#releasePressedByPress(pressedByPress);
     }
   }
 
   async #releasePressedByPress(pressedByPress: readonly string[]): Promise<void> {
-    let cleanupError: unknown
+    let cleanupError: unknown;
 
     for (const key of [...pressedByPress].reverse()) {
       if (this.#pressedKeys.includes(key)) {
         try {
-          await this.keyUp(key)
+          await this.keyUp(key);
         } catch (error) {
-          cleanupError ??= error
+          cleanupError ??= error;
         }
       }
     }
 
     if (cleanupError !== undefined) {
-      throw cleanupError
+      throw cleanupError;
     }
   }
 
@@ -166,34 +166,34 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
       key,
       code: codeForKey(key),
       modifiers: this.getState().modifiers,
-    })
+    });
   }
 
   #activeKeyboardTargetOrThrow(key: string): Element {
-    const target = this.#dom.getActiveElement()
+    const target = this.#dom.getActiveElement();
 
     if (!target) {
       throw actorbleError('INTERACTABILITY_FAILED', 'Keyboard Engine requires an active target.', {
         details: { boundary: 'keyboard-engine', key },
-      })
+      });
     }
 
-    return target
+    return target;
   }
 
   #removePressedKey(key: string): void {
-    const index = this.#pressedKeys.indexOf(key)
+    const index = this.#pressedKeys.indexOf(key);
 
     if (index >= 0) {
-      this.#pressedKeys.splice(index, 1)
+      this.#pressedKeys.splice(index, 1);
     }
   }
 
   #syncKeyboardModality(): void {
-    const activeElement = this.#dom.getActiveElement()
+    const activeElement = this.#dom.getActiveElement();
 
     if (!activeElement) {
-      return
+      return;
     }
 
     this.#store.setFocused(
@@ -206,15 +206,15 @@ export class BrowserKeyboardEngine implements KeyboardEngine {
         debug: this.#dom.describeElement(activeElement),
       },
       true,
-    )
+    );
   }
 }
 
 export function createKeyboardEngine(options: KeyboardEngineOptions = {}): KeyboardEngine {
-  return new BrowserKeyboardEngine(options)
+  return new BrowserKeyboardEngine(options);
 }
 
-type KeyboardOperationName = 'keyboard.press'
+type KeyboardOperationName = 'keyboard.press';
 
 async function delayKeyHold(
   timeline: TimelineEngine,
@@ -222,10 +222,10 @@ async function delayKeyHold(
   signal: CancellationSignalLike | undefined,
 ): Promise<void> {
   if (delay === undefined || !Number.isFinite(delay) || delay <= 0) {
-    return
+    return;
   }
 
-  await timeline.delay(delay, signal === undefined ? {} : { signal })
+  await timeline.delay(delay, signal === undefined ? {} : { signal });
 }
 
 async function withKeyboardOperationTimeout<TValue>(
@@ -235,61 +235,61 @@ async function withKeyboardOperationTimeout<TValue>(
 ): Promise<TValue> {
   if (options.timeout === undefined) {
     if (options.signal?.aborted) {
-      throw cancellationError(operation, options.signal.reason)
+      throw cancellationError(operation, options.signal.reason);
     }
 
     try {
-      return await run(options.signal)
+      return await run(options.signal);
     } catch (error) {
-      throw normalizeKeyboardOperationError(error, operation, options.timeout)
+      throw normalizeKeyboardOperationError(error, operation, options.timeout);
     }
   }
 
-  const timeout = normalizeDuration(options.timeout)
+  const timeout = normalizeDuration(options.timeout);
   const timeoutFailure = timeoutError(operation, timeout, {
     details: keyboardOperationDetails(),
-  })
-  const controller = new AbortController()
-  let timerId: ReturnType<typeof setTimeout> | null = null
+  });
+  const controller = new AbortController();
+  let timerId: ReturnType<typeof setTimeout> | null = null;
 
   if (options.signal?.aborted) {
-    throw cancellationError(operation, options.signal.reason)
+    throw cancellationError(operation, options.signal.reason);
   }
 
   const abortFromExternalSignal = () => {
-    controller.abort(options.signal?.reason)
-  }
+    controller.abort(options.signal?.reason);
+  };
 
-  options.signal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+  options.signal?.addEventListener('abort', abortFromExternalSignal, { once: true });
 
   timerId = setTimeout(() => {
-    controller.abort(timeoutFailure)
-  }, timeout)
+    controller.abort(timeoutFailure);
+  }, timeout);
 
   try {
-    return await run(controller.signal)
+    return await run(controller.signal);
   } catch (error) {
     throw normalizeKeyboardOperationError(
       error,
       operation,
       options.timeout,
       controller.signal.reason,
-    )
+    );
   } finally {
     if (timerId !== null) {
-      clearTimeout(timerId)
+      clearTimeout(timerId);
     }
 
-    options.signal?.removeEventListener('abort', abortFromExternalSignal)
+    options.signal?.removeEventListener('abort', abortFromExternalSignal);
   }
 }
 
 function normalizeDuration(duration: DurationMs): DurationMs {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return 0
+    return 0;
   }
 
-  return duration
+  return duration;
 }
 
 function assertKeyboardNotCancelled(
@@ -297,7 +297,7 @@ function assertKeyboardNotCancelled(
   signal: CancellationSignalLike | undefined,
 ): void {
   if (signal?.aborted) {
-    throw cancellationError(operation, signal.reason)
+    throw cancellationError(operation, signal.reason);
   }
 }
 
@@ -308,18 +308,18 @@ function normalizeKeyboardOperationError(
   abortReason?: unknown,
 ): ActorbleError {
   if (abortReason instanceof ActorbleError && abortReason.code === 'ACTION_TIMEOUT') {
-    return abortReason
+    return abortReason;
   }
 
   if (error instanceof ActorbleError) {
     if (error.code === 'ACTION_CANCELLED' && error.details?.operation !== operation) {
-      const reason = abortReason ?? error.details?.reason
+      const reason = abortReason ?? error.details?.reason;
 
       if (reason instanceof ActorbleError && reason.code === 'ACTION_TIMEOUT') {
-        return reason
+        return reason;
       }
 
-      return cancellationError(operation, reason)
+      return cancellationError(operation, reason);
     }
 
     if (
@@ -330,93 +330,93 @@ function normalizeKeyboardOperationError(
       return timeoutError(operation, normalizeDuration(timeout), {
         cause: error,
         details: keyboardOperationDetails(),
-      })
+      });
     }
 
-    return error
+    return error;
   }
 
   return actorbleError('PLATFORM_UNSUPPORTED', `${operation} failed.`, {
     cause: error,
     details: keyboardOperationDetails(),
-  })
+  });
 }
 
 function keyboardOperationDetails(): Readonly<Record<string, unknown>> {
-  return { boundary: 'keyboard-engine' }
+  return { boundary: 'keyboard-engine' };
 }
 
 function parseKeySequence(keys: string): readonly string[] {
   const sequence = keys
     .split('+')
     .map((part) => normalizeKey(part.trim()))
-    .filter((part) => part.length > 0)
+    .filter((part) => part.length > 0);
 
   if (sequence.length === 0) {
     throw actorbleError('INTERACTABILITY_FAILED', 'Keyboard Engine requires a key sequence.', {
       details: { boundary: 'keyboard-engine', keys },
-    })
+    });
   }
 
-  return sequence
+  return sequence;
 }
 
 function normalizeKey(key: string): string {
-  const lower = key.toLowerCase()
+  const lower = key.toLowerCase();
 
   switch (lower) {
     case 'alt':
     case 'option':
-      return 'Alt'
+      return 'Alt';
     case 'control':
     case 'ctrl':
-      return 'Control'
+      return 'Control';
     case 'command':
     case 'cmd':
     case 'meta':
-      return 'Meta'
+      return 'Meta';
     case 'shift':
-      return 'Shift'
+      return 'Shift';
     case 'esc':
-      return 'Escape'
+      return 'Escape';
     case 'space':
-      return ' '
+      return ' ';
     default:
-      return key.length === 1 ? key.toUpperCase() : key
+      return key.length === 1 ? key.toUpperCase() : key;
   }
 }
 
 function isKeyboardModifier(key: string): key is KeyboardModifier {
-  return key === 'Alt' || key === 'Control' || key === 'Meta' || key === 'Shift'
+  return key === 'Alt' || key === 'Control' || key === 'Meta' || key === 'Shift';
 }
 
 function codeForKey(key: string): string | undefined {
   if (/^[A-Z]$/.test(key)) {
-    return `Key${key}`
+    return `Key${key}`;
   }
 
   if (/^[0-9]$/.test(key)) {
-    return `Digit${key}`
+    return `Digit${key}`;
   }
 
   switch (key) {
     case 'Alt':
-      return 'AltLeft'
+      return 'AltLeft';
     case 'Control':
-      return 'ControlLeft'
+      return 'ControlLeft';
     case 'Meta':
-      return 'MetaLeft'
+      return 'MetaLeft';
     case 'Shift':
-      return 'ShiftLeft'
+      return 'ShiftLeft';
     case 'Escape':
-      return 'Escape'
+      return 'Escape';
     case 'Enter':
-      return 'Enter'
+      return 'Enter';
     case 'Tab':
-      return 'Tab'
+      return 'Tab';
     case ' ':
-      return 'Space'
+      return 'Space';
     default:
-      return undefined
+      return undefined;
   }
 }

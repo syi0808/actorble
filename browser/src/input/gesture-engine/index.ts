@@ -1,6 +1,6 @@
-import { actorbleError, cancellationError } from '../../shared/index.js'
-import { BrowserPointerEngine } from '../pointer-engine/index.js'
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
+import { actorbleError, cancellationError } from '../../shared/index.js';
+import { BrowserPointerEngine } from '../pointer-engine/index.js';
+import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js';
 import type {
   CancellationOptions,
   ClickOptions,
@@ -11,75 +11,75 @@ import type {
   PointerSequence,
   PointerSequenceOptions,
   TargetHandle,
-} from '../../shared/index.js'
-import type { PointerEngine } from '../pointer-engine/index.js'
-import type { PointerEndpointResolver, PointerMoveOptions } from '../pointer-engine/index.js'
-import type { TimelineEngine } from '../../runtime/timeline-engine/index.js'
+} from '../../shared/index.js';
+import type { PointerEngine } from '../pointer-engine/index.js';
+import type { PointerEndpointResolver, PointerMoveOptions } from '../pointer-engine/index.js';
+import type { TimelineEngine } from '../../runtime/timeline-engine/index.js';
 
 export type DragCapability =
   | 'none'
   | 'pointer-gesture'
   | 'html5-dnd'
   | 'editor-selection'
-  | 'custom-adapter'
+  | 'custom-adapter';
 
 export type GestureResult = Readonly<{
-  completed: boolean
-}>
+  completed: boolean;
+}>;
 
 export type GestureClickOptions = ClickOptions &
   Readonly<{
-    refreshPointBeforeDown?: (point: Point) => Point | Promise<Point>
-    resolveEndpoint?: PointerEndpointResolver
-  }>
+    refreshPointBeforeDown?: (point: Point) => Point | Promise<Point>;
+    resolveEndpoint?: PointerEndpointResolver;
+  }>;
 
 export type GestureMoveOptions = MoveOptions &
   Readonly<{
-    resolveEndpoint?: PointerEndpointResolver
-  }>
+    resolveEndpoint?: PointerEndpointResolver;
+  }>;
 
 export type GestureDragOptions = DragOptions &
   Readonly<{
-    resolveFromEndpoint?: PointerEndpointResolver
-    resolveToEndpoint?: PointerEndpointResolver
-  }>
+    resolveFromEndpoint?: PointerEndpointResolver;
+    resolveToEndpoint?: PointerEndpointResolver;
+  }>;
 
-export type GesturePointerSequenceOptions = PointerSequenceOptions
+export type GesturePointerSequenceOptions = PointerSequenceOptions;
 
 export type GestureEngineOptions = Readonly<{
-  pointer?: PointerEngine
-  timeline?: TimelineEngine
-}>
+  pointer?: PointerEngine;
+  timeline?: TimelineEngine;
+}>;
 
 export interface GestureEngine {
-  click(target: TargetHandle, point: Point, options?: GestureClickOptions): Promise<GestureResult>
+  click(target: TargetHandle, point: Point, options?: GestureClickOptions): Promise<GestureResult>;
   doubleClick(
     target: TargetHandle,
     point: Point,
     options?: GestureClickOptions,
-  ): Promise<GestureResult>
-  hover(point: Point, options?: GestureMoveOptions): Promise<GestureResult>
-  drag(from: Point, to: Point, options?: GestureDragOptions): Promise<GestureResult>
+  ): Promise<GestureResult>;
+  hover(point: Point, options?: GestureMoveOptions): Promise<GestureResult>;
+  drag(from: Point, to: Point, options?: GestureDragOptions): Promise<GestureResult>;
   pointerSequence(
     sequence: PointerSequence,
     options?: GesturePointerSequenceOptions,
-  ): Promise<GestureResult>
-  cancel(): Promise<GestureResult>
+  ): Promise<GestureResult>;
+  cancel(): Promise<GestureResult>;
 }
 
 export class BrowserGestureEngine implements GestureEngine {
-  readonly #pointer: PointerEngine
-  readonly #timeline: TimelineEngine
+  readonly #pointer: PointerEngine;
+  readonly #timeline: TimelineEngine;
 
   constructor(options: GestureEngineOptions = {}) {
-    const timeline = options.timeline ?? new BrowserTimelineEngine()
+    const timeline = options.timeline ?? new BrowserTimelineEngine();
 
-    this.#timeline = timeline
+    this.#timeline = timeline;
     this.#pointer =
       options.pointer ??
       new BrowserPointerEngine({
         timeline,
-      })
+      });
   }
 
   async click(
@@ -92,7 +92,7 @@ export class BrowserGestureEngine implements GestureEngine {
       point,
       options,
       normalizeClickCount(options.clickCount),
-    )
+    );
   }
 
   async doubleClick(
@@ -100,36 +100,36 @@ export class BrowserGestureEngine implements GestureEngine {
     point: Point,
     options: GestureClickOptions = {},
   ): Promise<GestureResult> {
-    return this.#clickSequence('gesture.doubleClick', point, options, 2)
+    return this.#clickSequence('gesture.doubleClick', point, options, 2);
   }
 
   async hover(point: Point, options: GestureMoveOptions = {}): Promise<GestureResult> {
-    await this.#pointer.moveTo(point, options)
+    await this.#pointer.moveTo(point, options);
 
-    return { completed: true }
+    return { completed: true };
   }
 
   async drag(from: Point, to: Point, options: GestureDragOptions = {}): Promise<GestureResult> {
-    let pressed = false
+    let pressed = false;
 
-    await this.#pointer.moveTo(from, dragMovementOptions(options, options.resolveFromEndpoint))
-    assertGestureNotCancelled('gesture.drag', options)
+    await this.#pointer.moveTo(from, dragMovementOptions(options, options.resolveFromEndpoint));
+    assertGestureNotCancelled('gesture.drag', options);
 
     try {
-      await this.#pointer.down('primary')
-      pressed = true
-      await this.#pointer.moveTo(to, dragMovementOptions(options, options.resolveToEndpoint))
-      assertGestureNotCancelled('gesture.drag', options)
-      await this.#pointer.up('primary')
-      pressed = false
+      await this.#pointer.down('primary');
+      pressed = true;
+      await this.#pointer.moveTo(to, dragMovementOptions(options, options.resolveToEndpoint));
+      assertGestureNotCancelled('gesture.drag', options);
+      await this.#pointer.up('primary');
+      pressed = false;
 
-      return { completed: true }
+      return { completed: true };
     } catch (error) {
       if (pressed) {
-        await this.#pointer.cancel()
+        await this.#pointer.cancel();
       }
 
-      throw error
+      throw error;
     }
   }
 
@@ -137,61 +137,61 @@ export class BrowserGestureEngine implements GestureEngine {
     sequence: PointerSequence,
     options: GesturePointerSequenceOptions = {},
   ): Promise<GestureResult> {
-    const pressed = new Set<PointerButtonName>()
+    const pressed = new Set<PointerButtonName>();
 
     try {
       for (const step of sequence) {
-        assertGestureNotCancelled('gesture.pointerSequence', options)
+        assertGestureNotCancelled('gesture.pointerSequence', options);
 
         switch (step.type) {
           case 'move':
-            await this.#pointer.moveTo(step.to, pointerSequenceMovementOptions(step, options))
-            break
+            await this.#pointer.moveTo(step.to, pointerSequenceMovementOptions(step, options));
+            break;
           case 'down': {
-            const button = step.button ?? 'primary'
+            const button = step.button ?? 'primary';
 
-            await this.#pointer.down(button)
-            pressed.add(button)
-            break
+            await this.#pointer.down(button);
+            pressed.add(button);
+            break;
           }
           case 'up': {
-            const button = step.button ?? 'primary'
+            const button = step.button ?? 'primary';
 
-            await this.#pointer.up(button)
-            pressed.delete(button)
-            break
+            await this.#pointer.up(button);
+            pressed.delete(button);
+            break;
           }
           case 'pause':
             await this.#timeline.delay(
               normalizePauseDuration(step.duration),
               cancellationOptions(options),
-            )
-            break
+            );
+            break;
         }
       }
 
       if (pressed.size > 0) {
-        await this.#pointer.cancel()
-        const incompleteButtons = [...pressed]
+        await this.#pointer.cancel();
+        const incompleteButtons = [...pressed];
 
-        pressed.clear()
-        throw incompletePointerSequence(incompleteButtons)
+        pressed.clear();
+        throw incompletePointerSequence(incompleteButtons);
       }
 
-      return { completed: true }
+      return { completed: true };
     } catch (error) {
       if (pressed.size > 0) {
-        await this.#pointer.cancel()
+        await this.#pointer.cancel();
       }
 
-      throw error
+      throw error;
     }
   }
 
   async cancel(): Promise<GestureResult> {
-    await this.#pointer.cancel()
+    await this.#pointer.cancel();
 
-    return { completed: false }
+    return { completed: false };
   }
 
   async #clickSequence(
@@ -200,54 +200,54 @@ export class BrowserGestureEngine implements GestureEngine {
     options: GestureClickOptions,
     clickCount: number,
   ): Promise<GestureResult> {
-    const button = options.button ?? 'primary'
-    const pressDwell = normalizePressDwell(options.pressDwell)
-    let currentPoint = point
-    let pressed = false
+    const button = options.button ?? 'primary';
+    const pressDwell = normalizePressDwell(options.pressDwell);
+    let currentPoint = point;
+    let pressed = false;
 
     try {
-      const movement = await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options))
+      const movement = await this.#pointer.moveTo(currentPoint, pointerMovementOptions(options));
 
       if (options.resolveEndpoint) {
-        currentPoint = movement.position
+        currentPoint = movement.position;
       }
 
       for (let clickIndex = 0; clickIndex < clickCount; clickIndex += 1) {
-        assertGestureNotCancelled(operation, options)
-        const refreshedPoint = await options.refreshPointBeforeDown?.(currentPoint)
-        assertGestureNotCancelled(operation, options)
+        assertGestureNotCancelled(operation, options);
+        const refreshedPoint = await options.refreshPointBeforeDown?.(currentPoint);
+        assertGestureNotCancelled(operation, options);
 
         if (refreshedPoint && !samePoint(currentPoint, refreshedPoint)) {
-          await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options))
-          currentPoint = refreshedPoint
+          await this.#pointer.moveTo(refreshedPoint, freshPointMovementOptions(options));
+          currentPoint = refreshedPoint;
         }
 
-        assertGestureNotCancelled(operation, options)
-        await this.#pointer.down(button)
-        pressed = true
+        assertGestureNotCancelled(operation, options);
+        await this.#pointer.down(button);
+        pressed = true;
 
         if (pressDwell > 0) {
-          await this.#timeline.delay(pressDwell, cancellationOptions(options))
+          await this.#timeline.delay(pressDwell, cancellationOptions(options));
         }
 
-        assertGestureNotCancelled(operation, options)
-        await this.#pointer.up(button)
-        pressed = false
+        assertGestureNotCancelled(operation, options);
+        await this.#pointer.up(button);
+        pressed = false;
       }
 
-      return { completed: true }
+      return { completed: true };
     } catch (error) {
       if (pressed) {
-        await this.#pointer.cancel()
+        await this.#pointer.cancel();
       }
 
-      throw error
+      throw error;
     }
   }
 }
 
 export function createGestureEngine(options: GestureEngineOptions = {}): GestureEngine {
-  return new BrowserGestureEngine(options)
+  return new BrowserGestureEngine(options);
 }
 
 function pointerMovementOptions(options: GestureClickOptions): PointerMoveOptions | undefined {
@@ -257,9 +257,9 @@ function pointerMovementOptions(options: GestureClickOptions): PointerMoveOption
     ...(options.duration === undefined ? {} : { duration: options.duration }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
     ...(options.resolveEndpoint === undefined ? {} : { resolveEndpoint: options.resolveEndpoint }),
-  }
+  };
 
-  return Object.keys(movement).length === 0 ? undefined : movement
+  return Object.keys(movement).length === 0 ? undefined : movement;
 }
 
 function dragMovementOptions(
@@ -272,9 +272,9 @@ function dragMovementOptions(
     ...(options.duration === undefined ? {} : { duration: options.duration }),
     ...(options.motion === undefined ? {} : { motion: options.motion }),
     ...(resolveEndpoint === undefined ? {} : { resolveEndpoint }),
-  }
+  };
 
-  return Object.keys(movement).length === 0 ? undefined : movement
+  return Object.keys(movement).length === 0 ? undefined : movement;
 }
 
 function pointerSequenceMovementOptions(
@@ -285,9 +285,9 @@ function pointerSequenceMovementOptions(
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(step.duration === undefined ? {} : { duration: step.duration }),
-  }
+  };
 
-  return Object.keys(movement).length === 0 ? undefined : movement
+  return Object.keys(movement).length === 0 ? undefined : movement;
 }
 
 function freshPointMovementOptions(options: ClickOptions): MoveOptions {
@@ -295,26 +295,26 @@ function freshPointMovementOptions(options: ClickOptions): MoveOptions {
     ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     duration: 0,
-  }
+  };
 }
 
 function cancellationOptions(options: ClickOptions): CancellationOptions {
-  return options.signal === undefined ? {} : { signal: options.signal }
+  return options.signal === undefined ? {} : { signal: options.signal };
 }
 
 function assertGestureNotCancelled(operation: string, options: CancellationOptions): void {
   if (options.signal?.aborted) {
-    throw cancellationError(operation, options.signal.reason)
+    throw cancellationError(operation, options.signal.reason);
   }
 }
 
 function normalizeClickCount(clickCount: number | undefined): number {
   if (clickCount === undefined) {
-    return 1
+    return 1;
   }
 
   if (Number.isInteger(clickCount) && clickCount >= 1) {
-    return clickCount
+    return clickCount;
   }
 
   throw actorbleError(
@@ -327,23 +327,23 @@ function normalizeClickCount(clickCount: number | undefined): number {
         limit: 'Only positive integer click counts are supported.',
       },
     },
-  )
+  );
 }
 
 function normalizePressDwell(pressDwell: number | undefined): number {
   if (pressDwell === undefined || !Number.isFinite(pressDwell) || pressDwell <= 0) {
-    return 0
+    return 0;
   }
 
-  return pressDwell
+  return pressDwell;
 }
 
 function normalizePauseDuration(duration: number): number {
   if (!Number.isFinite(duration) || duration <= 0) {
-    return 0
+    return 0;
   }
 
-  return duration
+  return duration;
 }
 
 function incompletePointerSequence(pressedButtons: readonly PointerButtonName[]): never {
@@ -356,9 +356,9 @@ function incompletePointerSequence(pressedButtons: readonly PointerButtonName[])
         pressedButtons,
       },
     },
-  )
+  );
 }
 
 function samePoint(first: Point, second: Point): boolean {
-  return first.x === second.x && first.y === second.y
+  return first.x === second.x && first.y === second.y;
 }

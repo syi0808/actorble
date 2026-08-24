@@ -89,13 +89,13 @@ Scenario
 사용자가 직접 만나는 진입점입니다.
 
 ```ts
-const stuntman = new Stuntman()
+const stuntman = new Stuntman();
 
-await stuntman.moveTo(target)
-await stuntman.click(target)
-await stuntman.typeInto(input, 'hello')
-await stuntman.press('Enter')
-await stuntman.waitFor(text('Project created'))
+await stuntman.moveTo(target);
+await stuntman.click(target);
+await stuntman.typeInto(input, 'hello');
+await stuntman.press('Enter');
+await stuntman.waitFor(text('Project created'));
 ```
 
 담당:
@@ -113,45 +113,45 @@ await stuntman.waitFor(text('Project created'))
 
 ```ts
 class Stuntman {
-  resolve(locator, options?)
-  resolveAll(locator, options?)
-  exists(locator, options?)
-  inspect(target)
+  resolve(locator, options?);
+  resolveAll(locator, options?);
+  exists(locator, options?);
+  inspect(target);
 
-  geometry(target)
+  geometry(target);
 
-  moveTo(target, options?)
-  click(target, options?)
-  clickCurrent(options?)
-  doubleClick(target, options?)
+  moveTo(target, options?);
+  click(target, options?);
+  clickCurrent(options?);
+  doubleClick(target, options?);
 
-  focus(target, options?)
-  type(text, options?)
-  typeInto(target, text, options?)
-  fill(target, text, options?)
-  press(keys, options?)
+  focus(target, options?);
+  type(text, options?);
+  typeInto(target, text, options?);
+  fill(target, text, options?);
+  press(keys, options?);
 
-  reveal(target, options?)
-  scrollTo(position, options?)
-  scrollBy(delta, options?)
-  drag(from, to, options?)
-  selectText(targetOrRange, options?)
-  pointerSequence(sequence, options?)
+  reveal(target, options?);
+  scrollTo(position, options?);
+  scrollBy(delta, options?);
+  drag(from, to, options?);
+  selectText(targetOrRange, options?);
+  pointerSequence(sequence, options?);
 
-  waitFor(condition, options?)
+  waitFor(condition, options?);
 
-  run(scenario, options?)
-  pause()
-  resume()
-  stop()
-  destroy()
+  run(scenario, options?);
+  pause();
+  resume();
+  stop();
+  destroy();
 
-  getCapabilities()
-  getFidelity()
-  getTrace()
+  getCapabilities();
+  getFidelity();
+  getTrace();
 
-  on(event, listener)
-  off(event, listener)
+  on(event, listener);
+  off(event, listener);
 }
 ```
 
@@ -272,11 +272,9 @@ pointerSequence([...down, ...move, ...up])
 외부 API로 노출합니다.
 
 ```ts
-const button = await stuntman.resolve(
-  role('button', { name: 'Create Project' })
-)
+const button = await stuntman.resolve(role('button', { name: 'Create Project' }));
 
-const inputs = await stuntman.resolveAll(label('Project name'))
+const inputs = await stuntman.resolveAll(label('Project name'));
 ```
 
 담당:
@@ -296,14 +294,14 @@ TargetHandle은 영구 참조가 아니라 **짧게 유효한 snapshot handle**�
 
 ```ts
 type TargetHandle = {
-  id: string
-  raw: unknown
-  locator?: Locator
-  resolvedAt: number
-  surfaceId?: string
-  validity: 'live' | 'stale' | 'detached' | 'unknown'
-  debug: TargetDebugInfo
-}
+  id: string;
+  raw: unknown;
+  locator?: Locator;
+  resolvedAt: number;
+  surfaceId?: string;
+  validity: 'live' | 'stale' | 'detached' | 'unknown';
+  debug: TargetDebugInfo;
+};
 ```
 
 모든 action 직전에는 handle을 검증해야 합니다.
@@ -319,9 +317,9 @@ validate target
 
 ```ts
 type ResolveOptions = {
-  strict?: boolean
-  timeout?: number
-}
+  strict?: boolean;
+  timeout?: number;
+};
 ```
 
 동작 정책:
@@ -427,17 +425,17 @@ Geometry snapshot 예시:
 
 ```ts
 type GeometrySnapshot = {
-  target: TargetHandle
+  target: TargetHandle;
 
-  rect: Rect
-  visibleRect: Rect | null
-  center: Point
+  rect: Rect;
+  visibleRect: Rect | null;
+  center: Point;
 
-  clickablePoint: ClickablePointResult
+  clickablePoint: ClickablePointResult;
 
-  coordinateSpace: CoordinateSpace
-  computedAt: number
-}
+  coordinateSpace: CoordinateSpace;
+  computedAt: number;
+};
 ```
 
 `clickablePoint`는 단순 `Point | null`보다 계산 근거를 포함해야 합니다.
@@ -445,27 +443,22 @@ type GeometrySnapshot = {
 ```ts
 type ClickablePointResult =
   | {
-      ok: true
-      point: Point
-      strategy:
-        | 'center'
-        | 'visible-center'
-        | 'grid-sampling'
-        | 'label-control'
-        | 'custom'
-      hitTarget?: TargetHandle
+      ok: true;
+      point: Point;
+      strategy: 'center' | 'visible-center' | 'grid-sampling' | 'label-control' | 'custom';
+      hitTarget?: TargetHandle;
     }
   | {
-      ok: false
+      ok: false;
       reason:
         | 'not-visible'
         | 'fully-occluded'
         | 'pointer-events-none'
         | 'disabled'
         | 'outside-surface'
-        | 'no-sample-hit'
-      samples?: PointSample[]
-    }
+        | 'no-sample-hit';
+      samples?: PointSample[];
+    };
 ```
 
 ---
@@ -496,24 +489,24 @@ Geometry가 “어디에 있는가”를 계산한다면, Interactability는 “
 
 ```ts
 type InteractabilityReport = {
-  target: TargetHandle
+  target: TargetHandle;
 
-  visible: boolean
-  visibilityRatio?: number
+  visible: boolean;
+  visibilityRatio?: number;
 
-  enabled: boolean
-  editable?: boolean
-  focusable?: boolean
+  enabled: boolean;
+  editable?: boolean;
+  focusable?: boolean;
 
-  receivesPointerEvents: boolean
-  occludedBy?: TargetDebugInfo
+  receivesPointerEvents: boolean;
+  occludedBy?: TargetDebugInfo;
 
-  canClick: boolean
-  canFocus: boolean
-  canType?: boolean
+  canClick: boolean;
+  canFocus: boolean;
+  canType?: boolean;
 
-  blockingReasons: InteractabilityReason[]
-}
+  blockingReasons: InteractabilityReason[];
+};
 ```
 
 예상 실패 메시지:
@@ -602,39 +595,39 @@ PointerState:
 
 ```ts
 type PointerState = {
-  id: string
+  id: string;
 
-  position: Point
-  previousPosition: Point | null
+  position: Point;
+  previousPosition: Point | null;
 
-  motion: PointerMotionState
-  buttons: PointerButtonState
+  motion: PointerMotionState;
+  buttons: PointerButtonState;
 
   surface: {
-    id: string | null
-    coordinateSpace: CoordinateSpace
-  }
-}
+    id: string | null;
+    coordinateSpace: CoordinateSpace;
+  };
+};
 
 type PointerMotionState = {
-  status: 'idle' | 'moving' | 'settling' | 'cancelled'
+  status: 'idle' | 'moving' | 'settling' | 'cancelled';
 
-  from?: Point
-  to?: Point
+  from?: Point;
+  to?: Point;
 
-  startedAt?: number
-  updatedAt?: number
+  startedAt?: number;
+  updatedAt?: number;
 
-  path?: PointerPath
-}
+  path?: PointerPath;
+};
 
 type PointerButtonState = {
-  pressed: Set<PointerButton>
-  primary: PointerButton | null
+  pressed: Set<PointerButton>;
+  primary: PointerButton | null;
 
-  lastDownAt?: number
-  lastUpAt?: number
-}
+  lastDownAt?: number;
+  lastUpAt?: number;
+};
 ```
 
 Pointer Engine은 다음 signal을 냅니다.
@@ -642,23 +635,23 @@ Pointer Engine은 다음 signal을 냅니다.
 ```ts
 type PointerSignal =
   | {
-      type: 'pointer:moved'
-      point: Point
-      previousPoint: Point | null
+      type: 'pointer:moved';
+      point: Point;
+      previousPoint: Point | null;
     }
   | {
-      type: 'pointer:down'
-      point: Point
-      button: PointerButton
+      type: 'pointer:down';
+      point: Point;
+      button: PointerButton;
     }
   | {
-      type: 'pointer:up'
-      point: Point
-      button: PointerButton
+      type: 'pointer:up';
+      point: Point;
+      button: PointerButton;
     }
   | {
-      type: 'pointer:cancelled'
-    }
+      type: 'pointer:cancelled';
+    };
 ```
 
 ---
@@ -697,46 +690,46 @@ Interaction State Store
 ```ts
 type InteractionStateSnapshot = {
   hovered: {
-    target: TargetHandle | null
-    chain: TargetHandle[]
-    previous: TargetHandle | null
-  }
+    target: TargetHandle | null;
+    chain: TargetHandle[];
+    previous: TargetHandle | null;
+  };
 
   active: {
-    target: TargetHandle | null
-    button: PointerButton | null
-    startedAt: number | null
-  }
+    target: TargetHandle | null;
+    button: PointerButton | null;
+    startedAt: number | null;
+  };
 
   focused: {
-    target: TargetHandle | null
-    previous: TargetHandle | null
-  }
+    target: TargetHandle | null;
+    previous: TargetHandle | null;
+  };
 
   focusVisible: {
-    target: TargetHandle | null
-    modality: 'keyboard' | 'pointer' | 'programmatic'
-  }
+    target: TargetHandle | null;
+    modality: 'keyboard' | 'pointer' | 'programmatic';
+  };
 
   typing: {
-    active: boolean
-    target: TargetHandle | null
-  }
+    active: boolean;
+    target: TargetHandle | null;
+  };
 
   dragging: {
-    active: boolean
-    source: TargetHandle | null
-    currentDropTarget: TargetHandle | null
-  }
+    active: boolean;
+    source: TargetHandle | null;
+    currentDropTarget: TargetHandle | null;
+  };
 
   selection: {
-    active: boolean
-    target: TargetHandle | null
-    anchor: SelectionEndpoint | null
-    focus: SelectionEndpoint | null
-    text?: string
-  }
-}
+    active: boolean;
+    target: TargetHandle | null;
+    anchor: SelectionEndpoint | null;
+    focus: SelectionEndpoint | null;
+    text?: string;
+  };
+};
 ```
 
 업데이트는 event/reducer 방식으로 처리합니다.
@@ -746,7 +739,7 @@ interactionStore.dispatch({
   type: 'pointer:moved',
   point,
   hitTarget,
-})
+});
 ```
 
 중요한 원칙:
@@ -819,9 +812,9 @@ FocusEngine.ensureFocus(target)
 예:
 
 ```ts
-await stuntman.press('Meta+K')
-await stuntman.press('Escape')
-await stuntman.press('Enter')
+await stuntman.press('Meta+K');
+await stuntman.press('Escape');
+await stuntman.press('Enter');
 ```
 
 Keyboard Engine은 문자 입력 자체보다는 key sequence와 shortcut을 담당합니다.
@@ -850,23 +843,19 @@ Keyboard Engine과 분리합니다.
 
 ```ts
 type TextInputStrategy =
-  | 'set-value'
-  | 'insert-text'
-  | 'keyboard-events'
-  | 'composition'
-  | 'editor-adapter'
+  'set-value' | 'insert-text' | 'keyboard-events' | 'composition' | 'editor-adapter';
 ```
 
 권장 API:
 
 ```ts
-await stuntman.type('hello')
+await stuntman.type('hello');
 // 현재 focused target에 사람처럼 입력
 
-await stuntman.typeInto(input, 'hello')
+await stuntman.typeInto(input, 'hello');
 // 특정 target에 focus 후 사람처럼 입력
 
-await stuntman.fill(input, 'hello')
+await stuntman.fill(input, 'hello');
 // 기존 값을 빠르게 대체
 ```
 
@@ -950,22 +939,18 @@ scroll-stable
 
 ```ts
 type StabilityPolicy =
-  | 'none'
-  | 'next-frame'
-  | 'interaction-stable'
-  | 'visual-stable'
-  | CustomStabilityPolicy
+  'none' | 'next-frame' | 'interaction-stable' | 'visual-stable' | CustomStabilityPolicy;
 
 type ScrollSettlePolicy =
   | 'none'
   | 'next-frame'
   | 'scroll-stable'
   | {
-      kind: 'scroll-stable'
-      quietMs?: DurationMs
-      stableFrames?: number
-      threshold?: number
-    }
+      kind: 'scroll-stable';
+      quietMs?: DurationMs;
+      stableFrames?: number;
+      threshold?: number;
+    };
 ```
 
 Action option 예시:
@@ -973,11 +958,11 @@ Action option 예시:
 ```ts
 await actorble.click(target, {
   wait: 'interaction-stable',
-})
+});
 
 await actorble.click(target, {
   wait: visible(text('Project created')),
-})
+});
 ```
 
 Wait conditions are declarative UI-state primitives. The shared vocabulary includes
@@ -1152,62 +1137,34 @@ stuntman은 구현체별로 가능한 기능과 fidelity를 명시해야 합니�
 Fidelity 예시:
 
 ```ts
-type InputFidelity =
-  | 'visual-only'
-  | 'synthetic-dom-events'
-  | 'native-backed'
+type InputFidelity = 'visual-only' | 'synthetic-dom-events' | 'native-backed';
 ```
 
 Capability 예시:
 
 ```ts
 type CapabilityReport = {
-  pointerInput: 'none' | 'visual' | 'synthetic' | 'native'
-  keyboardInput: 'none' | 'synthetic' | 'native'
-  textInput:
-    | 'none'
-    | 'set-value'
-    | 'insert-text'
-    | 'composition'
-    | 'native'
+  pointerInput: 'none' | 'visual' | 'synthetic' | 'native';
+  keyboardInput: 'none' | 'synthetic' | 'native';
+  textInput: 'none' | 'set-value' | 'insert-text' | 'composition' | 'native';
 
-  pseudoState: 'none' | 'mirror' | 'native'
+  pseudoState: 'none' | 'mirror' | 'native';
 
-  trustedEvents: boolean
-  crossOriginFrame: boolean
-  closedShadowRoot: boolean
-  dragAndDrop:
-    | 'none'
-    | 'pointer-gesture'
-    | 'html5-dnd'
-    | 'custom-adapter'
+  trustedEvents: boolean;
+  crossOriginFrame: boolean;
+  closedShadowRoot: boolean;
+  dragAndDrop: 'none' | 'pointer-gesture' | 'html5-dnd' | 'custom-adapter';
 
-  textSelection:
-    | 'none'
-    | 'selection-api'
-    | 'pointer-gesture'
-    | 'editor-adapter'
-    | 'native'
+  textSelection: 'none' | 'selection-api' | 'pointer-gesture' | 'editor-adapter' | 'native';
 
-  pointerSequence:
-    | 'none'
-    | 'transactional'
+  pointerSequence: 'none' | 'transactional';
 
-  scrolling:
-    | 'none'
-    | 'viewport'
-    | 'nested-dom'
+  scrolling: 'none' | 'viewport' | 'nested-dom';
 
-  reveal:
-    | 'none'
-    | 'scroll-into-view'
-    | 'planned'
+  reveal: 'none' | 'scroll-into-view' | 'planned';
 
-  stability:
-    | 'none'
-    | 'frame'
-    | 'observed'
-}
+  stability: 'none' | 'frame' | 'observed';
+};
 ```
 
 이 모델은 다음 질문에 답하기 위한 것입니다.
@@ -1247,16 +1204,16 @@ Trace는 단순 event log가 아니라 span tree로 설계합니다.
 
 ```ts
 type TraceSpan = {
-  id: string
-  parentId?: string
-  name: string
-  startedAt: number
-  endedAt?: number
-  status: 'ok' | 'error' | 'cancelled'
-  input?: unknown
-  output?: unknown
-  events: TraceEvent[]
-}
+  id: string;
+  parentId?: string;
+  name: string;
+  startedAt: number;
+  endedAt?: number;
+  status: 'ok' | 'error' | 'cancelled';
+  input?: unknown;
+  output?: unknown;
+  events: TraceEvent[];
+};
 ```
 
 예시:
@@ -1312,25 +1269,25 @@ PSEUDO_MIRROR_FAILED
 
 ```ts
 type StuntmanErrorContext = {
-  scenarioName?: string
-  stepIndex?: number
-  action?: string
+  scenarioName?: string;
+  stepIndex?: number;
+  action?: string;
 
-  locator?: Locator
-  candidates?: TargetDebugInfo[]
+  locator?: Locator;
+  candidates?: TargetDebugInfo[];
 
-  resolvedTarget?: TargetDebugInfo
-  geometry?: GeometrySnapshot
-  interactability?: InteractabilityReport
+  resolvedTarget?: TargetDebugInfo;
+  geometry?: GeometrySnapshot;
+  interactability?: InteractabilityReport;
 
-  pointer?: PointerState
-  interaction?: InteractionStateSnapshot
+  pointer?: PointerState;
+  interaction?: InteractionStateSnapshot;
 
-  elapsedMs?: number
-  timeoutMs?: number
+  elapsedMs?: number;
+  timeoutMs?: number;
 
-  suggestion?: string
-}
+  suggestion?: string;
+};
 ```
 
 ---
@@ -1558,69 +1515,69 @@ Capability / Fidelity Reporter
 
 ```ts
 class Stuntman {
-  scenarioRunner
-  actionOrchestrator
+  scenarioRunner;
+  actionOrchestrator;
 
-  targetResolver
-  surfaceEngine
-  geometryEngine
-  interactabilityEngine
+  targetResolver;
+  surfaceEngine;
+  geometryEngine;
+  interactabilityEngine;
 
-  gestureEngine
-  pointerEngine
-  focusEngine
-  keyboardEngine
-  textInputEngine
+  gestureEngine;
+  pointerEngine;
+  focusEngine;
+  keyboardEngine;
+  textInputEngine;
 
-  interactionStateStore
-  timelineEngine
-  waitEngine
-  optionResolver
+  interactionStateStore;
+  timelineEngine;
+  waitEngine;
+  optionResolver;
 
-  visualLayer
-  platformAdapter
+  visualLayer;
+  platformAdapter;
 
-  diagnostics
-  capabilityReporter
+  diagnostics;
+  capabilityReporter;
 
-  resolve(locator, options?)
-  resolveAll(locator, options?)
-  exists(locator, options?)
-  inspect(target)
-  geometry(target)
+  resolve(locator, options?);
+  resolveAll(locator, options?);
+  exists(locator, options?);
+  inspect(target);
+  geometry(target);
 
-  moveTo(target, options?)
-  click(target, options?)
-  clickCurrent(options?)
-  doubleClick(target, options?)
+  moveTo(target, options?);
+  click(target, options?);
+  clickCurrent(options?);
+  doubleClick(target, options?);
 
-  focus(target, options?)
-  type(text, options?)
-  typeInto(target, text, options?)
-  fill(target, text, options?)
-  press(keys, options?)
+  focus(target, options?);
+  type(text, options?);
+  typeInto(target, text, options?);
+  fill(target, text, options?);
+  press(keys, options?);
 
-  reveal(target, options?)
-  scrollTo(position, options?)
-  scrollBy(delta, options?)
-  drag(from, to, options?)
-  selectText(targetOrRange, options?)
-  pointerSequence(sequence, options?)
+  reveal(target, options?);
+  scrollTo(position, options?);
+  scrollBy(delta, options?);
+  drag(from, to, options?);
+  selectText(targetOrRange, options?);
+  pointerSequence(sequence, options?);
 
-  waitFor(condition, options?)
+  waitFor(condition, options?);
 
-  run(scenario, options?)
-  pause()
-  resume()
-  stop()
-  destroy()
+  run(scenario, options?);
+  pause();
+  resume();
+  stop();
+  destroy();
 
-  getCapabilities()
-  getFidelity()
-  getTrace()
+  getCapabilities();
+  getFidelity();
+  getTrace();
 
-  on(event, listener)
-  off(event, listener)
+  on(event, listener);
+  off(event, listener);
 }
 ```
 

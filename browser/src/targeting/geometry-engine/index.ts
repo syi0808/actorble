@@ -1,9 +1,9 @@
-import { actorbleError } from '../../shared/index.js'
-import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
-import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
-import { BrowserSurfaceEngine } from '../surface-engine/index.js'
-import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
-import type { SurfaceEngine, SurfaceSnapshot } from '../surface-engine/index.js'
+import { actorbleError } from '../../shared/index.js';
+import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js';
+import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js';
+import { BrowserSurfaceEngine } from '../surface-engine/index.js';
+import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js';
+import type { SurfaceEngine, SurfaceSnapshot } from '../surface-engine/index.js';
 import type {
   Clock,
   CoordinateSpace,
@@ -13,83 +13,84 @@ import type {
   Rect,
   TargetHandle,
   TargetLike,
-} from '../../shared/index.js'
+} from '../../shared/index.js';
 
 export type PointSample = Readonly<{
-  point: Point
-  hitElement?: Element | null
-  accepted: boolean
-  reason?: string
-}>
+  point: Point;
+  hitElement?: Element | null;
+  accepted: boolean;
+  reason?: string;
+}>;
 
 export type ClickablePointResult =
   | Readonly<{
-      ok: true
-      point: Point
-      strategy: 'center' | 'visible-center' | 'grid-sampling' | 'label-control' | 'custom'
-      hitElement?: Element
+      ok: true;
+      point: Point;
+      strategy: 'center' | 'visible-center' | 'grid-sampling' | 'label-control' | 'custom';
+      hitElement?: Element;
     }>
   | Readonly<{
-      ok: false
+      ok: false;
       reason:
         | 'not-visible'
         | 'fully-occluded'
         | 'pointer-events-none'
         | 'disabled'
         | 'outside-surface'
-        | 'no-sample-hit'
-      samples?: readonly PointSample[]
-    }>
+        | 'no-sample-hit';
+      samples?: readonly PointSample[];
+    }>;
 
 export type GeometrySnapshot = Readonly<{
-  target: TargetHandle
-  rect: Rect
-  visibleRect: Rect | null
-  center: Point
-  clickablePoint: ClickablePointResult
-  coordinateSpace: CoordinateSpace
-  computedAt: number
-}>
+  target: TargetHandle;
+  rect: Rect;
+  visibleRect: Rect | null;
+  center: Point;
+  clickablePoint: ClickablePointResult;
+  coordinateSpace: CoordinateSpace;
+  computedAt: number;
+}>;
 
 export interface GeometryEngine {
-  snapshot(target: TargetLike): Promise<GeometrySnapshot>
-  getBoundingRect(target: TargetHandle): Rect
-  getVisibleRect(target: TargetHandle): Rect | null
-  getCenter(target: TargetHandle): Point
-  getClickablePoint(target: TargetHandle): ClickablePointResult
+  snapshot(target: TargetLike): Promise<GeometrySnapshot>;
+  getBoundingRect(target: TargetHandle): Rect;
+  getVisibleRect(target: TargetHandle): Rect | null;
+  getCenter(target: TargetHandle): Point;
+  getClickablePoint(target: TargetHandle): ClickablePointResult;
 }
 
 export type GeometryEngineOptions = Readonly<{
-  cache?: FrameGeometrySurfaceCache
-  dom?: DomPort
-  surface?: SurfaceEngine
-  clock?: Clock
-}>
+  cache?: FrameGeometrySurfaceCache;
+  dom?: DomPort;
+  surface?: SurfaceEngine;
+  clock?: Clock;
+}>;
 
 const defaultClock: Clock = {
   now() {
-    return Date.now()
+    return Date.now();
   },
-}
+};
 
 export class BrowserGeometryEngine implements GeometryEngine {
-  readonly #cache: FrameGeometrySurfaceCache
-  readonly #dom: DomPort
-  readonly #surface: SurfaceEngine
-  readonly #clock: Clock
+  readonly #cache: FrameGeometrySurfaceCache;
+  readonly #dom: DomPort;
+  readonly #surface: SurfaceEngine;
+  readonly #clock: Clock;
 
   constructor(options: GeometryEngineOptions = {}) {
-    this.#dom = options.dom ?? new BrowserDomAdapter()
-    this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
-    this.#surface = options.surface ?? new BrowserSurfaceEngine({ dom: this.#dom, cache: this.#cache })
-    this.#clock = options.clock ?? defaultClock
+    this.#dom = options.dom ?? new BrowserDomAdapter();
+    this.#cache = options.cache ?? createFrameGeometrySurfaceCache();
+    this.#surface =
+      options.surface ?? new BrowserSurfaceEngine({ dom: this.#dom, cache: this.#cache });
+    this.#clock = options.clock ?? defaultClock;
   }
 
   async snapshot(target: TargetLike): Promise<GeometrySnapshot> {
-    const handle = this.#toHandle(target)
-    const rect = this.getBoundingRect(handle)
-    const surface = this.#surface.getSurfaceFor(handle)
-    const visibleRect = this.#getVisibleRect(rect, surface)
+    const handle = this.#toHandle(target);
+    const rect = this.getBoundingRect(handle);
+    const surface = this.#surface.getSurfaceFor(handle);
+    const visibleRect = this.#getVisibleRect(rect, surface);
 
     return {
       target: handle,
@@ -99,45 +100,42 @@ export class BrowserGeometryEngine implements GeometryEngine {
       clickablePoint: clickablePointFor(rect, visibleRect),
       coordinateSpace: surface.coordinateSpace,
       computedAt: this.#clock.now(),
-    }
+    };
   }
 
   getBoundingRect(target: TargetHandle): Rect {
     return this.#cache.getBoundingRect(target.element, () =>
       this.#dom.getBoundingClientRect(target.element),
-    )
+    );
   }
 
   getVisibleRect(target: TargetHandle): Rect | null {
-    return this.#getVisibleRect(
-      this.getBoundingRect(target),
-      this.#surface.getSurfaceFor(target),
-    )
+    return this.#getVisibleRect(this.getBoundingRect(target), this.#surface.getSurfaceFor(target));
   }
 
   getCenter(target: TargetHandle): Point {
-    return centerOf(this.getBoundingRect(target))
+    return centerOf(this.getBoundingRect(target));
   }
 
   getClickablePoint(target: TargetHandle): ClickablePointResult {
-    const rect = this.getBoundingRect(target)
-    return clickablePointFor(rect, this.#getVisibleRect(rect, this.#surface.getSurfaceFor(target)))
+    const rect = this.getBoundingRect(target);
+    return clickablePointFor(rect, this.#getVisibleRect(rect, this.#surface.getSurfaceFor(target)));
   }
 
   #getVisibleRect(rect: Rect, surface: SurfaceSnapshot): Rect | null {
     if (!hasArea(rect)) {
-      return null
+      return null;
     }
 
-    let visibleRect: Rect | null = rect
+    let visibleRect: Rect | null = rect;
 
     if (surface.viewport) {
-      visibleRect = intersectRects(visibleRect, surface.viewport)
+      visibleRect = intersectRects(visibleRect, surface.viewport);
     }
 
     for (const clippingElement of surface.clippingChain) {
       if (!visibleRect) {
-        return null
+        return null;
       }
 
       visibleRect = intersectRects(
@@ -145,20 +143,20 @@ export class BrowserGeometryEngine implements GeometryEngine {
         this.#cache.getBoundingRect(clippingElement, () =>
           this.#dom.getBoundingClientRect(clippingElement),
         ),
-      )
+      );
     }
 
-    return visibleRect
+    return visibleRect;
   }
 
   #toHandle(target: TargetLike): TargetHandle {
     if (isTargetHandle(target)) {
-      return target
+      return target;
     }
 
     if (isLocator(target)) {
       if (target.kind === 'element') {
-        return this.#createElementHandle(target.element, target)
+        return this.#createElementHandle(target.element, target);
       }
 
       throw actorbleError(
@@ -167,14 +165,14 @@ export class BrowserGeometryEngine implements GeometryEngine {
         {
           details: { locatorKind: target.kind },
         },
-      )
+      );
     }
 
-    return this.#createElementHandle(target)
+    return this.#createElementHandle(target);
   }
 
   #createElementHandle(element: Element, locator?: Locator): TargetHandle {
-    const root = this.#dom.getRoot()
+    const root = this.#dom.getRoot();
 
     if (!this.#dom.isConnected(element) || !this.#dom.contains(root, element)) {
       throw actorbleError(
@@ -183,7 +181,7 @@ export class BrowserGeometryEngine implements GeometryEngine {
         {
           details: { locatorKind: locator?.kind },
         },
-      )
+      );
     }
 
     return {
@@ -194,62 +192,59 @@ export class BrowserGeometryEngine implements GeometryEngine {
       root,
       validity: 'live',
       debug: this.#dom.describeElement(element),
-    }
+    };
   }
 }
 
 export function createGeometryEngine(options: GeometryEngineOptions = {}): GeometryEngine {
-  return new BrowserGeometryEngine(options)
+  return new BrowserGeometryEngine(options);
 }
 
-function clickablePointFor(
-  rect: Rect,
-  visibleRect: Rect | null,
-): ClickablePointResult {
+function clickablePointFor(rect: Rect, visibleRect: Rect | null): ClickablePointResult {
   if (!hasArea(rect)) {
-    return { ok: false, reason: 'not-visible' }
+    return { ok: false, reason: 'not-visible' };
   }
 
   if (!visibleRect) {
-    return { ok: false, reason: 'outside-surface' }
+    return { ok: false, reason: 'outside-surface' };
   }
 
-  const center = centerOf(rect)
+  const center = centerOf(rect);
 
   if (containsPoint(visibleRect, center)) {
     return {
       ok: true,
       point: center,
       strategy: 'center',
-    }
+    };
   }
 
   return {
     ok: true,
     point: centerOf(visibleRect),
     strategy: 'visible-center',
-  }
+  };
 }
 
 function centerOf(rect: Rect): Point {
   return {
     x: rect.x + rect.width / 2,
     y: rect.y + rect.height / 2,
-  }
+  };
 }
 
 function intersectRects(a: Rect, b: Rect): Rect | null {
   if (!hasArea(a) || !hasArea(b)) {
-    return null
+    return null;
   }
 
-  const left = Math.max(a.x, b.x)
-  const top = Math.max(a.y, b.y)
-  const right = Math.min(a.x + a.width, b.x + b.width)
-  const bottom = Math.min(a.y + a.height, b.y + b.height)
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
 
   if (right <= left || bottom <= top) {
-    return null
+    return null;
   }
 
   return {
@@ -257,11 +252,11 @@ function intersectRects(a: Rect, b: Rect): Rect | null {
     y: top,
     width: right - left,
     height: bottom - top,
-  }
+  };
 }
 
 function hasArea(rect: Rect): boolean {
-  return rect.width > 0 && rect.height > 0
+  return rect.width > 0 && rect.height > 0;
 }
 
 function containsPoint(rect: Rect, point: Point): boolean {
@@ -270,7 +265,7 @@ function containsPoint(rect: Rect, point: Point): boolean {
     point.y >= rect.y &&
     point.x <= rect.x + rect.width &&
     point.y <= rect.y + rect.height
-  )
+  );
 }
 
 function isTargetHandle(target: TargetLike): target is TargetHandle {
@@ -281,9 +276,9 @@ function isTargetHandle(target: TargetLike): target is TargetHandle {
     'element' in target &&
     'resolvedAt' in target &&
     'debug' in target
-  )
+  );
 }
 
 function isLocator(target: TargetLike): target is Locator {
-  return typeof target === 'object' && target !== null && 'kind' in target
+  return typeof target === 'object' && target !== null && 'kind' in target;
 }

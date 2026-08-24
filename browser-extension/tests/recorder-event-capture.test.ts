@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   RECORDER_MASKED_VALUE,
   createRecorderEventCapturePort,
@@ -11,28 +11,28 @@ import {
   type RecorderSession,
   type RecorderSelectionSnapshot,
   type RecorderTextEvent,
-} from '../src/recorder/event-capture.js'
+} from '../src/recorder/event-capture.js';
 
 describe('recorder event capture', () => {
   it('flushes click events with locator-useful target context and cleans listeners on stop', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(1000),
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    const start = capture.start(session())
+    const start = capture.start(session());
     adapter.dispatchClick(targets.button, {
       clientX: 12,
       clientY: 18,
       pageX: 112,
       pageY: 218,
       button: 0,
-    })
-    const stop = await capture.stop('record-1')
+    });
+    const stop = await capture.stop('record-1');
 
     expect(start).toMatchObject({
       ok: true,
@@ -41,11 +41,11 @@ describe('recorder event capture', () => {
         tabId: 7,
         frameId: 0,
       },
-    })
+    });
     expect(stop).toEqual({
       ok: true,
       value: undefined,
-    })
+    });
     expect(flushes).toMatchObject([
       {
         tabId: 7,
@@ -70,7 +70,7 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
+    ]);
     expect(adapter.removedListeners).toEqual([
       'click',
       'input',
@@ -82,24 +82,24 @@ describe('recorder event capture', () => {
       'dragstart',
       'drop',
       'pagehide',
-    ])
-  })
+    ]);
+  });
 
   it('captures text input and masks sensitive values before flushing raw events', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(2000),
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    capture.start(session())
-    adapter.dispatchInput(targets.password)
-    const stop = await capture.stop('record-1')
+    capture.start(session());
+    adapter.dispatchInput(targets.password);
+    const stop = await capture.stop('record-1');
 
-    expect(stop).toMatchObject({ ok: true })
+    expect(stop).toMatchObject({ ok: true });
     expect(flushes).toMatchObject([
       {
         reason: 'incremental',
@@ -120,28 +120,33 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
-    expect(JSON.stringify(flushes)).not.toContain('correct horse battery staple')
-  })
+    ]);
+    expect(JSON.stringify(flushes)).not.toContain('correct horse battery staple');
+  });
 
   it('captures pointer windows in dispatch order with target context', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(2500),
       autoFlush: false,
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    capture.start(session())
-    adapter.dispatchPointer('down', targets.button, { clientX: 12, clientY: 18, buttons: 1 })
-    adapter.dispatchPointer('move', targets.button, { clientX: 22, clientY: 28, buttons: 1 })
-    adapter.dispatchPointer('up', targets.button, { clientX: 32, clientY: 38, button: 0, buttons: 0 })
-    const stop = await capture.stop('record-1')
+    capture.start(session());
+    adapter.dispatchPointer('down', targets.button, { clientX: 12, clientY: 18, buttons: 1 });
+    adapter.dispatchPointer('move', targets.button, { clientX: 22, clientY: 28, buttons: 1 });
+    adapter.dispatchPointer('up', targets.button, {
+      clientX: 32,
+      clientY: 38,
+      button: 0,
+      buttons: 0,
+    });
+    const stop = await capture.stop('record-1');
 
-    expect(stop).toMatchObject({ ok: true })
+    expect(stop).toMatchObject({ ok: true });
     expect(flushes).toMatchObject([
       {
         reason: 'stop',
@@ -178,29 +183,29 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   it('captures selection changes with selected text in plain text', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(2600),
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    capture.start(session())
+    capture.start(session());
     adapter.dispatchSelection({
       selectedText: 'plain selected secret',
       activeTarget: targets.editor,
       anchorTarget: targets.editor,
       focusTarget: targets.editor,
-    })
-    const stop = await capture.stop('record-1')
+    });
+    const stop = await capture.stop('record-1');
 
-    expect(stop).toMatchObject({ ok: true })
+    expect(stop).toMatchObject({ ok: true });
     expect(flushes).toMatchObject([
       {
         reason: 'incremental',
@@ -224,26 +229,26 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   it('captures drag start and drop events with timestamps and targets', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(2700),
       autoFlush: false,
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    capture.start(session())
-    adapter.dispatchDrag('start', targets.draggable, { clientX: 40, clientY: 50 })
-    adapter.dispatchDrag('drop', targets.dropzone, { clientX: 140, clientY: 150 })
-    const stop = await capture.stop('record-1')
+    capture.start(session());
+    adapter.dispatchDrag('start', targets.draggable, { clientX: 40, clientY: 50 });
+    adapter.dispatchDrag('drop', targets.dropzone, { clientX: 140, clientY: 150 });
+    const stop = await capture.stop('record-1');
 
-    expect(stop).toMatchObject({ ok: true })
+    expect(stop).toMatchObject({ ok: true });
     expect(flushes).toMatchObject([
       {
         reason: 'stop',
@@ -272,27 +277,27 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   it('flushes pending events on page navigation and ignores later events', async () => {
-    const adapter = createFakeAdapter()
-    const flushes: RecorderEventFlush[] = []
+    const adapter = createFakeAdapter();
+    const flushes: RecorderEventFlush[] = [];
     const capture = createRecorderEventCapturePort(adapter, {
       now: createClock(3000),
       autoFlush: false,
       flushEvents(flush) {
-        flushes.push(flush)
+        flushes.push(flush);
       },
-    })
+    });
 
-    capture.start(session())
-    adapter.dispatchClick(targets.button)
-    adapter.dispatchPointer('down', targets.button)
-    adapter.dispatchPagehide()
-    adapter.dispatchClick(targets.button)
-    adapter.dispatchPointer('up', targets.button)
-    const stop = await capture.stop('record-1')
+    capture.start(session());
+    adapter.dispatchClick(targets.button);
+    adapter.dispatchPointer('down', targets.button);
+    adapter.dispatchPagehide();
+    adapter.dispatchClick(targets.button);
+    adapter.dispatchPointer('up', targets.button);
+    const stop = await capture.stop('record-1');
 
     expect(adapter.removedListeners).toEqual([
       'click',
@@ -305,11 +310,11 @@ describe('recorder event capture', () => {
       'dragstart',
       'drop',
       'pagehide',
-    ])
+    ]);
     expect(stop).toEqual({
       ok: true,
       value: undefined,
-    })
+    });
     expect(flushes).toMatchObject([
       {
         reason: 'pagehide',
@@ -325,20 +330,20 @@ describe('recorder event capture', () => {
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
   it('reports flush failures on stop', async () => {
-    const adapter = createFakeAdapter()
+    const adapter = createFakeAdapter();
     const capture = createRecorderEventCapturePort(adapter, {
       flushEvents() {
-        throw new Error('background unavailable')
+        throw new Error('background unavailable');
       },
-    })
+    });
 
-    capture.start(session())
-    adapter.dispatchClick(targets.button)
-    const stop = await capture.stop('record-1')
+    capture.start(session());
+    adapter.dispatchClick(targets.button);
+    const stop = await capture.stop('record-1');
 
     expect(stop).toMatchObject({
       ok: false,
@@ -348,8 +353,8 @@ describe('recorder event capture', () => {
           message: 'Recorder events could not be flushed.',
         },
       ],
-    })
-  })
+    });
+  });
 
   it('marks secret-like fields as sensitive even when the input type is not password', () => {
     expect(
@@ -357,21 +362,21 @@ describe('recorder event capture', () => {
         inputType: 'text',
         name: 'api_token',
       }),
-    ).toBe('secret_like_field')
+    ).toBe('secret_like_field');
 
     expect(
       detectSensitiveInputReason({
         inputType: 'password',
         name: 'login',
       }),
-    ).toBe('password_type')
-  })
+    ).toBe('password_type');
+  });
 
   it('rejects overlapping sessions and mismatched stops', async () => {
-    const adapter = createFakeAdapter()
-    const capture = createRecorderEventCapturePort(adapter)
+    const adapter = createFakeAdapter();
+    const capture = createRecorderEventCapturePort(adapter);
 
-    expect(capture.start(session())).toMatchObject({ ok: true })
+    expect(capture.start(session())).toMatchObject({ ok: true });
     expect(capture.start({ ...session(), sessionId: 'record-2' })).toMatchObject({
       ok: false,
       issues: [
@@ -380,7 +385,7 @@ describe('recorder event capture', () => {
           message: 'A recorder session is already active.',
         },
       ],
-    })
+    });
     await expect(capture.stop('record-2')).resolves.toMatchObject({
       ok: false,
       issues: [
@@ -389,15 +394,15 @@ describe('recorder event capture', () => {
           message: 'The stop message does not match the active recorder session.',
         },
       ],
-    })
-  })
-})
+    });
+  });
+});
 
 type FakeElement = Readonly<{
-  key: string
-  value?: string
-  sensitiveReason?: 'password_type' | 'secret_like_field'
-}>
+  key: string;
+  value?: string;
+  sensitiveReason?: 'password_type' | 'secret_like_field';
+}>;
 
 const targets = {
   button: {
@@ -417,85 +422,85 @@ const targets = {
   dropzone: {
     key: 'dropzone',
   },
-} satisfies Record<string, FakeElement>
+} satisfies Record<string, FakeElement>;
 
 function createFakeAdapter() {
-  const removedListeners: string[] = []
-  let click: ((event: RecorderClickEvent<FakeElement>) => void) | undefined
-  let input: ((event: RecorderTextEvent<FakeElement>) => void) | undefined
-  let change: ((event: RecorderTextEvent<FakeElement>) => void) | undefined
-  let pointerDown: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
-  let pointerMove: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
-  let pointerUp: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined
-  let selectionChange: (() => void) | undefined
+  const removedListeners: string[] = [];
+  let click: ((event: RecorderClickEvent<FakeElement>) => void) | undefined;
+  let input: ((event: RecorderTextEvent<FakeElement>) => void) | undefined;
+  let change: ((event: RecorderTextEvent<FakeElement>) => void) | undefined;
+  let pointerDown: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined;
+  let pointerMove: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined;
+  let pointerUp: ((event: RecorderPointerEvent<FakeElement>) => void) | undefined;
+  let selectionChange: (() => void) | undefined;
   let selectionSnapshot: RecorderSelectionSnapshot<FakeElement> = {
     selectedText: '',
-  }
-  let dragStart: ((event: RecorderDragEvent<FakeElement>) => void) | undefined
-  let drop: ((event: RecorderDragEvent<FakeElement>) => void) | undefined
-  let pagehide: (() => void) | undefined
+  };
+  let dragStart: ((event: RecorderDragEvent<FakeElement>) => void) | undefined;
+  let drop: ((event: RecorderDragEvent<FakeElement>) => void) | undefined;
+  let pagehide: (() => void) | undefined;
 
   const adapter = {
     removedListeners,
     onClick(listener) {
-      click = listener
+      click = listener;
       return () => {
-        removedListeners.push('click')
-      }
+        removedListeners.push('click');
+      };
     },
     onInput(listener) {
-      input = listener
+      input = listener;
       return () => {
-        removedListeners.push('input')
-      }
+        removedListeners.push('input');
+      };
     },
     onChange(listener) {
-      change = listener
+      change = listener;
       return () => {
-        removedListeners.push('change')
-      }
+        removedListeners.push('change');
+      };
     },
     onPointerDown(listener) {
-      pointerDown = listener
+      pointerDown = listener;
       return () => {
-        removedListeners.push('pointerdown')
-      }
+        removedListeners.push('pointerdown');
+      };
     },
     onPointerMove(listener) {
-      pointerMove = listener
+      pointerMove = listener;
       return () => {
-        removedListeners.push('pointermove')
-      }
+        removedListeners.push('pointermove');
+      };
     },
     onPointerUp(listener) {
-      pointerUp = listener
+      pointerUp = listener;
       return () => {
-        removedListeners.push('pointerup')
-      }
+        removedListeners.push('pointerup');
+      };
     },
     onSelectionChange(listener) {
-      selectionChange = listener
+      selectionChange = listener;
       return () => {
-        removedListeners.push('selectionchange')
-      }
+        removedListeners.push('selectionchange');
+      };
     },
     onDragStart(listener) {
-      dragStart = listener
+      dragStart = listener;
       return () => {
-        removedListeners.push('dragstart')
-      }
+        removedListeners.push('dragstart');
+      };
     },
     onDrop(listener) {
-      drop = listener
+      drop = listener;
       return () => {
-        removedListeners.push('drop')
-      }
+        removedListeners.push('drop');
+      };
     },
     onPagehide(listener) {
-      pagehide = listener
+      pagehide = listener;
       return () => {
-        removedListeners.push('pagehide')
-      }
+        removedListeners.push('pagehide');
+      };
     },
     describeElement(element) {
       if (element.key === 'password') {
@@ -506,7 +511,7 @@ function createFakeAdapter() {
           inputType: 'password',
           rect: { x: 10, y: 20, width: 200, height: 32 },
           frameUrl: 'http://localhost:3000/login',
-        }
+        };
       }
 
       if (element.key === 'editor') {
@@ -516,7 +521,7 @@ function createFakeAdapter() {
           text: 'Plain selected text',
           rect: { x: 10, y: 70, width: 260, height: 90 },
           frameUrl: 'http://localhost:3000/login',
-        }
+        };
       }
 
       if (element.key === 'draggable') {
@@ -525,7 +530,7 @@ function createFakeAdapter() {
           id: 'card',
           rect: { x: 40, y: 50, width: 100, height: 40 },
           frameUrl: 'http://localhost:3000/login',
-        }
+        };
       }
 
       if (element.key === 'dropzone') {
@@ -534,7 +539,7 @@ function createFakeAdapter() {
           id: 'lane',
           rect: { x: 120, y: 130, width: 280, height: 320 },
           frameUrl: 'http://localhost:3000/login',
-        }
+        };
       }
 
       return {
@@ -544,16 +549,16 @@ function createFakeAdapter() {
         text: 'Sign in',
         rect: { x: 10, y: 20, width: 100, height: 32 },
         frameUrl: 'http://localhost:3000/login',
-      }
+      };
     },
     readElementValue(element) {
-      return element.value ?? ''
+      return element.value ?? '';
     },
     readSelection() {
-      return selectionSnapshot
+      return selectionSnapshot;
     },
     sensitiveInputReason(element) {
-      return element.sensitiveReason ?? null
+      return element.sensitiveReason ?? null;
     },
     dispatchClick(target, event = {}) {
       click?.({
@@ -562,20 +567,16 @@ function createFakeAdapter() {
         button: 0,
         target,
         ...event,
-      })
+      });
     },
     dispatchInput(target) {
-      input?.({ target })
+      input?.({ target });
     },
     dispatchChange(target) {
-      change?.({ target })
+      change?.({ target });
     },
     dispatchPointer(phase, target, event = {}) {
-      const listener = phase === 'down'
-        ? pointerDown
-        : phase === 'move'
-          ? pointerMove
-          : pointerUp
+      const listener = phase === 'down' ? pointerDown : phase === 'move' ? pointerMove : pointerUp;
       listener?.({
         clientX: 12,
         clientY: 18,
@@ -585,46 +586,43 @@ function createFakeAdapter() {
         pointerType: 'mouse',
         target,
         ...event,
-      })
+      });
     },
     dispatchSelection(snapshot) {
-      selectionSnapshot = snapshot
-      selectionChange?.()
+      selectionSnapshot = snapshot;
+      selectionChange?.();
     },
     dispatchDrag(phase, target, event = {}) {
-      const listener = phase === 'start' ? dragStart : drop
+      const listener = phase === 'start' ? dragStart : drop;
       listener?.({
         clientX: 12,
         clientY: 18,
         target,
         ...event,
-      })
+      });
     },
     dispatchPagehide() {
-      pagehide?.()
+      pagehide?.();
     },
   } satisfies RecorderEventCaptureAdapter<FakeElement> & {
-    removedListeners: string[]
-    dispatchClick(
-      target: FakeElement,
-      event?: Partial<RecorderClickEvent<FakeElement>>,
-    ): void
-    dispatchInput(target: FakeElement): void
-    dispatchChange(target: FakeElement): void
+    removedListeners: string[];
+    dispatchClick(target: FakeElement, event?: Partial<RecorderClickEvent<FakeElement>>): void;
+    dispatchInput(target: FakeElement): void;
+    dispatchChange(target: FakeElement): void;
     dispatchPointer(
       phase: 'down' | 'move' | 'up',
       target: FakeElement,
       event?: Partial<RecorderPointerEvent<FakeElement>>,
-    ): void
-    dispatchSelection(snapshot: RecorderSelectionSnapshot<FakeElement>): void
+    ): void;
+    dispatchSelection(snapshot: RecorderSelectionSnapshot<FakeElement>): void;
     dispatchDrag(
       phase: 'start' | 'drop',
       target: FakeElement,
       event?: Partial<RecorderDragEvent<FakeElement>>,
-    ): void
-    dispatchPagehide(): void
-  }
-  return adapter
+    ): void;
+    dispatchPagehide(): void;
+  };
+  return adapter;
 }
 
 function session(): RecorderSession {
@@ -634,10 +632,10 @@ function session(): RecorderSession {
     sessionId: 'record-1',
     startedAt: 100,
     sensitiveInputPolicy: 'mask',
-  }
+  };
 }
 
 function createClock(start: number): () => number {
-  let now = start
-  return () => now++
+  let now = start;
+  return () => now++;
 }

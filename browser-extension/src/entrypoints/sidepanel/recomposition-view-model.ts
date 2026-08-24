@@ -3,14 +3,14 @@ import {
   type LocatorPreviewCandidateView,
   type LocatorPreviewSnapshot,
   type LocatorPreviewStatus,
-} from '../../inspector/locator-preview.js'
+} from '../../inspector/locator-preview.js';
 import {
   createTargetPickerView,
   type TargetPickerSnapshot,
   type TargetPickerStatus,
-} from '../../inspector/target-picker.js'
-import type { ExtensionIssue } from '../../shared/result.js'
-import type { TraceRunDisplayView } from '../../trace/index.js'
+} from '../../inspector/target-picker.js';
+import type { ExtensionIssue } from '../../shared/result.js';
+import type { TraceRunDisplayView } from '../../trace/index.js';
 import {
   createSidepanelScenarioEditorView,
   type SidepanelActionFamilyOptionView,
@@ -22,152 +22,151 @@ import {
   type SidepanelStepRowView,
   type SidepanelTargetSlotRowView,
   type SidepanelWorkflowView,
-} from './scenario-editor.js'
+} from './scenario-editor.js';
 
-export type SidepanelDebugDrawerView =
-  | 'validation'
-  | 'locator'
-  | 'run-trace'
-  | 'failure'
+export type SidepanelDebugDrawerView = 'validation' | 'locator' | 'run-trace' | 'failure';
 
 export type SidepanelDebugDrawerState = Readonly<{
-  expanded?: boolean
-  activeView?: SidepanelDebugDrawerView
-}>
+  expanded?: boolean;
+  activeView?: SidepanelDebugDrawerView;
+}>;
 
 export type SidepanelRecompositionInput = Readonly<{
-  editor: SidepanelScenarioEditorSnapshot
-  targetPicker: TargetPickerSnapshot
-  locatorPreview: LocatorPreviewSnapshot
-  debugDrawer?: SidepanelDebugDrawerState
-}>
+  editor: SidepanelScenarioEditorSnapshot;
+  targetPicker: TargetPickerSnapshot;
+  locatorPreview: LocatorPreviewSnapshot;
+  debugDrawer?: SidepanelDebugDrawerState;
+}>;
 
 export type SidepanelScenarioShellView = Readonly<{
-  status: SidepanelWorkflowView['status']
-  summary: string
-  dirty: boolean
-  issueSummary: string
-  selectedScenarioId?: string
-  selectedStepId?: string
-  selectedTargetSlotId?: string
-  scenarioOptions: SidepanelScenarioEditorView['scenarioOptions']
-  metadata: SidepanelScenarioEditorView['documentFields']
-  targetTab: SidepanelScenarioEditorView['targetTab']
-  pendingAction: SidepanelScenarioEditorSnapshot['pendingAction']
-  message?: string
-  runId?: string
+  status: SidepanelWorkflowView['status'];
+  summary: string;
+  dirty: boolean;
+  issueSummary: string;
+  selectedScenarioId?: string;
+  selectedStepId?: string;
+  selectedTargetSlotId?: string;
+  scenarioOptions: SidepanelScenarioEditorView['scenarioOptions'];
+  metadata: SidepanelScenarioEditorView['documentFields'];
+  targetTab: SidepanelScenarioEditorView['targetTab'];
+  pendingAction: SidepanelScenarioEditorSnapshot['pendingAction'];
+  message?: string;
+  runId?: string;
   runStatus?: SidepanelScenarioEditorSnapshot['currentRun'] extends infer TRun
     ? TRun extends Readonly<{ status: infer TStatus }>
       ? TStatus
       : never
-    : never
+    : never;
   recordStatus?: SidepanelScenarioEditorSnapshot['currentRecord'] extends infer TRecord
     ? TRecord extends Readonly<{ status: infer TStatus }>
       ? TStatus
       : never
-    : never
+    : never;
   buttons: Readonly<{
-    create: SidepanelButtonView
-    import: SidepanelButtonView
-    export: SidepanelButtonView
-    save: SidepanelButtonView
-    validate: SidepanelButtonView
-    run: SidepanelButtonView
-    record: SidepanelButtonView
-  }>
-}>
+    create: SidepanelButtonView;
+    import: SidepanelButtonView;
+    export: SidepanelButtonView;
+    save: SidepanelButtonView;
+    validate: SidepanelButtonView;
+    run: SidepanelButtonView;
+    record: SidepanelButtonView;
+  }>;
+}>;
 
 export type SidepanelSelectedStepView = SidepanelStepRowView &
   Readonly<{
-    actionFamily: SidepanelScenarioEditorView['selectedStepFields']['actionFamily']
-    fields: SidepanelScenarioEditorView['selectedStepFields']
-  }>
+    actionFamily: SidepanelScenarioEditorView['selectedStepFields']['actionFamily'];
+    fields: SidepanelScenarioEditorView['selectedStepFields'];
+  }>;
 
 export type SidepanelBuilderWorkbenchView = Readonly<{
-  status: 'empty' | 'ready'
-  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[]
-  steps: readonly SidepanelStepRowView[]
-  selectedStep?: SidepanelSelectedStepView
+  status: 'empty' | 'ready';
+  actionFamilyOptions: readonly SidepanelActionFamilyOptionView[];
+  steps: readonly SidepanelStepRowView[];
+  selectedStep?: SidepanelSelectedStepView;
   buttons: Readonly<{
-    addStep: SidepanelButtonView
-    insertStep: SidepanelButtonView
-    duplicateStep: SidepanelButtonView
-    deleteStep: SidepanelButtonView
-    moveStepUp: SidepanelButtonView
-    moveStepDown: SidepanelButtonView
-    dryRun: SidepanelButtonView
-  }>
-}>
+    addStep: SidepanelButtonView;
+    insertStep: SidepanelButtonView;
+    duplicateStep: SidepanelButtonView;
+    deleteStep: SidepanelButtonView;
+    moveStepUp: SidepanelButtonView;
+    moveStepDown: SidepanelButtonView;
+    dryRun: SidepanelButtonView;
+  }>;
+}>;
 
 export type SidepanelTargetAssignmentStatus =
   | 'unavailable'
   | 'idle'
   | TargetPickerStatus
-  | LocatorPreviewStatus
+  | LocatorPreviewStatus;
 
 export type SidepanelLocatorPreviewView = Readonly<{
-  status: LocatorPreviewStatus
-  summary: string
-  issueSummary: string
-  candidates: readonly LocatorPreviewCandidateView[]
-}>
+  status: LocatorPreviewStatus;
+  summary: string;
+  issueSummary: string;
+  candidates: readonly LocatorPreviewCandidateView[];
+}>;
 
 export type SidepanelTargetAssignmentView = Readonly<{
-  status: SidepanelTargetAssignmentStatus
-  selectedTargetSlotId?: string
-  slots: readonly SidepanelTargetSlotRowView[]
+  status: SidepanelTargetAssignmentStatus;
+  selectedTargetSlotId?: string;
+  slots: readonly SidepanelTargetSlotRowView[];
   picker: Readonly<{
-    statusSummary: string
-    selectedSummary: string
-    issueSummary: string
-  }>
-  locatorPreview: SidepanelLocatorPreviewView
+    statusSummary: string;
+    selectedSummary: string;
+    issueSummary: string;
+  }>;
+  locatorPreview: SidepanelLocatorPreviewView;
   buttons: Readonly<{
-    start: SidepanelButtonView
-  }>
-}>
+    start: SidepanelButtonView;
+  }>;
+}>;
 
 export type SidepanelDebugDrawerViewModel = Readonly<{
-  expanded: boolean
-  activeView: SidepanelDebugDrawerView
-  attention: boolean
+  expanded: boolean;
+  activeView: SidepanelDebugDrawerView;
+  attention: boolean;
   views: Readonly<{
     validation: Readonly<{
-      summary: string
-      issueCount: number
-      issues: readonly SidepanelIssueView[]
-    }>
-    locator: SidepanelLocatorPreviewView
+      summary: string;
+      issueCount: number;
+      issues: readonly SidepanelIssueView[];
+    }>;
+    locator: SidepanelLocatorPreviewView;
     runTrace: Readonly<{
-      summary: string
-      eventCount: number
-      runId?: string
-      status?: string
-      latestEventName?: string
-      latestEventMessage?: string
-    }>
+      summary: string;
+      eventCount: number;
+      runId?: string;
+      status?: string;
+      latestEventName?: string;
+      latestEventMessage?: string;
+    }>;
     failure: Readonly<{
-      message?: string
-      stepId?: string
-      eventName?: string
-      details?: Readonly<Record<string, unknown>>
-    }>
-  }>
-}>
+      message?: string;
+      stepId?: string;
+      eventName?: string;
+      details?: Readonly<Record<string, unknown>>;
+    }>;
+  }>;
+}>;
 
 export type SidepanelRecompositionViewModel = Readonly<{
-  scenarioShell: SidepanelScenarioShellView
-  builderWorkbench: SidepanelBuilderWorkbenchView
-  targetAssignment: SidepanelTargetAssignmentView
-  recordedDraftReview: SidepanelRecordedDraftReviewView | undefined
-  debugDrawer: SidepanelDebugDrawerViewModel
-}>
+  scenarioShell: SidepanelScenarioShellView;
+  builderWorkbench: SidepanelBuilderWorkbenchView;
+  targetAssignment: SidepanelTargetAssignmentView;
+  recordedDraftReview: SidepanelRecordedDraftReviewView | undefined;
+  debugDrawer: SidepanelDebugDrawerViewModel;
+}>;
 
 export function createSidepanelRecompositionViewModel(
   input: SidepanelRecompositionInput,
 ): SidepanelRecompositionViewModel {
-  const editorView = createSidepanelScenarioEditorView(input.editor)
-  const locatorPreview = locatorPreviewView(input.locatorPreview, input.editor.pendingAction !== null)
+  const editorView = createSidepanelScenarioEditorView(input.editor);
+  const locatorPreview = locatorPreviewView(
+    input.locatorPreview,
+    input.editor.pendingAction !== null,
+  );
 
   return {
     scenarioShell: scenarioShellView(input.editor, editorView),
@@ -175,7 +174,7 @@ export function createSidepanelRecompositionViewModel(
     targetAssignment: targetAssignmentView(input, editorView, locatorPreview),
     recordedDraftReview: editorView.recordedDraftReview,
     debugDrawer: debugDrawerView(input, editorView, locatorPreview),
-  }
+  };
 }
 
 function scenarioShellView(
@@ -207,25 +206,26 @@ function scenarioShellView(
       run: editorView.buttons.run,
       record: editorView.buttons.record,
     },
-  }
+  };
 }
 
 function builderWorkbenchView(
   editorView: SidepanelScenarioEditorView,
 ): SidepanelBuilderWorkbenchView {
-  const selectedStep = editorView.stepRows.find((step) => step.selected)
+  const selectedStep = editorView.stepRows.find((step) => step.selected);
 
   return {
     status: editorView.stepRows.length === 0 ? 'empty' : 'ready',
     actionFamilyOptions: editorView.actionFamilyOptions,
     steps: editorView.stepRows,
-    selectedStep: selectedStep === undefined
-      ? undefined
-      : {
-          ...selectedStep,
-          actionFamily: editorView.selectedStepFields.actionFamily,
-          fields: editorView.selectedStepFields,
-        },
+    selectedStep:
+      selectedStep === undefined
+        ? undefined
+        : {
+            ...selectedStep,
+            actionFamily: editorView.selectedStepFields.actionFamily,
+            fields: editorView.selectedStepFields,
+          },
     buttons: {
       addStep: editorView.buttons.addStep,
       insertStep: editorView.buttons.insertStep,
@@ -235,7 +235,7 @@ function builderWorkbenchView(
       moveStepDown: editorView.buttons.moveStepDown,
       dryRun: editorView.buttons.dryRun,
     },
-  }
+  };
 }
 
 function targetAssignmentView(
@@ -243,11 +243,12 @@ function targetAssignmentView(
   editorView: SidepanelScenarioEditorView,
   locatorPreview: SidepanelLocatorPreviewView,
 ): SidepanelTargetAssignmentView {
-  const pickerView = createTargetPickerView(input.targetPicker)
-  const unavailable = editorView.workflow.status === 'empty' ||
+  const pickerView = createTargetPickerView(input.targetPicker);
+  const unavailable =
+    editorView.workflow.status === 'empty' ||
     editorView.workflow.selectedTargetSlotId === undefined ||
-    editorView.targetSlotRows.length === 0
-  const editorPending = input.editor.pendingAction !== null
+    editorView.targetSlotRows.length === 0;
+  const editorPending = input.editor.pendingAction !== null;
 
   return {
     status: unavailable
@@ -268,7 +269,7 @@ function targetAssignmentView(
         disabled: pickerView.buttons.start.disabled || unavailable || editorPending,
       },
     },
-  }
+  };
 }
 
 function debugDrawerView(
@@ -276,20 +277,18 @@ function debugDrawerView(
   editorView: SidepanelScenarioEditorView,
   locatorPreview: SidepanelLocatorPreviewView,
 ): SidepanelDebugDrawerViewModel {
-  const traceView = input.editor.currentTrace
-  const failure = traceView?.failure
+  const traceView = input.editor.currentTrace;
+  const failure = traceView?.failure;
   const attention =
     input.editor.issues.length > 0 ||
     input.locatorPreview.issues.length > 0 ||
-    failure !== undefined
+    failure !== undefined;
 
   return {
     expanded: input.debugDrawer?.expanded ?? false,
-    activeView: input.debugDrawer?.activeView ?? defaultDebugDrawerView(
-      input.editor.issues,
-      input.locatorPreview,
-      traceView,
-    ),
+    activeView:
+      input.debugDrawer?.activeView ??
+      defaultDebugDrawerView(input.editor.issues, input.locatorPreview, traceView),
     attention,
     views: {
       validation: {
@@ -299,16 +298,17 @@ function debugDrawerView(
       },
       locator: locatorPreview,
       runTrace: runTraceView(traceView),
-      failure: failure === undefined
-        ? {}
-        : {
-            message: failure.message,
-            stepId: failure.stepId,
-            eventName: failure.eventName,
-            details: failure.details,
-          },
+      failure:
+        failure === undefined
+          ? {}
+          : {
+              message: failure.message,
+              stepId: failure.stepId,
+              eventName: failure.eventName,
+              details: failure.details,
+            },
     },
-  }
+  };
 }
 
 function locatorPreviewView(
@@ -323,7 +323,7 @@ function locatorPreviewView(
       ...candidate,
       selectable: candidate.selectable && !editorPending,
     })),
-  }
+  };
 }
 
 function runTraceView(
@@ -333,7 +333,7 @@ function runTraceView(
     return {
       summary: 'No active run',
       eventCount: 0,
-    }
+    };
   }
 
   return {
@@ -343,7 +343,7 @@ function runTraceView(
     status: traceView.status.status,
     latestEventName: traceView.latestEvent?.name,
     latestEventMessage: traceView.latestEvent?.message,
-  }
+  };
 }
 
 function targetAssignmentStatus(
@@ -351,10 +351,10 @@ function targetAssignmentStatus(
   locatorPreviewStatus: LocatorPreviewStatus,
 ): SidepanelTargetAssignmentStatus {
   if (targetPickerStatus !== 'idle') {
-    return targetPickerStatus
+    return targetPickerStatus;
   }
 
-  return locatorPreviewStatus === 'idle' ? 'idle' : locatorPreviewStatus
+  return locatorPreviewStatus === 'idle' ? 'idle' : locatorPreviewStatus;
 }
 
 function defaultDebugDrawerView(
@@ -363,44 +363,40 @@ function defaultDebugDrawerView(
   traceView: TraceRunDisplayView | undefined,
 ): SidepanelDebugDrawerView {
   if (traceView?.failure !== undefined) {
-    return 'failure'
+    return 'failure';
   }
 
   if (issues.length > 0) {
-    return 'validation'
+    return 'validation';
   }
 
   if (locatorPreview.issues.length > 0 || locatorPreview.status === 'failed') {
-    return 'locator'
+    return 'locator';
   }
 
   if (traceView !== undefined) {
-    return 'run-trace'
+    return 'run-trace';
   }
 
-  return 'validation'
+  return 'validation';
 }
 
 function locatorPreviewSummary(snapshot: LocatorPreviewSnapshot): string {
   if (snapshot.status === 'ready') {
-    const count = snapshot.candidates.length
-    return `${count} candidate${count === 1 ? '' : 's'}`
+    const count = snapshot.candidates.length;
+    return `${count} candidate${count === 1 ? '' : 's'}`;
   }
 
   switch (snapshot.status) {
     case 'idle':
-      return 'No preview'
+      return 'No preview';
     case 'previewing':
-      return 'Previewing'
+      return 'Previewing';
     case 'failed':
-      return 'Preview failed'
+      return 'Preview failed';
   }
 }
 
-function issueSummary(
-  issues: readonly Readonly<{ message: string }>[],
-): string {
-  return issues.length === 0
-    ? 'None'
-    : issues.map((issue) => issue.message).join(' · ')
+function issueSummary(issues: readonly Readonly<{ message: string }>[]): string {
+  return issues.length === 0 ? 'None' : issues.map((issue) => issue.message).join(' · ');
 }

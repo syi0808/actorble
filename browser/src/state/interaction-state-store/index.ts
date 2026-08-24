@@ -6,199 +6,199 @@ import type {
   TargetHandle,
   TextSelectionStrategy,
   TextSelectionSurface,
-} from '../../shared/index.js'
-import type { PointerSignal } from '../../input/pointer-signals/index.js'
+} from '../../shared/index.js';
+import type { PointerSignal } from '../../input/pointer-signals/index.js';
 
 export type InteractionStateSelectionEndpoint = Readonly<{
-  target?: TargetHandle
-  node?: Node | HTMLInputElement | HTMLTextAreaElement | null
-  offset: number
-}>
+  target?: TargetHandle;
+  node?: Node | HTMLInputElement | HTMLTextAreaElement | null;
+  offset: number;
+}>;
 
 export type InteractionStateSelection = Readonly<{
-  active: boolean
-  target: TargetHandle | null
-  anchor: InteractionStateSelectionEndpoint | null
-  focus: InteractionStateSelectionEndpoint | null
-  text?: string
-  surface?: TextSelectionSurface
-  strategy?: TextSelectionStrategy
-  collapsed?: boolean
-}>
+  active: boolean;
+  target: TargetHandle | null;
+  anchor: InteractionStateSelectionEndpoint | null;
+  focus: InteractionStateSelectionEndpoint | null;
+  text?: string;
+  surface?: TextSelectionSurface;
+  strategy?: TextSelectionStrategy;
+  collapsed?: boolean;
+}>;
 
 export type InteractionStateSnapshot = Readonly<{
-  hovered: readonly TargetHandle[]
-  active: TargetHandle | null
-  focused: TargetHandle | null
-  focusVisible: boolean
-  typing: TargetHandle | null
+  hovered: readonly TargetHandle[];
+  active: TargetHandle | null;
+  focused: TargetHandle | null;
+  focusVisible: boolean;
+  typing: TargetHandle | null;
   dragging: Readonly<{
-    source: TargetHandle | null
-    target: TargetHandle | null
-  }>
-  selection: InteractionStateSelection
-}>
+    source: TargetHandle | null;
+    target: TargetHandle | null;
+  }>;
+  selection: InteractionStateSelection;
+}>;
 
 export type InteractionStateDiff = Readonly<{
-  previous: InteractionStateSnapshot
-  next: InteractionStateSnapshot
-  effects: readonly StateEffect[]
-}>
+  previous: InteractionStateSnapshot;
+  next: InteractionStateSnapshot;
+  effects: readonly StateEffect[];
+}>;
 
 export type PointerInteractionStateEvent = PointerSignal &
   Readonly<{
-    hitTarget?: TargetHandle | null
-    hoverChain?: readonly TargetHandle[]
-  }>
+    hitTarget?: TargetHandle | null;
+    hoverChain?: readonly TargetHandle[];
+  }>;
 
 export type InteractionStateEvent =
   | PointerInteractionStateEvent
   | Readonly<{
-      type: 'focus:changed'
-      target: TargetHandle | null
-      focusVisible?: boolean
+      type: 'focus:changed';
+      target: TargetHandle | null;
+      focusVisible?: boolean;
     }>
   | Readonly<{
-      type: 'typing:started'
-      target: TargetHandle
+      type: 'typing:started';
+      target: TargetHandle;
     }>
   | Readonly<{
-      type: 'typing:ended'
+      type: 'typing:ended';
     }>
   | Readonly<{
-      type: 'dragging:started'
-      source: TargetHandle
-      target?: TargetHandle | null
+      type: 'dragging:started';
+      source: TargetHandle;
+      target?: TargetHandle | null;
     }>
   | Readonly<{
-      type: 'dragging:moved'
-      target: TargetHandle | null
+      type: 'dragging:moved';
+      target: TargetHandle | null;
     }>
   | Readonly<{
-      type: 'dragging:ended'
+      type: 'dragging:ended';
     }>
   | Readonly<{
-      type: 'selection:started' | 'selection:changed'
-      target: TargetHandle | null
-      anchor: InteractionStateSelectionEndpoint
-      focus: InteractionStateSelectionEndpoint
-      text?: string
-      surface?: TextSelectionSurface
-      strategy?: TextSelectionStrategy
-      collapsed?: boolean
+      type: 'selection:started' | 'selection:changed';
+      target: TargetHandle | null;
+      anchor: InteractionStateSelectionEndpoint;
+      focus: InteractionStateSelectionEndpoint;
+      text?: string;
+      surface?: TextSelectionSurface;
+      strategy?: TextSelectionStrategy;
+      collapsed?: boolean;
     }>
   | Readonly<{
-      type: 'selection:ended'
+      type: 'selection:ended';
     }>
   | Readonly<{
-      type: 'selection:synced'
-      target?: TargetHandle | null
-      snapshot: PlatformTextSelectionSnapshot
-    }>
+      type: 'selection:synced';
+      target?: TargetHandle | null;
+      snapshot: PlatformTextSelectionSnapshot;
+    }>;
 
 export interface InteractionStateStore {
-  snapshot(): InteractionStateSnapshot
-  dispatch(event: InteractionStateEvent): InteractionStateDiff
-  applyPointerSignal(signal: PointerSignal): InteractionStateDiff
-  setFocused(target: TargetHandle | null, focusVisible?: boolean): InteractionStateDiff
-  setTyping(target: TargetHandle | null): InteractionStateDiff
-  reset(): InteractionStateDiff
-  subscribe(listener: ActorbleListener<InteractionStateDiff>): Disposable
+  snapshot(): InteractionStateSnapshot;
+  dispatch(event: InteractionStateEvent): InteractionStateDiff;
+  applyPointerSignal(signal: PointerSignal): InteractionStateDiff;
+  setFocused(target: TargetHandle | null, focusVisible?: boolean): InteractionStateDiff;
+  setTyping(target: TargetHandle | null): InteractionStateDiff;
+  reset(): InteractionStateDiff;
+  subscribe(listener: ActorbleListener<InteractionStateDiff>): Disposable;
 }
 
 export class BrowserInteractionStateStore implements InteractionStateStore {
-  #state: InteractionStateSnapshot = createEmptySnapshot()
-  readonly #listeners: ActorbleListener<InteractionStateDiff>[] = []
+  #state: InteractionStateSnapshot = createEmptySnapshot();
+  readonly #listeners: ActorbleListener<InteractionStateDiff>[] = [];
 
   snapshot(): InteractionStateSnapshot {
-    return cloneSnapshot(this.#state)
+    return cloneSnapshot(this.#state);
   }
 
   dispatch(event: InteractionStateEvent): InteractionStateDiff {
-    const previousState = this.#state
-    const nextState = reduceState(previousState, event)
-    const effects = diffEffects(previousState, nextState)
+    const previousState = this.#state;
+    const nextState = reduceState(previousState, event);
+    const effects = diffEffects(previousState, nextState);
 
-    this.#state = nextState
+    this.#state = nextState;
 
     const diff = {
       previous: cloneSnapshot(previousState),
       next: cloneSnapshot(nextState),
       effects,
-    }
+    };
 
     if (hasStateChanged(previousState, nextState)) {
-      this.#notify(diff)
+      this.#notify(diff);
     }
 
-    return diff
+    return diff;
   }
 
   applyPointerSignal(signal: PointerSignal): InteractionStateDiff {
-    return this.dispatch(signal)
+    return this.dispatch(signal);
   }
 
   setFocused(target: TargetHandle | null, focusVisible = false): InteractionStateDiff {
-    return this.dispatch({ type: 'focus:changed', target, focusVisible })
+    return this.dispatch({ type: 'focus:changed', target, focusVisible });
   }
 
   setTyping(target: TargetHandle | null): InteractionStateDiff {
     if (target) {
-      return this.dispatch({ type: 'typing:started', target })
+      return this.dispatch({ type: 'typing:started', target });
     }
 
-    return this.dispatch({ type: 'typing:ended' })
+    return this.dispatch({ type: 'typing:ended' });
   }
 
   reset(): InteractionStateDiff {
-    const previousState = this.#state
-    const nextState = createEmptySnapshot()
-    const effects = diffEffects(previousState, nextState)
+    const previousState = this.#state;
+    const nextState = createEmptySnapshot();
+    const effects = diffEffects(previousState, nextState);
 
-    this.#state = nextState
+    this.#state = nextState;
 
     const diff = {
       previous: cloneSnapshot(previousState),
       next: cloneSnapshot(nextState),
       effects,
-    }
+    };
 
     if (hasStateChanged(previousState, nextState)) {
-      this.#notify(diff)
+      this.#notify(diff);
     }
 
-    return diff
+    return diff;
   }
 
   subscribe(listener: ActorbleListener<InteractionStateDiff>): Disposable {
-    this.#listeners.push(listener)
-    let disposed = false
+    this.#listeners.push(listener);
+    let disposed = false;
 
     return {
       dispose: () => {
         if (disposed) {
-          return
+          return;
         }
 
-        disposed = true
-        const index = this.#listeners.indexOf(listener)
+        disposed = true;
+        const index = this.#listeners.indexOf(listener);
 
         if (index >= 0) {
-          this.#listeners.splice(index, 1)
+          this.#listeners.splice(index, 1);
         }
       },
-    }
+    };
   }
 
   #notify(diff: InteractionStateDiff): void {
     for (const listener of [...this.#listeners]) {
-      listener(diff)
+      listener(diff);
     }
   }
 }
 
 export function createInteractionStateStore(): InteractionStateStore {
-  return new BrowserInteractionStateStore()
+  return new BrowserInteractionStateStore();
 }
 
 function createEmptySnapshot(): InteractionStateSnapshot {
@@ -213,7 +213,7 @@ function createEmptySnapshot(): InteractionStateSnapshot {
       target: null,
     },
     selection: emptySelectionState(),
-  }
+  };
 }
 
 function emptySelectionState(): InteractionStateSelection {
@@ -222,14 +222,14 @@ function emptySelectionState(): InteractionStateSelection {
     target: null,
     anchor: null,
     focus: null,
-  }
+  };
 }
 
 function reduceState(
   previous: InteractionStateSnapshot,
   event: InteractionStateEvent,
 ): InteractionStateSnapshot {
-  const next = cloneSnapshot(previous)
+  const next = cloneSnapshot(previous);
 
   switch (event.type) {
     case 'pointer:moved':
@@ -237,32 +237,29 @@ function reduceState(
         return {
           ...next,
           hovered: uniqueTargets(event.hoverChain),
-        }
+        };
       }
 
       if ('hitTarget' in event) {
         return {
           ...next,
           hovered: event.hitTarget ? [event.hitTarget] : [],
-        }
+        };
       }
 
-      return next
+      return next;
 
     case 'pointer:down':
       return {
         ...next,
-        active:
-          'hitTarget' in event
-            ? (event.hitTarget ?? null)
-            : (previous.hovered[0] ?? null),
-      }
+        active: 'hitTarget' in event ? (event.hitTarget ?? null) : (previous.hovered[0] ?? null),
+      };
 
     case 'pointer:up':
       return {
         ...next,
         active: null,
-      }
+      };
 
     case 'pointer:cancelled':
       return {
@@ -273,26 +270,26 @@ function reduceState(
           target: null,
         },
         selection: emptySelectionState(),
-      }
+      };
 
     case 'focus:changed':
       return {
         ...next,
         focused: event.target,
         focusVisible: Boolean(event.target && event.focusVisible),
-      }
+      };
 
     case 'typing:started':
       return {
         ...next,
         typing: event.target,
-      }
+      };
 
     case 'typing:ended':
       return {
         ...next,
         typing: null,
-      }
+      };
 
     case 'dragging:started':
       return {
@@ -301,7 +298,7 @@ function reduceState(
           source: event.source,
           target: event.target ?? null,
         },
-      }
+      };
 
     case 'dragging:moved':
       return {
@@ -310,7 +307,7 @@ function reduceState(
           source: previous.dragging.source,
           target: event.target,
         },
-      }
+      };
 
     case 'dragging:ended':
       return {
@@ -319,7 +316,7 @@ function reduceState(
           source: null,
           target: null,
         },
-      }
+      };
 
     case 'selection:started':
     case 'selection:changed':
@@ -335,19 +332,19 @@ function reduceState(
           strategy: event.strategy,
           collapsed: event.collapsed,
         },
-      }
+      };
 
     case 'selection:ended':
       return {
         ...next,
         selection: emptySelectionState(),
-      }
+      };
 
     case 'selection:synced':
       return {
         ...next,
         selection: selectionFromPlatformSnapshot(event.snapshot, event.target ?? null),
-      }
+      };
   }
 }
 
@@ -362,37 +359,33 @@ function diffEffects(
     ...targetEffects('typing', previous.typing, next.typing),
     ...draggingEffects(previous, next),
     ...selectionEffects(previous, next),
-  ]
+  ];
 }
 
 function focusEffects(
   previous: InteractionStateSnapshot,
   next: InteractionStateSnapshot,
 ): StateEffect[] {
-  const effects: StateEffect[] = []
-  const focusChanged = !sameTarget(previous.focused, next.focused)
+  const effects: StateEffect[] = [];
+  const focusChanged = !sameTarget(previous.focused, next.focused);
 
   if (focusChanged && previous.focused) {
-    effects.push({ kind: 'focus', target: previous.focused, active: false })
+    effects.push({ kind: 'focus', target: previous.focused, active: false });
   }
 
-  if (
-    previous.focusVisible &&
-    (!next.focusVisible || focusChanged) &&
-    previous.focused
-  ) {
-    effects.push({ kind: 'focus-visible', target: previous.focused, active: false })
+  if (previous.focusVisible && (!next.focusVisible || focusChanged) && previous.focused) {
+    effects.push({ kind: 'focus-visible', target: previous.focused, active: false });
   }
 
   if (focusChanged && next.focused) {
-    effects.push({ kind: 'focus', target: next.focused, active: true })
+    effects.push({ kind: 'focus', target: next.focused, active: true });
   }
 
   if (next.focusVisible && (!previous.focusVisible || focusChanged) && next.focused) {
-    effects.push({ kind: 'focus-visible', target: next.focused, active: true })
+    effects.push({ kind: 'focus-visible', target: next.focused, active: true });
   }
 
-  return effects
+  return effects;
 }
 
 function draggingEffects(
@@ -403,14 +396,14 @@ function draggingEffects(
     'dragging',
     uniqueTargets([previous.dragging.source, previous.dragging.target]),
     uniqueTargets([next.dragging.source, next.dragging.target]),
-  )
+  );
 }
 
 function selectionEffects(
   previous: InteractionStateSnapshot,
   next: InteractionStateSnapshot,
 ): StateEffect[] {
-  return targetEffects('selection', previous.selection.target, next.selection.target)
+  return targetEffects('selection', previous.selection.target, next.selection.target);
 }
 
 function targetEffects(
@@ -419,13 +412,13 @@ function targetEffects(
   next: TargetHandle | null,
 ): StateEffect[] {
   if (sameTarget(previous, next)) {
-    return []
+    return [];
   }
 
   return [
     ...(previous ? [{ kind, target: previous, active: false }] : []),
     ...(next ? [{ kind, target: next, active: true }] : []),
-  ]
+  ];
 }
 
 function targetListEffects(
@@ -433,21 +426,21 @@ function targetListEffects(
   previous: readonly TargetHandle[],
   next: readonly TargetHandle[],
 ): StateEffect[] {
-  const effects: StateEffect[] = []
+  const effects: StateEffect[] = [];
 
   for (const target of previous) {
     if (!includesTarget(next, target)) {
-      effects.push({ kind, target, active: false })
+      effects.push({ kind, target, active: false });
     }
   }
 
   for (const target of next) {
     if (!includesTarget(previous, target)) {
-      effects.push({ kind, target, active: true })
+      effects.push({ kind, target, active: true });
     }
   }
 
-  return effects
+  return effects;
 }
 
 function hasStateChanged(
@@ -463,7 +456,7 @@ function hasStateChanged(
     !sameTarget(previous.dragging.source, next.dragging.source) ||
     !sameTarget(previous.dragging.target, next.dragging.target) ||
     !sameSelection(previous.selection, next.selection)
-  )
+  );
 }
 
 function cloneSnapshot(snapshot: InteractionStateSnapshot): InteractionStateSnapshot {
@@ -478,7 +471,7 @@ function cloneSnapshot(snapshot: InteractionStateSnapshot): InteractionStateSnap
       target: snapshot.dragging.target,
     },
     selection: cloneSelection(snapshot.selection),
-  }
+  };
 }
 
 function selectionFromPlatformSnapshot(
@@ -494,14 +487,14 @@ function selectionFromPlatformSnapshot(
     surface: snapshot.surface,
     strategy: snapshot.strategy,
     collapsed: snapshot.collapsed,
-  }
+  };
 }
 
 function selectionEndpointFromPlatform(
   node: Node | HTMLInputElement | HTMLTextAreaElement | null,
   offset: number,
 ): InteractionStateSelectionEndpoint {
-  return { node, offset }
+  return { node, offset };
 }
 
 function cloneSelection(selection: InteractionStateSelection): InteractionStateSelection {
@@ -514,7 +507,7 @@ function cloneSelection(selection: InteractionStateSelection): InteractionStateS
     surface: selection.surface,
     strategy: selection.strategy,
     collapsed: selection.collapsed,
-  }
+  };
 }
 
 function cloneSelectionEndpoint(
@@ -524,13 +517,10 @@ function cloneSelectionEndpoint(
     target: endpoint.target,
     node: endpoint.node,
     offset: endpoint.offset,
-  }
+  };
 }
 
-function sameSelection(
-  left: InteractionStateSelection,
-  right: InteractionStateSelection,
-): boolean {
+function sameSelection(left: InteractionStateSelection, right: InteractionStateSelection): boolean {
   return (
     left.active === right.active &&
     sameTarget(left.target, right.target) &&
@@ -540,7 +530,7 @@ function sameSelection(
     left.surface === right.surface &&
     left.strategy === right.strategy &&
     left.collapsed === right.collapsed
-  )
+  );
 }
 
 function sameSelectionEndpoint(
@@ -548,43 +538,44 @@ function sameSelectionEndpoint(
   right: InteractionStateSelectionEndpoint | null,
 ): boolean {
   if (left === null || right === null) {
-    return left === right
+    return left === right;
   }
 
-  return sameTarget(left.target ?? null, right.target ?? null) && left.node === right.node && left.offset === right.offset
+  return (
+    sameTarget(left.target ?? null, right.target ?? null) &&
+    left.node === right.node &&
+    left.offset === right.offset
+  );
 }
 
 function uniqueTargets(targets: readonly (TargetHandle | null)[]): TargetHandle[] {
-  const unique: TargetHandle[] = []
+  const unique: TargetHandle[] = [];
 
   for (const target of targets) {
     if (target && !includesTarget(unique, target)) {
-      unique.push(target)
+      unique.push(target);
     }
   }
 
-  return unique
+  return unique;
 }
 
 function sameTarget(left: TargetHandle | null, right: TargetHandle | null): boolean {
   if (left === null || right === null) {
-    return left === right
+    return left === right;
   }
 
-  return left.id === right.id
+  return left.id === right.id;
 }
 
-function sameTargetList(
-  left: readonly TargetHandle[],
-  right: readonly TargetHandle[],
-): boolean {
+function sameTargetList(left: readonly TargetHandle[], right: readonly TargetHandle[]): boolean {
   if (left.length !== right.length) {
-    return false
+    return false;
   }
 
-  return left.every((target, index) => sameTarget(target, right[index] ?? null))
+  return left.every((target, index) => sameTarget(target, right[index] ?? null));
 }
 
 function includesTarget(targets: readonly TargetHandle[], target: TargetHandle): boolean {
-  return targets.some((candidate) => sameTarget(candidate, target))
+  return targets.some((candidate) => sameTarget(candidate, target));
 }

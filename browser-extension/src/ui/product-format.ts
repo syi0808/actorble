@@ -1,106 +1,100 @@
-import type { CommandIconName } from './icons.js'
+import type { CommandIconName } from './icons.js';
 
 export function actionIcon(action: string): CommandIconName {
   switch (action) {
     case 'click':
     case 'clickCurrent':
     case 'doubleClick':
-      return 'mouse-pointer-click'
+      return 'mouse-pointer-click';
     case 'moveTo':
-      return 'move'
+      return 'move';
     case 'focus':
-      return 'focus'
+      return 'focus';
     case 'type':
     case 'typeInto':
-      return 'type'
+      return 'type';
     case 'fill':
-      return 'text-cursor'
+      return 'text-cursor';
     case 'press':
-      return 'keyboard'
+      return 'keyboard';
     case 'reveal':
     case 'scrollToPosition':
     case 'scrollBy':
-      return 'scroll'
+      return 'scroll';
     case 'drag':
-      return 'grab'
+      return 'grab';
     case 'selectText':
-      return 'text-cursor'
+      return 'text-cursor';
     case 'waitForVisible':
-      return 'eye'
+      return 'eye';
     case 'waitForHidden':
-      return 'eye-off'
+      return 'eye-off';
     case 'waitForText':
-      return 'target'
+      return 'target';
     case 'delay':
-      return 'timer'
+      return 'timer';
     default:
-      return 'target'
+      return 'target';
   }
 }
 
 export function actionHint(action: string): string {
   switch (action) {
     case 'click':
-      return 'Activate an element'
+      return 'Activate an element';
     case 'moveTo':
-      return 'Move pointer to target'
+      return 'Move pointer to target';
     case 'doubleClick':
-      return 'Activate twice'
+      return 'Activate twice';
     case 'focus':
-      return 'Focus an element'
+      return 'Focus an element';
     case 'clickCurrent':
-      return 'Click current pointer'
+      return 'Click current pointer';
     case 'type':
-      return 'Type text'
+      return 'Type text';
     case 'typeInto':
-      return 'Focus and type'
+      return 'Focus and type';
     case 'fill':
-      return 'Set field value'
+      return 'Set field value';
     case 'press':
-      return 'Press keys'
+      return 'Press keys';
     case 'reveal':
-      return 'Reveal a target'
+      return 'Reveal a target';
     case 'scrollToPosition':
-      return 'Scroll coordinates'
+      return 'Scroll coordinates';
     case 'scrollBy':
-      return 'Scroll by a delta'
+      return 'Scroll by a delta';
     case 'drag':
-      return 'Drag between targets'
+      return 'Drag between targets';
     case 'selectText':
-      return 'Select text range'
+      return 'Select text range';
     case 'waitForVisible':
-      return 'Wait until visible'
+      return 'Wait until visible';
     case 'waitForHidden':
-      return 'Wait until hidden'
+      return 'Wait until hidden';
     case 'waitForText':
-      return 'Wait for text'
+      return 'Wait for text';
     case 'delay':
-      return 'Pause the flow'
+      return 'Pause the flow';
     default:
-      return 'Add action'
+      return 'Add action';
   }
 }
 
 export function formatActionLabel(action: string): string {
-  return action
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/^./, (first) => first.toUpperCase())
+  return action.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (first) => first.toUpperCase());
 }
 
 export function capitalize(value: string): string {
-  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
-export function downloadFile(
-  filename: string,
-  content: string,
-  mimeType: string,
-): void {
-  const url = URL.createObjectURL(new Blob([content], { type: mimeType }))
-  const link = document.createElement('a')
+export function downloadFile(filename: string, content: string, mimeType: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement('a');
 
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

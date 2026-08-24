@@ -1,58 +1,51 @@
-import type {
-  Actorble,
-  ActorbleFacadeOptions,
-} from '@actorble/browser'
-import { isExtensionMessageOfKind } from '../../messaging/index.js'
+import type { Actorble, ActorbleFacadeOptions } from '@actorble/browser';
+import { isExtensionMessageOfKind } from '../../messaging/index.js';
 import type {
   ActorbleExtensionMessageByKind,
   InspectorTargetMetadata,
-} from '../../messaging/index.js'
-import {
-  compileScenarioLocatorToBrowserRuntime,
-} from '../../scenario/compile-to-browser-runtime.js'
-import { failure, ok, type ExtensionResult } from '../../shared/result.js'
+} from '../../messaging/index.js';
+import { compileScenarioLocatorToBrowserRuntime } from '../../scenario/compile-to-browser-runtime.js';
+import { failure, ok, type ExtensionResult } from '../../shared/result.js';
 import type {
   LocatorPreviewCandidate,
   LocatorPreviewResult,
-} from '../../inspector/locator-preview.js'
+} from '../../inspector/locator-preview.js';
 
-export type ContentLocatorPreviewActorble = Pick<Actorble, 'resolveAll' | 'destroy'>
+export type ContentLocatorPreviewActorble = Pick<Actorble, 'resolveAll' | 'destroy'>;
 
 export type ContentLocatorPreviewHost = Readonly<{
-  handleMessage(message: unknown): Promise<ExtensionResult<LocatorPreviewResult>>
-}>
+  handleMessage(message: unknown): Promise<ExtensionResult<LocatorPreviewResult>>;
+}>;
 
 export type ContentLocatorPreviewHostOptions = Readonly<{
-  createActorble(options: ActorbleFacadeOptions): ContentLocatorPreviewActorble
-}>
+  createActorble(options: ActorbleFacadeOptions): ContentLocatorPreviewActorble;
+}>;
 
-type LocatorPreviewMessage = ActorbleExtensionMessageByKind<'locator:preview'>
+type LocatorPreviewMessage = ActorbleExtensionMessageByKind<'locator:preview'>;
 type DomLikeElement = Readonly<{
   ownerDocument: Readonly<{
-    querySelectorAll(selector: string): Iterable<unknown> | ArrayLike<unknown>
-  }>
-}>
+    querySelectorAll(selector: string): Iterable<unknown> | ArrayLike<unknown>;
+  }>;
+}>;
 
 export function createContentLocatorPreviewHost(
   options: ContentLocatorPreviewHostOptions,
 ): ContentLocatorPreviewHost {
-  async function handleMessage(
-    message: unknown,
-  ): Promise<ExtensionResult<LocatorPreviewResult>> {
+  async function handleMessage(message: unknown): Promise<ExtensionResult<LocatorPreviewResult>> {
     if (!isExtensionMessageOfKind(message, 'locator:preview')) {
       return failure({
         code: 'unsupported_message',
         message: 'Content locator preview received an unsupported message.',
-      })
+      });
     }
 
-    let actorble: ContentLocatorPreviewActorble
+    let actorble: ContentLocatorPreviewActorble;
     try {
       const actorbleOptions = {
         feedback: 'off',
         motion: false,
-      } as ActorbleFacadeOptions
-      actorble = options.createActorble(actorbleOptions)
+      } as ActorbleFacadeOptions;
+      actorble = options.createActorble(actorbleOptions);
     } catch (error) {
       return failure({
         code: 'runtime_error',
@@ -60,31 +53,35 @@ export function createContentLocatorPreviewHost(
         details: {
           error: describeUnknownError(error),
         },
-      })
+      });
     }
 
     try {
       const candidates = await Promise.all(
-        message.payload.candidates.map((candidate, index) => (
-          previewCandidate(actorble, message, candidate, index)
-        )),
-      )
+        message.payload.candidates.map((candidate, index) =>
+          previewCandidate(actorble, message, candidate, index),
+        ),
+      );
 
       return ok({
         tabId: message.payload.tabId,
         ...(message.payload.frameId === undefined ? {} : { frameId: message.payload.frameId }),
-        ...(message.payload.scenarioId === undefined ? {} : { scenarioId: message.payload.scenarioId }),
-        ...(message.payload.targetSlot === undefined ? {} : { targetSlot: message.payload.targetSlot }),
+        ...(message.payload.scenarioId === undefined
+          ? {}
+          : { scenarioId: message.payload.scenarioId }),
+        ...(message.payload.targetSlot === undefined
+          ? {}
+          : { targetSlot: message.payload.targetSlot }),
         candidates,
-      })
+      });
     } finally {
-      actorble.destroy()
+      actorble.destroy();
     }
   }
 
   return {
     handleMessage,
-  }
+  };
 }
 
 async function previewCandidate(
@@ -93,10 +90,11 @@ async function previewCandidate(
   candidate: LocatorPreviewMessage['payload']['candidates'][number],
   index: number,
 ): Promise<LocatorPreviewCandidate> {
-  const runtimeLocator = compileScenarioLocatorToBrowserRuntime(
-    candidate.locator,
-    ['candidates', index, 'locator'],
-  )
+  const runtimeLocator = compileScenarioLocatorToBrowserRuntime(candidate.locator, [
+    'candidates',
+    index,
+    'locator',
+  ]);
 
   if (!runtimeLocator.ok) {
     return {
@@ -105,13 +103,13 @@ async function previewCandidate(
       strict: false,
       status: 'error',
       message: runtimeLocator.issues[0]?.message ?? 'Locator could not be compiled.',
-    }
+    };
   }
 
   try {
-    const matches = await actorble.resolveAll(runtimeLocator.value, { strict: false })
-    const matchCount = matches.length
-    const selectedMatchIndex = selectedMatchIndexForTarget(message.payload.target, matches)
+    const matches = await actorble.resolveAll(runtimeLocator.value, { strict: false });
+    const matchCount = matches.length;
+    const selectedMatchIndex = selectedMatchIndexForTarget(message.payload.target, matches);
 
     return {
       ...candidate,
@@ -119,7 +117,7 @@ async function previewCandidate(
       ...(selectedMatchIndex === undefined ? {} : { selectedMatchIndex }),
       strict: matchCount === 1,
       status: statusForMatchCount(matchCount),
-    }
+    };
   } catch (error) {
     return {
       ...candidate,
@@ -127,7 +125,7 @@ async function previewCandidate(
       strict: false,
       status: 'error',
       message: describeUnknownError(error),
-    }
+    };
   }
 }
 
@@ -136,18 +134,18 @@ function selectedMatchIndexForTarget(
   matches: readonly unknown[],
 ): number | undefined {
   if (target.documentOrderIndex === undefined) {
-    return undefined
+    return undefined;
   }
 
   const matchIndex = matches.findIndex((match) => {
     if (!isElementTargetHandle(match)) {
-      return false
+      return false;
     }
 
-    return documentOrderIndexForElement(match.element) === target.documentOrderIndex
-  })
+    return documentOrderIndexForElement(match.element) === target.documentOrderIndex;
+  });
 
-  return matchIndex < 0 ? undefined : matchIndex
+  return matchIndex < 0 ? undefined : matchIndex;
 }
 
 function isElementTargetHandle(value: unknown): value is Readonly<{ element: DomLikeElement }> {
@@ -156,13 +154,15 @@ function isElementTargetHandle(value: unknown): value is Readonly<{ element: Dom
     value !== null &&
     'element' in value &&
     isDomLikeElement((value as Readonly<{ element?: unknown }>).element)
-  )
+  );
 }
 
 function isDomLikeElement(value: unknown): value is DomLikeElement {
-  const ownerDocument = (value as Readonly<{
-    ownerDocument?: Readonly<{ querySelectorAll?: unknown }>
-  }> | null)?.ownerDocument
+  const ownerDocument = (
+    value as Readonly<{
+      ownerDocument?: Readonly<{ querySelectorAll?: unknown }>;
+    }> | null
+  )?.ownerDocument;
 
   return (
     typeof value === 'object' &&
@@ -171,22 +171,22 @@ function isDomLikeElement(value: unknown): value is DomLikeElement {
     typeof ownerDocument === 'object' &&
     ownerDocument !== null &&
     typeof ownerDocument.querySelectorAll === 'function'
-  )
+  );
 }
 
 function documentOrderIndexForElement(element: DomLikeElement): number | undefined {
-  const index = Array.from(element.ownerDocument.querySelectorAll('*')).indexOf(element)
-  return index < 0 ? undefined : index
+  const index = Array.from(element.ownerDocument.querySelectorAll('*')).indexOf(element);
+  return index < 0 ? undefined : index;
 }
 
 function statusForMatchCount(matchCount: number): LocatorPreviewCandidate['status'] {
   if (matchCount === 0) {
-    return 'zero-match'
+    return 'zero-match';
   }
 
-  return matchCount === 1 ? 'unique' : 'ambiguous'
+  return matchCount === 1 ? 'unique' : 'ambiguous';
 }
 
 function describeUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error ? error.message : String(error);
 }

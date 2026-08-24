@@ -35,7 +35,7 @@ API에서 겹치던 `mode`/`visual` 옵션과 기존 pointer motion profile을 �
 - Custom visual layer 주입은 public feedback API와 섞지 않고 composition-only
   option으로 분리한다.
 - `PointerMotionProfile.kind: 'linear'`는 제거하고 `{ kind: 'ease', timing:
-  'linear' }`로 표현한다.
+'linear' }`로 표현한다.
 - `inertia`와 `spring` profile은 `duration`을 받지 않는다.
 - Legacy alias나 deprecation shim을 추가하지 않는다.
 
@@ -109,38 +109,38 @@ type ActorbleFeedback =
   | 'cursor'
   | 'debug'
   | {
-      cursor?: boolean
-      target?: boolean
-      click?: boolean
-      focus?: boolean
-      typing?: boolean
-      keystroke?: boolean
-      text?: 'hidden' | 'masked' | 'plain'
-    }
+      cursor?: boolean;
+      target?: boolean;
+      click?: boolean;
+      focus?: boolean;
+      typing?: boolean;
+      keystroke?: boolean;
+      text?: 'hidden' | 'masked' | 'plain';
+    };
 
 type RunOptions = OperationOptions & {
-  pacing?: ScenarioPacingOptions
-  motion?: boolean
-  actionDefaults?: BrowserActionDefaults
-}
+  pacing?: ScenarioPacingOptions;
+  motion?: boolean;
+  actionDefaults?: BrowserActionDefaults;
+};
 
 type PointerMotionProfile =
   | {
-      kind: 'ease'
-      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
-      duration?: DurationMs
+      kind: 'ease';
+      timing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+      duration?: DurationMs;
     }
   | {
-      kind: 'inertia'
-      initialVelocity?: number
-      deceleration?: number
+      kind: 'inertia';
+      initialVelocity?: number;
+      deceleration?: number;
     }
   | {
-      kind: 'spring'
-      stiffness?: number
-      damping?: number
-      mass?: number
-    }
+      kind: 'spring';
+      stiffness?: number;
+      damping?: number;
+      mass?: number;
+    };
 ```
 
 Option 병합 순서는 아래로 고정한다.
@@ -373,7 +373,7 @@ const actorble = createActorble({
   actionDefaults: {
     click: { pressDwell: 0 },
   },
-})
+});
 
 await actorble.run(
   {
@@ -393,7 +393,7 @@ await actorble.run(
       click: { timeout: 1000 },
     },
   },
-)
+);
 ```
 
 완료 시 이 slice는 다음을 증명해야 한다.

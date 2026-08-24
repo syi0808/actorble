@@ -4,15 +4,12 @@ import {
   type ExtensionIssue,
   type ExtensionIssuePath,
   type ExtensionResult,
-} from '../shared/result.js'
-import {
-  DRAFT_SCENARIO_SCHEMA_VERSION,
-  type ScenarioDocument,
-} from './types.js'
+} from '../shared/result.js';
+import { DRAFT_SCENARIO_SCHEMA_VERSION, type ScenarioDocument } from './types.js';
 
-export type ScenarioValidationResult = ExtensionResult<ScenarioDocument>
+export type ScenarioValidationResult = ExtensionResult<ScenarioDocument>;
 
-type UnknownRecord = Readonly<Record<string, unknown>>
+type UnknownRecord = Readonly<Record<string, unknown>>;
 
 const rootKeys = new Set([
   'schemaVersion',
@@ -25,7 +22,7 @@ const rootKeys = new Set([
   'metadata',
   'platform',
   'steps',
-])
+]);
 
 const locatorKeysByStrategy = {
   css: new Set(['strategy', 'selector', 'matchIndex']),
@@ -34,15 +31,9 @@ const locatorKeysByStrategy = {
   label: new Set(['strategy', 'label', 'matchIndex']),
   testId: new Set(['strategy', 'value', 'attribute', 'matchIndex']),
   point: new Set(['strategy', 'point']),
-} as const
+} as const;
 
-const targetGroupKeys = new Set([
-  'kind',
-  'description',
-  'strict',
-  'locators',
-  'platform',
-])
+const targetGroupKeys = new Set(['kind', 'description', 'strict', 'locators', 'platform']);
 
 const optionKeys = new Set([
   'timeout',
@@ -65,15 +56,12 @@ const optionKeys = new Set([
   'safeArea',
   'offset',
   'settle',
-])
+]);
 
 export function validateScenarioDocument(input: unknown): ScenarioValidationResult {
-  const schemaVersion = readProperty(input, 'schemaVersion')
+  const schemaVersion = readProperty(input, 'schemaVersion');
 
-  if (
-    typeof schemaVersion === 'string' &&
-    schemaVersion !== DRAFT_SCENARIO_SCHEMA_VERSION
-  ) {
+  if (typeof schemaVersion === 'string' && schemaVersion !== DRAFT_SCENARIO_SCHEMA_VERSION) {
     return failure({
       code: 'unsupported_schema_version',
       message: `Unsupported scenario schema version "${schemaVersion}".`,
@@ -82,61 +70,53 @@ export function validateScenarioDocument(input: unknown): ScenarioValidationResu
         schemaVersion,
         supportedSchemaVersions: [DRAFT_SCENARIO_SCHEMA_VERSION],
       },
-    })
+    });
   }
 
-  const issues: ExtensionIssue[] = []
+  const issues: ExtensionIssue[] = [];
 
   if (!isRecord(input)) {
-    issues.push(issue('Scenario document must be an object.', []))
-    return failure(issues)
+    issues.push(issue('Scenario document must be an object.', []));
+    return failure(issues);
   }
 
-  rejectUnexpectedProperties(input, rootKeys, [], issues)
-  requireConst(input, 'schemaVersion', DRAFT_SCENARIO_SCHEMA_VERSION, ['schemaVersion'], issues)
-  validateOptionalId(input.id, ['id'], issues)
-  validateOptionalNonEmptyString(input.name, ['name'], issues)
-  validateOptionalString(input.description, ['description'], issues)
-  validateOptionalString(input.createdAt, ['createdAt'], issues)
-  validateOptionalString(input.updatedAt, ['updatedAt'], issues)
-  validateDefaults(input.defaults, ['defaults'], issues)
-  validateOptionalRecord(input.metadata, ['metadata'], issues)
-  validatePlatformExtensions(input.platform, ['platform'], issues)
-  validateSteps(input.steps, ['steps'], issues)
+  rejectUnexpectedProperties(input, rootKeys, [], issues);
+  requireConst(input, 'schemaVersion', DRAFT_SCENARIO_SCHEMA_VERSION, ['schemaVersion'], issues);
+  validateOptionalId(input.id, ['id'], issues);
+  validateOptionalNonEmptyString(input.name, ['name'], issues);
+  validateOptionalString(input.description, ['description'], issues);
+  validateOptionalString(input.createdAt, ['createdAt'], issues);
+  validateOptionalString(input.updatedAt, ['updatedAt'], issues);
+  validateDefaults(input.defaults, ['defaults'], issues);
+  validateOptionalRecord(input.metadata, ['metadata'], issues);
+  validatePlatformExtensions(input.platform, ['platform'], issues);
+  validateSteps(input.steps, ['steps'], issues);
 
-  return issues.length === 0 ? ok(input as ScenarioDocument) : failure(issues)
+  return issues.length === 0 ? ok(input as ScenarioDocument) : failure(issues);
 }
 
-function validateSteps(
-  steps: unknown,
-  path: ExtensionIssuePath,
-  issues: ExtensionIssue[],
-): void {
+function validateSteps(steps: unknown, path: ExtensionIssuePath, issues: ExtensionIssue[]): void {
   if (!Array.isArray(steps)) {
-    issues.push(issue('Missing required property "steps".', path))
-    return
+    issues.push(issue('Missing required property "steps".', path));
+    return;
   }
 
   if (steps.length === 0) {
-    issues.push(issue('Scenario steps must include at least one step.', path))
+    issues.push(issue('Scenario steps must include at least one step.', path));
   }
 
-  steps.forEach((step, index) => validateStep(step, [...path, index], issues))
+  steps.forEach((step, index) => validateStep(step, [...path, index], issues));
 }
 
-function validateStep(
-  step: unknown,
-  path: ExtensionIssuePath,
-  issues: ExtensionIssue[],
-): void {
+function validateStep(step: unknown, path: ExtensionIssuePath, issues: ExtensionIssue[]): void {
   if (!isRecord(step)) {
-    issues.push(issue('Scenario step must be an object.', path))
-    return
+    issues.push(issue('Scenario step must be an object.', path));
+    return;
   }
 
-  validateOptionalId(step.id, [...path, 'id'], issues)
-  validateOptionalString(step.note, [...path, 'note'], issues)
-  validatePlatformExtensions(step.platform, [...path, 'platform'], issues)
+  validateOptionalId(step.id, [...path, 'id'], issues);
+  validateOptionalString(step.note, [...path, 'note'], issues);
+  validatePlatformExtensions(step.platform, [...path, 'platform'], issues);
 
   switch (step.action) {
     case 'click':
@@ -148,19 +128,19 @@ function validateStep(
         new Set(['id', 'note', 'action', 'target', 'options', 'platform']),
         path,
         issues,
-      )
-      validateTarget(step.target, [...path, 'target'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateTarget(step.target, [...path, 'target'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'clickCurrent':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'options', 'platform']),
         path,
         issues,
-      )
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'type':
     case 'press':
       rejectUnexpectedProperties(
@@ -168,10 +148,10 @@ function validateStep(
         new Set(['id', 'note', 'action', 'input', 'options', 'platform']),
         path,
         issues,
-      )
-      validateNonEmptyString(step.input, [...path, 'input'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateNonEmptyString(step.input, [...path, 'input'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'typeInto':
     case 'fill':
       rejectUnexpectedProperties(
@@ -179,68 +159,68 @@ function validateStep(
         new Set(['id', 'note', 'action', 'target', 'input', 'options', 'platform']),
         path,
         issues,
-      )
-      validateTarget(step.target, [...path, 'target'], issues)
-      validateNonEmptyString(step.input, [...path, 'input'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateTarget(step.target, [...path, 'target'], issues);
+      validateNonEmptyString(step.input, [...path, 'input'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'reveal':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'target', 'options', 'platform']),
         path,
         issues,
-      )
-      validateTarget(step.target, [...path, 'target'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateTarget(step.target, [...path, 'target'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'scrollTo':
     case 'scrollBy':
-      validateExplicitScrollStep(step, path, issues)
-      return
+      validateExplicitScrollStep(step, path, issues);
+      return;
     case 'drag':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'from', 'to', 'options', 'platform']),
         path,
         issues,
-      )
-      validateTarget(step.from, [...path, 'from'], issues)
-      validateTarget(step.to, [...path, 'to'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateTarget(step.from, [...path, 'from'], issues);
+      validateTarget(step.to, [...path, 'to'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'selectText':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'target', 'options', 'platform']),
         path,
         issues,
-      )
-      validateTextSelectionTarget(step.target, [...path, 'target'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateTextSelectionTarget(step.target, [...path, 'target'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'waitFor':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'input', 'options', 'platform']),
         path,
         issues,
-      )
-      validateWaitCondition(step.input, [...path, 'input'], issues)
-      validateOptions(step.options, [...path, 'options'], issues)
-      return
+      );
+      validateWaitCondition(step.input, [...path, 'input'], issues);
+      validateOptions(step.options, [...path, 'options'], issues);
+      return;
     case 'delay':
       rejectUnexpectedProperties(
         step,
         new Set(['id', 'note', 'action', 'duration', 'reason', 'platform']),
         path,
         issues,
-      )
-      validatePositiveNumber(step.duration, [...path, 'duration'], issues)
-      validateOptionalString(step.reason, [...path, 'reason'], issues)
-      return
+      );
+      validatePositiveNumber(step.duration, [...path, 'duration'], issues);
+      validateOptionalString(step.reason, [...path, 'reason'], issues);
+      return;
     default:
-      issues.push(issue('Scenario step action is not supported.', [...path, 'action']))
+      issues.push(issue('Scenario step action is not supported.', [...path, 'action']));
   }
 }
 
@@ -254,15 +234,17 @@ function validateExplicitScrollStep(
     new Set(['id', 'note', 'action', 'input', 'options', 'platform']),
     path,
     issues,
-  )
+  );
 
   if (hasOwn(step, 'target')) {
-    issues.push(issue('Explicit scroll steps do not accept "target"; use reveal.', [...path, 'target']))
+    issues.push(
+      issue('Explicit scroll steps do not accept "target"; use reveal.', [...path, 'target']),
+    );
   }
 
-  validateScrollVector(step.input, [...path, 'input'], issues)
+  validateScrollVector(step.input, [...path, 'input'], issues);
 
-  validateOptions(step.options, [...path, 'options'], issues)
+  validateOptions(step.options, [...path, 'options'], issues);
 }
 
 function validateScrollVector(
@@ -271,43 +253,39 @@ function validateScrollVector(
   issues: ExtensionIssue[],
 ): void {
   if (!isRecord(value)) {
-    issues.push(issue('Scroll input must be an object.', path))
-    return
+    issues.push(issue('Scroll input must be an object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(value, new Set(['x', 'y']), path, issues)
-  validateNumber(value.x, [...path, 'x'], issues)
-  validateNumber(value.y, [...path, 'y'], issues)
+  rejectUnexpectedProperties(value, new Set(['x', 'y']), path, issues);
+  validateNumber(value.x, [...path, 'x'], issues);
+  validateNumber(value.y, [...path, 'y'], issues);
 }
 
-function validateTarget(
-  target: unknown,
-  path: ExtensionIssuePath,
-  issues: ExtensionIssue[],
-): void {
+function validateTarget(target: unknown, path: ExtensionIssuePath, issues: ExtensionIssue[]): void {
   if (!isRecord(target)) {
-    issues.push(issue('Target must be an object.', path))
-    return
+    issues.push(issue('Target must be an object.', path));
+    return;
   }
 
   if (Array.isArray(target.locators)) {
-    rejectUnexpectedProperties(target, targetGroupKeys, path, issues)
+    rejectUnexpectedProperties(target, targetGroupKeys, path, issues);
     if (target.kind !== undefined && target.kind !== 'target') {
-      issues.push(issue('Target group kind must be "target".', [...path, 'kind']))
+      issues.push(issue('Target group kind must be "target".', [...path, 'kind']));
     }
-    validateOptionalString(target.description, [...path, 'description'], issues)
-    validateOptionalBoolean(target.strict, [...path, 'strict'], issues)
-    validatePlatformExtensions(target.platform, [...path, 'platform'], issues)
+    validateOptionalString(target.description, [...path, 'description'], issues);
+    validateOptionalBoolean(target.strict, [...path, 'strict'], issues);
+    validatePlatformExtensions(target.platform, [...path, 'platform'], issues);
     if (target.locators.length === 0) {
-      issues.push(issue('Target group must include at least one locator.', [...path, 'locators']))
+      issues.push(issue('Target group must include at least one locator.', [...path, 'locators']));
     }
     target.locators.forEach((locator, index) => {
-      validateLocator(locator, [...path, 'locators', index], issues)
-    })
-    return
+      validateLocator(locator, [...path, 'locators', index], issues);
+    });
+    return;
   }
 
-  validateLocator(target, path, issues)
+  validateLocator(target, path, issues);
 }
 
 function validateTextSelectionTarget(
@@ -316,13 +294,13 @@ function validateTextSelectionTarget(
   issues: ExtensionIssue[],
 ): void {
   if (isRecord(target) && ('anchor' in target || 'focus' in target)) {
-    rejectUnexpectedProperties(target, new Set(['anchor', 'focus']), path, issues)
-    validateSelectionEndpoint(target.anchor, [...path, 'anchor'], issues)
-    validateSelectionEndpoint(target.focus, [...path, 'focus'], issues)
-    return
+    rejectUnexpectedProperties(target, new Set(['anchor', 'focus']), path, issues);
+    validateSelectionEndpoint(target.anchor, [...path, 'anchor'], issues);
+    validateSelectionEndpoint(target.focus, [...path, 'focus'], issues);
+    return;
   }
 
-  validateTarget(target, path, issues)
+  validateTarget(target, path, issues);
 }
 
 function validateSelectionEndpoint(
@@ -331,15 +309,15 @@ function validateSelectionEndpoint(
   issues: ExtensionIssue[],
 ): void {
   if (!isRecord(endpoint)) {
-    issues.push(issue('Selection endpoint must be an object.', path))
-    return
+    issues.push(issue('Selection endpoint must be an object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(endpoint, new Set(['target', 'offset']), path, issues)
-  validateTarget(endpoint.target, [...path, 'target'], issues)
-  validateOptionalInteger(endpoint.offset, [...path, 'offset'], issues, 0)
+  rejectUnexpectedProperties(endpoint, new Set(['target', 'offset']), path, issues);
+  validateTarget(endpoint.target, [...path, 'target'], issues);
+  validateOptionalInteger(endpoint.offset, [...path, 'offset'], issues, 0);
   if (endpoint.offset === undefined) {
-    issues.push(issue('Missing required property "offset".', [...path, 'offset']))
+    issues.push(issue('Missing required property "offset".', [...path, 'offset']));
   }
 }
 
@@ -349,45 +327,45 @@ function validateLocator(
   issues: ExtensionIssue[],
 ): void {
   if (!isRecord(locator)) {
-    issues.push(issue('Locator must be an object.', path))
-    return
+    issues.push(issue('Locator must be an object.', path));
+    return;
   }
 
   switch (locator.strategy) {
     case 'css':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.css, path, issues)
-      validateNonEmptyString(locator.selector, [...path, 'selector'], issues)
-      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.css, path, issues);
+      validateNonEmptyString(locator.selector, [...path, 'selector'], issues);
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0);
+      return;
     case 'role':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.role, path, issues)
-      validateNonEmptyString(locator.role, [...path, 'role'], issues)
-      validateTextMatcher(locator.name, [...path, 'name'], issues, true)
-      validateOptionalBoolean(locator.includeHidden, [...path, 'includeHidden'], issues)
-      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.role, path, issues);
+      validateNonEmptyString(locator.role, [...path, 'role'], issues);
+      validateTextMatcher(locator.name, [...path, 'name'], issues, true);
+      validateOptionalBoolean(locator.includeHidden, [...path, 'includeHidden'], issues);
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0);
+      return;
     case 'text':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.text, path, issues)
-      validateTextMatcher(locator.text, [...path, 'text'], issues)
-      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.text, path, issues);
+      validateTextMatcher(locator.text, [...path, 'text'], issues);
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0);
+      return;
     case 'label':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.label, path, issues)
-      validateTextMatcher(locator.label, [...path, 'label'], issues)
-      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.label, path, issues);
+      validateTextMatcher(locator.label, [...path, 'label'], issues);
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0);
+      return;
     case 'testId':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.testId, path, issues)
-      validateNonEmptyString(locator.value, [...path, 'value'], issues)
-      validateOptionalNonEmptyString(locator.attribute, [...path, 'attribute'], issues)
-      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.testId, path, issues);
+      validateNonEmptyString(locator.value, [...path, 'value'], issues);
+      validateOptionalNonEmptyString(locator.attribute, [...path, 'attribute'], issues);
+      validateOptionalInteger(locator.matchIndex, [...path, 'matchIndex'], issues, 0);
+      return;
     case 'point':
-      rejectUnexpectedProperties(locator, locatorKeysByStrategy.point, path, issues)
-      validatePoint(locator.point, [...path, 'point'], issues)
-      return
+      rejectUnexpectedProperties(locator, locatorKeysByStrategy.point, path, issues);
+      validatePoint(locator.point, [...path, 'point'], issues);
+      return;
     default:
-      issues.push(issue('Locator strategy is not supported.', [...path, 'strategy']))
+      issues.push(issue('Locator strategy is not supported.', [...path, 'strategy']));
   }
 }
 
@@ -398,44 +376,40 @@ function validateTextMatcher(
   optional = false,
 ): void {
   if (matcher === undefined && optional) {
-    return
+    return;
   }
 
   if (typeof matcher === 'string') {
-    validateNonEmptyString(matcher, path, issues)
-    return
+    validateNonEmptyString(matcher, path, issues);
+    return;
   }
 
   if (!isRecord(matcher)) {
-    issues.push(issue('Text matcher must be a string or object.', path))
-    return
+    issues.push(issue('Text matcher must be a string or object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(matcher, new Set(['value', 'match', 'caseSensitive']), path, issues)
-  validateNonEmptyString(matcher.value, [...path, 'value'], issues)
-  validateOptionalEnum(matcher.match, ['exact', 'contains', 'regex'], [...path, 'match'], issues)
-  validateOptionalBoolean(matcher.caseSensitive, [...path, 'caseSensitive'], issues)
+  rejectUnexpectedProperties(matcher, new Set(['value', 'match', 'caseSensitive']), path, issues);
+  validateNonEmptyString(matcher.value, [...path, 'value'], issues);
+  validateOptionalEnum(matcher.match, ['exact', 'contains', 'regex'], [...path, 'match'], issues);
+  validateOptionalBoolean(matcher.caseSensitive, [...path, 'caseSensitive'], issues);
 }
 
-function validatePoint(
-  point: unknown,
-  path: ExtensionIssuePath,
-  issues: ExtensionIssue[],
-): void {
+function validatePoint(point: unknown, path: ExtensionIssuePath, issues: ExtensionIssue[]): void {
   if (!isRecord(point)) {
-    issues.push(issue('Point must be an object.', path))
-    return
+    issues.push(issue('Point must be an object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(point, new Set(['x', 'y', 'coordinateSpace']), path, issues)
-  validateNumber(point.x, [...path, 'x'], issues)
-  validateNumber(point.y, [...path, 'y'], issues)
+  rejectUnexpectedProperties(point, new Set(['x', 'y', 'coordinateSpace']), path, issues);
+  validateNumber(point.x, [...path, 'x'], issues);
+  validateNumber(point.y, [...path, 'y'], issues);
   validateOptionalEnum(
     point.coordinateSpace,
     ['viewport', 'document', 'screen', 'surface', 'element'],
     [...path, 'coordinateSpace'],
     issues,
-  )
+  );
 }
 
 function validateWaitCondition(
@@ -444,22 +418,22 @@ function validateWaitCondition(
   issues: ExtensionIssue[],
 ): void {
   if (!isRecord(condition)) {
-    issues.push(issue('Wait condition must be an object.', path))
-    return
+    issues.push(issue('Wait condition must be an object.', path));
+    return;
   }
 
   switch (condition.kind) {
     case 'visible':
     case 'hidden':
-      rejectUnexpectedProperties(condition, new Set(['kind', 'target']), path, issues)
-      validateTarget(condition.target, [...path, 'target'], issues)
-      return
+      rejectUnexpectedProperties(condition, new Set(['kind', 'target']), path, issues);
+      validateTarget(condition.target, [...path, 'target'], issues);
+      return;
     case 'text':
-      rejectUnexpectedProperties(condition, new Set(['kind', 'value']), path, issues)
-      validateTextMatcher(condition.value, [...path, 'value'], issues)
-      return
+      rejectUnexpectedProperties(condition, new Set(['kind', 'value']), path, issues);
+      validateTextMatcher(condition.value, [...path, 'value'], issues);
+      return;
     default:
-      issues.push(issue('Wait condition kind is not supported.', [...path, 'kind']))
+      issues.push(issue('Wait condition kind is not supported.', [...path, 'kind']));
   }
 }
 
@@ -469,25 +443,34 @@ function validateDefaults(
   issues: ExtensionIssue[],
 ): void {
   if (defaults === undefined) {
-    return
+    return;
   }
 
   if (!isRecord(defaults)) {
-    issues.push(issue('Defaults must be an object.', path))
-    return
+    issues.push(issue('Defaults must be an object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(defaults, new Set(['timeout', 'pacing']), path, issues)
-  validateOptionalPositiveNumber(defaults.timeout, [...path, 'timeout'], issues)
+  rejectUnexpectedProperties(defaults, new Set(['timeout', 'pacing']), path, issues);
+  validateOptionalPositiveNumber(defaults.timeout, [...path, 'timeout'], issues);
 
   if (defaults.pacing !== undefined) {
     if (!isRecord(defaults.pacing)) {
-      issues.push(issue('Pacing defaults must be an object.', [...path, 'pacing']))
-      return
+      issues.push(issue('Pacing defaults must be an object.', [...path, 'pacing']));
+      return;
     }
 
-    rejectUnexpectedProperties(defaults.pacing, new Set(['betweenSteps']), [...path, 'pacing'], issues)
-    validateOptionalPositiveNumber(defaults.pacing.betweenSteps, [...path, 'pacing', 'betweenSteps'], issues)
+    rejectUnexpectedProperties(
+      defaults.pacing,
+      new Set(['betweenSteps']),
+      [...path, 'pacing'],
+      issues,
+    );
+    validateOptionalPositiveNumber(
+      defaults.pacing.betweenSteps,
+      [...path, 'pacing', 'betweenSteps'],
+      issues,
+    );
   }
 }
 
@@ -497,37 +480,47 @@ function validateOptions(
   issues: ExtensionIssue[],
 ): void {
   if (options === undefined) {
-    return
+    return;
   }
 
   if (!isRecord(options)) {
-    issues.push(issue('Action options must be an object.', path))
-    return
+    issues.push(issue('Action options must be an object.', path));
+    return;
   }
 
-  rejectUnexpectedProperties(options, optionKeys, path, issues)
+  rejectUnexpectedProperties(options, optionKeys, path, issues);
   for (const key of ['timeout', 'duration', 'pressDwell', 'delay', 'afterFocusDelay'] as const) {
-    validateOptionalPositiveNumber(options[key], [...path, key], issues)
+    validateOptionalPositiveNumber(options[key], [...path, key], issues);
   }
-  validateOptionalInteger(options.clickCount, [...path, 'clickCount'], issues, 1)
+  validateOptionalInteger(options.clickCount, [...path, 'clickCount'], issues, 1);
   for (const key of ['force', 'focusVisible', 'clear'] as const) {
-    validateOptionalBoolean(options[key], [...path, key], issues)
+    validateOptionalBoolean(options[key], [...path, key], issues);
   }
   validateOptionalEnum(
     options.button,
     ['primary', 'secondary', 'auxiliary', 'back', 'forward'],
     [...path, 'button'],
     issues,
-  )
+  );
   validateOptionalEnum(
     options.focusStrategy,
     ['programmatic', 'click', 'none'],
     [...path, 'focusStrategy'],
     issues,
-  )
-  validateOptionalEnum(options.block, ['nearest', 'start', 'center', 'end'], [...path, 'block'], issues)
-  validateOptionalEnum(options.inline, ['nearest', 'start', 'center', 'end'], [...path, 'inline'], issues)
-  validateOptionalEnum(options.container, ['all', 'nearest'], [...path, 'container'], issues)
+  );
+  validateOptionalEnum(
+    options.block,
+    ['nearest', 'start', 'center', 'end'],
+    [...path, 'block'],
+    issues,
+  );
+  validateOptionalEnum(
+    options.inline,
+    ['nearest', 'start', 'center', 'end'],
+    [...path, 'inline'],
+    issues,
+  );
+  validateOptionalEnum(options.container, ['all', 'nearest'], [...path, 'container'], issues);
 }
 
 function validatePlatformExtensions(
@@ -536,17 +529,17 @@ function validatePlatformExtensions(
   issues: ExtensionIssue[],
 ): void {
   if (platform === undefined) {
-    return
+    return;
   }
 
   if (!isRecord(platform)) {
-    issues.push(issue('Platform extensions must be an object.', path))
-    return
+    issues.push(issue('Platform extensions must be an object.', path));
+    return;
   }
 
   for (const [key, value] of Object.entries(platform)) {
     if (!isRecord(value)) {
-      issues.push(issue('Platform extension values must be objects.', [...path, key]))
+      issues.push(issue('Platform extension values must be objects.', [...path, key]));
     }
   }
 }
@@ -557,7 +550,7 @@ function validateOptionalRecord(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined && !isRecord(value)) {
-    issues.push(issue('Value must be an object.', path))
+    issues.push(issue('Value must be an object.', path));
   }
 }
 
@@ -567,7 +560,7 @@ function validateOptionalString(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined && typeof value !== 'string') {
-    issues.push(issue('Value must be a string.', path))
+    issues.push(issue('Value must be a string.', path));
   }
 }
 
@@ -577,7 +570,7 @@ function validateOptionalNonEmptyString(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined) {
-    validateNonEmptyString(value, path, issues)
+    validateNonEmptyString(value, path, issues);
   }
 }
 
@@ -587,7 +580,7 @@ function validateOptionalBoolean(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined && typeof value !== 'boolean') {
-    issues.push(issue('Value must be a boolean.', path))
+    issues.push(issue('Value must be a boolean.', path));
   }
 }
 
@@ -598,7 +591,7 @@ function validateOptionalEnum(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined && (typeof value !== 'string' || !values.includes(value))) {
-    issues.push(issue(`Value must be one of: ${values.join(', ')}.`, path))
+    issues.push(issue(`Value must be one of: ${values.join(', ')}.`, path));
   }
 }
 
@@ -608,12 +601,12 @@ function validateOptionalId(
   issues: ExtensionIssue[],
 ): void {
   if (value === undefined) {
-    return
+    return;
   }
 
-  validateNonEmptyString(value, path, issues)
+  validateNonEmptyString(value, path, issues);
   if (typeof value === 'string' && !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
-    issues.push(issue('Id contains unsupported characters.', path))
+    issues.push(issue('Id contains unsupported characters.', path));
   }
 }
 
@@ -623,7 +616,7 @@ function validateNonEmptyString(
   issues: ExtensionIssue[],
 ): void {
   if (typeof value !== 'string' || value.length === 0) {
-    issues.push(issue('Value must be a non-empty string.', path))
+    issues.push(issue('Value must be a non-empty string.', path));
   }
 }
 
@@ -633,7 +626,7 @@ function validateOptionalPositiveNumber(
   issues: ExtensionIssue[],
 ): void {
   if (value !== undefined) {
-    validatePositiveNumber(value, path, issues)
+    validatePositiveNumber(value, path, issues);
   }
 }
 
@@ -643,17 +636,13 @@ function validatePositiveNumber(
   issues: ExtensionIssue[],
 ): void {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    issues.push(issue('Value must be a number greater than 0.', path))
+    issues.push(issue('Value must be a number greater than 0.', path));
   }
 }
 
-function validateNumber(
-  value: unknown,
-  path: ExtensionIssuePath,
-  issues: ExtensionIssue[],
-): void {
+function validateNumber(value: unknown, path: ExtensionIssuePath, issues: ExtensionIssue[]): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    issues.push(issue('Value must be a finite number.', path))
+    issues.push(issue('Value must be a finite number.', path));
   }
 }
 
@@ -667,7 +656,7 @@ function validateOptionalInteger(
     value !== undefined &&
     (typeof value !== 'number' || !Number.isInteger(value) || value < minimum)
   ) {
-    issues.push(issue(`Value must be an integer greater than or equal to ${minimum}.`, path))
+    issues.push(issue(`Value must be an integer greater than or equal to ${minimum}.`, path));
   }
 }
 
@@ -679,7 +668,7 @@ function requireConst(
   issues: ExtensionIssue[],
 ): void {
   if (record[key] !== expected) {
-    issues.push(issue(`Missing required property "${key}".`, path))
+    issues.push(issue(`Missing required property "${key}".`, path));
   }
 }
 
@@ -691,25 +680,25 @@ function rejectUnexpectedProperties(
 ): void {
   for (const key of Object.keys(record)) {
     if (!allowedKeys.has(key)) {
-      issues.push(issue(`Unexpected property "${key}".`, [...path, key]))
+      issues.push(issue(`Unexpected property "${key}".`, [...path, key]));
     }
   }
 }
 
 function readProperty(input: unknown, property: string): unknown {
   if (!isRecord(input)) {
-    return undefined
+    return undefined;
   }
 
-  return input[property]
+  return input[property];
 }
 
 function hasOwn(record: UnknownRecord, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.prototype.hasOwnProperty.call(record, key);
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function issue(message: string, path: ExtensionIssuePath): ExtensionIssue {
@@ -717,5 +706,5 @@ function issue(message: string, path: ExtensionIssuePath): ExtensionIssue {
     code: 'invalid_document',
     message,
     path,
-  }
+  };
 }

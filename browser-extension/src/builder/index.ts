@@ -1,1 +1,1 @@
-export * from './authoring-session.js'
+export * from './authoring-session.js';

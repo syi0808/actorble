@@ -1,217 +1,215 @@
-import { failure, ok, type ExtensionResult } from '../shared/result.js'
-import type { RequiredTabCorrelation } from '../messaging/index.js'
+import { failure, ok, type ExtensionResult } from '../shared/result.js';
+import type { RequiredTabCorrelation } from '../messaging/index.js';
 
-export type RecorderSensitiveInputPolicy = 'mask' | 'omit' | 'plain'
+export type RecorderSensitiveInputPolicy = 'mask' | 'omit' | 'plain';
 
-export type RecorderSensitiveInputReason = 'password_type' | 'secret_like_field'
+export type RecorderSensitiveInputReason = 'password_type' | 'secret_like_field';
 
-export type RecorderTextEventSource = 'input' | 'change'
-export type RecorderPointerEventPhase = 'down' | 'move' | 'up'
-export type RecorderDragEventPhase = 'start' | 'drop'
+export type RecorderTextEventSource = 'input' | 'change';
+export type RecorderPointerEventPhase = 'down' | 'move' | 'up';
+export type RecorderDragEventPhase = 'start' | 'drop';
 
-export const RECORDER_MASKED_VALUE = '[masked]'
+export const RECORDER_MASKED_VALUE = '[masked]';
 
 export type RecorderTargetRect = Readonly<{
-  x: number
-  y: number
-  width: number
-  height: number
-}>
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}>;
 
 export type RecorderTargetSnapshot = Readonly<{
-  tagName: string
-  rect: RecorderTargetRect
-  frameUrl?: string
-  id?: string
-  classes?: readonly string[]
-  role?: string
-  ariaLabel?: string
-  labelText?: string
-  testId?: string
-  inputType?: string
-  name?: string
-  placeholder?: string
-  href?: string
-  text?: string
-}>
+  tagName: string;
+  rect: RecorderTargetRect;
+  frameUrl?: string;
+  id?: string;
+  classes?: readonly string[];
+  role?: string;
+  ariaLabel?: string;
+  labelText?: string;
+  testId?: string;
+  inputType?: string;
+  name?: string;
+  placeholder?: string;
+  href?: string;
+  text?: string;
+}>;
 
 export type RawRecordedClickEvent = Readonly<{
-  kind: 'click'
-  target: RecorderTargetSnapshot
-  timestamp: number
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-  button: number
-}>
+  kind: 'click';
+  target: RecorderTargetSnapshot;
+  timestamp: number;
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+  button: number;
+}>;
 
 export type RawRecordedTextEvent = Readonly<{
-  kind: 'text'
-  target: RecorderTargetSnapshot
-  source: RecorderTextEventSource
-  value: string
-  sensitive: boolean
-  sensitiveReason?: RecorderSensitiveInputReason
-  timestamp: number
-}>
+  kind: 'text';
+  target: RecorderTargetSnapshot;
+  source: RecorderTextEventSource;
+  value: string;
+  sensitive: boolean;
+  sensitiveReason?: RecorderSensitiveInputReason;
+  timestamp: number;
+}>;
 
 export type RawRecordedPointerEvent = Readonly<{
-  kind: 'pointer'
-  phase: RecorderPointerEventPhase
-  target: RecorderTargetSnapshot
-  timestamp: number
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-  button: number
-  buttons: number
-  pointerId: number
-  pointerType: string
-}>
+  kind: 'pointer';
+  phase: RecorderPointerEventPhase;
+  target: RecorderTargetSnapshot;
+  timestamp: number;
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+  button: number;
+  buttons: number;
+  pointerId: number;
+  pointerType: string;
+}>;
 
 export type RawRecordedSelectionEvent = Readonly<{
-  kind: 'selection'
-  timestamp: number
-  selectedText: string
-  activeTarget?: RecorderTargetSnapshot
-  anchorTarget?: RecorderTargetSnapshot
-  focusTarget?: RecorderTargetSnapshot
-}>
+  kind: 'selection';
+  timestamp: number;
+  selectedText: string;
+  activeTarget?: RecorderTargetSnapshot;
+  anchorTarget?: RecorderTargetSnapshot;
+  focusTarget?: RecorderTargetSnapshot;
+}>;
 
 export type RawRecordedDragEvent = Readonly<{
-  kind: 'drag'
-  phase: RecorderDragEventPhase
-  target: RecorderTargetSnapshot
-  timestamp: number
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-}>
+  kind: 'drag';
+  phase: RecorderDragEventPhase;
+  target: RecorderTargetSnapshot;
+  timestamp: number;
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+}>;
 
 export type RawRecordedEvent =
   | RawRecordedClickEvent
   | RawRecordedTextEvent
   | RawRecordedPointerEvent
   | RawRecordedSelectionEvent
-  | RawRecordedDragEvent
+  | RawRecordedDragEvent;
 
-export type RecorderEventFlushReason = 'incremental' | 'pagehide' | 'stop'
+export type RecorderEventFlushReason = 'incremental' | 'pagehide' | 'stop';
 
 export type RecorderSession = RequiredTabCorrelation &
   Readonly<{
-    sessionId: string
-    startedAt: number
-    sensitiveInputPolicy: RecorderSensitiveInputPolicy
-    scenarioId?: string
-    runId?: string
-  }>
+    sessionId: string;
+    startedAt: number;
+    sensitiveInputPolicy: RecorderSensitiveInputPolicy;
+    scenarioId?: string;
+    runId?: string;
+  }>;
 
 export type RecorderCaptureStartReceipt = RecorderSession &
   Readonly<{
-    status: 'recording'
-  }>
+    status: 'recording';
+  }>;
 
 export type RecorderEventFlush = RecorderSession &
   Readonly<{
-    reason: RecorderEventFlushReason
-    events: readonly RawRecordedEvent[]
-  }>
+    reason: RecorderEventFlushReason;
+    events: readonly RawRecordedEvent[];
+  }>;
 
 export type RecorderClickEvent<TElement = unknown> = Readonly<{
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-  button?: number
-  target: TElement | null
-}>
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+  button?: number;
+  target: TElement | null;
+}>;
 
 export type RecorderTextEvent<TElement = unknown> = Readonly<{
-  target: TElement | null
-}>
+  target: TElement | null;
+}>;
 
 export type RecorderPointerEvent<TElement = unknown> = Readonly<{
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-  button: number
-  buttons: number
-  pointerId: number
-  pointerType: string
-  target: TElement | null
-}>
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+  button: number;
+  buttons: number;
+  pointerId: number;
+  pointerType: string;
+  target: TElement | null;
+}>;
 
 export type RecorderSelectionSnapshot<TElement = unknown> = Readonly<{
-  selectedText: string
-  activeTarget?: TElement | null
-  anchorTarget?: TElement | null
-  focusTarget?: TElement | null
-}>
+  selectedText: string;
+  activeTarget?: TElement | null;
+  anchorTarget?: TElement | null;
+  focusTarget?: TElement | null;
+}>;
 
 export type RecorderDragEvent<TElement = unknown> = Readonly<{
-  clientX: number
-  clientY: number
-  pageX?: number
-  pageY?: number
-  target: TElement | null
-}>
+  clientX: number;
+  clientY: number;
+  pageX?: number;
+  pageY?: number;
+  target: TElement | null;
+}>;
 
 export type RecorderEventCaptureAdapter<TElement = unknown> = Readonly<{
-  onClick(listener: (event: RecorderClickEvent<TElement>) => void): () => void
-  onInput(listener: (event: RecorderTextEvent<TElement>) => void): () => void
-  onChange(listener: (event: RecorderTextEvent<TElement>) => void): () => void
-  onPointerDown(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
-  onPointerMove(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
-  onPointerUp(listener: (event: RecorderPointerEvent<TElement>) => void): () => void
-  onSelectionChange(listener: () => void): () => void
-  onDragStart(listener: (event: RecorderDragEvent<TElement>) => void): () => void
-  onDrop(listener: (event: RecorderDragEvent<TElement>) => void): () => void
-  onPagehide(listener: () => void): () => void
-  describeElement(element: TElement): RecorderTargetSnapshot
-  readElementValue(element: TElement): string
-  readSelection(): RecorderSelectionSnapshot<TElement>
-  sensitiveInputReason(element: TElement): RecorderSensitiveInputReason | null
-}>
+  onClick(listener: (event: RecorderClickEvent<TElement>) => void): () => void;
+  onInput(listener: (event: RecorderTextEvent<TElement>) => void): () => void;
+  onChange(listener: (event: RecorderTextEvent<TElement>) => void): () => void;
+  onPointerDown(listener: (event: RecorderPointerEvent<TElement>) => void): () => void;
+  onPointerMove(listener: (event: RecorderPointerEvent<TElement>) => void): () => void;
+  onPointerUp(listener: (event: RecorderPointerEvent<TElement>) => void): () => void;
+  onSelectionChange(listener: () => void): () => void;
+  onDragStart(listener: (event: RecorderDragEvent<TElement>) => void): () => void;
+  onDrop(listener: (event: RecorderDragEvent<TElement>) => void): () => void;
+  onPagehide(listener: () => void): () => void;
+  describeElement(element: TElement): RecorderTargetSnapshot;
+  readElementValue(element: TElement): string;
+  readSelection(): RecorderSelectionSnapshot<TElement>;
+  sensitiveInputReason(element: TElement): RecorderSensitiveInputReason | null;
+}>;
 
 export interface RecorderEventCapturePort {
-  start(session: RecorderSession): ExtensionResult<RecorderCaptureStartReceipt>
-  stop(sessionId: string): Promise<ExtensionResult<void>>
-  dispose(): void
+  start(session: RecorderSession): ExtensionResult<RecorderCaptureStartReceipt>;
+  stop(sessionId: string): Promise<ExtensionResult<void>>;
+  dispose(): void;
 }
 
 export type RecorderEventCaptureOptions = Readonly<{
-  now?: () => number
-  autoFlush?: boolean
-  flushEvents?: (flush: RecorderEventFlush) => Promise<void> | void
-}>
+  now?: () => number;
+  autoFlush?: boolean;
+  flushEvents?: (flush: RecorderEventFlush) => Promise<void> | void;
+}>;
 
 type ActiveRecorderSession<TElement> = {
-  session: RecorderSession
-  pendingEvents: RawRecordedEvent[]
-  disposers: (() => void)[]
-  cleaned: boolean
-  flushChain: Promise<void>
+  session: RecorderSession;
+  pendingEvents: RawRecordedEvent[];
+  disposers: (() => void)[];
+  cleaned: boolean;
+  flushChain: Promise<void>;
   flushIssue?: {
-    code: 'recorder_error'
-    message: string
-    details?: Readonly<Record<string, unknown>>
-  }
-}
+    code: 'recorder_error';
+    message: string;
+    details?: Readonly<Record<string, unknown>>;
+  };
+};
 
 export function createRecorderEventCapturePort<TElement = unknown>(
   adapter: RecorderEventCaptureAdapter<TElement>,
   options: RecorderEventCaptureOptions = {},
 ): RecorderEventCapturePort {
-  const getNow = options.now ?? Date.now
-  let activeSession: ActiveRecorderSession<TElement> | null = null
+  const getNow = options.now ?? Date.now;
+  let activeSession: ActiveRecorderSession<TElement> | null = null;
 
-  function start(
-    session: RecorderSession,
-  ): ExtensionResult<RecorderCaptureStartReceipt> {
+  function start(session: RecorderSession): ExtensionResult<RecorderCaptureStartReceipt> {
     if (activeSession !== null) {
       return failure({
         code: 'recorder_error',
@@ -220,7 +218,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
           activeSessionId: activeSession.session.sessionId,
           requestedSessionId: session.sessionId,
         },
-      })
+      });
     }
 
     const active: ActiveRecorderSession<TElement> = {
@@ -229,7 +227,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       disposers: [],
       cleaned: false,
       flushChain: Promise.resolve(),
-    }
+    };
 
     active.disposers = [
       adapter.onClick((event) => captureClick(active, event)),
@@ -242,21 +240,21 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       adapter.onDragStart((event) => captureDrag(active, 'start', event)),
       adapter.onDrop((event) => captureDrag(active, 'drop', event)),
       adapter.onPagehide(() => {
-        queueFlush(active, 'pagehide')
-        cleanup(active)
+        queueFlush(active, 'pagehide');
+        cleanup(active);
       }),
-    ]
-    activeSession = active
+    ];
+    activeSession = active;
 
     return ok({
       ...session,
       status: 'recording',
-    })
+    });
   }
 
   async function stop(sessionId: string): Promise<ExtensionResult<void>> {
     if (activeSession === null) {
-      return ok(undefined)
+      return ok(undefined);
     }
 
     if (activeSession.session.sessionId !== sessionId) {
@@ -267,24 +265,24 @@ export function createRecorderEventCapturePort<TElement = unknown>(
           activeSessionId: activeSession.session.sessionId,
           requestedSessionId: sessionId,
         },
-      })
+      });
     }
 
-    const stoppedSession = activeSession
-    queueFlush(stoppedSession, 'stop')
-    cleanup(stoppedSession)
-    await stoppedSession.flushChain
+    const stoppedSession = activeSession;
+    queueFlush(stoppedSession, 'stop');
+    cleanup(stoppedSession);
+    await stoppedSession.flushChain;
 
     if (stoppedSession.flushIssue !== undefined) {
-      return failure(stoppedSession.flushIssue)
+      return failure(stoppedSession.flushIssue);
     }
 
-    return ok(undefined)
+    return ok(undefined);
   }
 
   function dispose(): void {
     if (activeSession !== null) {
-      cleanup(activeSession)
+      cleanup(activeSession);
     }
   }
 
@@ -293,7 +291,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     event: RecorderClickEvent<TElement>,
   ): void {
     if (!isCurrent(active) || event.target === null) {
-      return
+      return;
     }
 
     enqueueEvent(active, {
@@ -305,7 +303,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       ...(event.pageX === undefined ? {} : { pageX: event.pageX }),
       ...(event.pageY === undefined ? {} : { pageY: event.pageY }),
       button: event.button ?? 0,
-    })
+    });
   }
 
   function captureText(
@@ -314,11 +312,11 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     event: RecorderTextEvent<TElement>,
   ): void {
     if (!isCurrent(active) || event.target === null) {
-      return
+      return;
     }
 
-    const sensitiveReason = adapter.sensitiveInputReason(event.target)
-    const sensitive = sensitiveReason !== null
+    const sensitiveReason = adapter.sensitiveInputReason(event.target);
+    const sensitive = sensitiveReason !== null;
     enqueueEvent(active, {
       kind: 'text',
       target: adapter.describeElement(event.target),
@@ -331,7 +329,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       sensitive,
       ...(sensitiveReason === null ? {} : { sensitiveReason }),
       timestamp: getNow(),
-    })
+    });
   }
 
   function capturePointer(
@@ -340,7 +338,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     event: RecorderPointerEvent<TElement>,
   ): void {
     if (!isCurrent(active) || event.target === null) {
-      return
+      return;
     }
 
     enqueueEvent(active, {
@@ -356,15 +354,15 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       buttons: event.buttons,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
-    })
+    });
   }
 
   function captureSelection(active: ActiveRecorderSession<TElement>): void {
     if (!isCurrent(active)) {
-      return
+      return;
     }
 
-    const selection = adapter.readSelection()
+    const selection = adapter.readSelection();
     enqueueEvent(active, {
       kind: 'selection',
       timestamp: getNow(),
@@ -372,7 +370,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       ...optionalSelectionTarget(adapter, 'activeTarget', selection.activeTarget),
       ...optionalSelectionTarget(adapter, 'anchorTarget', selection.anchorTarget),
       ...optionalSelectionTarget(adapter, 'focusTarget', selection.focusTarget),
-    })
+    });
   }
 
   function captureDrag(
@@ -381,7 +379,7 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     event: RecorderDragEvent<TElement>,
   ): void {
     if (!isCurrent(active) || event.target === null) {
-      return
+      return;
     }
 
     enqueueEvent(active, {
@@ -393,16 +391,13 @@ export function createRecorderEventCapturePort<TElement = unknown>(
       clientY: event.clientY,
       ...(event.pageX === undefined ? {} : { pageX: event.pageX }),
       ...(event.pageY === undefined ? {} : { pageY: event.pageY }),
-    })
+    });
   }
 
-  function enqueueEvent(
-    active: ActiveRecorderSession<TElement>,
-    event: RawRecordedEvent,
-  ): void {
-    active.pendingEvents.push(event)
+  function enqueueEvent(active: ActiveRecorderSession<TElement>, event: RawRecordedEvent): void {
+    active.pendingEvents.push(event);
     if (options.autoFlush !== false) {
-      queueFlush(active, 'incremental')
+      queueFlush(active, 'incremental');
     }
   }
 
@@ -411,26 +406,26 @@ export function createRecorderEventCapturePort<TElement = unknown>(
     reason: RecorderEventFlushReason,
   ): void {
     if (active.pendingEvents.length === 0) {
-      return
+      return;
     }
 
-    const flushEvents = options.flushEvents
-    const events = active.pendingEvents
-    active.pendingEvents = []
+    const flushEvents = options.flushEvents;
+    const events = active.pendingEvents;
+    active.pendingEvents = [];
 
     if (flushEvents === undefined) {
-      return
+      return;
     }
 
     const flush = {
       ...active.session,
       reason,
       events,
-    } satisfies RecorderEventFlush
+    } satisfies RecorderEventFlush;
 
     active.flushChain = active.flushChain.then(async () => {
       try {
-        await flushEvents(flush)
+        await flushEvents(flush);
       } catch (error) {
         active.flushIssue ??= {
           code: 'recorder_error',
@@ -440,35 +435,35 @@ export function createRecorderEventCapturePort<TElement = unknown>(
             reason,
             error: errorMessage(error),
           },
-        }
+        };
       }
-    })
+    });
   }
 
   function cleanup(active: ActiveRecorderSession<TElement>): void {
     if (active.cleaned) {
-      return
+      return;
     }
 
-    active.cleaned = true
+    active.cleaned = true;
     for (const disposeListener of active.disposers) {
-      disposeListener()
+      disposeListener();
     }
 
     if (activeSession === active) {
-      activeSession = null
+      activeSession = null;
     }
   }
 
   function isCurrent(active: ActiveRecorderSession<TElement>): boolean {
-    return activeSession === active && !active.cleaned
+    return activeSession === active && !active.cleaned;
   }
 
   return {
     start,
     stop,
     dispose,
-  }
+  };
 }
 
 function optionalSelectionTarget<TElement>(
@@ -477,33 +472,33 @@ function optionalSelectionTarget<TElement>(
   element: TElement | null | undefined,
 ): Partial<Pick<RawRecordedSelectionEvent, 'activeTarget' | 'anchorTarget' | 'focusTarget'>> {
   if (element === undefined || element === null) {
-    return {}
+    return {};
   }
 
   return {
     [key]: adapter.describeElement(element),
-  }
+  };
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return error instanceof Error ? error.message : String(error);
 }
 
 export type SensitiveInputMetadata = Readonly<{
-  inputType?: string
-  id?: string
-  name?: string
-  ariaLabel?: string
-  labelText?: string
-  placeholder?: string
-  autocomplete?: string
-}>
+  inputType?: string;
+  id?: string;
+  name?: string;
+  ariaLabel?: string;
+  labelText?: string;
+  placeholder?: string;
+  autocomplete?: string;
+}>;
 
 export function detectSensitiveInputReason(
   metadata: SensitiveInputMetadata,
 ): RecorderSensitiveInputReason | null {
   if (metadata.inputType?.toLowerCase() === 'password') {
-    return 'password_type'
+    return 'password_type';
   }
 
   const haystack = [
@@ -515,13 +510,13 @@ export function detectSensitiveInputReason(
     metadata.autocomplete,
   ]
     .filter((value): value is string => value !== undefined && value.length > 0)
-    .join(' ')
+    .join(' ');
 
   if (secretLikePattern.test(haystack)) {
-    return 'secret_like_field'
+    return 'secret_like_field';
   }
 
-  return null
+  return null;
 }
 
 function recordedValue(
@@ -530,11 +525,11 @@ function recordedValue(
   policy: RecorderSensitiveInputPolicy,
 ): string {
   if (!sensitive || policy === 'plain') {
-    return value
+    return value;
   }
 
-  return policy === 'omit' ? '' : RECORDER_MASKED_VALUE
+  return policy === 'omit' ? '' : RECORDER_MASKED_VALUE;
 }
 
 const secretLikePattern =
-  /(^|[^a-z0-9])(pass(word|code|phrase)?|passwd|secret|token|api[-_\s]?key|credential|private[-_\s]?key|otp|one[-_\s]?time)([^a-z0-9]|$)/i
+  /(^|[^a-z0-9])(pass(word|code|phrase)?|passwd|secret|token|api[-_\s]?key|credential|private[-_\s]?key|otp|one[-_\s]?time)([^a-z0-9]|$)/i;
