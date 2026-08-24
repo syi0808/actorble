@@ -6,6 +6,10 @@ Date: 2026-07-14
 Compatibility amendment: `docs/adr/2026-07-14-remove-target-scrollto-compatibility.md` removes the
 temporary target-based `scrollTo` alias. The remaining decisions in this ADR stay accepted.
 
+Implementation ownership amendment: `docs/adr/2026-08-24-adopt-scroller2.md` delegates the scrolling
+kernel previously described here to `scroller2`. The Surface Engine boundary and behavior contracts in
+this ADR stay accepted.
+
 ## Context
 
 The browser runtime can resolve stale targets, dispatch synthetic interaction, track target-anchored

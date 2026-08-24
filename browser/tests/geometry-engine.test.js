@@ -296,9 +296,9 @@ describe('BrowserGeometryEngine', () => {
     const second = await engine.snapshot(handle)
 
     expect(second).toEqual(first)
-    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(2)
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(3)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(1)
-    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(1)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(2)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(1)
     expect(timeline.nextFrame).toHaveBeenCalledTimes(1)
 
@@ -309,9 +309,9 @@ describe('BrowserGeometryEngine', () => {
       rect: { x: 20, y: 30, width: 100, height: 50 },
       visibleRect: { x: 20, y: 30, width: 60, height: 40 },
     })
-    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(4)
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(6)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(2)
-    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(2)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(4)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(2)
     expect(timeline.nextFrame).toHaveBeenCalledTimes(2)
 
@@ -322,9 +322,9 @@ describe('BrowserGeometryEngine', () => {
       rect: { x: 40, y: 50, width: 120, height: 50 },
       visibleRect: { x: 40, y: 50, width: 40, height: 20 },
     })
-    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(6)
+    expect(dom.getBoundingClientRect).toHaveBeenCalledTimes(9)
     expect(dom.getViewportRect).toHaveBeenCalledTimes(3)
-    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(3)
+    expect(dom.getComputedScrollStyle).toHaveBeenCalledTimes(6)
     expect(dom.getScrollMetrics).toHaveBeenCalledTimes(3)
   })
 })

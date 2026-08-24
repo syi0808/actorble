@@ -1,25 +1,28 @@
 import {
-  actorbleError,
-  cancellationError,
-  notImplemented,
-  timeoutError,
-} from '../../shared/index.js'
+  ScrollAbortError,
+  createScrollEngine,
+  discoverScrollChain,
+  easeIn,
+  easeInOut,
+  easeOut,
+  linear,
+} from 'scroller2'
+import type {
+  ExecutedScrollStep,
+  MotionOptions,
+  RevealOptions as ScrollerRevealOptions,
+  RevealResult as ScrollerRevealResult,
+  ScrollEngine,
+  ScrollOptions as ScrollerScrollOptions,
+  ScrollSurface,
+  SettlementOptions,
+  VisibilitySnapshot as ScrollerVisibilitySnapshot,
+} from 'scroller2'
+import { actorbleError, cancellationError, timeoutError } from '../../shared/index.js'
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
-import { BrowserTimelineEngine } from '../../runtime/timeline-engine/index.js'
 import { createFrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
+import { ActorbleScrollerPlatform } from '../scroller2-platform-adapter/index.js'
 import type { FrameGeometrySurfaceCache } from '../frame-geometry-surface-cache/index.js'
-import {
-  createScrollChainResolver,
-  type ScrollChainResolver,
-  type ScrollSurfaceSnapshot,
-} from '../scroll-chain-resolver/index.js'
-import { createRevealPlanner, type RevealPlanner } from '../reveal-planner/index.js'
-import {
-  createScrollSettlementObserver,
-  scrollSettlementOptionsFor,
-  type ScrollSettlementObserver,
-  type ScrollSettlementTimeline,
-} from '../scroll-settlement-observer/index.js'
 import type {
   Clock,
   CancellationSignalLike,
@@ -31,9 +34,8 @@ import type {
   Rect,
   RevealOptions,
   RevealResult,
-  ScrollMotion,
-  ScrollSettlePolicy,
   ScrollDelta,
+  ScrollMotion,
   ScrollOptions,
   ScrollPosition,
   ScrollResult,
@@ -63,17 +65,14 @@ export interface SurfaceEngine {
   scrollTo(position: ScrollPosition, options?: ScrollOptions): Promise<ScrollResult>
   scrollBy(delta: ScrollDelta, options?: ScrollOptions): Promise<ScrollResult>
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point
+  dispose?(): void
 }
 
 export type SurfaceEngineOptions = Readonly<{
   cache?: FrameGeometrySurfaceCache
   clock?: Clock
   dom?: DomPort
-  geometry?: RevealGeometryReader | (() => RevealGeometryReader)
-  revealPlanner?: RevealPlanner
-  scrollChainResolver?: ScrollChainResolver
-  settlementObserver?: ScrollSettlementObserver
-  timeline?: ScrollSettlementTimeline
+  scrollEngine?: unknown
   trace?: SurfaceTraceRecorder
 }>
 
@@ -82,62 +81,30 @@ export type SurfaceTraceRecorder = Readonly<{
   attachSnapshot(name: string, data: unknown): void
 }>
 
-type RevealDiagnosticStep = Readonly<{
-  surfaceId: string
-  from: Point
-  intendedTo: Point
-  to: Point
-  axes: readonly string[]
-}>
-
-type RevealDiagnosticState = {
-  phase: string
-  before?: VisibilitySnapshot
-  after?: VisibilitySnapshot
-  completedSteps: RevealDiagnosticStep[]
-}
-
-export type RevealGeometrySnapshot = Readonly<{
-  rect: Rect
-  visibleRect: Rect | null
-  coordinateSpace: CoordinateSpace
-}>
-
-export interface RevealGeometryReader {
-  snapshot(target: TargetHandle): Promise<RevealGeometrySnapshot>
-}
-
 export class BrowserSurfaceEngine implements SurfaceEngine {
   readonly #cache: FrameGeometrySurfaceCache
   readonly #clock: Clock
   readonly #dom: DomPort
-  readonly #geometry?: () => RevealGeometryReader
-  readonly #revealPlanner: RevealPlanner
-  readonly #scrollChainResolver: ScrollChainResolver
-  readonly #settlementObserver: ScrollSettlementObserver
-  readonly #timeline: ScrollSettlementTimeline
+  readonly #ownsScrollEngine: boolean
+  readonly #platform: ActorbleScrollerPlatform
+  #scrollEngine?: ScrollEngine
+  readonly #surfaceIds = new WeakMap<object, string>()
   readonly #trace?: SurfaceTraceRecorder
+  #nextSurfaceId = 1
 
   constructor(options: SurfaceEngineOptions = {}) {
-    const timeline = options.timeline ?? new BrowserTimelineEngine()
-
     this.#dom = options.dom ?? new BrowserDomAdapter()
     this.#cache = options.cache ?? createFrameGeometrySurfaceCache()
-    this.#clock = options.clock ?? timeline
-    this.#timeline = timeline
+    this.#clock = options.clock ?? { now: () => performance.now() }
+    this.#platform = new ActorbleScrollerPlatform(this.#dom)
+    this.#ownsScrollEngine = options.scrollEngine === undefined
+    this.#scrollEngine = options.scrollEngine as ScrollEngine | undefined
     this.#trace = options.trace
-    this.#geometry =
-      options.geometry === undefined
-        ? undefined
-        : typeof options.geometry === 'function'
-          ? options.geometry
-          : () => options.geometry as RevealGeometryReader
-    this.#revealPlanner = options.revealPlanner ?? createRevealPlanner()
-    this.#scrollChainResolver =
-      options.scrollChainResolver ?? createScrollChainResolver({ dom: this.#dom, cache: this.#cache })
-    this.#settlementObserver =
-      options.settlementObserver ??
-      createScrollSettlementObserver({ dom: this.#dom, timeline: this.#timeline })
+  }
+
+  dispose(): void {
+    if (this.#ownsScrollEngine) this.#scrollEngine?.destroy()
+    this.#scrollEngine = undefined
   }
 
   getSurfaceFor(target: TargetHandle): SurfaceSnapshot {
@@ -153,10 +120,12 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   getScrollableAncestors(target: TargetHandle): readonly Element[] {
-    return this.#scrollChainResolver
-      .resolve(target)
-      .filter((surface) => surface.kind === 'element')
-      .map((surface) => surface.scrollTarget as Element)
+    return this.#cache.getScrollableAncestors(
+      target.element,
+      () => discoverScrollChain(target.element, this.#platform).filter(
+        (surface): surface is Element => !isWindow(surface),
+      ),
+    )
   }
 
   async ensureVisible(target: TargetHandle, options: EnsureVisibleOptions = {}): Promise<void> {
@@ -165,23 +134,45 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
   }
 
   async reveal(target: TargetHandle, options: RevealOptions = {}): Promise<RevealResult> {
-    const diagnostics: RevealDiagnosticState = { phase: 'start', completedSteps: [] }
-    this.#trace?.appendEvent('reveal:start', { policy: summarizeRevealPolicy(options) })
+    const startedAt = this.#clock.now()
+    const policy = summarizeRevealPolicy(options)
+    this.#trace?.appendEvent('reveal:start', { policy })
 
     try {
-      const result = await this.#performReveal(target, options, diagnostics)
+      const result = await this.#runOperation(
+        'surface.reveal',
+        options.timeout,
+        options.signal,
+        async (signal) => {
+          const mapped = mapRevealOptions(options, signal)
+          this.#trace?.appendEvent('reveal:visibility-before', {
+            visibility: mapVisibility(this.#scroller().planReveal(target.element, mapped).before),
+          })
+          const scrollerResult = requiresManualReveal(options)
+            ? await this.#executeAdjustedReveal(target.element, options, mapped)
+            : await this.#scroller().reveal(target.element, mapped)
+          return this.#mapRevealResult(target, scrollerResult)
+        },
+      )
+
+      this.#cache.invalidate('scroll')
+      this.#traceRevealResult(result)
       this.#trace?.appendEvent('reveal:complete', {
         outcome: 'success',
         changed: result.changed,
         fullyVisible: result.fullyVisible,
         visibilityRatio: result.visibilityRatio,
-        frameCount: diagnostics.completedSteps.length,
+        frameCount: result.steps.length,
       })
       return result
     } catch (error) {
       const code = diagnosticErrorCode(error)
       if (code === 'ACTION_TIMEOUT') {
-        this.#trace?.attachSnapshot('reveal:timeout', revealTimeoutSnapshot(diagnostics))
+        this.#trace?.attachSnapshot('reveal:timeout', {
+          phase: 'scroller2',
+          elapsed: this.#clock.now() - startedAt,
+          policy,
+        })
       }
       this.#trace?.appendEvent('reveal:complete', {
         outcome: code === 'ACTION_TIMEOUT'
@@ -195,278 +186,23 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     }
   }
 
-  async #performReveal(
-    target: TargetHandle,
-    options: RevealOptions,
-    diagnostics: RevealDiagnosticState,
-  ): Promise<RevealResult> {
-    const deadline = deadlineFor(this.#clock, options.timeout)
-    assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-
-    const geometry = this.#geometry?.()
-    if (geometry === undefined) {
-      return notImplemented('SurfaceEngine.reveal.geometry')
-    }
-
-    const initialGeometry = await geometry.snapshot(target)
-    assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-    assertViewportRevealGeometry(initialGeometry)
-    const before = visibilitySnapshot(initialGeometry.rect, initialGeometry.visibleRect)
-    diagnostics.phase = 'visibility-before'
-    diagnostics.before = before
-    this.#trace?.appendEvent('reveal:visibility-before', {
-      visibility: before,
-      rect: cloneRect(initialGeometry.rect),
-      visibleRect: cloneOptionalRect(initialGeometry.visibleRect),
-    })
-    const canonicalChain = this.#selectedRevealChain(
-      this.#scrollChainResolver.resolve(target),
-      options,
-    )
-    this.#trace?.appendEvent('reveal:scroll-chain', {
-      surfaces: canonicalChain.map((surface) => ({
-        surfaceId: surface.id,
-        kind: surface.kind,
-        offset: { x: surface.metrics.scrollLeft, y: surface.metrics.scrollTop },
-      })),
-    })
-    const executedSteps: Array<
-      Omit<RevealResult['steps'][number], 'to'> & { scrollTarget: Element | Window }
-    > = []
-    const changedSurfaces = new Set<Element | Window>()
-    let currentGeometry = initialGeometry
-
-    for (let index = 0; index < canonicalChain.length; index += 1) {
-      assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-
-      if (index > 0) {
-        currentGeometry = await geometry.snapshot(target)
-        assertViewportRevealGeometry(currentGeometry)
-        this.#trace?.appendEvent('reveal:replan', {
-          reason: 'post-scroll-geometry-refresh',
-          replanCount: index,
-          rect: cloneRect(currentGeometry.rect),
-        })
-      }
-
-      const canonicalSurface = canonicalChain[index]
-      const freshSurface = this.#scrollChainResolver
-        .resolve(target)
-        .find((surface) => surface.id === canonicalSurface.id)
-
-      if (freshSurface === undefined) {
-        continue
-      }
-
-      const [planned] = this.#revealPlanner.plan({
-        target: {
-          rect: currentGeometry.rect,
-          visibleRect: currentGeometry.visibleRect,
-          coordinateSpace: 'viewport',
-          scrollMargin: this.#readScrollStyle(target.element).scrollMargin,
-        },
-        surfaces: [freshSurface],
-        options,
-      })
-
-      this.#trace?.appendEvent('reveal:plan', {
-        surfaceId: freshSurface.id,
-        planned: planned !== undefined,
-        ...(planned === undefined
-          ? {}
-          : {
-              from: { ...planned.from },
-              intendedTo: { ...planned.intendedTo },
-              axes: [...planned.axes],
-            }),
-      })
-
-      if (planned === undefined) {
-        continue
-      }
-
-      diagnostics.phase = 'step'
-      this.#trace?.appendEvent('reveal:step-start', {
-        surfaceId: planned.surfaceId,
-        from: { ...planned.from },
-        intendedTo: { ...planned.intendedTo },
-        axes: [...planned.axes],
-      })
-      assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-      const execution = this.#executeScroll(
-        freshSurface.scrollTarget,
-        planned.intendedTo,
-        options.motion,
-        'surface.reveal',
-        deadline,
-        options.signal,
-      )
-      if (execution !== undefined) {
-        await execution
-      }
-      const currentPosition = this.#readScrollPosition(freshSurface.scrollTarget)
-      this.#trace?.appendEvent('reveal:step-update', {
-        surfaceId: planned.surfaceId,
-        frame: 1,
-        current: currentPosition,
-      })
-      executedSteps.push({
-        surfaceId: planned.surfaceId,
-        from: Object.freeze({ ...planned.from }),
-        intendedTo: Object.freeze({ ...planned.intendedTo }),
-        axes: Object.freeze([...planned.axes]),
-        scrollTarget: freshSurface.scrollTarget,
-      })
-      const diagnosticStep: RevealDiagnosticStep = {
-        surfaceId: planned.surfaceId,
-        from: { ...planned.from },
-        intendedTo: { ...planned.intendedTo },
-        to: { ...currentPosition },
-        axes: [...planned.axes],
-      }
-      diagnostics.completedSteps.push(diagnosticStep)
-      this.#trace?.appendEvent('reveal:step-end', diagnosticStep)
-
-      if (!samePoint(planned.from, planned.intendedTo)) {
-        changedSurfaces.add(freshSurface.scrollTarget)
-      }
-      assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-    }
-
-    diagnostics.phase = 'settle'
-    if (changedSurfaces.size > 0 && options.settle !== undefined && options.settle !== 'none') {
-      this.#trace?.appendEvent('reveal:settle-start', {
-        policy: summarizeSettlePolicy(options.settle),
-        surfaceCount: changedSurfaces.size,
-      })
-    }
-    await this.#settleSurfaces(
-      [...changedSurfaces],
-      options.settle,
-      'surface.reveal',
-      deadline,
-      options.signal,
-    )
-    if (changedSurfaces.size > 0 && options.settle !== undefined && options.settle !== 'none') {
-      this.#trace?.appendEvent('reveal:settle-end', {
-        policy: summarizeSettlePolicy(options.settle),
-        surfaceCount: changedSurfaces.size,
-      })
-    }
-    this.#cache.invalidate('scroll')
-    const steps: RevealResult['steps'][number][] = executedSteps.map(
-      ({ scrollTarget, ...step }) =>
-        Object.freeze({
-          ...step,
-          to: Object.freeze(this.#readScrollPosition(scrollTarget)),
-        }),
-    )
-
-    const finalGeometry = await geometry.snapshot(target)
-    assertOperationBoundary('surface.reveal', this.#clock, deadline, options.signal)
-    assertViewportRevealGeometry(finalGeometry)
-    const after = visibilitySnapshot(finalGeometry.rect, finalGeometry.visibleRect)
-    diagnostics.phase = 'visibility-after'
-    diagnostics.after = after
-    this.#trace?.appendEvent('reveal:visibility-after', {
-      visibility: after,
-      rect: cloneRect(finalGeometry.rect),
-      visibleRect: cloneOptionalRect(finalGeometry.visibleRect),
-    })
-
-    return Object.freeze({
-      target,
-      changed: steps.some(
-        (step) => step.from.x !== step.to.x || step.from.y !== step.to.y,
-      ),
-      before: Object.freeze(before),
-      after: Object.freeze(after),
-      fullyVisible: after.fullyVisible,
-      visibilityRatio: after.visibilityRatio,
-      steps: Object.freeze(steps),
-    })
-  }
-
   async scrollTo(position: ScrollPosition, options: ScrollOptions = {}): Promise<ScrollResult> {
-    const deadline = deadlineFor(this.#clock, options.timeout)
-    assertOperationBoundary('surface.scrollTo', this.#clock, deadline, options.signal)
-    const before = this.#getViewportScrollOffset()
-    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
-    const execution = this.#executeScroll(
-      target,
-      position,
-      options.motion,
-      'surface.scrollTo',
-      deadline,
-      options.signal,
-    )
-    if (execution !== undefined) {
-      await execution
-    }
-    await this.#settleSurfaces(
-      samePoint(before, position) ? [] : [target],
-      options.settle,
-      'surface.scrollTo',
-      deadline,
-      options.signal,
-    )
-    this.#cache.invalidate('scroll')
-    const after = this.#getViewportScrollOffset()
-    assertOperationBoundary('surface.scrollTo', this.#clock, deadline, options.signal)
-    return { changed: before.x !== after.x || before.y !== after.y, before, after }
+    return this.#explicitScroll('surface.scrollTo', position, options, false)
   }
 
   async scrollBy(delta: ScrollDelta, options: ScrollOptions = {}): Promise<ScrollResult> {
-    const deadline = deadlineFor(this.#clock, options.timeout)
-    assertOperationBoundary('surface.scrollBy', this.#clock, deadline, options.signal)
-    const before = this.#getViewportScrollOffset()
-    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
-    const intended = { x: before.x + delta.x, y: before.y + delta.y }
-    const execution = this.#executeScroll(
-      target,
-      intended,
-      options.motion,
-      'surface.scrollBy',
-      deadline,
-      options.signal,
-    )
-    if (execution !== undefined) {
-      await execution
-    }
-    await this.#settleSurfaces(
-      samePoint(before, intended) ? [] : [target],
-      options.settle,
-      'surface.scrollBy',
-      deadline,
-      options.signal,
-    )
-    this.#cache.invalidate('scroll')
-    const after = this.#getViewportScrollOffset()
-    assertOperationBoundary('surface.scrollBy', this.#clock, deadline, options.signal)
-    return { changed: before.x !== after.x || before.y !== after.y, before, after }
+    return this.#explicitScroll('surface.scrollBy', delta, options, true)
   }
 
   mapPoint(point: Point, from: CoordinateSpace, to: CoordinateSpace): Point {
-    if (from === to) {
-      return point
-    }
+    if (from === to) return point
 
+    const offset = this.#readViewportScroll()
     if (from === 'viewport' && to === 'document') {
-      const scrollOffset = this.#getViewportScrollOffset()
-
-      return {
-        x: point.x + scrollOffset.x,
-        y: point.y + scrollOffset.y,
-      }
+      return { x: point.x + offset.x, y: point.y + offset.y }
     }
-
     if (from === 'document' && to === 'viewport') {
-      const scrollOffset = this.#getViewportScrollOffset()
-
-      return {
-        x: point.x - scrollOffset.x,
-        y: point.y - scrollOffset.y,
-      }
+      return { x: point.x - offset.x, y: point.y - offset.y }
     }
 
     throw actorbleError(
@@ -484,135 +220,233 @@ export class BrowserSurfaceEngine implements SurfaceEngine {
     )
   }
 
-  #executeScroll(
-    target: Element | Window,
-    position: ScrollPosition,
-    motion: ScrollMotion | undefined,
-    operation: string,
-    deadline: OperationDeadline | undefined,
-    signal: CancellationSignalLike | undefined,
-  ): Promise<void> | undefined {
-    if (motion?.kind !== 'timed') {
-      this.#dom.scrollTo(target, position, {
-        behavior: motion?.kind === 'native-smooth' ? 'smooth' : 'instant',
-      })
-      this.#cache.invalidate('scroll')
-      return
-    }
-
-    return this.#executeTimedScroll(target, position, motion, operation, deadline, signal)
-  }
-
-  async #executeTimedScroll(
-    target: Element | Window,
-    position: ScrollPosition,
-    motion: Extract<ScrollMotion, { kind: 'timed' }>,
-    operation: string,
-    deadline: OperationDeadline | undefined,
-    signal: CancellationSignalLike | undefined,
-  ): Promise<void> {
-    const from = this.#readScrollPosition(target)
-    const duration = normalizeDuration(motion.duration)
-
-    if (duration === 0 || samePoint(from, position)) {
-      this.#writeTimedScrollFrame(target, position)
-      assertOperationBoundary(operation, this.#clock, deadline, signal)
-      return
-    }
-
-    const startedAt = this.#timeline.now()
-
-    while (true) {
-      try {
-        await this.#timeline.nextFrame({ signal })
-      } catch (error) {
-        if (signal?.aborted) {
-          throw cancellationError(operation, signal.reason)
-        }
-
-        throw error
-      }
-
-      assertOperationBoundary(operation, this.#clock, deadline, signal)
-      const progress = Math.min(1, Math.max(0, (this.#timeline.now() - startedAt) / duration))
-      const easedProgress = sampleTimingProgress(motion.timing ?? 'ease-in-out', progress)
-      const framePosition =
-        progress >= 1 ? position : interpolatePoint(from, position, easedProgress)
-
-      this.#writeTimedScrollFrame(target, framePosition)
-      assertOperationBoundary(operation, this.#clock, deadline, signal)
-
-      if (progress >= 1) {
-        return
-      }
-    }
-  }
-
-  #writeTimedScrollFrame(target: Element | Window, position: ScrollPosition): void {
-    const metrics = this.#cache.getScrollMetrics(target, () => this.#dom.getScrollMetrics(target))
-    const clamped = {
-      x: clamp(position.x, 0, Math.max(0, metrics.scrollWidth - metrics.clientWidth)),
-      y: clamp(position.y, 0, Math.max(0, metrics.scrollHeight - metrics.clientHeight)),
-    }
-
-    this.#dom.scrollTo(target, clamped, { behavior: 'instant' })
+  async #explicitScroll(
+    operation: 'surface.scrollTo' | 'surface.scrollBy',
+    vector: ScrollPosition | ScrollDelta,
+    options: ScrollOptions,
+    relative: boolean,
+  ): Promise<ScrollResult> {
+    const surface = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
+    const before = this.#platform.readScroll(surface)
+    const step = await this.#runOperation(operation, options.timeout, options.signal, (signal) => {
+      const mapped = mapScrollOptions(options, signal)
+      return relative
+        ? this.#scroller().by(surface, vector, mapped)
+        : this.#scroller().to(surface, vector, mapped)
+    })
     this.#cache.invalidate('scroll')
+    const after = { ...step.actualTo }
+    return Object.freeze({
+      changed: before.x !== after.x || before.y !== after.y,
+      before: Object.freeze({ ...before }),
+      after: Object.freeze(after),
+    })
   }
 
-  #getViewportScrollOffset(): Point {
-    const target = this.#dom.getViewportScrollTarget(this.#dom.getRoot())
-    return this.#readScrollPosition(target)
-  }
+  async #executeAdjustedReveal(
+    target: Element,
+    options: RevealOptions,
+    mapped: ScrollerRevealOptions,
+  ): Promise<ScrollerRevealResult> {
+    const startedAt = this.#clock.now()
+    const initial = this.#scroller().planReveal(target, mapped)
+    const selected = (options.container ?? 'all') === 'nearest'
+      ? initial.steps.slice(0, 1)
+      : initial.steps
+    const offset = options.offset ?? { x: 0, y: 0 }
+    const executed: ExecutedScrollStep[] = []
 
-  #readScrollPosition(target: Element | Window): Point {
-    const metrics = this.#cache.getScrollMetrics(target, () => this.#dom.getScrollMetrics(target))
+    for (const step of selected) {
+      executed.push(await this.#scroller().to(
+        step.surface,
+        { x: step.to.x - offset.x, y: step.to.y - offset.y },
+        {
+          motion: mapped.motion,
+          settle: mapped.settle,
+          signal: mapped.signal,
+        },
+      ))
+    }
 
+    const after = this.#scroller().planReveal(target, mapped).before
     return {
-      x: metrics.scrollLeft,
-      y: metrics.scrollTop,
+      changed: executed.some((step) => !samePoint(step.from, step.actualTo)),
+      before: initial.before,
+      after,
+      fullyVisible: after.fullyVisible,
+      visibilityRatio: after.visibilityRatio,
+      steps: Object.freeze(executed),
+      elapsed: this.#clock.now() - startedAt,
     }
   }
 
-  #readScrollStyle(element: Element) {
-    return this.#cache.getComputedScrollStyle(element, () =>
-      this.#dom.getComputedScrollStyle(element),
+  #mapRevealResult(target: TargetHandle, result: ScrollerRevealResult): RevealResult {
+    return Object.freeze({
+      target,
+      changed: result.changed,
+      before: Object.freeze(mapVisibility(result.before)),
+      after: Object.freeze(mapVisibility(result.after)),
+      fullyVisible: result.fullyVisible,
+      visibilityRatio: result.visibilityRatio,
+      steps: Object.freeze(result.steps.map((step) => Object.freeze({
+        surfaceId: this.#surfaceId(step.surface),
+        from: Object.freeze({ ...step.from }),
+        intendedTo: Object.freeze({ ...step.plannedTo }),
+        to: Object.freeze({ ...step.actualTo }),
+        axes: Object.freeze([...step.axes]),
+      }))),
+    })
+  }
+
+  #traceRevealResult(result: RevealResult): void {
+    this.#trace?.appendEvent('reveal:scroll-chain', {
+      surfaces: result.steps.map((step) => ({ surfaceId: step.surfaceId })),
+    })
+    for (const step of result.steps) {
+      const data = {
+        surfaceId: step.surfaceId,
+        from: { ...step.from },
+        intendedTo: { ...step.intendedTo },
+        to: { ...step.to },
+        axes: [...step.axes],
+      }
+      this.#trace?.appendEvent('reveal:plan', { ...data, planned: true })
+      this.#trace?.appendEvent('reveal:step-start', data)
+      this.#trace?.appendEvent('reveal:step-end', data)
+    }
+    this.#trace?.appendEvent('reveal:visibility-after', { visibility: result.after })
+  }
+
+  #surfaceId(surface: ScrollSurface): string {
+    if (isWindow(surface)) return 'viewport'
+    const existing = this.#surfaceIds.get(surface)
+    if (existing !== undefined) return existing
+    const id = `scroll-surface-${this.#nextSurfaceId++}`
+    this.#surfaceIds.set(surface, id)
+    return id
+  }
+
+  #readViewportScroll(): Point {
+    return this.#platform.readScroll(
+      this.#dom.getViewportScrollTarget(this.#dom.getRoot()),
     )
   }
 
-  #selectedRevealChain(
-    chain: readonly ScrollSurfaceSnapshot[],
-    options: RevealOptions,
-  ): readonly ScrollSurfaceSnapshot[] {
-    return (options.container ?? 'all') === 'nearest' ? chain.slice(0, 1) : chain
-  }
-
-  async #settleSurfaces(
-    surfaces: readonly (Element | Window)[],
-    policy: ScrollSettlePolicy | undefined,
-    operation: string,
-    deadline: OperationDeadline | undefined,
-    signal: CancellationSignalLike | undefined,
-  ): Promise<void> {
-    if (surfaces.length === 0 || policy === undefined || policy === 'none') {
-      return
-    }
-
-    if (policy === 'next-frame') {
-      await this.#timeline.nextFrame({ signal })
-      assertOperationBoundary(operation, this.#clock, deadline, signal)
-      return
-    }
-
-    await this.#settlementObserver.settle(surfaces, {
-      ...scrollSettlementOptionsFor(policy),
-      ...(deadline === undefined
-        ? {}
-        : { timeout: Math.max(0, deadline.at - this.#clock.now()) }),
-      ...(signal === undefined ? {} : { signal }),
-      operation,
+  #scroller(): ScrollEngine {
+    this.#scrollEngine ??= createScrollEngine({
+      platform: this.#platform,
+      now: () => this.#clock.now(),
     })
-    assertOperationBoundary(operation, this.#clock, deadline, signal)
+    return this.#scrollEngine
   }
+
+  async #runOperation<T>(
+    operation: string,
+    timeout: number | undefined,
+    signal: CancellationSignalLike | undefined,
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    if (signal?.aborted) throw cancellationError(operation, signal.reason)
+    const normalizedTimeout = normalizeTimeout(timeout)
+    if (normalizedTimeout === 0) throw timeoutError(operation, 0)
+
+    const controller = new AbortController()
+    let timedOut = false
+    const abort = () => controller.abort(signal?.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    const timer = normalizedTimeout === undefined
+      ? undefined
+      : setTimeout(() => {
+          timedOut = true
+          controller.abort()
+        }, normalizedTimeout)
+
+    try {
+      return await run(controller.signal)
+    } catch (error) {
+      if (timedOut) throw timeoutError(operation, normalizedTimeout ?? 0)
+      if (signal?.aborted || error instanceof ScrollAbortError) {
+        throw cancellationError(operation, signal?.reason)
+      }
+      throw error
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+}
+
+export function createSurfaceEngine(options: SurfaceEngineOptions = {}): SurfaceEngine {
+  return new BrowserSurfaceEngine(options)
+}
+
+function mapRevealOptions(options: RevealOptions, signal: AbortSignal): ScrollerRevealOptions {
+  return {
+    visibility: options.visibility ?? 'any',
+    block: options.block ?? 'nearest',
+    inline: options.inline ?? 'nearest',
+    safeArea: options.safeArea,
+    motion: mapMotion(options.motion),
+    settle: mapSettlement(options.settle, options.timeout),
+    signal,
+  }
+}
+
+function mapScrollOptions(options: ScrollOptions, signal: AbortSignal): ScrollerScrollOptions {
+  return {
+    motion: mapMotion(options.motion),
+    settle: mapSettlement(options.settle, options.timeout),
+    signal,
+  }
+}
+
+function mapMotion(motion: ScrollMotion | undefined): MotionOptions | 'instant' | 'smooth' {
+  if (motion === undefined || motion.kind === 'instant') return 'instant'
+  if (motion.kind === 'native-smooth') return 'smooth'
+  return {
+    type: 'tween',
+    duration: Math.max(0, motion.duration),
+    easing: easingFor(motion.timing),
+  }
+}
+
+function easingFor(timing: PointerMotionTiming | undefined) {
+  switch (timing ?? 'ease-in-out') {
+    case 'linear': return linear
+    case 'ease-in': return easeIn
+    case 'ease-out': return easeOut
+    case 'ease-in-out': return easeInOut
+  }
+}
+
+function mapSettlement(
+  policy: RevealOptions['settle'],
+  timeout: number | undefined,
+): SettlementOptions | false {
+  if (policy === undefined || policy === 'none') return false
+  if (policy === 'next-frame') {
+    return { stableFrames: 1, quietMs: 0, ...(timeout === undefined ? {} : { timeout }) }
+  }
+  if (policy === 'scroll-stable') {
+    return { ...(timeout === undefined ? {} : { timeout }) }
+  }
+  return {
+    quietMs: policy.quietMs,
+    stableFrames: policy.stableFrames,
+    threshold: policy.threshold,
+    ...(timeout === undefined ? {} : { timeout }),
+  }
+}
+
+function mapVisibility(snapshot: ScrollerVisibilitySnapshot): VisibilitySnapshot {
+  return {
+    visibilityRatio: snapshot.visibilityRatio,
+    fullyVisible: snapshot.fullyVisible,
+  }
+}
+
+function requiresManualReveal(options: RevealOptions): boolean {
+  return options.container === 'nearest' || options.offset !== undefined
 }
 
 function summarizeRevealPolicy(options: RevealOptions): Record<string, unknown> {
@@ -622,38 +456,24 @@ function summarizeRevealPolicy(options: RevealOptions): Record<string, unknown> 
     inline: options.inline ?? 'nearest',
     container: options.container ?? 'all',
     motion: options.motion?.kind ?? 'instant',
-    settle: summarizeSettlePolicy(options.settle),
+    settle: typeof options.settle === 'object' ? { ...options.settle } : options.settle ?? 'none',
     ...(options.safeArea === undefined ? {} : { safeArea: { ...options.safeArea } }),
     ...(options.offset === undefined ? {} : { offset: { ...options.offset } }),
   }
 }
 
-function summarizeSettlePolicy(policy: ScrollSettlePolicy | undefined): unknown {
-  if (typeof policy !== 'object' || policy === null) return policy ?? 'none'
-  return { ...policy }
+function revealToScrollIntoViewOptions(
+  options: EnsureVisibleOptions,
+): ScrollIntoViewOptions | undefined {
+  const scrollOptions: ScrollIntoViewOptions = {}
+  if (options.block !== undefined) scrollOptions.block = options.block
+  if (options.inline !== undefined) scrollOptions.inline = options.inline
+  return Object.keys(scrollOptions).length === 0 ? undefined : scrollOptions
 }
 
-function revealTimeoutSnapshot(state: RevealDiagnosticState): Record<string, unknown> {
-  return {
-    phase: state.phase,
-    ...(state.before === undefined ? {} : { before: { ...state.before } }),
-    ...(state.after === undefined ? {} : { after: { ...state.after } }),
-    completedSteps: state.completedSteps.map((step) => ({
-      ...step,
-      from: { ...step.from },
-      intendedTo: { ...step.intendedTo },
-      to: { ...step.to },
-      axes: [...step.axes],
-    })),
-  }
-}
-
-function cloneRect(rect: Rect): Rect {
-  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-}
-
-function cloneOptionalRect(rect: Rect | null): Rect | null {
-  return rect === null ? null : cloneRect(rect)
+function normalizeTimeout(timeout: number | undefined): number | undefined {
+  if (timeout === undefined) return undefined
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : 0
 }
 
 function diagnosticErrorCode(error: unknown): string | undefined {
@@ -661,109 +481,10 @@ function diagnosticErrorCode(error: unknown): string | undefined {
   return typeof error.code === 'string' ? error.code : undefined
 }
 
-export function createSurfaceEngine(options: SurfaceEngineOptions = {}): SurfaceEngine {
-  return new BrowserSurfaceEngine(options)
-}
-
-function revealToScrollIntoViewOptions(
-  options: EnsureVisibleOptions,
-): ScrollIntoViewOptions | undefined {
-  const scrollOptions: ScrollIntoViewOptions = {}
-
-  if (options.block !== undefined) {
-    scrollOptions.block = options.block
-  }
-
-  if (options.inline !== undefined) {
-    scrollOptions.inline = options.inline
-  }
-
-  return Object.keys(scrollOptions).length === 0 ? undefined : scrollOptions
-}
-
 function samePoint(left: Point, right: Point): boolean {
   return left.x === right.x && left.y === right.y
 }
 
-function normalizeDuration(duration: number): number {
-  return Number.isFinite(duration) && duration > 0 ? duration : 0
-}
-
-function interpolatePoint(from: Point, to: Point, progress: number): Point {
-  return {
-    x: from.x + (to.x - from.x) * progress,
-    y: from.y + (to.y - from.y) * progress,
-  }
-}
-
-function sampleTimingProgress(timing: PointerMotionTiming, progress: number): number {
-  switch (timing) {
-    case 'linear':
-      return progress
-    case 'ease-in':
-      return progress * progress
-    case 'ease-out':
-      return 1 - (1 - progress) * (1 - progress)
-    case 'ease-in-out':
-      return progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2
-  }
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
-function assertViewportRevealGeometry(snapshot: RevealGeometrySnapshot): void {
-  if (snapshot.coordinateSpace !== 'viewport') {
-    throw actorbleError(
-      'PLATFORM_UNSUPPORTED',
-      'Reveal geometry must use viewport coordinates.',
-      {
-        details: {
-          boundary: 'surface-engine',
-          coordinateSpace: snapshot.coordinateSpace,
-        },
-      },
-    )
-  }
-}
-
-function visibilitySnapshot(rect: Rect, visibleRect: Rect | null): VisibilitySnapshot {
-  if (rect.width <= 0 || rect.height <= 0 || visibleRect === null) {
-    return { visibilityRatio: 0, fullyVisible: false }
-  }
-
-  const visibleArea = Math.max(0, visibleRect.width) * Math.max(0, visibleRect.height)
-  const ratio = Math.min(1, Math.max(0, visibleArea / (rect.width * rect.height)))
-  return { visibilityRatio: ratio, fullyVisible: ratio >= 1 }
-}
-
-type OperationDeadline = Readonly<{ at: number; timeout: number }>
-
-function deadlineFor(clock: Clock, timeout: number | undefined): OperationDeadline | undefined {
-  if (timeout === undefined) {
-    return undefined
-  }
-
-  const normalized = Number.isFinite(timeout) && timeout > 0 ? timeout : 0
-  return { at: clock.now() + normalized, timeout: normalized }
-}
-
-function assertOperationBoundary(
-  operation: string,
-  clock: Clock,
-  deadline: OperationDeadline | undefined,
-  signal: RevealOptions['signal'],
-): void {
-  if (signal?.aborted) {
-    throw cancellationError(operation, signal.reason)
-  }
-
-  if (deadline !== undefined && clock.now() >= deadline.at) {
-    throw timeoutError(operation, deadline.timeout, {
-      details: { deadline: deadline.at },
-    })
-  }
+function isWindow(surface: ScrollSurface): surface is Window {
+  return 'window' in surface && surface.window === surface
 }

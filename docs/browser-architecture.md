@@ -520,7 +520,8 @@ class SurfaceEngine {
 }
 ```
 
-Decision history: `docs/adr/2026-07-14-browser-reveal-stability-runtime.md`.
+Decision history: `docs/adr/2026-07-14-browser-reveal-stability-runtime.md` and
+`docs/adr/2026-08-24-adopt-scroller2.md`.
 
 `reveal`, `scrollTo`, and `scrollBy` are distinct user intents.
 
@@ -539,21 +540,27 @@ scrollBy(delta)
 표현하며 새 scenario schema와 facade는 position 기반 `scrollTo`와 delta 기반 `scrollBy`만
 생성합니다.
 
-Surface Engine의 public architecture boundary는 유지하되 내부 책임은 다음처럼 나눕니다.
+Surface Engine의 public architecture boundary는 유지하되 scrolling kernel은 npm의
+`scroller2`에 위임합니다.
 
 ```txt
 targeting/surface-engine/
-  -> public surface boundary and composition
+  -> public surface boundary, option/result mapping, diagnostics, invalidation
 
-targeting/scroll-chain-resolver/
-  -> target에서 inner-to-outer scroll surface chain 계산
+scroller2
+  -> inner-to-outer scroll surface discovery
+  -> reveal planning and effective viewport calculation
+  -> instant/tween/lerp motion execution
+  -> scroll settlement and cancellation
 
-targeting/reveal-planner/
-  -> visibility requirement와 alignment를 scroll step으로 계획
-
-targeting/scroll-settlement-observer/
-  -> native scrollend와 offset/quiet-window fallback 관찰
+targeting/scroller2-platform-adapter/
+  -> Actorble DomPort와 scroller2 ScrollPlatform 연결
 ```
+
+Actorble은 자체 scroll-chain resolver, reveal planner, scroll settlement observer를 유지하지
+않습니다. Public `RevealOptions`와 `ScrollOptions`는 integration layer에서 scroller2 option으로
+정규화하고, scroller2 result와 abort를 Actorble result/error contract로 변환합니다. Public API,
+scenario schema, Surface Engine lifecycle boundary는 이 dependency 교체로 변경하지 않습니다.
 
 Scroll chain traversal은 `parentElement`에서 끝나지 않고 open shadow root의 host를 따라갑니다.
 Cross-origin iframe과 closed shadow root는 현재 non-goal이며 capability/fidelity limitation으로
@@ -585,10 +592,9 @@ type RevealResult = Readonly<{
 }>
 ```
 
-Scroll motion은 `instant`, `native-smooth`, `timed`를 구분합니다. `instant`가 기본이며,
-`timed`는 Timeline Engine의 frame scheduling을 재사용합니다. 모든 mode는 동일한
-`AbortSignal`을 따르고 cancellation 시 현재 scroll position을 보존한 채 future frames와
-observer만 정리합니다.
+Scroll motion은 `instant`, `native-smooth`, `timed`를 구분합니다. Integration layer는 이를
+scroller2 motion contract에 매핑합니다. 모든 mode는 동일한 `AbortSignal`을 따르고
+cancellation 시 현재 scroll position을 보존한 채 future frames와 observer만 정리합니다.
 
 Surface Engine과 Geometry Engine의 경계:
 
@@ -2145,6 +2151,8 @@ Capability / Fidelity Reporter
 27. Long-running pointer, gesture, typing, scroll, and wait operations share cancellation-safe cleanup invariants.
 
 28. Visual-stable is opt-in and must not become the default postcondition of every interaction action.
+
+29. Browser scrolling algorithms are delegated to scroller2 behind the Surface Engine boundary.
 ```
 
 ---

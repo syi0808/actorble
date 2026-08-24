@@ -103,15 +103,7 @@ export class Actorble {
     const surface = new BrowserSurfaceEngine({
       dom,
       cache: geometrySurfaceCache,
-      timeline,
       trace,
-      geometry: () => {
-        if (geometry === undefined) {
-          throw new Error('Actorble geometry composition is not initialized.')
-        }
-
-        return geometry
-      },
     })
     const resolver =
       options.resolver ?? new BrowserTargetResolver({ dom, trace, clock: timeline })
@@ -322,6 +314,7 @@ export class Actorble {
     this.#destroyed = true
     this.#detachTraceListeners()
     this.#runner.stop()
+    this.#orchestrator.dispose?.()
     this.#layoutInvalidation.dispose()
 
     try {

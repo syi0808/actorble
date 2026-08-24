@@ -603,6 +603,10 @@ describe('Actorble facade', () => {
 
   it('creates a default module graph that can scroll to an explicit position', async () => {
     window.scrollTo = vi.fn()
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      value: window.innerHeight + 100,
+    })
     const actorble = createActorble()
 
     await expect(

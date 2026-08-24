@@ -16,6 +16,7 @@
 - T34-T40은 scenario timeline과 runner 중 visual 안정성 문제를 다뤘다. `delay` step, run-level pacing, click 기반 type focus, scroll/resize/layout 변화에 따른 cursor tracking과 dispatch 좌표 보정을 순서대로 보강했다.
 - T0-T40 이후 follow-up 완료 기록과 최신 smoke 정합성은 `docs/tasks-2026-06-14.md`에서 관리한다. F 작업은 이 문서의 T41+ 항목으로 복제하지 않는다.
 - T45-T61은 browser reveal, explicit scroll, observed stability, wait condition, cancellation 개선 계획이다. 기준 결정은 Accepted 상태의 `../../docs/adr/2026-07-14-browser-reveal-stability-runtime.md`다.
+- T47-T51에서 완성한 자체 scroll-chain/reveal/motion/settlement 구현은 2026-08-24에 `scroller2` runtime dependency로 대체됐다. 현재 ownership 기준은 `../../docs/adr/2026-08-24-adopt-scroller2.md`다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령과 2026-06-15 기준 결과:
@@ -54,20 +55,12 @@ targeting/target-resolver
 targeting/surface-engine
   -> shared
   -> platform/platform-adapter/dom-adapter
+  -> targeting/scroller2-platform-adapter
+  -> scroller2
 
-targeting/scroll-chain-resolver
+targeting/scroller2-platform-adapter
   -> shared
-  -> platform/platform-adapter/dom-adapter
-
-targeting/reveal-planner
-  -> shared
-  -> targeting/scroll-chain-resolver
-  -> targeting/geometry-engine의 narrow read port
-
-targeting/scroll-settlement-observer
-  -> shared
-  -> runtime/timeline-engine의 narrow frame/clock port
-  -> platform/platform-adapter/dom-adapter
+  -> scroller2
 
 targeting/geometry-engine
   -> shared
@@ -185,10 +178,8 @@ api/actorble-facade
 | `platform/platform-adapter/state-applier` | `shared` | `data-actorble-*` state attribute apply/cleanup | hover/active/focus-visible cleanup |
 | `platform/platform-adapter/style-adapter` | `shared` | runtime style injection/disposal | style element lifecycle, duplicate cleanup |
 | `targeting/target-resolver` | `shared`, dom adapter, diagnostics | `element`/`css` locator, strict mode, stale validation | 0/1/N candidate, snapshot handle, detached target |
-| `targeting/surface-engine` | `shared`, dom adapter, scroll-chain/reveal/settlement ports | public surface boundary, reveal/explicit scroll composition | lifecycle ordering, result aggregation, no-op reveal |
-| `targeting/scroll-chain-resolver` | `shared`, dom adapter | nested DOM scroll surface chain과 open shadow host traversal | inner-to-outer ordering, overflow axis, viewport inclusion |
-| `targeting/reveal-planner` | `shared`, scroll chain, geometry read port | effective viewport와 alignment 기반 immutable plan | nearest/start/center/end, safeArea, clamp, oversized target |
-| `targeting/scroll-settlement-observer` | `shared`, dom adapter, frame/clock port | scroll offset stable frames와 quiet-window 관찰 | native scrollend hint, fallback, multi-surface abort disposal |
+| `targeting/surface-engine` | `shared`, dom adapter, scroller2 adapter, `scroller2` | public surface boundary, option/result/error/trace mapping | public delegation, result mapping, cancellation/timeout |
+| `targeting/scroller2-platform-adapter` | `shared`, `scroller2` | Actorble DomPort를 scroller2 ScrollPlatform에 연결 | metrics/style/rect/write mapping, nested chain integration |
 | `targeting/geometry-engine` | `shared`, surface, dom adapter | rect, visible rect, center, clickable point result | deterministic geometry, no interactability decisions |
 | `targeting/interactability-engine` | `shared`, geometry, dom adapter | visible/enabled/editable/focusable/pointer-events/occlusion report | action-specific preflight and force policy |
 | `runtime/timeline-engine` | `shared` | controllable clock, timeout, cancellation, next-frame/settled primitive | fake clock, cancellation, timeout |

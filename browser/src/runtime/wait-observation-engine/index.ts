@@ -13,7 +13,7 @@ import { BrowserTargetResolver } from '../../targeting/target-resolver/index.js'
 import { BrowserTimelineEngine, normalizeWaitStrategy } from '../timeline-engine/index.js'
 import { BrowserVisualStabilityObserver } from '../visual-stability-observer/index.js'
 import { BrowserLayoutInvalidationTracker } from '../../targeting/layout-invalidation-tracker/index.js'
-import { BrowserScrollChainResolver } from '../../targeting/scroll-chain-resolver/index.js'
+import { ActorbleScroller2ScrollChainResolver } from '../../targeting/scroller2-platform-adapter/index.js'
 import type {
   LayoutInvalidationEvent,
   LayoutInvalidationTracker,
@@ -244,7 +244,7 @@ export class BrowserWaitObservationEngine implements WaitObservationEngine {
         geometry: this.#geometry,
         layoutInvalidation,
         resolver: this.#resolver,
-        scrollChain: new BrowserScrollChainResolver({ dom: this.#dom }),
+        scrollChain: new ActorbleScroller2ScrollChainResolver(this.#dom),
         timeline: this.#timeline,
         trace: this.#trace,
       })

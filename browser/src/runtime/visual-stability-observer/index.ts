@@ -1,6 +1,6 @@
 import { BrowserDomAdapter } from '../../platform/platform-adapter/dom-adapter/index.js'
 import { BrowserTimelineEngine } from '../timeline-engine/index.js'
-import { BrowserScrollChainResolver } from '../../targeting/scroll-chain-resolver/index.js'
+import { ActorbleScroller2ScrollChainResolver } from '../../targeting/scroller2-platform-adapter/index.js'
 import { cancellationError, timeoutError } from '../../shared/index.js'
 import type {
   CancellationSignalLike,
@@ -17,7 +17,7 @@ import type {
   LayoutInvalidationTracker,
 } from '../../targeting/layout-invalidation-tracker/index.js'
 import type { TargetResolver } from '../../targeting/target-resolver/index.js'
-import type { ScrollChainResolver } from '../../targeting/scroll-chain-resolver/index.js'
+import type { Scroller2ScrollChainResolver } from '../../targeting/scroller2-platform-adapter/index.js'
 import type { TimelineEngine } from '../timeline-engine/index.js'
 
 export const DEFAULT_VISUAL_STABILITY_POLICY = Object.freeze({
@@ -56,7 +56,7 @@ export type VisualStabilityObserverOptions = Readonly<{
   geometry: Pick<GeometryEngine, 'getBoundingRect'>
   layoutInvalidation: LayoutInvalidationTracker
   resolver: Pick<TargetResolver, 'validate'>
-  scrollChain?: ScrollChainResolver
+  scrollChain?: Scroller2ScrollChainResolver
   timeline?: Pick<TimelineEngine, 'nextFrame' | 'now'>
   trace?: VisualStabilityTraceRecorder
 }>
@@ -80,7 +80,7 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
   readonly #geometry: Pick<GeometryEngine, 'getBoundingRect'>
   readonly #layoutInvalidation: LayoutInvalidationTracker
   readonly #resolver: Pick<TargetResolver, 'validate'>
-  readonly #scrollChain: ScrollChainResolver
+  readonly #scrollChain: Scroller2ScrollChainResolver
   readonly #timeline: Pick<TimelineEngine, 'nextFrame' | 'now'>
   readonly #trace?: VisualStabilityTraceRecorder
 
@@ -89,7 +89,9 @@ export class BrowserVisualStabilityObserver implements VisualStabilityObserver {
     this.#geometry = options.geometry
     this.#layoutInvalidation = options.layoutInvalidation
     this.#resolver = options.resolver
-    this.#scrollChain = options.scrollChain ?? new BrowserScrollChainResolver()
+    this.#scrollChain = options.scrollChain ?? new ActorbleScroller2ScrollChainResolver(
+      new BrowserDomAdapter(),
+    )
     this.#timeline = options.timeline ?? new BrowserTimelineEngine()
     this.#trace = options.trace
   }

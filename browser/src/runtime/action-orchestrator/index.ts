@@ -153,6 +153,7 @@ export interface ActionOrchestrator {
   pointerSequence(sequence: PointerSequence, options?: PointerSequenceOptions): Promise<void>
   waitFor(condition: WaitCondition, options?: WaitOptions): Promise<WaitResult>
   geometry(target: TargetLike): Promise<GeometrySnapshot>
+  dispose?(): void
 }
 
 export type ActionOrchestratorOptions = Readonly<{
@@ -334,13 +335,6 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         dom,
         cache: geometrySurfaceCache,
         trace,
-        geometry: () => {
-          if (geometry === undefined) {
-            throw new Error('Actorble geometry composition is not initialized.')
-          }
-
-          return geometry
-        },
       })
     geometry ??=
       new BrowserGeometryEngine({
@@ -1524,6 +1518,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
   geometry(target: TargetLike): Promise<GeometrySnapshot> {
     return this.#geometry.snapshot(target)
+  }
+
+  dispose(): void {
+    this.#surface.dispose?.()
   }
 
   async #revealTarget(
