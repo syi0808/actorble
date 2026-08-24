@@ -1,35 +1,64 @@
 {
   "name": "@actorble/browser",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Browser implementation of Actorble.",
   "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "bench": "vitest bench --run --config vitest.bench.config.mjs",
     "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "example:build": "vite build --config example/vite.config.ts",
     "example:dev": "vite --config example/vite.config.ts --host 127.0.0.1",
     "example:preview": "vite preview --config example/vite.config.ts --host 127.0.0.1",
     "example:smoke": "node scripts/example-smoke.mjs",
     "example:typecheck": "tsc -p example/tsconfig.json --noEmit",
+    "prepack": "pnpm run clean && pnpm run build",
+    "prepublishOnly": "pnpm test && pnpm run typecheck",
+    "release:check": "pnpm test && pnpm run typecheck && pnpm pack --dry-run",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": [],
+  "keywords": [
+    "browser-automation",
+    "interaction",
+    "scenario",
+    "ui-testing"
+  ],
   "author": "Yein Sung",
   "license": "Apache-2.0 OR MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syi0808/actorble.git",
+    "directory": "browser"
+  },
+  "bugs": {
+    "url": "https://github.com/syi0808/actorble/issues"
+  },
+  "homepage": "https://github.com/syi0808/actorble#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11.5.2",
+      "version": "11.5.3",
       "onFail": "download"
     }
   },

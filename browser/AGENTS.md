@@ -8,7 +8,7 @@ Browser code should map to the documented components: Actorble Facade, Scenario 
 
 ## Build, Test, and Development Commands
 
-Use pnpm for browser package work. `browser/package.json` declares pnpm `^11.5.2` in `devEngines`.
+Use pnpm for browser package work. `browser/package.json` pins pnpm `11.5.3` in `devEngines`.
 
 - `cd browser && pnpm install`: install browser package dependencies.
 - `cd browser && pnpm pkg get scripts`: inspect available package scripts.

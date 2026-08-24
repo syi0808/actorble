@@ -14,9 +14,11 @@ cd browser
 pnpm install
 pnpm test
 pnpm build
+pnpm run release:check
 ```
 
 The package is ESM and exports from `browser/src/index.ts` in development and `browser/dist/index.js` after build.
+`release:check` validates tests, types, the clean build, and npm tarball contents without publishing.
 
 ## Basic browser control
 
