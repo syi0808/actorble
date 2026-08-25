@@ -28,7 +28,6 @@ jobs:
         uses: withastro/action@v6
         with:
           path: docs
-          package-manager: pnpm@11.5.2
 
   deploy:
     environment:
