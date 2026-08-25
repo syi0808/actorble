@@ -33,6 +33,11 @@ describe('browser options model', () => {
     });
     expect(BROWSER_OPTION_DEFAULTS.typingDelay).toBe(60);
     expect(BROWSER_OPTION_DEFAULTS.clickPressDwell).toBe(80);
+    expect(BROWSER_OPTION_DEFAULTS.reveal.motion).toEqual({
+      kind: 'timed',
+      timing: 'ease-in-out',
+      duration: 250,
+    });
 
     expect(resolveActorbleOptions().feedback).toEqual({
       enabled: true,
@@ -117,6 +122,44 @@ describe('browser options model', () => {
       ...targetLifecycleDefaults,
       duration: 120,
       motion: { kind: 'ease', timing: 'linear', duration: 120 },
+      reveal: {
+        ...BROWSER_OPTION_DEFAULTS.reveal,
+        motion: { kind: 'timed', timing: 'linear', duration: 120 },
+      },
+    });
+  });
+
+  it('matches automatic reveal to resolved pointer motion unless explicitly overridden', () => {
+    expect(
+      resolveActionOptions('click', {
+        options: {
+          motion: { kind: 'ease', timing: 'ease-out', duration: 640 },
+        },
+      }).reveal,
+    ).toEqual({
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      motion: { kind: 'timed', timing: 'ease-out', duration: 640 },
+    });
+
+    expect(
+      resolveActionOptions('click', {
+        options: { duration: 0 },
+      }).reveal,
+    ).toEqual({
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      motion: { kind: 'instant' },
+    });
+
+    expect(
+      resolveActionOptions('click', {
+        options: {
+          motion: { kind: 'ease', timing: 'ease-out', duration: 640 },
+          reveal: { motion: { kind: 'native-smooth' } },
+        },
+      }).reveal,
+    ).toEqual({
+      ...BROWSER_OPTION_DEFAULTS.reveal,
+      motion: { kind: 'native-smooth' },
     });
   });
 
@@ -243,6 +286,10 @@ describe('browser options model', () => {
 
     expect(resolveActionOptions('click', { actorble, run })).toEqual({
       ...targetLifecycleDefaults,
+      reveal: {
+        ...BROWSER_OPTION_DEFAULTS.reveal,
+        motion: { kind: 'instant' },
+      },
       duration: 0,
       pressDwell: 70,
     });
@@ -258,6 +305,10 @@ describe('browser options model', () => {
       }),
     ).toEqual({
       ...targetLifecycleDefaults,
+      reveal: {
+        ...BROWSER_OPTION_DEFAULTS.reveal,
+        motion: { kind: 'timed', timing: 'linear', duration: 45 },
+      },
       duration: 45,
       pressDwell: 15,
       signal,
@@ -272,6 +323,10 @@ describe('browser options model', () => {
     });
     expect(resolveActionOptions('selectText', { actorble, run })).toEqual({
       ...targetLifecycleDefaults,
+      reveal: {
+        ...BROWSER_OPTION_DEFAULTS.reveal,
+        motion: { kind: 'instant' },
+      },
       duration: 0,
       timeout: 50,
     });
@@ -283,6 +338,10 @@ describe('browser options model', () => {
       }),
     ).toEqual({
       ...targetLifecycleDefaults,
+      reveal: {
+        ...BROWSER_OPTION_DEFAULTS.reveal,
+        motion: { kind: 'instant' },
+      },
       duration: 0,
       timeout: 5,
       signal,

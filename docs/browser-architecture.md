@@ -598,6 +598,16 @@ Scroll motion은 `instant`, `native-smooth`, `timed`를 구분합니다. Integra
 scroller2 motion contract에 매핑합니다. 모든 mode는 동일한 `AbortSignal`을 따르고
 cancellation 시 현재 scroll position을 보존한 채 future frames와 observer만 정리합니다.
 
+기본 reveal motion은 기본 pointer motion과 같은 `ease-in-out`, `250ms` timed motion입니다.
+Pointer action의 자동 reveal에 caller가 `reveal.motion`을 명시하지 않으면 option resolver가
+해당 action의 resolved `ease` pointer motion을 같은 timing과 duration의 timed scroll motion으로
+변환합니다. Motion policy 또는 action option으로 pointer duration이 `0`이 되면 자동 reveal도
+instant가 됩니다. 명시적인 `reveal.motion`은 항상 이 연동보다 우선합니다. 현재 scroll motion
+contract로 직접 표현할 수 없는 `inertia`와 `spring` pointer profile은 중앙 기본 reveal
+motion을 사용합니다.
+
+Decision history: `docs/adr/2026-08-25-match-automatic-reveal-to-pointer-motion.md`.
+
 Surface Engine과 Geometry Engine의 경계:
 
 ```txt

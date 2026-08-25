@@ -10,6 +10,10 @@ const targetLifecycleDefaults = {
 };
 const actionWaitDefaults = { wait: 'interaction-stable' };
 
+function revealWithMotion(motion) {
+  return { ...BROWSER_OPTION_DEFAULTS.reveal, motion };
+}
+
 function targetHandle(id = 'target-1') {
   const target = document.createElement('button');
   target.id = id;
@@ -212,6 +216,7 @@ describe('Actorble facade', () => {
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
       ...moveOptions,
+      reveal: revealWithMotion({ kind: 'timed', timing: 'linear', duration: 6 }),
     });
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
@@ -312,6 +317,7 @@ describe('Actorble facade', () => {
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
       duration: 25,
+      reveal: revealWithMotion({ kind: 'timed', timing: 'linear', duration: 25 }),
     });
     expect(orchestrator.typeInto).toHaveBeenCalledWith(locator, 'hello', {
       ...targetLifecycleDefaults,
@@ -380,15 +386,18 @@ describe('Actorble facade', () => {
 
     expect(orchestrator.click).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
+      reveal: revealWithMotion({ kind: 'instant' }),
       duration: 0,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
     });
     expect(orchestrator.moveTo).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
+      reveal: revealWithMotion({ kind: 'timed', timing: 'ease-out', duration: 40 }),
       motion,
     });
     expect(orchestrator.selectText).toHaveBeenCalledWith(locator, {
       ...targetLifecycleDefaults,
+      reveal: revealWithMotion({ kind: 'instant' }),
       duration: 0,
     });
   });

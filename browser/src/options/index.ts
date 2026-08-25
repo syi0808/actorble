@@ -13,6 +13,7 @@ import type {
   PressOptions,
   RevealOptions,
   RunOptions,
+  ScrollMotion,
   ScrollOptions,
   SelectTextOptions,
   TypeOptions,
@@ -29,6 +30,12 @@ const DEFAULT_POINTER_MOTION = {
   timing: 'ease-in-out',
   duration: 250,
 } as const satisfies PointerMotionProfile;
+
+const DEFAULT_REVEAL_MOTION = {
+  kind: 'timed',
+  timing: DEFAULT_POINTER_MOTION.timing,
+  duration: DEFAULT_POINTER_MOTION.duration,
+} as const satisfies ScrollMotion;
 
 const DEFAULT_INERTIA_MOTION = {
   initialVelocity: 1200,
@@ -62,7 +69,7 @@ export const BROWSER_OPTION_DEFAULTS = {
     block: 'nearest',
     inline: 'nearest',
     container: 'all',
-    motion: { kind: 'instant' },
+    motion: DEFAULT_REVEAL_MOTION,
     settle: 'scroll-stable',
   },
   feedback: DEFAULT_FEEDBACK,
@@ -551,13 +558,61 @@ function normalizeActionRevealPolicy(
   }
 
   const reveal = options.reveal;
+  const configured: Readonly<Partial<RevealOptions>> =
+    typeof reveal === 'object' && reveal !== null ? reveal : {};
   return {
     ...options,
     reveal: {
       ...BROWSER_OPTION_DEFAULTS.reveal,
-      ...(typeof reveal === 'object' && reveal !== null ? reveal : {}),
+      ...configured,
+      motion:
+        configured.motion ??
+        pointerMatchedRevealMotion(action, options) ??
+        BROWSER_OPTION_DEFAULTS.reveal.motion,
     },
   };
+}
+
+function pointerMatchedRevealMotion(
+  action: BrowserActionName,
+  options: Readonly<Record<string, unknown>>,
+): ScrollMotion | undefined {
+  if (!isPointerAction(action)) {
+    return undefined;
+  }
+
+  const motion = options.motion;
+  if (isEaseMotionProfile(motion)) {
+    const duration = normalizeMotionDuration(
+      motion.duration ?? options.duration ?? DEFAULT_POINTER_MOTION.duration,
+    );
+    return duration === 0
+      ? { kind: 'instant' }
+      : {
+          kind: 'timed',
+          duration,
+          timing: motion.timing ?? 'ease-in-out',
+        };
+  }
+
+  if (motion === undefined && options.duration !== undefined) {
+    const duration = normalizeMotionDuration(options.duration);
+    return duration === 0 ? { kind: 'instant' } : { kind: 'timed', duration, timing: 'linear' };
+  }
+
+  return undefined;
+}
+
+function isEaseMotionProfile(
+  motion: unknown,
+): motion is Extract<PointerMotionProfile, { kind: 'ease' }> {
+  return (
+    typeof motion === 'object' && motion !== null && (motion as { kind?: unknown }).kind === 'ease'
+  );
+}
+
+function normalizeMotionDuration(duration: unknown): number {
+  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0 ? duration : 0;
 }
 
 function isInertiaMotionProfile(

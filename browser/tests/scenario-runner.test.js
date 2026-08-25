@@ -11,6 +11,10 @@ const targetLifecycleDefaults = {
 };
 const actionWaitDefaults = { wait: 'interaction-stable' };
 
+function revealWithMotion(motion) {
+  return { ...BROWSER_OPTION_DEFAULTS.reveal, motion };
+}
+
 function deferred() {
   let resolve;
   let reject;
@@ -614,6 +618,7 @@ describe('BrowserScenarioRunner', () => {
         clickTarget,
         {
           ...targetLifecycleDefaults,
+          reveal: revealWithMotion({ kind: 'timed', timing: 'linear', duration: 45 }),
           duration: 45,
           timeout: 10,
           pressDwell: 20,
@@ -625,6 +630,7 @@ describe('BrowserScenarioRunner', () => {
         moveTarget,
         {
           ...targetLifecycleDefaults,
+          reveal: revealWithMotion({ kind: 'timed', timing: 'ease-out', duration: 30 }),
           motion: explicitMotion,
           signal: expect.any(AbortSignal),
         },
@@ -650,6 +656,7 @@ describe('BrowserScenarioRunner', () => {
 
     expect(orchestrator.click).toHaveBeenCalledWith(target, {
       ...targetLifecycleDefaults,
+      reveal: revealWithMotion({ kind: 'instant' }),
       duration: 0,
       pressDwell: BROWSER_OPTION_DEFAULTS.clickPressDwell,
       signal: expect.any(AbortSignal),

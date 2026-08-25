@@ -857,8 +857,10 @@ const github = 'https://github.com/syi0808/actorble'
 
     function revealNearest() {
       return {
-        block: 'nearest' as ScrollLogicalPosition,
-        inline: 'nearest' as ScrollLogicalPosition,
+        reveal: {
+          block: 'nearest' as ScrollLogicalPosition,
+          inline: 'nearest' as ScrollLogicalPosition,
+        },
       }
     }
 

@@ -393,6 +393,12 @@ surface chain을 안쪽에서 바깥쪽으로 계획하고, 각 이동 뒤 geome
 계획의 재평가를 허용해야 합니다. Oversized target처럼 requested visibility를 달성할 수
 없는 경우에는 가능한 최대 visibility를 확보하고 결과에 미달 상태를 보고합니다.
 
+Target action이 자동 reveal을 수행할 때 명시적인 reveal motion이 없으면 현재 action의
+pointer motion과 같은 timing과 duration을 사용해 시각적 연속성을 유지합니다. Pointer
+motion이 비활성화되어 있으면 자동 reveal도 instant로 수행합니다. 플랫폼 scroll motion으로
+직접 표현할 수 없는 pointer profile은 해당 플랫폼의 presentation 기본 motion으로
+정규화하며, caller가 명시한 reveal motion은 항상 이 기본 연동 정책보다 우선합니다.
+
 브라우저 구현의 scroll chain discovery, reveal planning, motion execution, settlement는
 `scroller2` 패키지에 위임합니다. Actorble은 Surface Engine public boundary, option 변환,
 timeout/error 변환, trace, geometry invalidation만 소유하며 범용 scrolling algorithm을
