@@ -249,6 +249,11 @@ type TargetPointTracker = Readonly<{
   dispose(): void;
 }>;
 
+type TargetPointTrackerOptions = Readonly<{
+  reveal?: ActionRevealPolicy;
+  signal?: OperationOptions['signal'];
+}>;
+
 type DragSignalContext = {
   source: TargetHandle;
   destination: TargetHandle;
@@ -456,7 +461,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         'moveTo',
         pointerMovementOptions(options),
         (performOptions) => {
-          const pointTracker = this.#createTargetPointTracker('moveTo', moveTarget, point, span);
+          const pointTracker = this.#createTargetPointTracker('moveTo', moveTarget, point, span, {
+            reveal: options.reveal,
+            signal: performOptions.signal,
+          });
 
           return this.#withSignalTarget(moveTarget, commandId, async () => {
             try {
@@ -533,7 +541,10 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         'click',
         clickGestureOptions(options),
         (performOptions) => {
-          const pointTracker = this.#createTargetPointTracker('click', clickTarget, point, span);
+          const pointTracker = this.#createTargetPointTracker('click', clickTarget, point, span, {
+            reveal: options.reveal,
+            signal: performOptions.signal,
+          });
 
           return this.#withSignalTarget(
             clickTarget,
@@ -740,6 +751,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
             clickTarget,
             point,
             span,
+            { reveal: options.reveal, signal: performOptions.signal },
           );
 
           return this.#withSignalTarget(
@@ -944,6 +956,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
               typeTarget,
               point,
               span,
+              { reveal: options.reveal, signal: performOptions.signal },
             );
 
             return this.#withSignalTarget(
@@ -1297,12 +1310,14 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
             dragSource,
             freshSource.point,
             span,
+            { reveal: options.reveal, signal: performOptions.signal },
           );
           const destinationPointTracker = this.#createTargetPointTracker(
             'drag',
             dragDestination,
             freshDestination.point,
             span,
+            { reveal: options.reveal, signal: performOptions.signal },
           );
 
           return this.#withDragSignalTarget(dragSource, dragDestination, commandId, async () => {
@@ -1544,9 +1559,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   async #revealTarget(
     target: TargetHandle,
     options: OperationOptions & Readonly<{ reveal?: ActionRevealPolicy }>,
-  ): Promise<void> {
+  ): Promise<RevealResult | undefined> {
     if (options.reveal === false) {
-      return;
+      return undefined;
     }
 
     const configured =
@@ -1560,6 +1575,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     if (result.changed) {
       this.#wait.invalidateGeometry('scroll');
     }
+
+    return result;
   }
 
   async #waitAfterAction(
@@ -2115,6 +2132,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     target: TargetHandle,
     initialPoint: Point,
     span: TraceSpanHandle,
+    options: TargetPointTrackerOptions,
   ): TargetPointTracker {
     let currentPoint = clonePoint(initialPoint);
     let dirtyEvent: LayoutInvalidationEvent | null = null;
@@ -2135,6 +2153,21 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
         const previousPoint = clonePoint(currentPoint);
 
         try {
+          if (event.reasons.includes('scroll') && options.reveal !== false) {
+            const revealResult = await this.#revealTarget(target, options);
+
+            span.event('surface:recovery-reveal', {
+              action,
+              targetId: target.id,
+              changed: revealResult?.changed ?? false,
+              fullyVisible: revealResult?.fullyVisible,
+              visibilityRatio: revealResult?.visibilityRatio,
+              reason: event.reason,
+              reasons: event.reasons,
+              coalesced: event.coalesced,
+            });
+          }
+
           const snapshot = await this.#geometry.snapshot(target);
           const freshPoint = clickablePointOrThrow(action, target, snapshot);
 

@@ -608,6 +608,16 @@ motion을 사용합니다.
 
 Decision history: `docs/adr/2026-08-25-match-automatic-reveal-to-pointer-motion.md`.
 
+Target-directed pointer motion이 진행되는 동안 coalesced layout invalidation에 scroll reason이
+포함되면 Action Orchestrator는 endpoint geometry refresh 전에 Surface Engine의 `reveal`을 다시
+호출합니다. Recovery reveal은 해당 action에서 resolve된 `reveal` option과 동일한 deadline 및
+`AbortSignal`을 사용합니다. `reveal: false`는 최초 reveal과 recovery reveal을 모두 비활성화하며,
+resize 또는 mutation만 있는 invalidation은 endpoint refresh만 수행합니다. Recovery scroll에서
+발생한 후속 invalidation은 기존 frame coalescing을 따르고, target이 이미 required visibility를
+만족하면 scroller2 no-op reveal로 끝나야 합니다.
+
+Decision history: `docs/adr/2026-08-26-restore-target-visibility-during-pointer-motion.md`.
+
 Surface Engine과 Geometry Engine의 경계:
 
 ```txt

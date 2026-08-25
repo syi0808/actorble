@@ -399,6 +399,12 @@ motion이 비활성화되어 있으면 자동 reveal도 instant로 수행합니�
 직접 표현할 수 없는 pointer profile은 해당 플랫폼의 presentation 기본 motion으로
 정규화하며, caller가 명시한 reveal motion은 항상 이 기본 연동 정책보다 우선합니다.
 
+Target-directed pointer motion 중 scroll invalidation이 target을 required visibility 밖으로
+이동시키면 action은 최신 pointer endpoint를 계산하기 전에 같은 reveal policy로 target을 다시
+노출합니다. 이 recovery reveal은 최초 reveal과 같은 action deadline과 cancellation signal을
+공유하고, `reveal: false`인 action에는 적용하지 않습니다. Recovery가 만든 scroll signal은
+coalescing되며 이미 보이는 target에 대한 다음 reveal은 no-op으로 수렴해야 합니다.
+
 브라우저 구현의 scroll chain discovery, reveal planning, motion execution, settlement는
 `scroller2` 패키지에 위임합니다. Actorble은 Surface Engine public boundary, option 변환,
 timeout/error 변환, trace, geometry invalidation만 소유하며 범용 scrolling algorithm을

@@ -1352,6 +1352,29 @@ api/actorble-facade
   - Add a deterministic Vitest integration fixture where possible and a real-browser smoke for layout-dependent assertions.
   - Run targeted new tests, then `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm example:typecheck`, `pnpm example:build`, and `pnpm example:smoke`.
 
+### T62. Pointer-motion scroll recovery reveal
+
+- Status: [x] Completed
+- Briefing: When scrolling moves the active pointer target out of view during motion, restore target
+  visibility before refreshing the cursor endpoint and dispatch geometry.
+- Dependencies: T38-T39, T51-T52, layout invalidation tracker, Surface Engine, Action Orchestrator.
+- Decision constraints:
+  - Only invalidations containing a scroll reason trigger recovery reveal; resize and mutation continue
+    to refresh endpoint geometry without automatic scrolling.
+  - Recovery reuses the resolved action reveal policy, deadline, and AbortSignal.
+  - `reveal: false` disables initial and recovery reveal without disabling endpoint refresh.
+  - Recovery-created scroll invalidations coalesce and converge through a no-op reveal once visible.
+- Ask only if: scroller2 cannot safely perform a no-op reveal after its own scroll signal.
+- Expert preflight: None expected.
+- Completion criteria:
+  - A target scrolled out of view during pointer motion is revealed before endpoint geometry refresh.
+  - Pointerdown and activation dispatch use post-recovery geometry.
+  - Non-scroll invalidation and `reveal: false` do not invoke recovery reveal.
+  - Recovery observes action cancellation and leaves no tracker subscriptions or motion alive.
+- Test expectations:
+  - Add orchestrator regression tests for recovery ordering, reveal opt-out, and resize-only refresh.
+  - Run `pnpm test -- tests/action-orchestrator.test.js`, `pnpm typecheck`, and `pnpm build`.
+
 ## 다음 개선 vertical slice
 
 T45-T61의 첫 end-to-end 증명은 다음 순서다.

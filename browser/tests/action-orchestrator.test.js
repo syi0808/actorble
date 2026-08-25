@@ -338,6 +338,7 @@ function createHarness(options = {}) {
   const resolveTargets = [...(options.resolveTargets ?? [])];
   const hitTestResults = [...(options.hitTestResults ?? [])];
   const geometrySnapshots = [...(options.geometrySnapshots ?? [])];
+  const revealResults = [...(options.revealResults ?? [])];
   const geometry = options.geometry ?? geometrySnapshots[0] ?? geometryFor(target);
   let currentGeometry = geometry;
   const clickReports = [...(options.clickReports ?? [])];
@@ -375,15 +376,17 @@ function createHarness(options = {}) {
     }),
     reveal: vi.fn(async (resolvedTarget) => {
       calls.push('surface.reveal');
-      return {
-        target: resolvedTarget,
-        changed: false,
-        before: { visibilityRatio: 1, fullyVisible: true },
-        after: { visibilityRatio: 1, fullyVisible: true },
-        fullyVisible: true,
-        visibilityRatio: 1,
-        steps: [],
-      };
+      return (
+        revealResults.shift() ?? {
+          target: resolvedTarget,
+          changed: false,
+          before: { visibilityRatio: 1, fullyVisible: true },
+          after: { visibilityRatio: 1, fullyVisible: true },
+          fullyVisible: true,
+          visibilityRatio: 1,
+          steps: [],
+        }
+      );
     }),
     scrollTo: vi.fn(async (position) => {
       calls.push('surface.scrollTo');
@@ -2065,6 +2068,118 @@ describe('BrowserActionOrchestrator', () => {
         }),
       ]),
     );
+  });
+
+  it('reveals the target again when scrolling moves it during pointer motion', async () => {
+    const target = targetHandle();
+    const signal = new AbortController().signal;
+    const initialGeometry = geometryFor(target, { x: 100, y: 0 });
+    const revealedGeometry = geometryFor(target, { x: 160, y: 40 });
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    const timeline = createLayoutEmittingTimeline(layoutInvalidation, { frameInterval: 25 });
+    const { events, orchestrator, surface, trace, wait } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, revealedGeometry, revealedGeometry],
+      revealResults: [
+        {
+          target,
+          changed: false,
+          before: { visibilityRatio: 1, fullyVisible: true },
+          after: { visibilityRatio: 1, fullyVisible: true },
+          fullyVisible: true,
+          visibilityRatio: 1,
+          steps: [],
+        },
+        {
+          target,
+          changed: true,
+          before: { visibilityRatio: 0, fullyVisible: false },
+          after: { visibilityRatio: 1, fullyVisible: true },
+          fullyVisible: true,
+          visibilityRatio: 1,
+          steps: [{ surfaceId: 'viewport' }],
+        },
+      ],
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+      useRealGesture: true,
+    });
+
+    await expect(
+      orchestrator.click(css('#target-1'), { duration: 100, pressDwell: 0, signal }),
+    ).resolves.toBeUndefined();
+
+    expect(surface.reveal).toHaveBeenCalledTimes(2);
+    expect(surface.reveal).toHaveBeenNthCalledWith(
+      2,
+      target,
+      expect.objectContaining({
+        block: 'nearest',
+        inline: 'nearest',
+        signal,
+      }),
+    );
+    expect(wait.invalidateGeometry).toHaveBeenCalledWith('scroll');
+    expect(trace.getTrace().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'surface:recovery-reveal',
+          data: expect.objectContaining({
+            action: 'click',
+            changed: true,
+            reason: 'scroll',
+            targetId: 'target-1',
+          }),
+        }),
+      ]),
+    );
+    expect(events.dispatchPointerEvent).toHaveBeenCalledWith({
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 160, y: 40 },
+      button: 'primary',
+      buttons: ['primary'],
+    });
+  });
+
+  it.each([
+    { label: 'resize-only invalidation', reason: 'resize', reveal: undefined, revealCalls: 1 },
+    { label: 'reveal opt-out', reason: 'scroll', reveal: false, revealCalls: 0 },
+  ])('refreshes the pointer endpoint without recovery reveal for $label', async (scenario) => {
+    const target = targetHandle();
+    const initialGeometry = geometryFor(target, { x: 100, y: 0 });
+    const movedGeometry = geometryFor(target, { x: 180, y: 50 });
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    const timeline = createLayoutEmittingTimeline(layoutInvalidation, {
+      frameInterval: 25,
+      reason: scenario.reason,
+    });
+    const { events, orchestrator, surface } = createHarness({
+      target,
+      geometry: initialGeometry,
+      geometrySnapshots: [initialGeometry, movedGeometry, movedGeometry],
+      layoutInvalidation: layoutInvalidation.tracker,
+      timeline,
+      useRealGesture: true,
+    });
+
+    await expect(
+      orchestrator.click(css('#target-1'), {
+        duration: 100,
+        pressDwell: 0,
+        ...(scenario.reveal === undefined ? {} : { reveal: scenario.reveal }),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(surface.reveal).toHaveBeenCalledTimes(scenario.revealCalls);
+    expect(events.dispatchPointerEvent).toHaveBeenCalledWith({
+      type: 'pointerdown',
+      target: target.element,
+      point: { x: 180, y: 50 },
+      button: 'primary',
+      buttons: ['primary'],
+    });
   });
 
   it('preserves an already running layout invalidation tracker during pointer actions', async () => {
