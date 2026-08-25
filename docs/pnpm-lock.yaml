@@ -26,6 +26,9 @@ importers:
       oxlint:
         specifier: 1.77.0
         version: 1.77.0
+      scroller2:
+        specifier: 0.0.1
+        version: 0.0.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2231,6 +2234,10 @@ packages:
   sax@1.6.0:
     resolution: {integrity: sha512-6R3J5M4AcbtLUdZmRv2SygeVaM7IhrLXu9BmnOGmmACak8fiUtOsYNWUS4uK7upbmHIBbLBeFeI//477BKLBzA==}
     engines: {node: '>=11.0.0'}
+
+  scroller2@0.0.1:
+    resolution: {integrity: sha512-HEkSpi6qqY355Gb7X0hdHOooXiaQ5IipGqvcITYClyelq4qUcC14c9eH0g0Qx3DStHMWRVBgMXH2yCluUjDiZw==}
+    engines: {node: '>=20'}
 
   semver@7.8.4:
     resolution: {integrity: sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA==}
@@ -5242,6 +5249,8 @@ snapshots:
       '@bruits/satteri-win32-x64-msvc': 0.9.5
 
   sax@1.6.0: {}
+
+  scroller2@0.0.1: {}
 
   semver@7.8.4: {}
 

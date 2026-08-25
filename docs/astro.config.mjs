@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const browserSource = fileURLToPath(new URL('../browser/src/index.ts', import.meta.url));
+const scroller2 = fileURLToPath(import.meta.resolve('scroller2'));
 
 export default defineConfig({
   site: 'https://syi0808.github.io',
@@ -13,6 +14,7 @@ export default defineConfig({
     resolve: {
       alias: {
         '@actorble/browser-source': browserSource,
+        scroller2,
       },
     },
     server: {
