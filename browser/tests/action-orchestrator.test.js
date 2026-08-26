@@ -4301,7 +4301,6 @@ describe('BrowserActionOrchestrator', () => {
     }
     input.addEventListener('click', (event) => {
       seen.push(event.type);
-      input.focus();
     });
 
     await expect(
@@ -4380,11 +4379,15 @@ describe('BrowserActionOrchestrator', () => {
   });
 
   it('fails click-focused typeInto when the click does not focus the target', async () => {
-    const other = inputTargetHandle('other-target');
-    const { events, orchestrator, text } = createHarness({
-      target: inputTargetHandle(),
+    const target = inputTargetHandle();
+    const ancestor = {
+      ...targetHandle('ancestor-target'),
+      element: document.body,
+    };
+    const { events, focus, orchestrator, text } = createHarness({
+      target,
       focusedSnapshot: {
-        active: other,
+        active: ancestor,
         previous: null,
         focusVisible: false,
       },
@@ -4401,13 +4404,14 @@ describe('BrowserActionOrchestrator', () => {
         action: 'typeInto',
         focusStrategy: 'click',
         targetId: 'target-1',
-        focusedTargetId: 'other-target',
+        focusedTargetId: 'ancestor-target',
       }),
     });
 
     expect(events.dispatchMouseEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'click' }),
     );
+    expect(focus.focus).toHaveBeenCalledWith(target);
     expect(text.typeInto).not.toHaveBeenCalled();
   });
 

@@ -991,7 +991,13 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
 
         const activationDispatched = (this.#clickDispatchState?.activationCount ?? 0) > 0;
 
-        const focused = await this.#focus.getFocused();
+        let focused = await this.#focus.getFocused();
+
+        if (!focused.active || !this.#isFocusedTargetForTyping(typeTarget, focused.active)) {
+          await this.#focus.focus(typeTarget);
+          focused = await this.#focus.getFocused();
+        }
+
         const focusedTarget = this.#assertClickFocusAcquired(typeTarget, focused.active);
 
         await this.#delayAfterClickFocus(options);
@@ -2771,10 +2777,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
 
     try {
-      return (
-        this.#dom.contains(target.element, focusedTarget.element) ||
-        this.#dom.contains(focusedTarget.element, target.element)
-      );
+      return this.#dom.contains(target.element, focusedTarget.element);
     } catch (error) {
       this.#trace.warn('Focus target containment check failed.', {
         targetId: target.id,
