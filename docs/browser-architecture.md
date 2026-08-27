@@ -943,6 +943,32 @@ PointerEngine
 → PlatformAdapter / VisualLayer
 ```
 
+Pointer position and the UI below that position can change independently. After pointer motion has
+finished, scroll, resize, DOM mutation, element resize, stylesheet changes, resource loading, and
+animation may change the hit-tested element without producing another `pointer:moved` signal. The
+browser runtime therefore treats hover as derived state and reconciles it from the current viewport
+point whenever layout becomes dirty.
+
+```txt
+layout invalidation
+→ coalesce until the next animation-frame read phase
+→ hit-test the current Pointer Engine viewport point once
+→ dispatch pointer:hit-reconciled to Interaction State Store
+→ apply hover-chain diff and refresh the visual cursor style
+```
+
+`pointer:hit-reconciled` is an internal semantic signal, not physical pointer motion. It must not
+advance the pointer path or dispatch `pointermove` / `mousemove`. Target-bound pointer anchors are
+allowed only while resolving a target-directed motion endpoint. After motion completes, the cursor
+remains at the Pointer Engine viewport coordinate and never follows the target.
+
+Observable dirty signals start reconciliation. Multiple signals in one frame produce at most one
+hit-test. While an animation or otherwise uncertain layout change remains active, the runtime may
+continue a bounded animation-frame loop and stops it after consecutive stable results or a deadline.
+The loop is inactive before the pointer has entered the document and after runtime disposal.
+
+Decision history: `docs/adr/2026-08-27-reconcile-pointer-hit-after-layout-invalidation.md`.
+
 ---
 
 ## 13. Interaction State Store
@@ -1030,6 +1056,20 @@ interactionStore.dispatch({
   hitTarget,
 });
 ```
+
+Layout reconciliation uses the same hover reducer without pretending that the pointer moved.
+
+```ts
+interactionStore.dispatch({
+  type: 'pointer:hit-reconciled',
+  point: pointer.position,
+  hoverChain,
+  reason: invalidation.reason,
+});
+```
+
+Hover changes caused by reconciliation clear and apply mirrored pseudo-state exactly like physical
+movement. Pressed/active and pointer-capture state do not clear merely because layout changed.
 
 상태 소유권 기준:
 

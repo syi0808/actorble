@@ -1375,6 +1375,31 @@ api/actorble-facade
   - Add orchestrator regression tests for recovery ordering, reveal opt-out, and resize-only refresh.
   - Run `pnpm test -- tests/action-orchestrator.test.js`, `pnpm typecheck`, and `pnpm build`.
 
+### T63. Dirty-driven pointer hit reconciliation
+
+- Status: [x] Completed
+- Briefing: Reconcile hover and cursor presentation at the current pointer viewport coordinate when
+  layout invalidation moves UI without physical pointer motion.
+- Dependencies: Pointer Engine, Interaction State Store, Layout Invalidation Tracker, Pseudo State
+  Mirror, Visual Layer.
+- Decision constraints:
+  - Completed pointer motion remains at its viewport coordinate and does not follow the previous target.
+  - Coalesced layout invalidation performs one hit-test and uses an internal semantic event rather than
+    emitting `pointermove` or `mousemove`.
+  - Hover reconciliation does not clear pressed, active, dragging, or pointer-capture state.
+  - Reconciliation remains inactive until a pointer coordinate has been applied and is disposed with
+    the orchestrator.
+- Completion criteria:
+  - Scroll, resize, mutation, animation-frame, and manual invalidation can replace or clear the hover
+    chain under the unchanged pointer coordinate.
+  - Mirrored hover effects and cursor style reflect the new hit target.
+  - No physical pointer/mouse movement event is emitted by layout-only reconciliation.
+  - Successful `moveTo` leaves the cursor in free-point mode.
+- Test expectations:
+  - Add store and orchestrator regression tests for hover replacement, empty hits, cursor style refresh,
+    event suppression, and disposal.
+  - Run focused tests, then `pnpm test`, `pnpm typecheck`, and `pnpm build`.
+
 ## 다음 개선 vertical slice
 
 T45-T61의 첫 end-to-end 증명은 다음 순서다.

@@ -3542,9 +3542,9 @@ describe('BrowserActionOrchestrator', () => {
     expect(visual.showClick).toHaveBeenCalledTimes(1);
   });
 
-  it('anchors moveTo visuals after success so hover tracking can follow layout changes', async () => {
+  it('keeps moveTo visuals at the final viewport point after success', async () => {
     const pointerVisual = createPointerVisualTrackerDouble();
-    const { orchestrator, target } = createHarness({ pointerVisual });
+    const { orchestrator } = createHarness({ pointerVisual });
 
     await expect(
       orchestrator.moveTo(css('#target-1'), resolveActionOptions('moveTo')),
@@ -3552,7 +3552,6 @@ describe('BrowserActionOrchestrator', () => {
 
     const modes = pointerVisual.setMode.mock.calls.map(([mode]) => mode);
     const freePointModes = modes.filter((mode) => mode.kind === 'freePoint');
-    const targetAnchorModes = modes.filter((mode) => mode.kind === 'targetAnchor');
 
     expect(freePointModes).toEqual([
       {
@@ -3561,15 +3560,94 @@ describe('BrowserActionOrchestrator', () => {
         pressed: false,
       },
     ]);
-    expect(targetAnchorModes).toHaveLength(1);
-    expect(targetAnchorModes[0]).toMatchObject({
-      kind: 'targetAnchor',
+    expect(modes.map((mode) => mode.kind)).not.toContain('targetAnchor');
+  });
+
+  it('reconciles hover and cursor style at the unchanged pointer point after layout invalidation', async () => {
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    const target = targetHandle();
+    const next = targetHandle('next-target');
+    let hitElement = target.element;
+    const { calls, events, orchestrator, state, store, visual } = createHarness({
       target,
-      anchor: { kind: 'clickablePoint' },
-      commandId: 1,
-      pressed: false,
-      lastPoint: { x: 20, y: 30 },
+      enableVisual: true,
+      layoutInvalidation: layoutInvalidation.tracker,
+      elementFromPoint: () => hitElement,
+      cursorStyles: new Map([
+        [target.element, 'pointer'],
+        [next.element, 'crosshair'],
+      ]),
+      trackCursorReads: true,
     });
+
+    await orchestrator.moveTo(css('#target-1'));
+    calls.length = 0;
+    events.dispatchPointerEvent.mockClear();
+    state.applyStateEffects.mockClear();
+    visual.showCursor.mockClear();
+
+    hitElement = next.element;
+    layoutInvalidation.emit('scroll');
+
+    expect(store.snapshot().hovered[0]?.element).toBe(next.element);
+    expect(state.applyStateEffects).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: 'hover', target, active: false }),
+      expect.objectContaining({
+        kind: 'hover',
+        target: expect.objectContaining({ element: next.element }),
+        active: true,
+      }),
+    ]);
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      cursor: 'crosshair',
+      pressed: false,
+    });
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+    expect(calls).toContain('dom.cursor:next-target');
+  });
+
+  it('clears reconciled hover when layout leaves no element under the pointer', async () => {
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    let hitElement;
+    const { events, orchestrator, state, store, visual } = createHarness({
+      enableVisual: true,
+      layoutInvalidation: layoutInvalidation.tracker,
+      elementFromPoint: () => hitElement,
+    });
+
+    hitElement = document.querySelector('#target-1');
+    await orchestrator.moveTo(css('#target-1'));
+    events.dispatchPointerEvent.mockClear();
+    state.applyStateEffects.mockClear();
+    visual.showCursor.mockClear();
+
+    hitElement = null;
+    layoutInvalidation.emit('resize');
+
+    expect(store.snapshot().hovered).toEqual([]);
+    expect(state.applyStateEffects).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: 'hover', active: false }),
+    ]);
+    expect(visual.showCursor).toHaveBeenCalledWith({
+      point: { x: 20, y: 30 },
+      pressed: false,
+    });
+    expect(events.dispatchPointerEvent).not.toHaveBeenCalled();
+  });
+
+  it('disposes layout-driven pointer reconciliation with the orchestrator', async () => {
+    const layoutInvalidation = createManualLayoutInvalidationTracker();
+    const { dom, orchestrator } = createHarness({
+      layoutInvalidation: layoutInvalidation.tracker,
+    });
+
+    await orchestrator.moveTo(css('#target-1'));
+    dom.elementFromPoint.mockClear();
+    orchestrator.dispose();
+    layoutInvalidation.emit('manual');
+
+    expect(dom.elementFromPoint).not.toHaveBeenCalled();
   });
 
   it('keeps click visuals at the final pointer coordinate after success', async () => {
@@ -3630,14 +3708,7 @@ describe('BrowserActionOrchestrator', () => {
         pressed: false,
       },
     ]);
-    expect(targetAnchorModes).toEqual([
-      expect.objectContaining({
-        kind: 'targetAnchor',
-        commandId: 1,
-        pressed: false,
-        lastPoint: { x: 20, y: 30 },
-      }),
-    ]);
+    expect(targetAnchorModes).toEqual([]);
   });
 
   it('clears free-point cursor follow state when pointer perform is cancelled', async () => {

@@ -105,6 +105,38 @@ describe('BrowserInteractionStateStore', () => {
     });
   });
 
+  it('reconciles hover without treating layout movement as physical pointer movement', () => {
+    const store = new BrowserInteractionStateStore();
+    const previous = targetHandle('previous');
+    const next = targetHandle('next');
+
+    store.dispatch({
+      type: 'pointer:moved',
+      point: { x: 10, y: 20 },
+      previousPoint: null,
+      hoverChain: [previous],
+    });
+    store.dispatch({
+      type: 'pointer:down',
+      point: { x: 10, y: 20 },
+      button: 'primary',
+      hitTarget: previous,
+    });
+
+    expect(
+      store.dispatch({
+        type: 'pointer:hit-reconciled',
+        point: { x: 10, y: 20 },
+        hoverChain: [next],
+        reason: 'scroll',
+      }),
+    ).toMatchObject({
+      previous: { hovered: [previous] },
+      next: { hovered: [next], active: previous },
+      effects: [effect('hover', previous, false), effect('hover', next, true)],
+    });
+  });
+
   it('keeps active state separate from pointer buttons and clears it on release or cancellation', () => {
     const store = new BrowserInteractionStateStore();
     const button = targetHandle('button');

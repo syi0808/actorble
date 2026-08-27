@@ -1,6 +1,7 @@
 import type {
   ActorbleListener,
   Disposable,
+  LayoutInvalidationReason,
   PlatformTextSelectionSnapshot,
   StateEffect,
   TargetHandle,
@@ -53,6 +54,12 @@ export type PointerInteractionStateEvent = PointerSignal &
 
 export type InteractionStateEvent =
   | PointerInteractionStateEvent
+  | Readonly<{
+      type: 'pointer:hit-reconciled';
+      point: Readonly<{ x: number; y: number }>;
+      hoverChain: readonly TargetHandle[];
+      reason: LayoutInvalidationReason;
+    }>
   | Readonly<{
       type: 'focus:changed';
       target: TargetHandle | null;
@@ -233,6 +240,7 @@ function reduceState(
 
   switch (event.type) {
     case 'pointer:moved':
+    case 'pointer:hit-reconciled':
       if (event.hoverChain !== undefined) {
         return {
           ...next,

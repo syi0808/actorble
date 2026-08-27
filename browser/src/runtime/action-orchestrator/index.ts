@@ -43,6 +43,7 @@ import type {
   ClickCurrentOptions,
   ClickOptions,
   DomPort,
+  Disposable,
   DurationMs,
   EventDispatchPort,
   ActorblePointerOptions,
@@ -214,7 +215,7 @@ type ClickDispatchState = {
 };
 
 type CursorVisualState = {
-  target: TargetHandle;
+  target: TargetHandle | null;
   point: Point;
   cursor?: string;
   pressed: boolean;
@@ -298,6 +299,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   readonly #pointerVisual: PointerVisualTracker;
   readonly #wait: WaitObservationEngine;
   readonly #layoutInvalidation: LayoutInvalidationTracker;
+  readonly #pointerHitReconciliationSubscription: Disposable;
   #signalContext: PointerSignalContext | null = null;
   #clickDispatchState: ClickDispatchState | null = null;
   readonly #cursorPressedButtons = new Set<PointerButtonName>();
@@ -372,6 +374,9 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     this.#surface = surface;
     this.#timeline = timeline;
     this.#layoutInvalidation = layoutInvalidation;
+    this.#pointerHitReconciliationSubscription = layoutInvalidation.subscribe((event) => {
+      this.#reconcilePointerHit(event);
+    });
     this.#visual = options.visual ?? new NoopVisualLayer();
     this.#visualFeedback =
       options.visualFeedback === undefined
@@ -1559,6 +1564,8 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
   }
 
   dispose(): void {
+    this.#pointerHitReconciliationSubscription.dispose();
+    this.#pointerVisual.dispose();
     this.#surface.dispose?.();
   }
 
@@ -2021,9 +2028,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     try {
       const result = await operation();
 
-      if (options.anchorAfterSuccess !== false) {
-        this.#anchorPointerCursor(context);
-      }
+      if (options.anchorAfterSuccess !== false) this.#keepPointerAtViewportPoint();
 
       return result;
     } finally {
@@ -2487,6 +2492,39 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     }
   }
 
+  #reconcilePointerHit(event: LayoutInvalidationEvent): void {
+    const point = this.#currentPointerPoint;
+
+    if (!point) {
+      return;
+    }
+
+    const pointerHit = this.#resolvePointerHit(point, null);
+    const diff = this.#store.dispatch({
+      type: 'pointer:hit-reconciled',
+      point,
+      hoverChain: pointerHit.hoverChain,
+      reason: event.reason,
+    });
+
+    this.#state.applyStateEffects(diff.effects);
+
+    if (this.#signalContext?.drag?.active) {
+      this.#moveDragState(this.#signalContext, pointerHit.target);
+    }
+
+    if (!this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
+      return;
+    }
+
+    if (pointerHit.target) {
+      this.#showPointerCursor(point, pointerHit.target, this.#hasPressedCursorButtons());
+      return;
+    }
+
+    this.#showPointerCursorWithoutTarget(point, this.#hasPressedCursorButtons());
+  }
+
   #hoverChainFor(element: Element, preferredTarget: TargetHandle | null): readonly TargetHandle[] {
     const hoverChain: TargetHandle[] = [];
     const visited = new Set<Element>();
@@ -2858,20 +2896,49 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     });
   }
 
-  #anchorPointerCursor(context: PointerSignalContext): void {
+  #keepPointerAtViewportPoint(): void {
     const state = this.#cursorVisualState;
 
     if (!state || !this.#visualFeedback.enabled || !this.#visualFeedback.cursor) {
       return;
     }
 
+    try {
+      if (this.#pointerVisual.getSnapshot().mode?.kind !== 'targetAnchor') {
+        return;
+      }
+    } catch (error) {
+      this.#trace.warn('Pointer visual tracker snapshot failed.', {
+        error: describeUnknownError(error),
+      });
+      return;
+    }
+
     this.#setPointerVisualMode({
-      kind: 'targetAnchor',
-      target: state.target,
-      anchor: { kind: 'clickablePoint' },
-      commandId: context.commandId,
+      kind: 'freePoint',
+      point: state.point,
       pressed: state.pressed,
-      lastPoint: state.point,
+    });
+  }
+
+  #showPointerCursorWithoutTarget(point: Point, pressed = this.#hasPressedCursorButtons()): void {
+    const visualPoint = clonePoint(point);
+
+    this.#tryVisual('showCursor', () =>
+      this.#visual.showCursor({
+        point: visualPoint,
+        pressed,
+      }),
+    );
+    this.#cursorVisualState = {
+      target: null,
+      point: visualPoint,
+      pressed,
+    };
+    this.#setPointerVisualMode({
+      kind: 'freePoint',
+      point: visualPoint,
+      pressed,
     });
   }
 
@@ -2907,7 +2974,11 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
       return;
     }
 
-    this.#renderPointerCursor(state.point, state.target, false);
+    if (state.target) {
+      this.#renderPointerCursor(state.point, state.target, false);
+    } else {
+      this.#showPointerCursorWithoutTarget(state.point, false);
+    }
   }
 
   #hasPressedCursorButtons(): boolean {

@@ -666,6 +666,23 @@ type PointerSignal =
     };
 ```
 
+포인터 좌표가 움직이지 않아도 surface layout이 포인터 아래에서 움직일 수 있습니다. 각 플랫폼은
+scroll, resize, mutation, animation 같은 layout invalidation을 coalesce한 뒤 현재 포인터 좌표를
+다시 hit-test해야 합니다. 이 reconciliation은 hover chain과 cursor 표현만 갱신하며 physical
+pointer move로 기록하거나 pointer-move platform event를 발행하지 않습니다. Pointer visual은
+완료된 target에 고정되지 않고 Pointer Engine의 surface coordinate에 남습니다.
+
+```txt
+layout dirty
+→ next-frame hit-test at current pointer coordinate
+→ hover diff
+→ state/pseudo/cursor reconciliation
+```
+
+Animation처럼 단일 invalidation signal만으로 중간 frame을 포착할 수 없는 변화는 pointer가
+활성화된 동안 bounded stability loop로 관찰하고, stable frame 조건 또는 deadline에서 중단합니다.
+Decision history: `docs/adr/2026-08-27-reconcile-pointer-hit-after-layout-invalidation.md`.
+
 ---
 
 ## 12. Interaction State Store
