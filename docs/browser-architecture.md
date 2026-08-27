@@ -235,7 +235,8 @@ type PointerSequenceStep =
 Browser options are normalized by a dedicated option module before runtime
 execution reaches the lower-level engines.
 
-Decision history: `docs/adr/2026-06-17-browser-options-model.md`.
+Decision history: `docs/adr/2026-06-17-browser-options-model.md`,
+`docs/adr/2026-08-27-cursor-feedback-labels.md`.
 
 ```txt
 src/options/
@@ -256,7 +257,7 @@ type ActorbleFeedback =
   | 'cursor'
   | 'debug'
   | {
-      cursor?: boolean;
+      cursor?: boolean | CursorFeedback;
       target?: boolean;
       click?: boolean;
       focus?: boolean;
@@ -264,7 +265,16 @@ type ActorbleFeedback =
       keystroke?: boolean;
       text?: 'hidden' | 'masked' | 'plain';
     };
+
+type CursorFeedback = {
+  label?: string;
+};
 ```
+
+`cursor: true` preserves the unlabeled cursor. A cursor feedback object enables
+the cursor channel and may add a user-provided identity label. Empty or
+whitespace-only labels render no label. Labels are visual metadata only and are
+not stable actor IDs.
 
 Motion is a separate runtime policy because visual feedback and movement timing
 are related but not identical concerns.
@@ -1518,6 +1528,7 @@ hover visual reproduction
 
 ```txt
 - cursor overlay
+- optional cursor identity label
 - target highlight
 - click ripple
 - keystroke overlay
@@ -1541,6 +1552,15 @@ Visual Layer
 Visual Layer must be non-interactive by default.
 Visual Layer must never affect target resolution or hit-testing.
 ```
+
+The built-in cursor label is a compact, single-line name tag attached to the
+cursor graphic. Its preferred placement is below and to the right of the
+graphic. Before rendering outside the viewport, it flips horizontally or
+vertically; final coordinates are clamped to a small viewport-safe margin. The
+label has a bounded width with ellipsis, uses text content rather than HTML,
+does not scale with cursor press feedback, and remains non-interactive. Cursor
+labels identify visual participants only; action captions and walkthrough
+annotations remain presentation-runtime concerns.
 
 Browser Visual Layer는 Actorble interaction의 debug/feedback에 한정합니다. Spotlight, dimmed
 overlay, popover, caption, narration, scene transition, user-takeover policy는 Scenema 같은

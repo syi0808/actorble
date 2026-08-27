@@ -1118,6 +1118,7 @@ hover visual reproduction
 
 ```txt
 - cursor overlay
+- optional cursor identity label
 - target highlight
 - click ripple
 - keystroke overlay
@@ -1141,6 +1142,13 @@ Visual Layer
 Visual Layer must be non-interactive by default.
 Visual Layer must never affect target resolution or hit-testing.
 ```
+
+Cursor feedback may include a short user-provided identity label so multiple
+Actorble cursors can be distinguished visually. The label is presentation
+metadata, not a pointer identifier, interaction state, action caption, or trace
+correlation key. It follows the cursor without participating in pressed-state
+scaling and remains inside the visible viewport by changing its preferred
+bottom-right placement and clamping as a final fallback.
 
 Visual Layer는 Actorble interaction의 cursor, target, click, focus, typing 같은 debug/feedback
 표현만 담당합니다. Product walkthrough의 spotlight, dimmed overlay, popover, caption, narration,
