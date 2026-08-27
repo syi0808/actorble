@@ -109,7 +109,7 @@ import type { SurfaceEngine } from '../../targeting/surface-engine/index.js';
 import type { TargetResolver } from '../../targeting/target-resolver/index.js';
 import type { TextInputEngine } from '../../input/text-input-engine/index.js';
 import type { TimelineEngine } from '../timeline-engine/index.js';
-import type { VisualLayer } from '../../visual/visual-layer/index.js';
+import type { CursorVisualRequest, VisualLayer } from '../../visual/visual-layer/index.js';
 import type { WaitObservationEngine, WaitResult } from '../wait-observation-engine/index.js';
 
 export type ActionName =
@@ -2877,7 +2877,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const visualPoint = clonePoint(point);
 
     this.#tryVisual('showCursor', () =>
-      this.#visual.showCursor({
+      this.#showVisualCursor({
         point: visualPoint,
         cursor: 'text',
         pressed,
@@ -2925,7 +2925,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const visualPoint = clonePoint(point);
 
     this.#tryVisual('showCursor', () =>
-      this.#visual.showCursor({
+      this.#showVisualCursor({
         point: visualPoint,
         pressed,
       }),
@@ -2951,7 +2951,7 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     const visualPoint = { x: point.x, y: point.y };
 
     this.#tryVisual('showCursor', () =>
-      this.#visual.showCursor(
+      this.#showVisualCursor(
         cursor === undefined
           ? { point: visualPoint, pressed }
           : { point: visualPoint, cursor, pressed },
@@ -2965,6 +2965,12 @@ export class BrowserActionOrchestrator implements ActionOrchestrator {
     };
 
     return visualPoint;
+  }
+
+  #showVisualCursor(request: CursorVisualRequest): void {
+    const label = this.#visualFeedback.cursorLabel;
+
+    this.#visual.showCursor(label === undefined ? request : { ...request, label });
   }
 
   #restorePressedCursorVisual(): void {

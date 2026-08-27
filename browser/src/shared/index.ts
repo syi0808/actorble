@@ -146,12 +146,16 @@ export function err<TError = ActorbleError>(error: TError): Result<never, TError
 
 export type VisualTextVisibility = 'hidden' | 'masked' | 'plain';
 
+export type CursorFeedback = Readonly<{
+  label?: string;
+}>;
+
 export type ActorbleFeedback =
   | 'off'
   | 'cursor'
   | 'debug'
   | Readonly<{
-      cursor?: boolean;
+      cursor?: boolean | CursorFeedback;
       target?: boolean;
       click?: boolean;
       focus?: boolean;

@@ -90,6 +90,26 @@ describe('browser options model', () => {
       keystrokeOverlay: false,
       textVisibility: 'masked',
     });
+
+    expect(
+      resolveActorbleOptions({
+        feedback: { cursor: { label: '  Admin  ' } },
+      }).feedback,
+    ).toMatchObject({
+      enabled: true,
+      cursor: true,
+      cursorLabel: 'Admin',
+      targetHighlight: false,
+    });
+    expect(
+      resolveActorbleOptions({
+        feedback: { cursor: { label: '   ' } },
+      }).feedback,
+    ).toMatchObject({
+      enabled: true,
+      cursor: true,
+      cursorLabel: undefined,
+    });
   });
 
   it('materializes centralized action defaults', () => {

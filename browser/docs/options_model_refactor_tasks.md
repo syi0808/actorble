@@ -109,7 +109,7 @@ type ActorbleFeedback =
   | 'cursor'
   | 'debug'
   | {
-      cursor?: boolean;
+      cursor?: boolean | CursorFeedback;
       target?: boolean;
       click?: boolean;
       focus?: boolean;
@@ -117,6 +117,10 @@ type ActorbleFeedback =
       keystroke?: boolean;
       text?: 'hidden' | 'masked' | 'plain';
     };
+
+type CursorFeedback = {
+  label?: string;
+};
 
 type RunOptions = OperationOptions & {
   pacing?: ScenarioPacingOptions;

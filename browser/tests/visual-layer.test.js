@@ -35,6 +35,13 @@ function getCursorSvg(cursor = getCursorElement()) {
   return svg;
 }
 
+function getCursorLabel(cursor = getCursorElement()) {
+  const label = cursor.querySelector('[data-actorble-visual-cursor-label]');
+  expect(label).not.toBeNull();
+
+  return label;
+}
+
 function getCursorHotspotShift(cursor = getCursorElement()) {
   const shift = getCursorSvg(cursor).querySelector('[data-actorble-cursor-hotspot-shift]');
   expect(shift).not.toBeNull();
@@ -55,18 +62,77 @@ function expectCursorSvgShift(cursor, hotspotX, hotspotY) {
   );
 }
 
+function mockCursorLabelSize(width, height = 18) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    if (this.hasAttribute('data-actorble-visual-cursor-label')) {
+      return {
+        x: 0,
+        y: 0,
+        width,
+        height,
+        top: 0,
+        right: width,
+        bottom: height,
+        left: 0,
+        toJSON: () => {},
+      };
+    }
+
+    return {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      toJSON: () => {},
+    };
+  });
+}
+
+function setViewportSize(width, height) {
+  Object.defineProperty(document.documentElement, 'clientWidth', {
+    configurable: true,
+    value: 0,
+  });
+  Object.defineProperty(document.documentElement, 'clientHeight', {
+    configurable: true,
+    value: 0,
+  });
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+}
+
+function cursorLabelBounds(point, label) {
+  const match = label.style.transform.match(
+    /^translate3d\((-?[\d.]+)px, (-?[\d.]+)px, 0(?:px)?\)$/,
+  );
+  expect(match).not.toBeNull();
+
+  const width = label.getBoundingClientRect().width;
+  const height = label.getBoundingClientRect().height;
+  const left = point.x + Number(match[1]);
+  const top = point.y + Number(match[2]);
+
+  return { left, top, right: left + width, bottom: top + height };
+}
+
 describe('BrowserVisualLayer', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     document.body.innerHTML = '';
     document.head.innerHTML = '';
     document.elementFromPoint = undefined;
+    setViewportSize(1024, 768);
   });
 
   it('creates a non-interactive internal overlay for cursor, highlight, and click visuals', () => {
     const target = targetHandle();
     const layer = new BrowserVisualLayer({ root: document });
 
-    layer.showCursor({ x: 10, y: 20 });
+    layer.showCursor({ point: { x: 10, y: 20 }, label: 'Admin' });
     layer.highlightTarget({
       target,
       rect: { x: 5, y: 6, width: 30, height: 20 },
@@ -78,12 +144,14 @@ describe('BrowserVisualLayer', () => {
     expect(root.hasAttribute('data-actorble-internal')).toBe(true);
     expect(root.style.pointerEvents).toBe('none');
     expect(root.querySelector('[data-actorble-visual-cursor]')).not.toBeNull();
+    expect(root.querySelector('[data-actorble-visual-cursor-label]').textContent).toBe('Admin');
     expect(root.querySelector('[data-actorble-visual-highlight]')).not.toBeNull();
     expect(root.querySelector('[data-actorble-visual-click]')).not.toBeNull();
 
     layer.hide();
     expect(root.hidden).toBe(true);
     expect(root.querySelector('[data-actorble-visual-cursor]')).toBeNull();
+    expect(root.querySelector('[data-actorble-visual-cursor-label]')).toBeNull();
 
     layer.destroy();
     expect(document.body.querySelector('[data-actorble-overlay-root]')).toBeNull();
@@ -153,6 +221,92 @@ describe('BrowserVisualLayer', () => {
     expect(path?.getAttribute('d')).toContain('M 2,2');
     expect(path?.getAttribute('fill')).toBe('CanvasText');
     expect(path?.getAttribute('stroke')).toBe('Canvas');
+  });
+
+  it('renders a trimmed non-interactive cursor identity label without HTML interpretation', () => {
+    const layer = new BrowserVisualLayer({ root: document });
+
+    layer.showCursor({
+      point: { x: 40, y: 50 },
+      label: '  <Admin>  ',
+    });
+
+    const label = getCursorLabel();
+    expect(label.textContent).toBe('<Admin>');
+    expect(label.children).toHaveLength(0);
+    expect(label.getAttribute('aria-hidden')).toBe('true');
+    expect(label.style.pointerEvents).toBe('none');
+    expect(label.style.maxWidth).toBe('96px');
+    expect(label.style.overflow).toBe('hidden');
+    expect(label.style.textOverflow).toBe('ellipsis');
+    expect(label.style.transform).toBe('translate3d(24px, 34px, 0)');
+    expect(label.style.whiteSpace).toBe('nowrap');
+
+    layer.showCursor({ point: { x: 41, y: 51 }, label: '   ' });
+    expect(document.querySelector('[data-actorble-visual-cursor-label]')).toBeNull();
+  });
+
+  it('keeps cursor labels inside every viewport edge for all cursor variants', () => {
+    setViewportSize(120, 90);
+    mockCursorLabelSize(64);
+    const layer = new BrowserVisualLayer({ root: document });
+    const point = { x: 116, y: 86 };
+    const variants = [
+      'default',
+      'pointer',
+      'text',
+      'not-allowed',
+      'wait',
+      'progress',
+      'grab',
+      'grabbing',
+      'move',
+      'crosshair',
+    ];
+
+    for (const kind of variants) {
+      layer.showCursor({ point, kind, label: 'Reviewer' });
+
+      const bounds = cursorLabelBounds(point, getCursorLabel());
+      expect(bounds.left).toBeGreaterThanOrEqual(4);
+      expect(bounds.top).toBeGreaterThanOrEqual(4);
+      expect(bounds.right).toBeLessThanOrEqual(116);
+      expect(bounds.bottom).toBeLessThanOrEqual(86);
+    }
+  });
+
+  it('clamps a long label when neither preferred horizontal placement fits', () => {
+    setViewportSize(100, 80);
+    mockCursorLabelSize(92);
+    const layer = new BrowserVisualLayer({ root: document });
+    const point = { x: 50, y: 40 };
+
+    layer.showCursor({
+      point,
+      label: 'A cursor label that is wider than either side',
+    });
+
+    const label = getCursorLabel();
+    const bounds = cursorLabelBounds(point, label);
+    expect(label.style.maxWidth).toBe('92px');
+    expect(bounds).toEqual({ left: 4, top: 14, right: 96, bottom: 32 });
+  });
+
+  it('does not scale the cursor label with pressed cursor feedback', () => {
+    mockCursorLabelSize(42);
+    const layer = new BrowserVisualLayer({ root: document });
+    const request = { point: { x: 50, y: 60 }, cursor: 'pointer', label: 'Admin' };
+
+    layer.showCursor({ ...request, pressed: false });
+    const label = getCursorLabel();
+    const labelTransform = label.style.transform;
+
+    layer.showCursor({ ...request, pressed: true });
+
+    expect(getCursorLabel()).toBe(label);
+    expect(label.style.transform).toBe(labelTransform);
+    expect(label.style.transform).not.toContain('scale');
+    expect(getCursorSvg().style.transform).toBe('scale(0.9)');
   });
 
   it('renders distinct browser cursor variants with stable hotspot offsets', () => {

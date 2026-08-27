@@ -822,6 +822,35 @@ describe('Actorble facade', () => {
     expect(overlay.querySelector('[data-actorble-visual-keystroke]')).toBeNull();
   });
 
+  it('renders and routes a normalized cursor identity label through facade actions', async () => {
+    const { seen } = createClickableButton('labeled-cursor');
+    const actorble = createActorble({
+      feedback: { cursor: { label: '  Admin  ' } },
+    });
+
+    await expect(actorble.click(css('#labeled-cursor'))).resolves.toBeUndefined();
+
+    const label = document.querySelector('[data-actorble-visual-cursor-label]');
+    expect(seen).toEqual(['pointerdown', 'pointerup', 'click']);
+    expect(label).not.toBeNull();
+    expect(label.textContent).toBe('Admin');
+  });
+
+  it('passes normalized cursor identity metadata to an injected visual layer', async () => {
+    createClickableButton('custom-labeled-cursor');
+    const visualLayer = createFakeVisualLayer();
+    const actorble = createActorble({
+      feedback: { cursor: { label: '  Reviewer  ' } },
+      visualLayer,
+    });
+
+    await expect(actorble.click(css('#custom-labeled-cursor'))).resolves.toBeUndefined();
+
+    expect(visualLayer.showCursor).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'Reviewer' }),
+    );
+  });
+
   it('enables debug feedback channels', async () => {
     const { seen } = createClickableButton('debug-visual');
     const actorble = createActorble({ feedback: 'debug' });

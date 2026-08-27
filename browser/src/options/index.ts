@@ -77,6 +77,7 @@ export const BROWSER_OPTION_DEFAULTS = {
 
 export type BrowserFeedbackOptions = Readonly<{
   cursor?: boolean;
+  cursorLabel?: string;
   targetHighlight?: boolean;
   clickFeedback?: boolean;
   focusOverlay?: boolean;
@@ -88,6 +89,7 @@ export type BrowserFeedbackOptions = Readonly<{
 export type ResolvedBrowserFeedbackOptions = Readonly<{
   enabled: boolean;
   cursor: boolean;
+  cursorLabel?: string;
   targetHighlight: boolean;
   clickFeedback: boolean;
   focusOverlay: boolean;
@@ -295,7 +297,8 @@ function isPublicFeedbackObject(
   return (
     typeof feedback === 'object' &&
     feedback !== null &&
-    ('target' in feedback ||
+    (typeof feedback.cursor === 'object' ||
+      'target' in feedback ||
       'click' in feedback ||
       'focus' in feedback ||
       'typing' in feedback ||
@@ -307,8 +310,11 @@ function isPublicFeedbackObject(
 function resolvePublicFeedbackObject(
   feedback: Exclude<ActorbleFeedback, string>,
 ): ResolvedBrowserFeedbackOptions {
+  const cursor = resolvePublicCursorFeedback(feedback.cursor);
+
   return resolveFeedbackChannels({
-    cursor: feedback.cursor ?? false,
+    cursor: cursor.enabled,
+    cursorLabel: cursor.label,
     targetHighlight: feedback.target ?? false,
     clickFeedback: feedback.click ?? false,
     focusOverlay: feedback.focus ?? false,
@@ -323,6 +329,7 @@ function resolveInternalFeedbackObject(
 ): ResolvedBrowserFeedbackOptions {
   return resolveFeedbackChannels({
     cursor: feedback.cursor ?? quietFeedbackDefaults.cursor,
+    cursorLabel: feedback.cursorLabel,
     targetHighlight: feedback.targetHighlight ?? quietFeedbackDefaults.targetHighlight,
     clickFeedback: feedback.clickFeedback ?? quietFeedbackDefaults.clickFeedback,
     focusOverlay: feedback.focusOverlay ?? quietFeedbackDefaults.focusOverlay,
@@ -333,8 +340,10 @@ function resolveInternalFeedbackObject(
 }
 
 function resolveFeedbackChannels(feedback: BrowserFeedbackOptions): ResolvedBrowserFeedbackOptions {
+  const cursor = feedback.cursor ?? false;
   const resolved = {
-    cursor: feedback.cursor ?? false,
+    cursor,
+    cursorLabel: cursor ? normalizeCursorLabel(feedback.cursorLabel) : undefined,
     targetHighlight: feedback.targetHighlight ?? false,
     clickFeedback: feedback.clickFeedback ?? false,
     focusOverlay: feedback.focusOverlay ?? false,
@@ -354,6 +363,25 @@ function resolveFeedbackChannels(feedback: BrowserFeedbackOptions): ResolvedBrow
     enabled,
     ...resolved,
   };
+}
+
+function resolvePublicCursorFeedback(
+  cursor: Exclude<ActorbleFeedback, string>['cursor'],
+): Readonly<{ enabled: boolean; label?: string }> {
+  if (typeof cursor === 'object' && cursor !== null) {
+    return {
+      enabled: true,
+      label: normalizeCursorLabel(cursor.label),
+    };
+  }
+
+  return { enabled: cursor ?? false };
+}
+
+function normalizeCursorLabel(label: string | undefined): string | undefined {
+  const normalized = label?.trim();
+
+  return normalized ? normalized : undefined;
 }
 
 const feedbackOffDefaults = {

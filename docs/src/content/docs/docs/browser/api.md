@@ -69,7 +69,7 @@ Reserved on the shared options shape. It is not wired to facade behavior yet.
 
 - Type: `ActorbleFeedback`
 
-`feedback: 'cursor'` creates the built-in non-interactive browser overlay with cursor feedback only. `feedback: 'debug'` enables target, click, focus, typing, and keystroke feedback. `feedback: 'off'` disables the overlay runtime. Object feedback enables only the channels you set.
+`feedback: 'cursor'` creates the built-in non-interactive browser overlay with cursor feedback only. `feedback: 'debug'` enables target, click, focus, typing, and keystroke feedback. `feedback: 'off'` disables the overlay runtime. Object feedback enables only the channels you set. The cursor channel also accepts an object with an optional identity label.
 
 ```ts
 const actorble = createActorble({
@@ -83,7 +83,7 @@ type ActorbleFeedback =
   | 'cursor'
   | 'debug'
   | {
-      cursor?: boolean;
+      cursor?: boolean | CursorFeedback;
       target?: boolean;
       click?: boolean;
       focus?: boolean;
@@ -91,7 +91,21 @@ type ActorbleFeedback =
       keystroke?: boolean;
       text?: 'hidden' | 'masked' | 'plain';
     };
+
+type CursorFeedback = {
+  label?: string;
+};
 ```
+
+```ts
+const actorble = createActorble({
+  feedback: {
+    cursor: { label: 'Admin' },
+  },
+});
+```
+
+The built-in label follows the cursor, prefers its lower-right corner, and flips or clamps its position to remain inside the viewport. Labels are trimmed, displayed on one line with ellipsis, and used only as visual identity metadata.
 
 Custom visual layer injection is an advanced composition hook exposed as `visualLayer`; it is separate from the public feedback preset.
 

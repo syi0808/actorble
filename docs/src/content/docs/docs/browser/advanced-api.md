@@ -364,7 +364,17 @@ interface VisualLayer {
   hide(): void;
   destroy(): void;
 }
+
+type CursorVisualRequest = {
+  point: Point;
+  cursor?: string;
+  kind?: CursorVisualKind;
+  label?: string;
+  pressed?: boolean;
+};
 ```
+
+`label` contains normalized cursor identity metadata. Injected visual layers may render it differently, but they remain responsible for non-interactive behavior and hit-test isolation.
 
 Exports:
 

@@ -30,6 +30,7 @@ export type CursorVisualRequest = Readonly<{
   point: Point;
   cursor?: string;
   kind?: CursorVisualKind;
+  label?: string;
   pressed?: boolean;
 }>;
 
@@ -67,6 +68,7 @@ export class BrowserVisualLayer implements VisualLayer {
   #rootElement: HTMLElement | null = null;
   readonly #parts = new Map<string, HTMLElement>();
   #cursorRenderState: CursorRenderState | null = null;
+  #cursorLabelRenderState: CursorLabelRenderState | null = null;
 
   constructor(readonly options: VisualLayerOptions = {}) {}
 
@@ -125,6 +127,10 @@ export class BrowserVisualLayer implements VisualLayer {
       if (currentState.svg) {
         currentState.svg.style.transform = cursorTransform(baseTransform, request.pressed);
       }
+    }
+
+    if (request.label || this.#cursorLabelRenderState) {
+      this.#renderCursorLabel(cursor, request, spec);
     }
   }
 
@@ -271,10 +277,53 @@ export class BrowserVisualLayer implements VisualLayer {
     this.#rootElement = null;
     this.#parts.clear();
     this.#cursorRenderState = null;
+    this.#cursorLabelRenderState = null;
   }
 
   get #enabled(): boolean {
     return this.options.enabled !== false;
+  }
+
+  #renderCursorLabel(
+    cursor: HTMLElement,
+    request: NormalizedCursorVisualRequest,
+    spec: CursorVisualSpec,
+  ): void {
+    if (!request.label) {
+      this.#cursorLabelRenderState?.element.remove();
+      this.#cursorLabelRenderState = null;
+      return;
+    }
+
+    let state = this.#cursorLabelRenderState;
+
+    if (!state?.element.isConnected || state.element.parentElement !== cursor) {
+      const element = createCursorLabelElement(cursor.ownerDocument);
+      cursor.append(element);
+      state = {
+        element,
+        text: '',
+        viewportWidth: -1,
+        size: { width: 0, height: CURSOR_LABEL_HEIGHT },
+      };
+      this.#cursorLabelRenderState = state;
+    }
+
+    const viewport = cursorViewport(cursor.ownerDocument);
+    const maxWidth = Math.max(
+      0,
+      Math.min(CURSOR_LABEL_MAX_WIDTH, viewport.width - CURSOR_LABEL_VIEWPORT_MARGIN * 2),
+    );
+    state.element.style.maxWidth = `${maxWidth}px`;
+
+    if (state.text !== request.label || state.viewportWidth !== viewport.width) {
+      state.element.textContent = request.label;
+      state.text = request.label;
+      state.viewportWidth = viewport.width;
+      state.size = measureCursorLabel(state.element, request.label, maxWidth);
+    }
+
+    positionCursorLabel(state.element, request.point, spec, state.size, viewport);
   }
 
   #ensureRoot(): HTMLElement {
@@ -337,6 +386,7 @@ export class BrowserVisualLayer implements VisualLayer {
 
     if (key === 'cursor') {
       this.#cursorRenderState = null;
+      this.#cursorLabelRenderState = null;
     }
   }
 }
@@ -369,6 +419,7 @@ type NormalizedCursorVisualRequest = Readonly<{
   point: Point;
   cssCursor?: string;
   kind: SupportedCursorVisualKind;
+  label?: string;
   pressed: boolean;
 }>;
 
@@ -380,6 +431,7 @@ function normalizeCursorVisualRequest(input: CursorVisualInput): NormalizedCurso
       point: input.point,
       cssCursor,
       kind: normalizeCursorVisualKind(input.kind, cssCursor),
+      label: normalizeCursorLabel(input.label),
       pressed: input.pressed ?? false,
     };
   }
@@ -423,6 +475,13 @@ type CursorRenderState = {
   svg: SVGSVGElement | null;
 };
 
+type CursorLabelRenderState = {
+  element: HTMLElement;
+  text: string;
+  viewportWidth: number;
+  size: Readonly<{ width: number; height: number }>;
+};
+
 const CURSOR_FILL = 'CanvasText';
 const CURSOR_HALO = 'Canvas';
 const CURSOR_ROUND_CAP = 'round';
@@ -435,6 +494,10 @@ const CURSOR_THIN_LINE_STROKE_WIDTH = '1.6';
 const CURSOR_TEXT_LINE_HALO_STROKE_WIDTH = '5.2';
 const CURSOR_TEXT_LINE_STROKE_WIDTH = '2.4';
 const CURSOR_PRESSED_SCALE = 'scale(0.9)';
+const CURSOR_LABEL_GAP = 6;
+const CURSOR_LABEL_HEIGHT = 18;
+const CURSOR_LABEL_MAX_WIDTH = 96;
+const CURSOR_LABEL_VIEWPORT_MARGIN = 4;
 
 const CURSOR_BASE_STYLE: Readonly<Record<string, string>> = {
   border: '0px',
@@ -687,6 +750,12 @@ function normalizeCursorText(cursor: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
+function normalizeCursorLabel(label: string | undefined): string | undefined {
+  const normalized = label?.trim();
+
+  return normalized ? normalized : undefined;
+}
+
 function normalizeCursorScale(cursorScale: number | undefined): number {
   return cursorScale !== undefined && Number.isFinite(cursorScale) && cursorScale > 0
     ? cursorScale
@@ -771,6 +840,110 @@ function applyCursorElementStyle(cursor: HTMLElement, spec: CursorVisualSpec, po
 function applyCursorElementSize(cursor: HTMLElement, spec: CursorVisualSpec): void {
   cursor.style.height = `${spec.height}px`;
   cursor.style.width = `${spec.width}px`;
+}
+
+function createCursorLabelElement(ownerDocument: Document): HTMLElement {
+  const label = ownerDocument.createElement('span');
+  label.setAttribute('aria-hidden', 'true');
+  label.setAttribute('data-actorble-internal', '');
+  label.setAttribute('data-actorble-visual-cursor-label', '');
+  Object.assign(label.style, {
+    background: 'rgba(16, 20, 24, 0.92)',
+    border: '1px solid rgba(255, 255, 255, 0.72)',
+    borderRadius: '4px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.28)',
+    boxSizing: 'border-box',
+    color: '#f7fbff',
+    display: 'block',
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSize: '12px',
+    fontWeight: '500',
+    height: `${CURSOR_LABEL_HEIGHT}px`,
+    left: '0px',
+    lineHeight: '16px',
+    overflow: 'hidden',
+    padding: '0 5px',
+    pointerEvents: 'none',
+    position: 'absolute',
+    textOverflow: 'ellipsis',
+    top: '0px',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+    width: 'max-content',
+    willChange: 'transform',
+  });
+
+  return label;
+}
+
+function cursorViewport(ownerDocument: Document): Readonly<{ width: number; height: number }> {
+  const view = ownerDocument.defaultView;
+  const width = ownerDocument.documentElement.clientWidth || view?.innerWidth || 0;
+  const height = ownerDocument.documentElement.clientHeight || view?.innerHeight || 0;
+
+  return {
+    width: Math.max(0, width),
+    height: Math.max(0, height),
+  };
+}
+
+function measureCursorLabel(
+  label: HTMLElement,
+  text: string,
+  maxWidth: number,
+): Readonly<{ width: number; height: number }> {
+  const rect = label.getBoundingClientRect();
+  const estimatedWidth = Math.min(maxWidth, estimateCursorLabelWidth(text));
+
+  return {
+    width: Math.min(maxWidth, rect.width > 0 ? rect.width : estimatedWidth),
+    height: rect.height > 0 ? rect.height : CURSOR_LABEL_HEIGHT,
+  };
+}
+
+function estimateCursorLabelWidth(text: string): number {
+  const textWidth = Array.from(text).reduce(
+    (width, character) => width + (character.codePointAt(0)! > 0xff ? 12 : 7),
+    0,
+  );
+
+  return textWidth + 12;
+}
+
+function positionCursorLabel(
+  label: HTMLElement,
+  point: Point,
+  spec: CursorVisualSpec,
+  size: Readonly<{ width: number; height: number }>,
+  viewport: Readonly<{ width: number; height: number }>,
+): void {
+  const graphicLeft = point.x - spec.hotspot.x;
+  const graphicTop = point.y - spec.hotspot.y;
+  const graphicRight = graphicLeft + spec.width;
+  const graphicBottom = graphicTop + spec.height;
+  const viewportRight = viewport.width - CURSOR_LABEL_VIEWPORT_MARGIN;
+  const viewportBottom = viewport.height - CURSOR_LABEL_VIEWPORT_MARGIN;
+  let left = graphicRight + CURSOR_LABEL_GAP;
+  let top = graphicBottom + CURSOR_LABEL_GAP;
+
+  if (left + size.width > viewportRight) {
+    left = graphicLeft - CURSOR_LABEL_GAP - size.width;
+  }
+
+  if (top + size.height > viewportBottom) {
+    top = graphicTop - CURSOR_LABEL_GAP - size.height;
+  }
+
+  const maxLeft = Math.max(CURSOR_LABEL_VIEWPORT_MARGIN, viewportRight - size.width);
+  const maxTop = Math.max(CURSOR_LABEL_VIEWPORT_MARGIN, viewportBottom - size.height);
+  left = clamp(left, CURSOR_LABEL_VIEWPORT_MARGIN, maxLeft);
+  top = clamp(top, CURSOR_LABEL_VIEWPORT_MARGIN, maxTop);
+
+  label.style.transform = `translate3d(${left - point.x}px, ${top - point.y}px, 0)`;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
 }
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';

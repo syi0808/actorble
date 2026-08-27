@@ -17,6 +17,7 @@
 - T0-T40 이후 follow-up 완료 기록과 최신 smoke 정합성은 `docs/tasks-2026-06-14.md`에서 관리한다. F 작업은 이 문서의 T41+ 항목으로 복제하지 않는다.
 - T45-T61은 browser reveal, explicit scroll, observed stability, wait condition, cancellation 개선 계획이다. 기준 결정은 Accepted 상태의 `../../docs/adr/2026-07-14-browser-reveal-stability-runtime.md`다.
 - T47-T51에서 완성한 자체 scroll-chain/reveal/motion/settlement 구현은 2026-08-24에 `scroller2` runtime dependency로 대체됐다. 현재 ownership 기준은 `../../docs/adr/2026-08-24-adopt-scroller2.md`다.
+- T64는 cursor feedback에 viewport-bounded identity label을 추가해 완료했다. 기준 결정은 Accepted 상태의 `../../docs/adr/2026-08-27-cursor-feedback-labels.md`다.
 - 모든 새 동작은 TDD로 진행한다. 먼저 실패하는 Vitest 케이스를 추가하고, 최소 구현으로 통과시킨 뒤 리팩터링한다.
 
 기본 검증 명령과 2026-06-15 기준 결과:
@@ -1399,6 +1400,36 @@ api/actorble-facade
   - Add store and orchestrator regression tests for hover replacement, empty hits, cursor style refresh,
     event suppression, and disposal.
   - Run focused tests, then `pnpm test`, `pnpm typecheck`, and `pnpm build`.
+
+### T64. Viewport-bounded cursor identity labels
+
+- Status: [x] Completed
+- Briefing: Extend cursor feedback with an optional user-provided label that follows the built-in
+  visual cursor and remains fully visible at viewport edges.
+- Dependencies: Browser option normalization, Action Orchestrator visual routing, Visual Layer,
+  accepted cursor feedback label ADR.
+- Decision constraints:
+  - Public cursor feedback remains backward compatible with `boolean` and adds an object containing
+    optional `label`; the object form enables the cursor channel.
+  - Label normalization trims surrounding whitespace and treats an empty result as no label.
+  - Cursor visual requests carry the normalized label so injected visual layers receive the same
+    metadata as the built-in layer.
+  - The built-in label prefers the cursor graphic's lower-right corner, flips on an overflowing axis,
+    and clamps both axes to a viewport-safe margin as a final fallback.
+  - The label is single-line, width-bounded, ellipsized, rendered with text content, and excluded from
+    pressed cursor scaling, hit-testing, interaction state, and trace identity.
+- Ask only if: None expected.
+- Expert preflight: None expected.
+- Completion criteria:
+  - Existing feedback presets and `cursor: true` retain an unlabeled cursor.
+  - A cursor feedback object renders its trimmed label through normal facade actions.
+  - Labels stay within all four viewport edges for every supported cursor kind and long label width.
+  - Hiding or destroying the cursor removes the label, and injected layers receive label metadata.
+- Test expectations:
+  - Add option normalization, facade routing, cursor visual rendering, edge placement, long text,
+    pressed-state, hide, and destroy coverage.
+  - Run focused Vitest tests, then `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm lint`, and
+    `pnpm format:check`.
 
 ## 다음 개선 vertical slice
 

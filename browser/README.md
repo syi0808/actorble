@@ -31,6 +31,15 @@ console.log(actorble.getTrace());
 actorble.destroy();
 ```
 
+Add a compact identity label when multiple role-specific cursors need to be
+distinguished. The built-in label stays within the visible viewport.
+
+```ts
+const admin = createActorble({
+  feedback: { cursor: { label: 'Admin' } },
+});
+```
+
 Actorble resolves targets, checks geometry and interactability, performs input,
 tracks interaction state, and waits for the UI to settle. Capability and
 fidelity reports expose browser limitations instead of hiding them.
